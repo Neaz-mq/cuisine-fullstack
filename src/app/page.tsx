@@ -1,7 +1,9 @@
+import Banner from "@/components/Banner";
+
 export default function Home() {
   return (
     <div>
-      <h1>Cuisine Fullstack — Coming Soon</h1>
+      <Banner />
     </div>
   );
 }
