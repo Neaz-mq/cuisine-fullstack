@@ -91,7 +91,9 @@ const Navbar = () => {
                   key={index}
                   href={item.path}
                   className={`block text-sm font-medium ${
-                    currentPath === item.path ? "text-[#2C6252]" : "text-gray-600 hover:text-[#2C6252]"
+                    currentPath === item.path
+                      ? "text-[#2C6252]"
+                      : "text-gray-600 hover:text-[#2C6252]"
                   }`}
                   onClick={closeMenu}
                 >
@@ -111,15 +113,21 @@ const Navbar = () => {
       </div>
 
       {/* Large screen nav menu */}
-      <div className="hidden lg:flex flex-col 3xl:space-y-6 2xl:space-y-4 xl:space-y-4 lg:space-y-3 w-full items-center 3xl:mt-44 2xl:mt-36 xl:mt-28 lg:mt-24 3xl:ml-32 2xl:ml-[5.8rem] xl:ml-[3.5rem] lg:ml-[2.8rem]">
+      <div className="hidden lg:flex flex-col 3xl:gap-8 2xl:gap-6 xl:gap-6 lg:gap-5 w-full items-center 3xl:mt-44 2xl:mt-36 xl:mt-28 lg:mt-24 3xl:ml-32 2xl:ml-[5.8rem] xl:ml-[3.5rem] lg:ml-[2.8rem]">
         {navItems.map((item, index) => (
           <Link
             key={index}
             href={item.path}
-            className={`3xl:text-[15px] 2xl:text-[13px] xl:text-[11px] lg:text-[9px] flex flex-row-reverse items-center space-x-1 ${
-              currentPath === item.path ? "text-[#2C6252]" : "text-[#CCCCCC] hover:text-[#2C6252]"
+            className={`3xl:text-[15px] 2xl:text-[13px] xl:text-[11px] lg:text-[9px] ${
+              currentPath === item.path
+                ? "text-[#2C6252]"
+                : "text-[#888888] hover:text-[#2C6252]"
             }`}
-            style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+            style={{
+              writingMode: "vertical-rl",
+              transform: "rotate(180deg)",
+              display: "inline-block",
+            }}
           >
             {item.name}
           </Link>
