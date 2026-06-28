@@ -5,9 +5,10 @@ import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import Container from "@/components/Container";
+import AccountMenu from "@/components/AccountMenu";
 
 // 🔧 Restaurant location config — change these to match your restaurant
-const RESTAURANT_TIMEZONE = "America/New_York"; // IANA timezone name, e.g. "Asia/Dhaka", "Europe/London"
+const RESTAURANT_TIMEZONE = "Asia/Dhaka"; // IANA timezone name — restaurant is in Bangladesh
 const KITCHEN_OPEN_HOUR = 10; // 24-hour format, e.g. 10 = 10 AM
 const KITCHEN_CLOSE_HOUR = 22; // 24-hour format, e.g. 22 = 10 PM
 
@@ -158,9 +159,9 @@ const TopBar = memo(() => {
   }, [time]);
 
   return (
-    <div className="flex items-center justify-center overflow-hidden">
+    <div className="flex items-center justify-center relative z-30">
       <Container>
-        <div className="flex flex-col sm:flex-row items-center bg-white px-4 sm:px-6 text-gray-700 text-sm relative z-0 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-10 md:-ml-0 -ml-28">
+        <div className="flex flex-col sm:flex-row items-center bg-white px-4 sm:px-6 text-gray-700 text-sm relative z-30 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-10 md:-ml-0 -ml-28 overflow-visible">
           <img
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png"
             alt="Group 22"
@@ -243,15 +244,19 @@ const TopBar = memo(() => {
               </div>
             </div>
 
-            <div className="3xl:ml-auto 2xl:ml-auto xl:ml-auto lg:ml-auto md:ml-auto sm:ml-6 mb-2 sm:mb-0 relative">
-              <Link href="/carts" aria-label="View shopping cart">
-                <div className="relative 3xl:w-9 3xl:h-9 2xl:w-9 2xl:h-9 xl:w-9 xl:h-9 lg:w-9 lg:h-9 md:w-9 md:h-9 w-6 h-6 rounded-full bg-white border border-[#FF4C15] flex items-center justify-center shadow-[0_1px_4px_rgba(0,0,0,0.1)] hover:scale-105 transition-transform sm:mt-2">
-                  <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-[#FF4C15]" strokeWidth={2.2} />
-                  <div className="absolute -top-1.5 -right-1.5 bg-[#FF4C15] text-white text-[10px] md:text-[11px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-md border-2 border-white">
-                    {cartCount}
+            <div className="3xl:ml-auto 2xl:ml-auto xl:ml-auto lg:ml-auto md:ml-auto sm:ml-6 mb-2 sm:mb-0 flex items-center gap-3 3xl:gap-4 2xl:gap-4 relative z-40">
+              <AccountMenu />
+
+              <div className="relative">
+                <Link href="/carts" aria-label="View shopping cart">
+                  <div className="relative 3xl:w-9 3xl:h-9 2xl:w-9 2xl:h-9 xl:w-9 xl:h-9 lg:w-9 lg:h-9 md:w-9 md:h-9 w-6 h-6 rounded-full bg-white border border-[#FF4C15] flex items-center justify-center shadow-[0_1px_4px_rgba(0,0,0,0.1)] hover:scale-105 transition-transform">
+                    <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-[#FF4C15]" strokeWidth={2.2} />
+                    <div className="absolute -top-1.5 -right-1.5 bg-[#FF4C15] text-white text-[10px] md:text-[11px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-md border-2 border-white">
+                      {cartCount}
+                    </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             </div>
           </div>
         </div>

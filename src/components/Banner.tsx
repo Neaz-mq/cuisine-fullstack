@@ -15,7 +15,7 @@ const Banner = () => {
   }, []);
 
   return (
-    <div className="flex items-center justify-center overflow-hidden z-20 3xl:-mt-10 md:-ml-16 sm:-ml-36 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-0">
+    <div className="flex items-center justify-center overflow-hidden relative z-0 3xl:-mt-10 md:-ml-16 sm:-ml-36 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-0">
       <Container>
         <section className="relative bg-white" aria-label="Promotional Banner">
           <div className="flex items-start justify-between sm:w-56 3xl:w-full 2xl:w-full xl:w-full lg:w-full md:w-full">
@@ -195,7 +195,7 @@ const Banner = () => {
               initial={{ opacity: 0, y: 60 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1 }}
-              className="relative 3xl:-mt-28 3xl:-ml-20 2xl:-ml-32 w-full 2xl:-mt-28 xl:-mt-20 xl:-ml-28 lg:-mt-[4.5rem] md:-mt-[5.4rem] lg:-ml-44 md:-ml-44 sm:-ml-52 sm:-mr-20 3xl:-mr-0 2xl:-mr-0 xl:-mr-0 lg:-mr-0 md:-mr-0 object-cover z-20 sm:w-full sm:-mt-8 3xl:w-full 2xl:w-full xl:w-full lg:w-full md:w-full"
+              className="relative z-0 3xl:-mt-28 3xl:-ml-20 2xl:-ml-32 w-full 2xl:-mt-28 xl:-mt-20 xl:-ml-28 lg:-mt-[4.5rem] md:-mt-[5.4rem] lg:-ml-44 md:-ml-44 sm:-ml-52 sm:-mr-20 3xl:-mr-0 2xl:-mr-0 xl:-mr-0 lg:-mr-0 md:-mr-0 object-cover sm:w-full sm:-mt-8 3xl:w-full 2xl:w-full xl:w-full lg:w-full md:w-full"
             >
               <img
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752045017/banner1_p7xkxk.webp"
