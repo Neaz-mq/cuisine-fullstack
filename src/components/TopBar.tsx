@@ -122,12 +122,12 @@ const TopBar = memo(() => {
           hour: "numeric",
           hourCycle: "h23",
         }).format(now),
-        10
+        10,
       );
 
       setIsKitchenOpen(
         hourInRestaurantTz >= KITCHEN_OPEN_HOUR &&
-          hourInRestaurantTz < KITCHEN_CLOSE_HOUR
+          hourInRestaurantTz < KITCHEN_CLOSE_HOUR,
       );
     }, 1000);
 
@@ -210,8 +210,12 @@ const TopBar = memo(() => {
             <div className="flex flex-col md:flex-col lg:flex-row 3xl:space-x-4 2xl:space-x-4 xl:space-x-4 lg:space-x-4 md:space-y-2 sm:space-y-0 space-y-1 lg:space-y-0 mr-0 sm:mr-2 md:mr-4 mb-2 sm:mb-0 ml-2 sm:mt-5 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 md:mt-6">
               <div className="flex items-center 3xl:space-x-3 2xl:space-x-3 xl:space-x-3 lg:space-x-3 md:space-x-4 space-x-2">
                 <img
-                  src={isKitchenOpen ? "/kitchen.svg" : "/kitchen-unavailable.svg"}
-                  alt={isKitchenOpen ? "Kitchen available" : "Kitchen unavailable"}
+                  src={
+                    isKitchenOpen ? "/kitchen.svg" : "/kitchen-unavailable.svg"
+                  }
+                  alt={
+                    isKitchenOpen ? "Kitchen available" : "Kitchen unavailable"
+                  }
                   loading="lazy"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
@@ -233,11 +237,15 @@ const TopBar = memo(() => {
                 <div className="inline-flex items-baseline 3xl:min-w-[100px] 2xl:min-w-[90px] xl:min-w-[80px] lg:min-w-[50px] justify-end">
                   <span
                     className="3xl:text-[16px] 2xl:text-[15px] xl:text-[15px] lg:text-[13px] md:text-[13px] text-[9px] text-[#2C6252] font-semibold whitespace-nowrap [font-variant-numeric:tabular-nums] md:ml-2"
-                    style={{ minWidth: "82px", display: "inline-block", fontVariantNumeric: "tabular-nums" }}
+                    style={{
+                      minWidth: "82px",
+                      display: "inline-block",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
                   >
                     {formattedTime}
                   </span>
-                  <span className="text-[#2C6252] font-semibold text-[9px] md:text-[13px] lg:text-[13px] xl:text-[15px] 2xl:text-[15px] 3xl:text-[16px] 3xl:-ml-[0.8rem] 2xl:-ml-[1rem] xl:-ml-[1rem] lg:-ml-[1.4rem] md:-ml-6 -ml-11">
+                  <span className="text-[#2C6252] font-semibold text-[9px] md:text-[13px] lg:text-[13px] xl:text-[15px] 2xl:text-[15px] 3xl:text-[16px] -ml-2">
                     {ampm}
                   </span>
                 </div>
@@ -250,7 +258,10 @@ const TopBar = memo(() => {
               <div className="relative">
                 <Link href="/carts" aria-label="View shopping cart">
                   <div className="relative 3xl:w-9 3xl:h-9 2xl:w-9 2xl:h-9 xl:w-9 xl:h-9 lg:w-9 lg:h-9 md:w-9 md:h-9 w-6 h-6 rounded-full bg-white border border-[#FF4C15] flex items-center justify-center shadow-[0_1px_4px_rgba(0,0,0,0.1)] hover:scale-105 transition-transform">
-                    <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-[#FF4C15]" strokeWidth={2.2} />
+                    <ShoppingCart
+                      className="w-4 h-4 md:w-5 md:h-5 text-[#FF4C15]"
+                      strokeWidth={2.2}
+                    />
                     <div className="absolute -top-1.5 -right-1.5 bg-[#FF4C15] text-white text-[10px] md:text-[11px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-md border-2 border-white">
                       {cartCount}
                     </div>

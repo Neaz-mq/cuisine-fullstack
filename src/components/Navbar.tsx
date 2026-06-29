@@ -118,10 +118,10 @@ const Navbar = () => {
           <Link
             key={index}
             href={item.path}
-            className={`3xl:text-[15px] 2xl:text-[13px] xl:text-[11px] lg:text-[9px] ${
+            className={`3xl:text-[15px] 2xl:text-[13px] xl:text-[11px] lg:text-[9px]   ${
               currentPath === item.path
                 ? "text-[#2C6252]"
-                : "text-[#888888] hover:text-[#2C6252]"
+                : "text-[#919191] hover:text-[#2C6252]"
             }`}
             style={{
               writingMode: "vertical-rl",
