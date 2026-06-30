@@ -6,6 +6,7 @@ import AuthProvider from "@/components/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
 import Navbar from "@/components/Navbar";
 import TopBar from "@/components/TopBar";
+import Footer from "@/components/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,6 +48,8 @@ export default function RootLayout({
                 </div>
                 <div className="flex-1 ml-20">{children}</div>
               </div>
+              {/* Footer sits outside the ml-20 wrapper so its background is full-bleed */}
+              <Footer />
             </div>
           </CartProvider>
         </AuthProvider>

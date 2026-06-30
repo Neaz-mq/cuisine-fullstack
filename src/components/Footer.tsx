@@ -12,17 +12,17 @@ import Container from "@/components/Container";
 const Footer = () => {
   return (
     <footer
-      className="bg-[#2C6252] text-white sm:-ml-[4.2rem] 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-0 md:-ml-0"
+      className="bg-[#2C6252] text-white"
       role="contentinfo"
       aria-label="Site Footer"
     >
       {/* Top Footer Content */}
       <Container>
-        <div className="px-6 py-12 grid grid-cols-1 md:grid-cols-1 lg:grid-cols-4 3xl:gap-10 2xl:gap-14 xl:gap-16 lg:gap-20 text-center lg:text-left">
+        <div className="px-6 py-12 lg:pl-20 grid grid-cols-1 md:grid-cols-1 lg:grid-cols-4 3xl:gap-10 2xl:gap-14 xl:gap-16 lg:gap-20 text-center lg:text-left">
           {/* Logo */}
-          <div className="flex justify-center 3xl:justify-center items-start w-full 3xl:ml-8 2xl:ml-[5.2rem] 2xl:justify-start xl:ml-[7rem] lg:ml-[5rem] md:-ml-10 xl:justify-start lg:justify-start relative">
+          <div className="flex justify-center 3xl:justify-center items-start w-full 2xl:justify-start xl:justify-start lg:justify-start relative">
             <Link href="/" aria-label="Navigate to homepage">
-              <div className="bg-[#3A7563] 3xl:px-4 3xl:py-4 2xl:px-4 2xl:py-4 xl:px-4 xl:py-4 lg:px-3 lg:py-3 md:px-4 md:py-3 sm:px-4 sm:py-3 flex items-center sm:ml-[4.7rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-[4.8rem] space-x-2 w-fit 3xl:mt-1 2xl:mt-1 xl:mt-0 lg:mt-0 mx-auto">
+              <div className="bg-[#3A7563] 3xl:px-4 3xl:py-4 2xl:px-4 2xl:py-4 xl:px-4 xl:py-4 lg:px-3 lg:py-3 md:px-4 md:py-3 sm:px-4 sm:py-3 flex items-center space-x-2 w-fit 3xl:mt-1 2xl:mt-1 xl:mt-0 lg:mt-0 mx-auto lg:mx-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/logo.svg"
@@ -40,7 +40,7 @@ const Footer = () => {
           {/* Customer Services */}
           <nav
             aria-labelledby="footer-customer-services"
-            className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 sm:ml-[4.3rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-0"
+            className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0"
           >
             <h2
               id="footer-customer-services"
@@ -75,7 +75,7 @@ const Footer = () => {
           {/* Our Information */}
           <nav
             aria-labelledby="footer-our-information"
-            className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 sm:ml-[4.3rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-0"
+            className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0"
           >
             <h2
               id="footer-our-information"
@@ -103,7 +103,7 @@ const Footer = () => {
           </nav>
 
           {/* Contact Info */}
-          <address className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 sm:ml-[4.3rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-0 not-italic">
+          <address className="sm:mt-10 md:mt-10 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 not-italic">
             <h2 className="font-semibold mb-4 3xl:text-lg 2xl:text-lg xl:text-base lg:text-[12px] md:text-[17px] sm:text-[16px]">
               Contact Info
             </h2>
@@ -117,7 +117,7 @@ const Footer = () => {
                   +0123-456-789
                 </a>
               </li>
-              <li className="flex items-center gap-2 justify-center lg:justify-start sm:ml-[1rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-0">
+              <li className="flex items-center gap-2 justify-center lg:justify-start">
                 <MdEmail aria-hidden="true" />
                 <a
                   href="mailto:example@gmail.com"
@@ -126,7 +126,7 @@ const Footer = () => {
                   example@gmail.com
                 </a>
               </li>
-              <li className="flex items-start gap-2 justify-center lg:justify-start text-left sm:ml-[1.3rem] 3xl:ml-0 2xl:ml-0 xl:ml-0 lg:ml-0 md:ml-0">
+              <li className="flex items-start gap-2 justify-center lg:justify-start text-left">
                 <FaLocationDot aria-hidden="true" />
                 <span className="underline">8502 Preston Rd. Inglewood, Maine 98380</span>
               </li>
@@ -138,14 +138,14 @@ const Footer = () => {
       {/* Divider Line */}
       <div className="w-full flex justify-center" aria-hidden="true">
         <Container>
-          <div className="border-t border-[#ACBCB8] 3xl:w-[80rem] 2xl:w-[62rem] xl:w-[57rem] lg:w-[45rem] mt-6 mb-12 3xl:ml-36 2xl:ml-28 xl:ml-36 lg:ml-[7.5rem] sm:ml-20"></div>
+          <div className="border-t border-[#ACBCB8] mt-6 mb-12 lg:ml-20"></div>
         </Container>
       </div>
 
       {/* Bottom Bar */}
       <div className="bg-[#FF4C15] w-full flex justify-center">
         <Container>
-          <div className="flex flex-col md:flex-row justify-center md:justify-between items-center px-6 py-4 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-white gap-4 3xl:ml-28 2xl:ml-20 xl:ml-28 lg:ml-16 sm:ml-16">
+          <div className="flex flex-col md:flex-row justify-center md:justify-between items-center px-6 py-4 lg:pl-20 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-white gap-4">
             <div className="flex items-center gap-2" aria-label="Copyright information">
               <FaRegCopyright aria-hidden="true" />
               <span className="whitespace-nowrap">
