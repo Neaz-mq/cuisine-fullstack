@@ -12,6 +12,11 @@ const RESTAURANT_TIMEZONE = "Asia/Dhaka"; // IANA timezone name — restaurant i
 const KITCHEN_OPEN_HOUR = 10; // 24-hour format, e.g. 10 = 10 AM
 const KITCHEN_CLOSE_HOUR = 22; // 24-hour format, e.g. 22 = 10 PM
 
+// Rounds trig output to a fixed precision so server and client renders
+// always produce an identical string — prevents hydration mismatches caused
+// by tiny floating-point differences between Node.js and browser Math engines.
+const round = (n: number) => Math.round(n * 10000) / 10000;
+
 const AnalogClock = memo(() => {
   const [time, setTime] = useState(new Date());
 
@@ -30,10 +35,10 @@ const AnalogClock = memo(() => {
   const renderTicks = () =>
     Array.from({ length: 12 }, (_, i) => {
       const angle = (i * 30 * Math.PI) / 180;
-      const x1 = center + (radius - 2) * Math.sin(angle);
-      const y1 = center - (radius - 2) * Math.cos(angle);
-      const x2 = center + (radius - 4) * Math.sin(angle);
-      const y2 = center - (radius - 4) * Math.cos(angle);
+      const x1 = round(center + (radius - 2) * Math.sin(angle));
+      const y1 = round(center - (radius - 2) * Math.cos(angle));
+      const x2 = round(center + (radius - 4) * Math.sin(angle));
+      const y2 = round(center - (radius - 4) * Math.cos(angle));
       return (
         <line
           key={i}
@@ -47,6 +52,13 @@ const AnalogClock = memo(() => {
         />
       );
     });
+
+  const hourX2 = round(center + (radius - 10) * Math.sin((hour * Math.PI) / 180));
+  const hourY2 = round(center - (radius - 10) * Math.cos((hour * Math.PI) / 180));
+  const minX2 = round(center + (radius - 6) * Math.sin((min * Math.PI) / 180));
+  const minY2 = round(center - (radius - 6) * Math.cos((min * Math.PI) / 180));
+  const secX2 = round(center + (radius - 4) * Math.sin((sec * Math.PI) / 180));
+  const secY2 = round(center - (radius - 4) * Math.cos((sec * Math.PI) / 180));
 
   return (
     <svg
@@ -74,8 +86,8 @@ const AnalogClock = memo(() => {
       <line
         x1={center}
         y1={center}
-        x2={center + (radius - 10) * Math.sin((hour * Math.PI) / 180)}
-        y2={center - (radius - 10) * Math.cos((hour * Math.PI) / 180)}
+        x2={hourX2}
+        y2={hourY2}
         stroke="#2C6252"
         strokeWidth="2"
         strokeLinecap="round"
@@ -83,8 +95,8 @@ const AnalogClock = memo(() => {
       <line
         x1={center}
         y1={center}
-        x2={center + (radius - 6) * Math.sin((min * Math.PI) / 180)}
-        y2={center - (radius - 6) * Math.cos((min * Math.PI) / 180)}
+        x2={minX2}
+        y2={minY2}
         stroke="#2C6252"
         strokeWidth="1.5"
         strokeLinecap="round"
@@ -92,8 +104,8 @@ const AnalogClock = memo(() => {
       <line
         x1={center}
         y1={center}
-        x2={center + (radius - 4) * Math.sin((sec * Math.PI) / 180)}
-        y2={center - (radius - 4) * Math.cos((sec * Math.PI) / 180)}
+        x2={secX2}
+        y2={secY2}
         stroke="#FF4C15"
         strokeWidth="1"
         strokeLinecap="round"
@@ -162,6 +174,7 @@ const TopBar = memo(() => {
     <div className="flex items-center justify-center relative z-30">
       <Container>
         <div className="flex flex-col sm:flex-row items-center bg-white px-4 sm:px-6 text-gray-700 text-sm relative z-30 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-10 md:-ml-0 -ml-28 overflow-visible">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png"
             alt="Group 22"
@@ -209,6 +222,7 @@ const TopBar = memo(() => {
 
             <div className="flex flex-col md:flex-col lg:flex-row 3xl:space-x-4 2xl:space-x-4 xl:space-x-4 lg:space-x-4 md:space-y-2 sm:space-y-0 space-y-1 lg:space-y-0 mr-0 sm:mr-2 md:mr-4 mb-2 sm:mb-0 ml-2 sm:mt-5 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 md:mt-6">
               <div className="flex items-center 3xl:space-x-3 2xl:space-x-3 xl:space-x-3 lg:space-x-3 md:space-x-4 space-x-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={
                     isKitchenOpen ? "/kitchen.svg" : "/kitchen-unavailable.svg"
