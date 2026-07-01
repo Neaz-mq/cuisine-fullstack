@@ -5,11 +5,7 @@ import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import Select, { SingleValue } from "react-select";
 import { toast } from "react-toastify";
-
-interface CountryOption {
-  value: string;
-  label: string;
-}
+import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
 
 interface BillingFormData {
   email: string;
@@ -41,7 +37,6 @@ const Carts = () => {
   const { cartItems, increaseQty, decreaseQty, removeFromCart, clearCart } = useCart();
   const [selectedShipping, setSelectedShipping] = useState("uber-eats");
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
-  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<CountryOption | null>(null);
   const [formData, setFormData] = useState<BillingFormData>({
     email: "",
@@ -69,22 +64,6 @@ const Carts = () => {
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const total = subtotal;
-
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const res = await fetch("https://restcountries.com/v3.1/all?fields=name");
-        const data: { name: { common: string } }[] = await res.json();
-        const countryOptions: CountryOption[] = data
-          .map((c) => ({ value: c.name.common, label: c.name.common }))
-          .sort((a, b) => a.label.localeCompare(b.label));
-        setCountries(countryOptions);
-      } catch (error) {
-        console.error("Error fetching countries:", error);
-      }
-    };
-    fetchCountries();
-  }, []);
 
   const handleConfirmOrder = () => {
     if (cartItems.length === 0) {
@@ -510,7 +489,9 @@ const Carts = () => {
               {errors.lastName && <p className="text-red-500 text-xs">{errors.lastName}</p>}
 
               <Select<CountryOption>
-                options={countries}
+                inputId="country-select"
+                instanceId="country-select"
+                options={COUNTRY_OPTIONS}
                 value={selectedCountry}
                 onChange={(option: SingleValue<CountryOption>) => setSelectedCountry(option)}
                 placeholder="Select country"

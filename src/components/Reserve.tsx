@@ -276,6 +276,7 @@ const Reserve = () => {
             <Motion.div variants={inputField} custom={5} initial="hidden" animate="visible">
               <Select<TableOption>
                 inputId="table-select"
+                instanceId="table-select"
                 options={tableOptions}
                 value={selectedTable}
                 onChange={handleTableSelect}
