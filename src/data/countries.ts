@@ -1,17 +1,3 @@
-// Static list of world countries.
-//
-// Why static instead of fetching from restcountries.com at runtime:
-// - This data almost never changes, so there's no real benefit to a live fetch.
-// - Third-party APIs like restcountries.com are outside your control and have
-//   had repeated outages/rate limiting, which was causing the
-//   "TypeError: Failed to fetch" crash in the checkout form.
-// - A bundled list means zero network requests, zero loading spinner, and
-//   the country dropdown works even if the user is offline or the API is down.
-//
-// If you ever need live/official data instead, prefer a maintained npm
-// package (e.g. `world-countries`) over calling a public REST API directly
-// from the client on every page load.
-
 export interface CountryOption {
   value: string;
   label: string;
