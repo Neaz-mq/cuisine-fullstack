@@ -24,7 +24,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders    Order[]
+  orders       Order[]
+  reservations Reservation[]
 }
 
 enum Role {
@@ -87,4 +88,54 @@ model OrderItem {
 
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   menuItemId String
+}
+
+// ---------------------------------------------------------------------------
+// Table reservations
+//
+// Design note: a table is NOT a static booked/free flag. Real restaurants
+// reuse the same table across different time slots in a day, so "booked"
+// only makes sense relative to a specific date/time window. Availability is
+// computed at query time in the API layer by checking for overlapping
+// Reservation rows for that table, not stored as a boolean on RestaurantTable.
+// ---------------------------------------------------------------------------
+
+model RestaurantTable {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  capacity  Int      @default(4)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  reservations Reservation[]
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Reservation {
+  id           String             @id @default(cuid())
+  customerName String
+  phone        String
+  guestCount   Int
+  reservedAt   DateTime
+  status       ReservationStatus  @default(PENDING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  table        RestaurantTable    @relation(fields: [tableId], references: [id])
+  tableId      String
+
+  // Optional: reservations don't require login (matches the current /table
+  // page, which isn't behind auth), but we link the account when available.
+  user         User?              @relation(fields: [userId], references: [id])
+  userId       String?
+
+  @@index([tableId, reservedAt])
 }

@@ -752,6 +752,19 @@ async function main() {
   }
 
   console.log(`✅ ${createdCount} MenuItem তৈরি হয়েছে`);
+
+  // ৩) সব RestaurantTable তৈরি (আগের hardcoded T-1..T-10 UI-এর সাথে মিলিয়ে)
+  const tableLabels = Array.from({ length: 10 }, (_, i) => `T-${i + 1}`);
+
+  for (const label of tableLabels) {
+    await prisma.restaurantTable.upsert({
+      where: { label },
+      update: {},
+      create: { label, capacity: 4 },
+    });
+  }
+  console.log(`✅ ${tableLabels.length} RestaurantTable তৈরি/নিশ্চিত হয়েছে`);
+
   console.log("🎉 Seeding সম্পন্ন!");
 }
 
