@@ -64,21 +64,21 @@ export default function RegisterPage() {
         <div className="absolute -bottom-24 -right-16 w-96 h-96 bg-orange-400/10 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-md px-10 text-white text-center">
-          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
-            <svg
-              className="w-8 h-8"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21M8.25 3v18M15.75 3v18"
-              />
-            </svg>
-          </div>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl mb-8 transition-colors"
+            aria-label="Back to home"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.svg"
+              alt="Cuisine Logo"
+              className="w-6 h-6 brightness-0 invert"
+              loading="lazy"
+            />
+            <span className="font-bold text-lg text-white">Cuisine</span>
+          </Link>
+
           <h2 className="text-3xl font-bold leading-tight">
             Join the table.
           </h2>
@@ -101,7 +101,42 @@ export default function RegisterPage() {
       {/* Right form panel */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-12 sm:px-6 lg:px-16">
         <div className="w-full max-w-md">
+          {/* Mobile-only logo + back link (left panel is hidden below lg) */}
+          <div className="flex lg:hidden items-center justify-between mb-6">
+            <Link
+              href="/"
+              className="flex items-center gap-2"
+              aria-label="Back to home"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.svg"
+                alt="Cuisine Logo"
+                className="w-6 h-6"
+                loading="lazy"
+              />
+              <span className="font-bold text-lg text-[#2C6252]">
+                Cuisine
+              </span>
+            </Link>
+          </div>
+
           <div className="bg-[#F8F8F8] rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-10">
+            {/* Desktop-only back-to-home text link */}
+            <Link
+              href="/"
+              className="hidden lg:inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Back to home
+            </Link>
+
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-gray-900">
                 Create your account
