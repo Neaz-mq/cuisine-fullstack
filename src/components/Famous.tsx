@@ -30,7 +30,7 @@ const Famous = () => {
   return (
     <Container>
       <section
-        className="relative overflow-hidden 3xl:-mt-[44rem] 2xl:-mt-[50rem] xl:-mt-[58rem] lg:-mt-[71rem] md:-mt-[81rem] sm:-mt-[101rem] 3xl:px-[4.3rem] 2xl:px-[1.3rem] xl:px-[3.4rem] lg:px-[0.2rem] md:px-[0.8rem] sm:px-[0.8rem] mb-24 md:-ml-0 sm:-ml-36 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-0"
+        className="relative overflow-hidden 3xl:-mt-[44rem] 2xl:-mt-[50rem] xl:-mt-[58rem] lg:-mt-[71rem] md:-mt-[81rem] sm:-mt-[101rem] 3xl:px-[4.3rem] 2xl:px-[1.3rem] xl:px-[3.4rem] lg:px-[0.2rem] md:px-[0.8rem] sm:px-[0.8rem] mb-6 md:-ml-0 sm:-ml-36 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-0"
         aria-label="Weekly Deals and Chef Section"
       >
         {/* Headings */}
