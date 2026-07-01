@@ -18,9 +18,13 @@ const KITCHEN_CLOSE_HOUR = 22; // 24-hour format, e.g. 22 = 10 PM
 const round = (n: number) => Math.round(n * 10000) / 10000;
 
 const AnalogClock = memo(() => {
-  const [time, setTime] = useState(new Date());
+  // Start with `null` (not `new Date()`) so the very first render — the one
+  // that has to match between server and client — is always identical.
+  // The real time is only set after mount, entirely on the client.
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    setTime(new Date());
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -28,9 +32,13 @@ const AnalogClock = memo(() => {
   const radius = 20;
   const center = radius;
 
-  const sec = time.getSeconds() * 6;
-  const min = time.getMinutes() * 6 + time.getSeconds() * 0.1;
-  const hour = ((time.getHours() % 12) / 12) * 360 + time.getMinutes() * 0.5;
+  // Before mount, fall back to a fixed 12:00:00 position so SSR and the
+  // first client render match exactly (no real "current time" involved yet).
+  const safeTime = time ?? new Date(0);
+
+  const sec = safeTime.getSeconds() * 6;
+  const min = safeTime.getMinutes() * 6 + safeTime.getSeconds() * 0.1;
+  const hour = ((safeTime.getHours() % 12) / 12) * 360 + safeTime.getMinutes() * 0.5;
 
   const renderTicks = () =>
     Array.from({ length: 12 }, (_, i) => {
@@ -118,12 +126,14 @@ const AnalogClock = memo(() => {
 AnalogClock.displayName = "AnalogClock";
 
 const TopBar = memo(() => {
-  const [time, setTime] = useState(new Date());
+  // Same fix here: don't seed with `new Date()` on the server. Start `null`
+  // and only compute the real time after mount.
+  const [time, setTime] = useState<Date | null>(null);
   const [isKitchenOpen, setIsKitchenOpen] = useState(true);
   const { cartCount } = useCart();
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateTime = () => {
       const now = new Date();
       setTime(now);
 
@@ -141,13 +151,16 @@ const TopBar = memo(() => {
         hourInRestaurantTz >= KITCHEN_OPEN_HOUR &&
           hourInRestaurantTz < KITCHEN_CLOSE_HOUR,
       );
-    }, 1000);
+    };
 
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
   // Time displayed is always the restaurant's local time, regardless of visitor location
   const formattedTime = useMemo(() => {
+    if (!time) return "--:--:--";
     return time
       .toLocaleTimeString("en-US", {
         timeZone: RESTAURANT_TIMEZONE,
@@ -160,6 +173,7 @@ const TopBar = memo(() => {
   }, [time]);
 
   const ampm = useMemo(() => {
+    if (!time) return "";
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: RESTAURANT_TIMEZONE,
       hour: "numeric",
