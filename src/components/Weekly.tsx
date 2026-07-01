@@ -185,7 +185,7 @@ const Weekly = () => {
   return (
     <Container>
       <div className="sm:px-4 md:px-6 3xl:px-[3.5rem] 2xl:px-4 xl:px-14 lg:px-14 3xl:ml-2 2xl:ml-0 xl:ml-0 lg:-ml-16 md:-ml-16 sm:-ml-[6.5rem] 3xl:mt-24 2xl:mt-20 xl:mt-16 lg:mt-12 md:mt-12 sm:mt-2">
-        <div className="py-16 3xl:mb-32 2xl:mb-24 xl:mb-16 lg:mb-12 md:mb-12 sm:mb-12">
+        <div className="py-8 3xl:mb-8 2xl:mb-6 xl:mb-6 lg:mb-4 md:mb-4 sm:mb-4">
           <header className="mb-10 text-center md:text-left">
             <h2 className="3xl:text-4xl 2xl:text-4xl xl:text-3xl lg:text-2xl md:text-2xl sm:text-xl font-semibold text-[#2C6252] mb-2">
               Our Signature<span className="font-bold ml-2">Foods</span>
