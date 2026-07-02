@@ -61,6 +61,7 @@ const Carts = () => {
   const [discountCode, setDiscountCode] = useState("");
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const total = subtotal;
