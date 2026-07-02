@@ -4,14 +4,13 @@ import type { Prisma } from "@/generated/prisma/client";
 /**
  * src/lib/reservations.ts
  *
- * একই table double-book হওয়া ঠেকানোর জন্য সব overlap-check logic এখানে
- * এক জায়গায় রাখা হয়েছে, যাতে /api/tables (availability দেখানো) আর
- * /api/reservations (বুকিং তৈরি করা) — দুই জায়গায় আলাদা আলাদা করে একই
- * নিয়ম লিখতে না হয় এবং দুটো কখনো out-of-sync না হয়ে যায়।
+ * All double-booking / overlap-check logic lives here in one place, so
+ * /api/tables (showing availability) and /api/reservations (creating a
+ * booking) don't each implement the rule separately and drift out of sync.
  *
- * একটা reservation একটা table কে এই সময়ের জন্য "দখল" করে রাখে:
+ * A reservation "occupies" a table for this window:
  *   [reservedAt, reservedAt + RESERVATION_DURATION_MINUTES)
- * নতুন বুকিং এই window-এর সাথে overlap করলে সেটা conflict ধরা হয়।
+ * A new booking that overlaps this window is treated as a conflict.
  */
 
 export const RESERVATION_DURATION_MINUTES = 90;
@@ -21,12 +20,12 @@ const ACTIVE_STATUSES = ["PENDING", "CONFIRMED", "SEATED"] as const;
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
 /**
- * একটা table-এ দেওয়া সময়ে বসার জন্য জায়গা খালি আছে কিনা চেক করে।
- * (CANCELLED/NO_SHOW/COMPLETED reservation গুলো block করে না।)
+ * Checks whether a table has room at the given time.
+ * (CANCELLED/NO_SHOW/COMPLETED reservations don't block it.)
  *
- * `db` প্যারামিটার দিয়ে চাইলে একটা $transaction-এর ভেতরের client
- * (tx) পাস করা যায়, যাতে check + create সত্যিকারের atomic হয় এবং
- * দুইটা একই সাথে আসা request race condition তৈরি না করে।
+ * The optional `db` param lets you pass the client from inside a
+ * $transaction (tx), so the check + create are genuinely atomic and two
+ * simultaneous requests can't create a race condition.
  */
 export async function isTableAvailable(
   tableId: string,
@@ -38,8 +37,8 @@ export async function isTableAvailable(
   const requestedStart = reservedAt.getTime();
   const requestedEnd = requestedStart + durationMs;
 
-  // সম্ভাব্য conflict range-এর reservation গুলো টেনে এনে JS-এ overlap চেক করা —
-  // এতে raw SQL ছাড়াই DB-agnostic ভাবে ঠিকঠাক কাজ করে।
+  // Pull reservations in the plausible conflict range and check overlap in
+  // JS — this works correctly across any DB without needing raw SQL.
   const windowStart = new Date(requestedStart - durationMs);
   const windowEnd = new Date(requestedEnd + durationMs);
 

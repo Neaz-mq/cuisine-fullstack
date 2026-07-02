@@ -713,9 +713,9 @@ const menuItems = [
 ];
 
 async function main() {
-  console.log("🌱 Seeding শুরু হচ্ছে...");
+  console.log("🌱 Starting seed...");
 
-  // ১) সব Category তৈরি (upsert — থাকলে স্কিপ, না থাকলে তৈরি)
+  // 1) Create all Category rows (upsert — skip if exists, create if not)
   const categoryMap = new Map<string, string>(); // name -> id
 
   for (const name of categories) {
@@ -726,15 +726,43 @@ async function main() {
     });
     categoryMap.set(name, category.id);
   }
-  console.log(`✅ ${categories.length} Category তৈরি/নিশ্চিত হয়েছে`);
+  console.log(`✅ ${categories.length} Category rows created/confirmed`);
 
-  // ২) সব MenuItem তৈরি
+  // 2) Create MenuItem rows — capped at SEED_ITEMS_PER_CATEGORY per category
+  //
+  // The full source list (menuItems) has 72 items across 13 categories.
+  // For local/testing purposes we only need a handful per category, not the
+  // whole set — so we take the first N per category here. Bump this number
+  // (or seed the full `menuItems` array directly) whenever real menu data
+  // is needed.
+  //
+  // MenuItem has no natural unique key (unlike Category.name or
+  // RestaurantTable.label), so upsert isn't possible here. Instead we clear
+  // out existing menu items first and recreate them fresh — this seed file
+  // is the single source of truth for menu data, so "wipe and reseed" is the
+  // correct idempotent behavior. NOTE: this will fail with a foreign-key
+  // error once real Orders reference MenuItems (OrderItem.menuItemId) — at
+  // that point switch this to an upsert keyed on a new MenuItem.slug field,
+  // or only delete items with isAvailable: true that have zero orderItems.
+  const SEED_ITEMS_PER_CATEGORY = 3;
+
+  const itemsPerCategoryCount = new Map<string, number>();
+  const trimmedMenuItems = menuItems.filter((item) => {
+    const usedSoFar = itemsPerCategoryCount.get(item.category) ?? 0;
+    if (usedSoFar >= SEED_ITEMS_PER_CATEGORY) return false;
+    itemsPerCategoryCount.set(item.category, usedSoFar + 1);
+    return true;
+  });
+
+  const deleted = await prisma.menuItem.deleteMany({});
+  console.log(`🧹 Cleared ${deleted.count} existing MenuItem rows before reseeding`);
+
   let createdCount = 0;
-  for (const item of menuItems) {
+  for (const item of trimmedMenuItems) {
     const categoryId = categoryMap.get(item.category);
     if (!categoryId) {
       console.warn(
-        `⚠️  Category "${item.category}" পাওয়া যায়নি, "${item.title}" স্কিপ করা হলো`,
+        `⚠️  Category "${item.category}" not found, skipping "${item.title}"`,
       );
       continue;
     }
@@ -751,26 +779,34 @@ async function main() {
     createdCount++;
   }
 
-  console.log(`✅ ${createdCount} MenuItem তৈরি হয়েছে`);
+  console.log(`✅ ${createdCount} MenuItem rows created`);
 
-  // ৩) সব RestaurantTable তৈরি (আগের hardcoded T-1..T-10 UI-এর সাথে মিলিয়ে)
+  // 3) Create all RestaurantTable rows (T-1..T-10, matching the earlier
+  //    hardcoded UI). T-4 and T-9 are 2-seaters; the rest are 4-seaters.
   const tableLabels = Array.from({ length: 10 }, (_, i) => `T-${i + 1}`);
+  const capacityOverrides: Record<string, number> = {
+    "T-4": 2,
+    "T-9": 2,
+  };
 
   for (const label of tableLabels) {
+    const capacity = capacityOverrides[label] ?? 4;
     await prisma.restaurantTable.upsert({
       where: { label },
-      update: {},
-      create: { label, capacity: 4 },
+      // `update` runs even if the table already exists, so re-running this
+      // seed also fixes capacity on tables created by an earlier seed run.
+      update: { capacity },
+      create: { label, capacity },
     });
   }
-  console.log(`✅ ${tableLabels.length} RestaurantTable তৈরি/নিশ্চিত হয়েছে`);
+  console.log(`✅ ${tableLabels.length} RestaurantTable rows created/updated`);
 
-  console.log("🎉 Seeding সম্পন্ন!");
+  console.log("🎉 Seeding complete!");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Seeding-এ সমস্যা হয়েছে:", e);
+    console.error("❌ Seeding failed:", e);
     process.exit(1);
   })
   .finally(async () => {

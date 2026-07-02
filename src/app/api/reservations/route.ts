@@ -6,9 +6,10 @@ import { isTableAvailable } from "@/lib/reservations";
 /**
  * src/app/api/reservations/route.ts
  *
- * GET  /api/reservations   -> সব reservation, admin dashboard-এর জন্য (শুধু ADMIN)
- * POST /api/reservations   -> নতুন reservation তৈরি (public — login ছাড়াও করা যায়,
- *                              matches করে /table page যেটা এখন auth-protected না)
+ * GET  /api/reservations   -> all reservations, for the admin dashboard (ADMIN only)
+ * POST /api/reservations   -> create a new reservation (public — works without
+ *                              login too, matching the /table page which isn't
+ *                              behind auth)
  */
 export async function GET() {
   try {
@@ -28,7 +29,7 @@ export async function GET() {
   } catch (error) {
     console.error("GET /api/reservations error:", error);
     return NextResponse.json(
-      { error: "Reservation list আনতে সমস্যা হয়েছে" },
+      { error: "Failed to fetch reservation list" },
       { status: 500 }
     );
   }
@@ -39,10 +40,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { tableId, customerName, phone, guestCount, reservedAt } = body;
 
-    // ---- Basic validation (register route-এর সাথে convention মিলিয়ে) ----
+    // ---- Basic validation (matches the convention in the register route) ----
     if (!tableId || !customerName || !phone || !guestCount || !reservedAt) {
       return NextResponse.json(
-        { error: "সব ফিল্ড পূরণ করা আবশ্যক" },
+        { error: "All fields are required" },
         { status: 400 }
       );
     }
@@ -50,14 +51,14 @@ export async function POST(request: Request) {
     const parsedDate = new Date(reservedAt);
     if (Number.isNaN(parsedDate.getTime())) {
       return NextResponse.json(
-        { error: "reservedAt একটা valid date/time হতে হবে" },
+        { error: "reservedAt must be a valid date/time" },
         { status: 400 }
       );
     }
 
     if (parsedDate.getTime() < Date.now()) {
       return NextResponse.json(
-        { error: "অতীতের সময়ে reservation করা যাবে না" },
+        { error: "Cannot make a reservation in the past" },
         { status: 400 }
       );
     }
@@ -68,25 +69,23 @@ export async function POST(request: Request) {
 
     if (!table || !table.isActive) {
       return NextResponse.json(
-        { error: "টেবিলটি পাওয়া যায়নি বা বর্তমানে অকার্যকর" },
+        { error: "Table not found or currently inactive" },
         { status: 404 }
       );
     }
 
     if (guestCount > table.capacity) {
       return NextResponse.json(
-        {
-          error: `এই টেবিলে সর্বোচ্চ ${table.capacity} জন বসতে পারবে`,
-        },
+        { error: `This table can seat a maximum of ${table.capacity} guests` },
         { status: 400 }
       );
     }
 
     // ---- Race-condition-safe double-booking check ----
-    // দুইজন একই মুহূর্তে একই স্লট বুক করার চেষ্টা করলে, availability চেক করার
-    // পরও একটা ছোট window থাকে যেখানে দুটোই pass করে যেতে পারে। তাই টেবিল
-    // অ্যাসাইনমেন্টের সাথে সাথেই একটা transaction-এর ভেতরে আবার চেক করা হচ্ছে,
-    // যাতে conflict থাকলে দ্বিতীয় request টা reject হয়।
+    // If two people try to book the same slot at nearly the same moment,
+    // there's a small window where both could pass the availability check.
+    // So right when we assign the table, we check again inside a
+    // transaction, so a genuine conflict rejects the second request.
     const session = await auth();
 
     const reservation = await prisma.$transaction(
@@ -118,14 +117,14 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "TABLE_UNAVAILABLE") {
       return NextResponse.json(
-        { error: "এই সময়ে টেবিলটি ইতিমধ্যে বুক করা আছে, অন্য সময় বেছে নিন" },
+        { error: "This table is already booked at that time, please pick another slot" },
         { status: 409 }
       );
     }
 
-    // Serializable isolation-এ দুইটা concurrent request একই টেবিলের জন্য
-    // fight করলে Prisma P2034 (transaction conflict) ছোঁড়ে — সেটাও
-    // ইউজারের কাছে একই "conflict, আবার চেষ্টা করুন" বার্তা হিসেবে যাওয়া উচিত।
+    // Under Serializable isolation, two concurrent requests fighting over the
+    // same table can make Prisma throw P2034 (transaction conflict) — that
+    // should surface to the user as the same "conflict, try again" message.
     const isSerializationConflict =
       typeof error === "object" &&
       error !== null &&
@@ -134,14 +133,14 @@ export async function POST(request: Request) {
 
     if (isSerializationConflict) {
       return NextResponse.json(
-        { error: "এই মুহূর্তে অনেকে বুক করার চেষ্টা করছে, আবার চেষ্টা করুন" },
+        { error: "Lots of people are booking right now, please try again" },
         { status: 409 }
       );
     }
 
     console.error("POST /api/reservations error:", error);
     return NextResponse.json(
-      { error: "Reservation তৈরি করতে সমস্যা হয়েছে" },
+      { error: "Failed to create reservation" },
       { status: 500 }
     );
   }

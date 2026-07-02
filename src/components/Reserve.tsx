@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion as Motion } from "framer-motion";
 import Container from "@/components/Container";
 import { toast } from "react-toastify";
@@ -8,28 +8,22 @@ import Select, { SingleValue } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-interface Table {
+interface ApiTable {
+  id: string;
   label: string;
-  booked: boolean;
+  capacity: number;
+  isActive: boolean;
+  createdAt: string;
+  // null  -> no date/time selected yet, so availability is unknown
+  // true  -> this table is free at the selected time
+  // false -> this table is already booked at that time
+  available: boolean | null;
 }
 
 interface TableOption {
-  value: string;
+  value: string; // RestaurantTable.id
   label: string;
 }
-
-const initialTables: Table[] = [
-  { label: "T-1", booked: false },
-  { label: "T-2", booked: true },
-  { label: "T-3", booked: false },
-  { label: "T-4", booked: false },
-  { label: "T-5", booked: false },
-  { label: "T-6", booked: false },
-  { label: "T-7", booked: false },
-  { label: "T-8", booked: true },
-  { label: "T-9", booked: false },
-  { label: "T-10", booked: true },
-];
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 40 },
@@ -60,46 +54,113 @@ const inputField = {
 };
 
 const Reserve = () => {
-  const [tables, setTables] = useState<Table[]>(initialTables);
+  const [tables, setTables] = useState<ApiTable[]>([]);
+  const [isLoadingTables, setIsLoadingTables] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedTable, setSelectedTable] = useState<TableOption | null>(null);
   const [guestCount, setGuestCount] = useState("");
   const [reservationDate, setReservationDate] = useState<Date | null>(null);
 
-  const availableTables = tables.filter((table) => !table.booked);
-  const tableOptions: TableOption[] = availableTables.map((table) => ({
-    value: table.label,
-    label: table.label,
-  }));
+  // Refetch availability whenever reservationDate changes (from the date/time
+  // picker). If no date is selected yet, we still fetch the table list so
+  // label/capacity are visible, but "available" stays null (unknown).
+  useEffect(() => {
+    const controller = new AbortController();
 
-  const handleBookTable = () => {
+    const fetchTables = async () => {
+      setIsLoadingTables(true);
+      try {
+        const url = reservationDate
+          ? `/api/tables?reservedAt=${encodeURIComponent(reservationDate.toISOString())}`
+          : "/api/tables";
+
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("Failed to load tables");
+
+        const data: ApiTable[] = await res.json();
+        setTables(data);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("Error fetching tables:", error);
+          toast.error("Failed to load tables. Please refresh and try again.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingTables(false);
+      }
+    };
+
+    fetchTables();
+    return () => controller.abort();
+  }, [reservationDate]);
+
+  const hasSelectedDate = reservationDate !== null;
+
+  const tableOptions: TableOption[] = tables
+    .filter((table) => table.available !== false)
+    .map((table) => ({
+      value: table.id,
+      label: `${table.label} (${table.capacity} seats)`,
+    }));
+
+  const handleBookTable = async () => {
     if (!name || !phone || !selectedTable || !guestCount || !reservationDate) {
       toast.error("Please fill in all fields to reserve a table.");
       return;
     }
 
-    const updatedTables = tables.map((table) =>
-      table.label === selectedTable.value ? { ...table, booked: true } : table
-    );
+    const selectedTableData = tables.find((t) => t.id === selectedTable.value);
+    if (selectedTableData && Number(guestCount) > selectedTableData.capacity) {
+      toast.error(`This table can seat a maximum of ${selectedTableData.capacity} guests.`);
+      return;
+    }
 
-    setTables(updatedTables);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tableId: selectedTable.value,
+          customerName: name,
+          phone,
+          guestCount: Number(guestCount),
+          reservedAt: reservationDate.toISOString(),
+        }),
+      });
 
-    const formattedDate = new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "numeric",
-      hour12: true,
-    }).format(reservationDate);
+      const data = await res.json();
 
-    toast.success(`Table ${selectedTable.label} has been booked on ${formattedDate}!`);
-    setName("");
-    setPhone("");
-    setGuestCount("");
-    setReservationDate(null);
-    setSelectedTable(null);
+      if (!res.ok) {
+        // 409 = someone else already booked this table for that time (race condition)
+        toast.error(data.error || "Failed to create reservation.");
+        return;
+      }
+
+      const formattedDate = new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true,
+      }).format(reservationDate);
+
+      toast.success(`Table ${data.table.label} has been booked on ${formattedDate}!`);
+
+      setName("");
+      setPhone("");
+      setGuestCount("");
+      setReservationDate(null); // this triggers the useEffect and refreshes the grid
+      setSelectedTable(null);
+    } catch (error) {
+      console.error("Error creating reservation:", error);
+      toast.error("Failed to create reservation. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDateChange = (date: Date | null) => {
@@ -112,6 +173,8 @@ const Reserve = () => {
     } else {
       setReservationDate(null);
     }
+    // Previously selected table may no longer be valid after picking a new time
+    setSelectedTable(null);
   };
 
   const handleTableSelect = (option: SingleValue<TableOption>) => {
@@ -143,6 +206,11 @@ const Reserve = () => {
               transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity }}
             />
           </h2>
+          {!hasSelectedDate && (
+            <p className="text-sm text-[#A9A2A2] mt-2">
+              Pick a date and time below to see which tables are free, shown in color.
+            </p>
+          )}
         </Motion.header>
 
         {/* Table Grid */}
@@ -153,20 +221,32 @@ const Reserve = () => {
           animate="visible"
           aria-label="Table Availability Grid"
         >
-          {tables.map((table, index) => (
-            <Motion.div
-              key={index}
-              className={`cursor-pointer flex items-center justify-center font-bold text-white 3xl:text-6xl 2xl:text-6xl xl:text-5xl lg:text-4xl ${
-                table.booked ? "bg-[#FF4C15]" : "bg-[#2C6252]"
-              } 3xl:w-44 3xl:h-44 2xl:w-44 2xl:h-44 xl:w-40 xl:h-40 lg:w-28 lg:h-28`}
-              variants={tableItem}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              aria-label={`Table ${table.label} is ${table.booked ? "booked" : "available"}`}
-            >
-              {table.label}
-            </Motion.div>
-          ))}
+          {tables.map((table) => {
+            const isBooked = table.available === false;
+            const isUnknown = table.available === null;
+            const bgClass = isUnknown
+              ? "bg-gray-300"
+              : isBooked
+              ? "bg-[#FF4C15]"
+              : "bg-[#2C6252]";
+            const statusLabel = isUnknown ? "unknown (pick a date)" : isBooked ? "booked" : "available";
+
+            return (
+              <Motion.div
+                key={table.id}
+                className={`cursor-pointer flex items-center justify-center font-bold text-white 3xl:text-6xl 2xl:text-6xl xl:text-5xl lg:text-4xl ${bgClass} 3xl:w-44 3xl:h-44 2xl:w-44 2xl:h-44 xl:w-40 xl:h-40 lg:w-28 lg:h-28`}
+                variants={tableItem}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label={`Table ${table.label} is ${statusLabel}`}
+              >
+                {table.label}
+              </Motion.div>
+            );
+          })}
+          {isLoadingTables && tables.length === 0 && (
+            <p className="col-span-5 text-sm text-[#A9A2A2]">Loading tables...</p>
+          )}
         </Motion.div>
 
         {/* Legend */}
@@ -183,6 +263,10 @@ const Reserve = () => {
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-[#FF4C15]" aria-hidden="true"></div>
             <span className="text-[#A9A2A2] text-sm">Booked Table Indicator</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-gray-300" aria-hidden="true"></div>
+            <span className="text-[#A9A2A2] text-sm">Unknown (no date picked)</span>
           </div>
         </Motion.div>
 
@@ -280,8 +364,12 @@ const Reserve = () => {
                 options={tableOptions}
                 value={selectedTable}
                 onChange={handleTableSelect}
-                placeholder="Select a Table"
+                placeholder={
+                  hasSelectedDate ? "Select a Table" : "Select date & time first"
+                }
                 isSearchable={false}
+                isDisabled={!hasSelectedDate || isLoadingTables}
+                noOptionsMessage={() => "No tables available at this time"}
                 styles={{
                   control: (base) => ({
                     ...base,
@@ -298,11 +386,12 @@ const Reserve = () => {
             <Motion.button
               type="button"
               onClick={handleBookTable}
-              className="mt-4 bg-[#2C6252] hover:bg-[#244f42] text-white font-semibold py-3 transition-all"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.96 }}
+              disabled={isSubmitting}
+              className="mt-4 bg-[#2C6252] hover:bg-[#244f42] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 transition-all"
+              whileHover={{ scale: isSubmitting ? 1 : 1.05 }}
+              whileTap={{ scale: isSubmitting ? 1 : 0.96 }}
             >
-              Book Table
+              {isSubmitting ? "Booking..." : "Book Table"}
             </Motion.button>
           </form>
         </Motion.div>

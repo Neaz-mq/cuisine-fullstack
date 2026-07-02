@@ -32,3 +32,47 @@ body {
   color: var(--foreground);
   font-family: var(--font-poppins), sans-serif;
 }
+
+/* ---------------------------------------------------------------------
+   react-toastify theming — matches the site's green/orange brand palette
+   and gives a softer, more premium feel than the library defaults.
+   These are react-toastify's own CSS custom properties, so this is the
+   supported way to theme it (no need to fight the library's internal
+   styles with !important overrides).
+   ------------------------------------------------------------------- */
+:root {
+  --toastify-color-success: #2c6252;
+  --toastify-color-error: #ff4c15;
+  --toastify-color-info: #2c6252;
+  --toastify-color-warning: #f5a524;
+
+  --toastify-toast-width: 380px;
+  --toastify-toast-min-height: 56px;
+  --toastify-toast-bd-radius: 14px;
+  --toastify-toast-shadow: 0 12px 32px -8px rgba(17, 24, 21, 0.25);
+}
+
+.cuisine-toast {
+  font-family: var(--font-poppins), sans-serif !important;
+  font-size: 0.9rem;
+  align-items: center;
+  backdrop-filter: blur(6px);
+}
+
+.Toastify__progress-bar {
+  height: 3px;
+  opacity: 0.85;
+}
+
+.Toastify__close-button {
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1;
+}
+
+.Toastify__toast-icon {
+  width: 22px;
+}

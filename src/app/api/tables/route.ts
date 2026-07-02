@@ -6,19 +6,40 @@ import { isTableAvailable } from "@/lib/reservations";
 /**
  * src/app/api/tables/route.ts
  *
- * GET  /api/tables                          -> সব active table, availability ছাড়া
- * GET  /api/tables?reservedAt=<ISO string>   -> সেই নির্দিষ্ট সময়ে কোন টেবিল খালি তা সহ
- * POST /api/tables                          -> নতুন table তৈরি (শুধু ADMIN)
+ * GET  /api/tables                          -> all active tables, no availability
+ * GET  /api/tables?reservedAt=<ISO string>   -> same, plus availability at that time
+ * POST /api/tables                          -> create a new table (ADMIN only)
  */
+
+/**
+ * Postgres sorts "label" as plain text, so "T-10" comes right after "T-1"
+ * (alphabetically "1" < "2"), producing T-1, T-10, T-2, T-3... instead of
+ * T-1, T-2, ... T-10. We fetch and then sort "naturally" in JS: extract the
+ * numeric part of the label and compare numerically, falling back to a plain
+ * string compare for labels with no digits.
+ */
+function naturalSortByLabel<T extends { label: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const numA = a.label.match(/\d+/);
+    const numB = b.label.match(/\d+/);
+
+    if (numA && numB) {
+      return Number(numA[0]) - Number(numB[0]);
+    }
+    return a.label.localeCompare(b.label);
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const reservedAtParam = searchParams.get("reservedAt");
 
-    const tables = await prisma.restaurantTable.findMany({
-      where: { isActive: true },
-      orderBy: { label: "asc" },
-    });
+    const tables = naturalSortByLabel(
+      await prisma.restaurantTable.findMany({
+        where: { isActive: true },
+      })
+    );
 
     if (!reservedAtParam) {
       return NextResponse.json(
@@ -29,7 +50,7 @@ export async function GET(request: Request) {
     const reservedAt = new Date(reservedAtParam);
     if (Number.isNaN(reservedAt.getTime())) {
       return NextResponse.json(
-        { error: "reservedAt একটা valid date/time হতে হবে" },
+        { error: "reservedAt must be a valid date/time" },
         { status: 400 }
       );
     }
@@ -45,7 +66,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("GET /api/tables error:", error);
     return NextResponse.json(
-      { error: "Table list আনতে সমস্যা হয়েছে" },
+      { error: "Failed to fetch table list" },
       { status: 500 }
     );
   }
@@ -65,7 +86,7 @@ export async function POST(request: Request) {
 
     if (!label || typeof label !== "string") {
       return NextResponse.json(
-        { error: "Table label প্রয়োজন" },
+        { error: "Table label is required" },
         { status: 400 }
       );
     }
@@ -87,14 +108,14 @@ export async function POST(request: Request) {
 
     if (isUniqueConflict) {
       return NextResponse.json(
-        { error: "এই label-এর টেবিল আগে থেকেই আছে" },
+        { error: "A table with this label already exists" },
         { status: 409 }
       );
     }
 
     console.error("POST /api/tables error:", error);
     return NextResponse.json(
-      { error: "Table তৈরি করতে সমস্যা হয়েছে" },
+      { error: "Failed to create table" },
       { status: 500 }
     );
   }

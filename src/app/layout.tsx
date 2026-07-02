@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Poppins } from "next/font/google";
 import "./globals.css";
+import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer, Slide } from "react-toastify";
 import AuthProvider from "@/components/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
 
@@ -40,6 +42,18 @@ export default function RootLayout({
         <AuthProvider>
           <CartProvider>{children}</CartProvider>
         </AuthProvider>
+        <ToastContainer
+          position="top-right"
+          autoClose={3500}
+          newestOnTop
+          closeOnClick
+          pauseOnHover
+          draggable
+          theme="colored"
+          transition={Slide}
+          limit={3}
+          toastClassName="cuisine-toast"
+        />
       </body>
     </html>
   );
