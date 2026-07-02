@@ -5,8 +5,8 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin" },
   { label: "Orders", href: "/admin/orders" },
   { label: "Menu", href: "/admin/menu" },
+  { label: "Reservations", href: "/admin/reservations" },
   // পরে যোগ হবে:
-  // { label: "Reservations", href: "/admin/reservations" },
   // { label: "Tables", href: "/admin/tables" },
 ];
 

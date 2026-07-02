@@ -4,10 +4,12 @@ export default function Pagination({
   currentPage,
   totalPages,
   searchParams,
+  basePath = "/admin/orders",
 }: {
   currentPage: number;
   totalPages: number;
   searchParams: Record<string, string | undefined>;
+  basePath?: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -17,7 +19,7 @@ export default function Pagination({
       if (value && key !== "page") params.set(key, value);
     });
     params.set("page", String(page));
-    return `/admin/orders?${params.toString()}`;
+    return `${basePath}?${params.toString()}`;
   }
 
   return (
