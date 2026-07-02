@@ -1,6 +1,5 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
@@ -48,26 +47,39 @@ model MenuItem {
   isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  category    Category    @relation(fields: [categoryId], references: [id])
-  categoryId  String
-
-  orderItems  OrderItem[]
+  category   Category    @relation(fields: [categoryId], references: [id])
+  categoryId String
+  orderItems OrderItem[]
 }
 
 model Order {
   id          String      @id @default(cuid())
   status      OrderStatus @default(PLACED)
   totalAmount Float
-  address     String
-  city        String
-  phone       String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
 
-  user        User        @relation(fields: [userId], references: [id])
-  userId      String
+  // Billing / contact details captured at checkout
+  email     String
+  firstName String
+  lastName  String
+  phone     String
+  country   String
+  address   String
+  apartment String?
+  city      String
+  state     String
+  zip       String
 
-  items       OrderItem[]
+  shippingMethod ShippingMethod
+  paymentMethod  PaymentMethod
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Guest checkout is allowed, matching /carts which isn't behind auth
+  user   User?  @relation(fields: [userId], references: [id])
+  userId String?
+
+  items OrderItem[]
 }
 
 enum OrderStatus {
@@ -78,6 +90,16 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum ShippingMethod {
+  UBER_EATS
+  FOOD_PANDA
+}
+
+enum PaymentMethod {
+  COD
+  ONLINE
+}
+
 model OrderItem {
   id         String   @id @default(cuid())
   quantity   Int
@@ -85,7 +107,6 @@ model OrderItem {
 
   order      Order    @relation(fields: [orderId], references: [id])
   orderId    String
-
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   menuItemId String
 }
@@ -99,7 +120,6 @@ model OrderItem {
 // computed at query time in the API layer by checking for overlapping
 // Reservation rows for that table, not stored as a boolean on RestaurantTable.
 // ---------------------------------------------------------------------------
-
 model RestaurantTable {
   id        String   @id @default(cuid())
   label     String   @unique
@@ -120,22 +140,22 @@ enum ReservationStatus {
 }
 
 model Reservation {
-  id           String             @id @default(cuid())
+  id           String            @id @default(cuid())
   customerName String
   phone        String
   guestCount   Int
   reservedAt   DateTime
-  status       ReservationStatus  @default(PENDING)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  status       ReservationStatus @default(PENDING)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  table        RestaurantTable    @relation(fields: [tableId], references: [id])
-  tableId      String
+  table   RestaurantTable @relation(fields: [tableId], references: [id])
+  tableId String
 
   // Optional: reservations don't require login (matches the current /table
   // page, which isn't behind auth), but we link the account when available.
-  user         User?              @relation(fields: [userId], references: [id])
-  userId       String?
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
 
   @@index([tableId, reservedAt])
 }

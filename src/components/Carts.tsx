@@ -29,6 +29,16 @@ interface CardDetails {
 type BillingErrors = Partial<Record<keyof BillingFormData | "selectedCountry", string>>;
 type PaymentErrors = Partial<Record<keyof CardDetails | "isAgreedToTerms", string>>;
 
+const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA"> = {
+  "uber-eats": "UBER_EATS",
+  "food-panda": "FOOD_PANDA",
+};
+
+const PAYMENT_METHOD_MAP: Record<"cod" | "online", "COD" | "ONLINE"> = {
+  cod: "COD",
+  online: "ONLINE",
+};
+
 const Carts = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -66,7 +76,7 @@ const Carts = () => {
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const total = subtotal;
 
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
       toast.warning("Please add an item before placing the order!", {
         position: "top-center",
@@ -111,8 +121,53 @@ const Carts = () => {
     setErrors(newErrors);
     setPaymentErrors(newPaymentErrors);
 
-    if (Object.keys(newErrors).length === 0 && Object.keys(newPaymentErrors).length === 0) {
-      toast.success("The Food order successfully!", {
+    if (Object.keys(newErrors).length > 0 || Object.keys(newPaymentErrors).length > 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            title: item.title,
+            quantity: item.quantity,
+          })),
+          billing: {
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phoneNumber,
+            country: selectedCountry?.label ?? "",
+            address: formData.address,
+            apartment: formData.apartment || undefined,
+            city: formData.city,
+            state: formData.state,
+            zip: formData.zip,
+          },
+          shippingMethod: SHIPPING_METHOD_MAP[selectedShipping],
+          paymentMethod: PAYMENT_METHOD_MAP[paymentMethod],
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data?.error ?? "Failed to place order. Please try again.", {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: true,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        return;
+      }
+
+      toast.success("The Food order placed successfully!", {
         position: "top-center",
         autoClose: 2000,
         hideProgressBar: true,
@@ -145,6 +200,18 @@ const Carts = () => {
       setPaymentErrors({});
 
       clearCart();
+    } catch (err) {
+      console.error("Order submission failed:", err);
+      toast.error("Something went wrong placing your order. Please try again.", {
+        position: "top-center",
+        autoClose: 3000,
+        hideProgressBar: true,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -173,7 +240,16 @@ const Carts = () => {
     });
   };
 
-  const shippingMethodSection = (
+  // NOTE: this section is rendered TWICE below (once for desktop layout,
+  // once for mobile, toggled via Tailwind hidden/block classes). CSS
+  // `hidden` only sets display:none — the hidden copy's <input> elements
+  // stay in the DOM. If both copies shared the same `name`, the browser's
+  // native radio-group behavior (grouped by `name`, not by visibility)
+  // could silently check/uncheck the hidden duplicate instead of the
+  // visible one — that's the "sometimes it doesn't visually select" bug.
+  // Passing a unique idSuffix keeps the two copies in separate native
+  // radio groups while both stay in sync via the shared state.
+  const renderShippingMethodSection = (idSuffix: string) => (
     <div className="space-y-4">
       <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
         Available Shipping Method
@@ -210,7 +286,7 @@ const Carts = () => {
             Free
             <input
               type="radio"
-              name="shipping"
+              name={`shipping-${idSuffix}`}
               value="uber-eats"
               checked={selectedShipping === "uber-eats"}
               onChange={() => setSelectedShipping("uber-eats")}
@@ -244,7 +320,7 @@ const Carts = () => {
             Free
             <input
               type="radio"
-              name="shipping"
+              name={`shipping-${idSuffix}`}
               value="food-panda"
               checked={selectedShipping === "food-panda"}
               onChange={() => setSelectedShipping("food-panda")}
@@ -256,7 +332,8 @@ const Carts = () => {
     </div>
   );
 
-  const paymentMethodSection = (
+  // Same duplicate-DOM issue as shipping — see note above renderShippingMethodSection.
+  const renderPaymentMethodSection = (idSuffix: string) => (
     <>
       <div className="space-y-4">
         <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
@@ -267,7 +344,7 @@ const Carts = () => {
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="radio"
-              name="payment"
+              name={`payment-${idSuffix}`}
               value="online"
               checked={paymentMethod === "online"}
               onChange={() => setPaymentMethod("online")}
@@ -290,7 +367,7 @@ const Carts = () => {
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="radio"
-              name="payment"
+              name={`payment-${idSuffix}`}
               value="cod"
               checked={paymentMethod === "cod"}
               onChange={() => setPaymentMethod("cod")}
@@ -450,12 +527,20 @@ const Carts = () => {
 
       <button
         onClick={handleConfirmOrder}
-        className="bg-[#2C6252] text-white w-full py-3 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs mt-4"
+        disabled={isSubmitting}
+        className={`bg-[#2C6252] text-white w-full py-3 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs mt-4 ${
+          isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+        }`}
       >
-        Confirm your order
+        {isSubmitting ? "Placing order..." : "Confirm your order"}
       </button>
     </>
   );
+
+  const shippingMethodSectionDesktop = renderShippingMethodSection("desktop");
+  const shippingMethodSectionMobile = renderShippingMethodSection("mobile");
+  const paymentMethodSectionDesktop = renderPaymentMethodSection("desktop");
+  const paymentMethodSectionMobile = renderPaymentMethodSection("mobile");
 
   return (
     <Container>
@@ -580,8 +665,8 @@ const Carts = () => {
               {errors.phoneNumber && <p className="text-red-500 text-xs">{errors.phoneNumber}</p>}
 
               <div className="hidden lg:block">
-                {shippingMethodSection}
-                {paymentMethodSection}
+                {shippingMethodSectionDesktop}
+                {paymentMethodSectionDesktop}
               </div>
             </div>
           </div>
@@ -686,8 +771,8 @@ const Carts = () => {
           </div>
 
           <div className="block lg:hidden">
-            {shippingMethodSection}
-            {paymentMethodSection}
+            {shippingMethodSectionMobile}
+            {paymentMethodSectionMobile}
           </div>
         </div>
       </div>
