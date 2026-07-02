@@ -28,24 +28,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
-
         const email = credentials.email as string;
         const password = credentials.password as string;
-
         const user = await prisma.user.findUnique({
           where: { email },
         });
-
         // user.password null হবে যদি সে Google দিয়ে signup করে থাকে
         if (!user || !user.password) {
           return null;
         }
-
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
           return null;
         }
-
         return {
           id: user.id,
           email: user.email,
@@ -59,12 +54,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig.callbacks,
     // Google দিয়ে প্রথমবার login করলে User টেবিলে row তৈরি করা
     // (PrismaAdapter ব্যবহার না করে JWT strategy দিয়ে manual handle)
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
+        // SECURITY: Google-এর email_verified flag চেক না করলে account
+        // takeover সম্ভব — কেউ credentials দিয়ে victim@gmail.com নামে
+        // আগেই একটা account বানিয়ে রাখতে পারে, পরে আসল victim Google দিয়ে
+        // login করলে সেই আগের (attacker-controlled) account-এর সাথে
+        // silently merge হয়ে যেত। Google সাধারণত verified email-ই পাঠায়,
+        // কিন্তু defensive coding হিসেবে এখানে explicit চেক রাখা হলো।
+        if (!profile?.email_verified) {
+          return false;
+        }
+
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email as string },
         });
-
         if (!existingUser) {
           const newUser = await prisma.user.create({
             data: {
