@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import { redirect } from "next/navigation";
+import { formatOrderId } from "@/lib/format-order-id";
 
 /**
  * src/app/(main)/account/orders/page.tsx
@@ -33,15 +34,6 @@ const STATUS_LABELS: Record<string, string> = {
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
 };
-
-/**
- * Turns a full cuid (e.g. "cmr38wefz00014ulgwq2ynzne") into a short,
- * trendy display code (e.g. "#ORD-2YNZNE") using the last 6 characters.
- */
-function formatOrderId(id: string) {
-  const shortCode = id.slice(-6).toUpperCase();
-  return `#ORD-${shortCode}`;
-}
 
 export default async function MyOrdersPage() {
   const session = await auth();
