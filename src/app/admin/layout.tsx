@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 
 const NAV_ITEMS = [
+  { label: "Dashboard", href: "/admin" },
   { label: "Orders", href: "/admin/orders" },
   // পরে যোগ হবে:
   // { label: "Menu", href: "/admin/menu" },
