@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { label: "Categories", href: "/admin/categories" },
   { label: "Reservations", href: "/admin/reservations" },
   { label: "Tables", href: "/admin/tables" },
+  { label: "Users", href: "/admin/users" },
 ];
 
 export default async function AdminLayout({
