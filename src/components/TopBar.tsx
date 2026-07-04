@@ -7,11 +7,6 @@ import { useCart } from "@/context/CartContext";
 import Container from "@/components/Container";
 import AccountMenu from "@/components/AccountMenu";
 
-// 🔧 Restaurant location config — change these to match your restaurant
-const RESTAURANT_TIMEZONE = "Asia/Dhaka"; // IANA timezone name — restaurant is in Bangladesh
-const KITCHEN_OPEN_HOUR = 10; // 24-hour format, e.g. 10 = 10 AM
-const KITCHEN_CLOSE_HOUR = 22; // 24-hour format, e.g. 22 = 10 PM
-
 // Rounds trig output to a fixed precision so server and client renders
 // always produce an identical string — prevents hydration mismatches caused
 // by tiny floating-point differences between Node.js and browser Math engines.
@@ -125,12 +120,37 @@ const AnalogClock = memo(() => {
 });
 AnalogClock.displayName = "AnalogClock";
 
+// ডিফল্ট ভ্যালু — /api/settings থেকে fetch হওয়ার আগ পর্যন্ত fallback হিসেবে
+// ব্যবহার হয়, যাতে প্রথম render-এ কোনো crash বা undefined না হয়
+const DEFAULT_TIMEZONE = "Asia/Dhaka";
+const DEFAULT_OPEN_HOUR = 10;
+const DEFAULT_CLOSE_HOUR = 22;
+
 const TopBar = memo(() => {
   // Same fix here: don't seed with `new Date()` on the server. Start `null`
   // and only compute the real time after mount.
   const [time, setTime] = useState<Date | null>(null);
   const [isKitchenOpen, setIsKitchenOpen] = useState(true);
   const { cartCount } = useCart();
+
+  // Restaurant settings — আগে hardcoded const ছিল, এখন admin panel
+  // (/admin/settings) থেকে পরিবর্তনযোগ্য, তাই এখানে DB থেকে fetch করা হচ্ছে।
+  const [restaurantTimezone, setRestaurantTimezone] = useState(DEFAULT_TIMEZONE);
+  const [kitchenOpenHour, setKitchenOpenHour] = useState(DEFAULT_OPEN_HOUR);
+  const [kitchenCloseHour, setKitchenCloseHour] = useState(DEFAULT_CLOSE_HOUR);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.timezone) setRestaurantTimezone(data.timezone);
+        if (typeof data.kitchenOpenHour === "number") setKitchenOpenHour(data.kitchenOpenHour);
+        if (typeof data.kitchenCloseHour === "number") setKitchenCloseHour(data.kitchenCloseHour);
+      })
+      .catch(() => {
+        // fetch fail হলে চুপচাপ ডিফল্ট ভ্যালু দিয়েই চলবে — কোনো crash হবে না
+      });
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -140,7 +160,7 @@ const TopBar = memo(() => {
       // Get the current hour specifically in the restaurant's timezone
       const hourInRestaurantTz = parseInt(
         new Intl.DateTimeFormat("en-US", {
-          timeZone: RESTAURANT_TIMEZONE,
+          timeZone: restaurantTimezone,
           hour: "numeric",
           hourCycle: "h23",
         }).format(now),
@@ -148,41 +168,41 @@ const TopBar = memo(() => {
       );
 
       setIsKitchenOpen(
-        hourInRestaurantTz >= KITCHEN_OPEN_HOUR &&
-          hourInRestaurantTz < KITCHEN_CLOSE_HOUR,
+        hourInRestaurantTz >= kitchenOpenHour &&
+          hourInRestaurantTz < kitchenCloseHour,
       );
     };
 
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [restaurantTimezone, kitchenOpenHour, kitchenCloseHour]);
 
   // Time displayed is always the restaurant's local time, regardless of visitor location
   const formattedTime = useMemo(() => {
     if (!time) return "--:--:--";
     return time
       .toLocaleTimeString("en-US", {
-        timeZone: RESTAURANT_TIMEZONE,
+        timeZone: restaurantTimezone,
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
         hour12: true,
       })
       .replace(/ (AM|PM)/, "");
-  }, [time]);
+  }, [time, restaurantTimezone]);
 
   const ampm = useMemo(() => {
     if (!time) return "";
     const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: RESTAURANT_TIMEZONE,
+      timeZone: restaurantTimezone,
       hour: "numeric",
       hour12: true,
     })
       .format(time)
       .split(" ");
     return parts[1] || "AM";
-  }, [time]);
+  }, [time, restaurantTimezone]);
 
   return (
     <div className="flex items-center justify-center relative z-30">
@@ -225,7 +245,7 @@ const TopBar = memo(() => {
 
               {!isKitchenOpen && (
                 <div className="absolute top-full left-0 mt-1 px-2 py-0 w-full bg-black text-white text-center text-xs md:text-sm 3xl:text-base opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-sm">
-                  Kitchen will open at {KITCHEN_OPEN_HOUR}:00 (restaurant time)
+                  Kitchen will open at {kitchenOpenHour}:00 (restaurant time)
                 </div>
               )}
             </div>

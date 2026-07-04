@@ -159,3 +159,19 @@ model Reservation {
 
   @@index([tableId, reservedAt])
 }
+
+// ---------------------------------------------------------------------------
+// Restaurant settings
+//
+// Single-row table pattern — সবসময় ঠিক একটাই row থাকবে (id: "singleton")।
+// আগে TopBar.tsx-এ timezone আর kitchen open/close hour hardcoded const
+// হিসেবে ছিল (কোড এডিট করে redeploy করতে হতো)। এখন এটা admin panel
+// (/admin/settings) থেকে UI দিয়েই পরিবর্তনযোগ্য।
+// ---------------------------------------------------------------------------
+model RestaurantSettings {
+  id               String   @id @default("singleton")
+  timezone         String   @default("Asia/Dhaka")
+  kitchenOpenHour  Int      @default(10)
+  kitchenCloseHour Int      @default(22)
+  updatedAt        DateTime @updatedAt
+}
