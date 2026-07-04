@@ -126,6 +126,14 @@ const DEFAULT_TIMEZONE = "Asia/Dhaka";
 const DEFAULT_OPEN_HOUR = 10;
 const DEFAULT_CLOSE_HOUR = 22;
 
+// 24-hour সংখ্যাকে "10:00 AM" / "10:00 PM" ফরম্যাটে দেখানোর জন্য —
+// tooltip-এ শুধু raw সংখ্যা (যেমন "10:00") দেখালে AM/PM অস্পষ্ট থাকতো।
+function formatHourLabel(hour: number) {
+  const period = hour < 12 ? "AM" : "PM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}:00 ${period}`;
+}
+
 const TopBar = memo(() => {
   // Same fix here: don't seed with `new Date()` on the server. Start `null`
   // and only compute the real time after mount.
@@ -245,7 +253,7 @@ const TopBar = memo(() => {
 
               {!isKitchenOpen && (
                 <div className="absolute top-full left-0 mt-1 px-2 py-0 w-full bg-black text-white text-center text-xs md:text-sm 3xl:text-base opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-sm">
-                  Kitchen will open at {kitchenOpenHour}:00 (restaurant time)
+                  Kitchen will open at {formatHourLabel(kitchenOpenHour)} (restaurant time)
                 </div>
               )}
             </div>
