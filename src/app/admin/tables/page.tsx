@@ -4,11 +4,22 @@ import ActiveToggle from "./ActiveToggle";
 import DeleteTableButton from "./DeleteTableButton";
 
 export default async function AdminTablesPage() {
-  const tables = await prisma.restaurantTable.findMany({
-    orderBy: { label: "asc" },
+  const rawTables = await prisma.restaurantTable.findMany({
     include: {
       _count: { select: { reservations: true } },
     },
+  });
+
+  // Prisma-র string sort "T-10"-কে "T-1"-এর ঠিক পরে বসিয়ে দেয় (lexicographic),
+  // কিন্তু আমরা চাই T-1, T-2, ... T-10 — natural/numeric order।
+  // label থেকে সংখ্যা অংশ বের করে সেটার উপর ভিত্তি করে সাজানো হচ্ছে।
+  const tables = [...rawTables].sort((a, b) => {
+    const numA = parseInt(a.label.replace(/\D/g, ""), 10);
+    const numB = parseInt(b.label.replace(/\D/g, ""), 10);
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+      return numA - numB;
+    }
+    return a.label.localeCompare(b.label);
   });
 
   return (
