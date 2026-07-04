@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
@@ -62,7 +63,12 @@ export default async function AdminOrdersPage({
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div>
                   <p className="text-xs text-gray-400">Order ID</p>
-                  <p className="text-sm font-mono">{formatOrderId(order.id)}</p>
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="text-sm font-mono text-[#2C6252] hover:underline"
+                  >
+                    {formatOrderId(order.id)}
+                  </Link>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Customer</p>
