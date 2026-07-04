@@ -6,8 +6,7 @@ const NAV_ITEMS = [
   { label: "Orders", href: "/admin/orders" },
   { label: "Menu", href: "/admin/menu" },
   { label: "Reservations", href: "/admin/reservations" },
-  // পরে যোগ হবে:
-  // { label: "Tables", href: "/admin/tables" },
+  { label: "Tables", href: "/admin/tables" },
 ];
 
 export default async function AdminLayout({
