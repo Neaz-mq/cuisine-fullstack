@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
+import NotificationBell from "./NotificationBell";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin" },
@@ -22,9 +23,12 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-screen bg-gray-50">
       <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col">
-        <div className="px-5 py-5 border-b border-gray-100">
-          <p className="text-sm font-semibold text-gray-800">Admin Panel</p>
-          <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+        <div className="px-5 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Admin Panel</p>
+            <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+          </div>
+          <NotificationBell />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
