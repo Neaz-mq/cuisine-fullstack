@@ -21,6 +21,7 @@ type MenuItemFormProps = {
 export default function MenuItemForm({ categories, initialData }: MenuItemFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [title, setTitle] = useState(initialData?.title ?? "");
@@ -31,6 +32,35 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
     initialData?.categoryId ?? categories[0]?.id ?? ""
   );
   const [isAvailable, setIsAvailable] = useState(initialData?.isAvailable ?? true);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/admin/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setImageUrl(data.url);
+      } else {
+        setError(data.error ?? "Upload failed. Please try again.");
+      }
+    } catch {
+      setError("Upload failed. Please check your connection and try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,16 +161,23 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Image URL (optional)
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
         <input
-          type="text"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          placeholder="https://..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          disabled={isUploading}
+          className="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-gray-100 file:text-sm file:font-medium hover:file:bg-gray-200 disabled:opacity-50"
         />
+        {isUploading && <p className="text-xs text-gray-400 mt-1">Uploading...</p>}
+        {imageUrl && !isUploading && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt="Preview"
+            className="mt-2 h-24 w-24 object-cover rounded-md border border-gray-200"
+          />
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -156,7 +193,7 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || isUploading}
           className="bg-[#FF4C15] text-white text-sm font-semibold px-5 py-2 rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
         >
           {isPending ? "Saving..." : initialData ? "Save Changes" : "Create Item"}
