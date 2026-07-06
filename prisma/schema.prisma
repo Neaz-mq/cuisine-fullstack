@@ -25,6 +25,7 @@ model User {
 
   orders       Order[]
   reservations Reservation[]
+  reviews      Review[]
 }
 
 enum Role {
@@ -50,6 +51,7 @@ model MenuItem {
   category   Category    @relation(fields: [categoryId], references: [id])
   categoryId String
   orderItems OrderItem[]
+  reviews    Review[]
 }
 
 model Order {
@@ -174,4 +176,44 @@ model RestaurantSettings {
   kitchenOpenHour  Int      @default(10)
   kitchenCloseHour Int      @default(22)
   updatedAt        DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Reviews & Ratings
+//
+// Design note: verified-purchase eligibility (user must have a DELIVERED
+// order containing this menuItem) is enforced in API logic, not as a schema
+// constraint — same query-time-computation pattern used for
+// RestaurantTable availability above, rather than denormalizing purchase
+// state onto this model.
+//
+// One review per (user, menuItem) — @@unique below. Re-reviewing the same
+// item after a repeat order is an UPDATE to the existing review, not a new
+// row.
+//
+// avgRating/reviewCount are intentionally NOT cached on MenuItem; they are
+// computed on read via aggregate query. Can be denormalized later purely as
+// a perf optimization if needed — not a correctness requirement now.
+// ---------------------------------------------------------------------------
+model Review {
+  id        String       @id @default(cuid())
+  rating    Int
+  comment   String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId String
+
+  @@unique([userId, menuItemId])
+  @@index([menuItemId, status])
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
