@@ -6,6 +6,7 @@ import NotificationBell from "./NotificationBell";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin" },
   { label: "Orders", href: "/admin/orders" },
+  { label: "Kitchen", href: "/admin/kitchen" },
   { label: "Menu", href: "/admin/menu" },
   { label: "Categories", href: "/admin/categories" },
   { label: "Reviews", href: "/admin/reviews" },
