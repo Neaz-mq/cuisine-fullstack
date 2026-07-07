@@ -23,9 +23,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders       Order[]
-  reservations Reservation[]
-  reviews      Review[]
+  // Running balance, kept in sync with LoyaltyTransaction rows inside the
+  // same DB transaction whenever it changes (order delivered, manual admin
+  // adjustment). Denormalized on purpose — displaying points for a user list
+  // shouldn't require summing the whole ledger on every page view.
+  loyaltyPoints Int @default(0)
+
+  orders              Order[]
+  reservations        Reservation[]
+  reviews             Review[]
+  loyaltyTransactions LoyaltyTransaction[]
 }
 
 enum Role {
@@ -74,6 +81,10 @@ model Order {
   shippingMethod ShippingMethod
   paymentMethod  PaymentMethod
 
+  // Guards against re-crediting loyalty points if an order is moved to
+  // DELIVERED, reverted, and marked DELIVERED again by mistake.
+  pointsAwarded Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -81,7 +92,8 @@ model Order {
   user   User?  @relation(fields: [userId], references: [id])
   userId String?
 
-  items OrderItem[]
+  items               OrderItem[]
+  loyaltyTransactions LoyaltyTransaction[]
 }
 
 enum OrderStatus {
@@ -216,4 +228,37 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ---------------------------------------------------------------------------
+// Loyalty / Rewards Points
+//
+// Ledger + cached balance pattern: every change to a user's points (an
+// order getting DELIVERED, or an admin's manual adjustment) writes a
+// LoyaltyTransaction row AND updates User.loyaltyPoints in the same DB
+// transaction, so the running balance never drifts from its history.
+//
+// `points` is signed: positive = credit (earned), negative = debit
+// (redeemed / manual deduction). `orderId` is optional because manual
+// admin adjustments aren't tied to any specific order.
+// ---------------------------------------------------------------------------
+model LoyaltyTransaction {
+  id        String              @id @default(cuid())
+  points    Int
+  reason    LoyaltyReason
+  note      String?
+  createdAt DateTime            @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId String?
+
+  @@index([userId, createdAt])
+}
+
+enum LoyaltyReason {
+  ORDER_DELIVERED
+  MANUAL_ADJUSTMENT
 }
