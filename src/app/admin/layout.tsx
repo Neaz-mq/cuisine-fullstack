@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
+import { prisma } from "@/lib/prisma";
 import NotificationBell from "./NotificationBell";
 
 const NAV_ITEMS = [
@@ -7,6 +8,7 @@ const NAV_ITEMS = [
   { label: "Orders", href: "/admin/orders" },
   { label: "Menu", href: "/admin/menu" },
   { label: "Categories", href: "/admin/categories" },
+  { label: "Reviews", href: "/admin/reviews" },
   { label: "Reservations", href: "/admin/reservations" },
   { label: "Tables", href: "/admin/tables" },
   { label: "Users", href: "/admin/users" },
@@ -19,6 +21,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await requireAdmin();
+  const pendingReviewCount = await prisma.review.count({ where: { status: "PENDING" } });
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -36,9 +39,14 @@ export default async function AdminLayout({
             <Link
               key={item.href}
               href={item.href}
-              className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.href === "/admin/reviews" && pendingReviewCount > 0 && (
+                <span className="text-[11px] font-semibold bg-orange-50 text-[#FF4C15] px-2 py-0.5 rounded-full">
+                  {pendingReviewCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
