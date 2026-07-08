@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 
 /**
  * src/app/api/orders/route.ts
@@ -214,6 +215,8 @@ export async function POST(request: Request) {
     // installed dependency but unused). Treat online orders as
     // "payment intent captured on the honor system" until Stripe (or
     // another processor) is integrated.
+
+    await sendOrderConfirmationEmail(order);
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
