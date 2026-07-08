@@ -85,6 +85,13 @@ model Order {
   // DELIVERED, reverted, and marked DELIVERED again by mistake.
   pointsAwarded Boolean @default(false)
 
+  // Tracks real payment confirmation for ONLINE orders via Stripe Checkout
+  // + webhook — separate from `status` (fulfillment stage) because an order
+  // can be PLACED in our DB before Stripe has actually confirmed the charge.
+  // For COD orders this is left at its default and isn't currently acted
+  // on anywhere (no "mark paid on delivery" admin action exists yet).
+  paymentStatus PaymentStatus @default(PENDING)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -112,6 +119,12 @@ enum ShippingMethod {
 enum PaymentMethod {
   COD
   ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
 }
 
 model OrderItem {

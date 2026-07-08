@@ -20,24 +20,12 @@ interface BillingFormData {
   phoneNumber: string;
 }
 
-interface CardDetails {
-  cardholderName: string;
-  cardNumber: string;
-  expiryDate: string;
-  ccv: string;
-}
-
 type BillingErrors = Partial<Record<keyof BillingFormData | "selectedCountry", string>>;
-type PaymentErrors = Partial<Record<keyof CardDetails | "isAgreedToTerms", string>>;
+type PaymentErrors = Partial<Record<"isAgreedToTerms", string>>;
 
 const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA"> = {
   "uber-eats": "UBER_EATS",
   "food-panda": "FOOD_PANDA",
-};
-
-const PAYMENT_METHOD_MAP: Record<"cod" | "online", "COD" | "ONLINE"> = {
-  cod: "COD",
-  online: "ONLINE",
 };
 
 const Carts = () => {
@@ -61,13 +49,6 @@ const Carts = () => {
     state: "",
     zip: "",
     phoneNumber: "",
-  });
-
-  const [cardDetails, setCardDetails] = useState<CardDetails>({
-    cardholderName: "",
-    cardNumber: "",
-    expiryDate: "",
-    ccv: "",
   });
 
   const [isAgreedToTerms, setIsAgreedToTerms] = useState(false);
@@ -106,18 +87,6 @@ const Carts = () => {
     if (!selectedCountry) newErrors.selectedCountry = "Country is required.";
 
     if (paymentMethod === "online") {
-      if (!cardDetails.cardholderName.trim())
-        newPaymentErrors.cardholderName = "Cardholder name is required.";
-      if (!cardDetails.cardNumber.trim())
-        newPaymentErrors.cardNumber = "Card number is required.";
-      if (!/^\d{16}$/.test(cardDetails.cardNumber.replace(/\s/g, "")))
-        newPaymentErrors.cardNumber = "Invalid card number (16 digits required).";
-      if (!cardDetails.expiryDate.trim())
-        newPaymentErrors.expiryDate = "Expiry date is required.";
-      if (!/^\d{2}\/\d{2}$/.test(cardDetails.expiryDate))
-        newPaymentErrors.expiryDate = "Invalid expiry date (MM/YY).";
-      if (!cardDetails.ccv.trim()) newPaymentErrors.ccv = "CCV is required.";
-      if (!/^\d{3,4}$/.test(cardDetails.ccv)) newPaymentErrors.ccv = "Invalid CCV (3 or 4 digits).";
       if (!isAgreedToTerms) newPaymentErrors.isAgreedToTerms = "You must agree to the condition.";
     }
 
@@ -130,30 +99,62 @@ const Carts = () => {
 
     setIsSubmitting(true);
 
+    const billing = {
+      email: formData.email,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      phone: formData.phoneNumber,
+      country: selectedCountry?.label ?? "",
+      address: formData.address,
+      apartment: formData.apartment || undefined,
+      city: formData.city,
+      state: formData.state,
+      zip: formData.zip,
+    };
+    const shippingMethod = SHIPPING_METHOD_MAP[selectedShipping];
+    const orderItems = cartItems.map((item) => ({
+      title: item.title,
+      quantity: item.quantity,
+    }));
+
     try {
+      if (paymentMethod === "online") {
+        // Redirect to Stripe's hosted Checkout page. The order is created
+        // as PENDING payment on the server before we redirect — it's only
+        // ever confirmed PAID (and only then does the confirmation email
+        // go out) once Stripe's webhook verifies the actual charge. This
+        // redirect happening is not, by itself, proof of payment.
+        const res = await fetch("/api/checkout/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: orderItems, billing, shippingMethod }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          toast.error(data?.error ?? "Failed to start checkout. Please try again.", {
+            position: "top-center",
+            autoClose: 3000,
+            hideProgressBar: true,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        clearCart();
+        window.location.href = data.url; // full navigation — Stripe's page is a different origin
+        return;
+      }
+
+      // Cash on Delivery — created immediately, no payment step.
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cartItems.map((item) => ({
-            title: item.title,
-            quantity: item.quantity,
-          })),
-          billing: {
-            email: formData.email,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            phone: formData.phoneNumber,
-            country: selectedCountry?.label ?? "",
-            address: formData.address,
-            apartment: formData.apartment || undefined,
-            city: formData.city,
-            state: formData.state,
-            zip: formData.zip,
-          },
-          shippingMethod: SHIPPING_METHOD_MAP[selectedShipping],
-          paymentMethod: PAYMENT_METHOD_MAP[paymentMethod],
-        }),
+        body: JSON.stringify({ items: orderItems, billing, shippingMethod }),
       });
 
       const data = await res.json();
@@ -192,13 +193,6 @@ const Carts = () => {
       });
       setSelectedCountry(null);
       setErrors({});
-
-      setCardDetails({
-        cardholderName: "",
-        cardNumber: "",
-        expiryDate: "",
-        ccv: "",
-      });
       setIsAgreedToTerms(false);
       setPaymentErrors({});
 
@@ -222,11 +216,6 @@ const Carts = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleCardDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCardDetails((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDiscountCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -394,138 +383,45 @@ const Carts = () => {
 
       {paymentMethod === "online" && (
         <div className="mt-8 p-6 border border-gray-200 space-y-4">
-          <div className="flex sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row items-center justify-between">
-            <h3 className="3xl:text-xl 2xl:text-xl xl:text-xl lg:text-xl md:text-xl sm:text-lg font-semibold text-gray-800">
-              Credit card / debit card
-            </h3>
-            <div className="flex items-center 3xl:gap-8 2xl:gap-8 xl:gap-8 lg:gap-8 md:gap-8 sm:gap-4 sm:mt-3 sm:-ml-1 3xl:mt-0 3xl:-ml-0 2xl:mt-0 2xl:-ml-0 xl:mt-0 xl:-ml-0 lg:mt-0 lg:-ml-0 md:mt-0 md:-ml-0">
-              <img
-                src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348676/pngegg_84_rh7u9t.png"
-                alt="Mastercard"
-                className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
-              />
-              <img
-                src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348700/pngegg_85_i6czbr.png"
-                alt="Visa"
-                className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
-              />
-              <img
-                src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348721/pngegg_86_icrxs1.png"
-                alt="American Express"
-                className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
-              />
-              <img
-                src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348785/pngegg_92_lbmpaf.png"
-                alt="Ria Money Transfer"
-                className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
-              />
-            </div>
+          <div className="flex items-center 3xl:gap-8 2xl:gap-8 xl:gap-8 lg:gap-8 md:gap-8 sm:gap-4 flex-wrap">
+            <img
+              src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348676/pngegg_84_rh7u9t.png"
+              alt="Mastercard"
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+            />
+            <img
+              src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348700/pngegg_85_i6czbr.png"
+              alt="Visa"
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+            />
+            <img
+              src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348721/pngegg_86_icrxs1.png"
+              alt="American Express"
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+            />
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="cardholderName" className="block text-sm font-medium text-gray-700">
-                Cardholder name
-              </label>
-              <input
-                type="text"
-                id="cardholderName"
-                name="cardholderName"
-                placeholder="Lynette Kunze"
-                className="mt-1 block w-full border border-gray-300 px-4 py-2 rounded-md 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                value={cardDetails.cardholderName}
-                onChange={handleCardDetailsChange}
-              />
-              {paymentErrors.cardholderName && (
-                <p className="text-red-500 text-xs mt-1">{paymentErrors.cardholderName}</p>
-              )}
-            </div>
+          <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600 flex items-start gap-2">
+            <span className="text-[#2C6252] text-lg">&#128274;</span>
+            You&apos;ll enter your card details securely on Stripe&apos;s payment page after
+            clicking &quot;Confirm your order&quot; below — we never see or store your card
+            number.
+          </p>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <label
-                  htmlFor="cardNumber"
-                  className="block 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs font-medium text-gray-700"
-                >
-                  Card number
-                </label>
-                <input
-                  type="text"
-                  id="cardNumber"
-                  name="cardNumber"
-                  placeholder="5316 8e71 7571 5545"
-                  className="mt-1 block w-full border border-gray-300 3xl:px-4 3xl:py-2 2xl:px-4 2xl:py-2 xl:px-4 xl:py-2 lg:px-4 lg:py-2 md:px-4 md:py-2 sm:px-2 sm:py-2 rounded-md 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[9px]"
-                  value={cardDetails.cardNumber}
-                  onChange={handleCardDetailsChange}
-                  maxLength={19}
-                />
-                {paymentErrors.cardNumber && (
-                  <p className="text-red-500 text-xs mt-1">{paymentErrors.cardNumber}</p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="expiryDate"
-                  className="block 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs font-medium text-gray-700"
-                >
-                  Date
-                </label>
-                <input
-                  type="text"
-                  id="expiryDate"
-                  name="expiryDate"
-                  placeholder="24/28"
-                  className="mt-1 block w-full border border-gray-300 3xl:px-4 3xl:py-2 2xl:px-4 2xl:py-2 xl:px-4 xl:py-2 lg:px-4 lg:py-2 md:px-4 md:py-2 sm:px-2 sm:py-2 rounded-md 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[9px]"
-                  value={cardDetails.expiryDate}
-                  onChange={handleCardDetailsChange}
-                  maxLength={5}
-                />
-                {paymentErrors.expiryDate && (
-                  <p className="text-red-500 text-xs mt-1">{paymentErrors.expiryDate}</p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="ccv"
-                  className="block 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs font-medium text-gray-700"
-                >
-                  CCV <span className="text-gray-400 text-sm ml-1">?</span>
-                </label>
-                <input
-                  type="text"
-                  id="ccv"
-                  name="ccv"
-                  placeholder="2659"
-                  className="mt-1 block w-full border border-gray-300 3xl:px-4 3xl:py-2 2xl:px-4 2xl:py-2 xl:px-4 xl:py-2 lg:px-4 lg:py-2 md:px-4 md:py-2 sm:px-2 sm:py-2 rounded-md 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[9px]"
-                  value={cardDetails.ccv}
-                  onChange={handleCardDetailsChange}
-                  maxLength={4}
-                />
-                {paymentErrors.ccv && <p className="text-red-500 text-xs mt-1">{paymentErrors.ccv}</p>}
-              </div>
-            </div>
-
-            <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-gray-500 flex items-center gap-2">
-              <span className="text-blue-500 text-lg mr-1">&#9432;</span>
-              Credit card payments may take up to 24th to be processed
-              <span className="text-gray-400 text-sm ml-1">?</span>
-            </p>
-
-            <label className="flex items-center gap-2 mt-4 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAgreedToTerms}
-                onChange={(e) => setIsAgreedToTerms(e.target.checked)}
-                className="form-checkbox h-4 w-4 text-green-600 rounded"
-              />
-              <span className="text-gray-700 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]">
-                If you agree this condition please mark
-              </span>
-            </label>
-            {paymentErrors.isAgreedToTerms && (
-              <p className="text-red-500 text-xs mt-1">{paymentErrors.isAgreedToTerms}</p>
-            )}
-          </div>
+          <label className="flex items-center gap-2 mt-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isAgreedToTerms}
+              onChange={(e) => setIsAgreedToTerms(e.target.checked)}
+              className="form-checkbox h-4 w-4 text-green-600 rounded"
+            />
+            <span className="text-gray-700 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]">
+              If you agree this condition please mark
+            </span>
+          </label>
+          {paymentErrors.isAgreedToTerms && (
+            <p className="text-red-500 text-xs mt-1">{paymentErrors.isAgreedToTerms}</p>
+          )}
         </div>
       )}
 
