@@ -7,6 +7,48 @@ const VALID_STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", 
 // 1 loyalty point per $10 spent, rounded down.
 const POINTS_PER_CURRENCY_UNIT = 10;
 
+// Public, unauthenticated lookup for the /track/[orderId] page. Guest
+// checkout customers have no account to log into, so tracking has to work
+// without a session — the unguessable cuid order id is effectively the
+// access token here (same pattern most delivery apps use for tracking
+// links). Deliberately selects only tracking-relevant fields — not phone,
+// full address, or email — to limit what's exposed on an endpoint with no
+// auth check.
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  const order = await prisma.order.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      totalAmount: true,
+      firstName: true,
+      city: true,
+      shippingMethod: true,
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+          price: true,
+          menuItem: { select: { title: true } },
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(order);
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

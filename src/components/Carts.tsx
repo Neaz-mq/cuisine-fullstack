@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import Select, { SingleValue } from "react-select";
@@ -40,6 +41,8 @@ const PAYMENT_METHOD_MAP: Record<"cod" | "online", "COD" | "ONLINE"> = {
 };
 
 const Carts = () => {
+  const router = useRouter();
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -200,6 +203,7 @@ const Carts = () => {
       setPaymentErrors({});
 
       clearCart();
+      router.push(`/track/${data.id}`);
     } catch (err) {
       console.error("Order submission failed:", err);
       toast.error("Something went wrong placing your order. Please try again.", {

@@ -28,12 +28,14 @@ export default async function AdminInsightsPage() {
         category: { select: { name: true } },
       },
     }),
-    // Same "exclude CANCELLED orders" convention as the Dashboard's
-    // top-selling-items query.
-    prisma.orderItem.groupBy({
-      by: ["menuItemId"],
-      _sum: { quantity: true, price: true },
+    // OrderItem.price is a UNIT price, not a line total (confirmed by every
+    // other place in the app that renders `item.price * item.quantity`).
+    // Prisma's groupBy _sum can only sum a raw column, so it can't multiply
+    // price by quantity per row — we fetch the raw lines and aggregate
+    // revenue in JS instead.
+    prisma.orderItem.findMany({
       where: { order: { status: { not: "CANCELLED" } } },
+      select: { menuItemId: true, quantity: true, price: true },
     }),
     prisma.review.groupBy({
       by: ["menuItemId"],
@@ -43,7 +45,13 @@ export default async function AdminInsightsPage() {
     }),
   ]);
 
-  const salesMap = new Map(orderItemAgg.map((o) => [o.menuItemId, o]));
+  const salesMap = new Map<string, { quantity: number; revenue: number }>();
+  orderItemAgg.forEach((line) => {
+    const existing = salesMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
+    existing.quantity += line.quantity;
+    existing.revenue += line.price * line.quantity;
+    salesMap.set(line.menuItemId, existing);
+  });
   const reviewMap = new Map(reviewAgg.map((r) => [r.menuItemId, r]));
 
   const stats: ItemStat[] = menuItems.map((item) => {
@@ -54,8 +62,8 @@ export default async function AdminInsightsPage() {
       title: item.title,
       categoryName: item.category?.name ?? "Uncategorized",
       isAvailable: item.isAvailable,
-      quantity: sales?._sum.quantity ?? 0,
-      revenue: sales?._sum.price ?? 0,
+      quantity: sales?.quantity ?? 0,
+      revenue: sales?.revenue ?? 0,
       avgRating: reviews?._avg.rating ?? null,
       reviewCount: reviews?._count.rating ?? 0,
     };

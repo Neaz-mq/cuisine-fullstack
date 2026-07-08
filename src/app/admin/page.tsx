@@ -53,14 +53,11 @@ export default async function AdminDashboardPage() {
       },
       select: { createdAt: true, totalAmount: true },
     }),
-    prisma.orderItem.groupBy({
-      by: ["menuItemId"],
-      _sum: { quantity: true, price: true },
+    prisma.orderItem.findMany({
       where: {
         order: { status: { not: "CANCELLED" } },
       },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 5,
+      select: { menuItemId: true, quantity: true, price: true },
     }),
   ]);
 
@@ -92,17 +89,34 @@ export default async function AdminDashboardPage() {
   const weekTotal = dayBuckets.reduce((sum, d) => sum + d.revenue, 0);
 
   // --- Top-selling items ---
-  const menuItemIds = topItemsRaw.map((t) => t.menuItemId);
+  // OrderItem.price is a UNIT price (confirmed by every other place in the
+  // app — admin orders list, order detail, customer order history — which
+  // all render `item.price * item.quantity` as the line total). A raw
+  // `_sum: { price: true }` groupBy would sum unit prices across lines
+  // without multiplying by quantity, undercounting revenue for any item
+  // ever ordered with quantity > 1. So we aggregate in JS instead.
+  const itemStatsMap = new Map<string, { quantity: number; revenue: number }>();
+  topItemsRaw.forEach((line) => {
+    const existing = itemStatsMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
+    existing.quantity += line.quantity;
+    existing.revenue += line.price * line.quantity;
+    itemStatsMap.set(line.menuItemId, existing);
+  });
+
+  const menuItemIds = [...itemStatsMap.keys()];
   const menuItems = await prisma.menuItem.findMany({
     where: { id: { in: menuItemIds } },
     select: { id: true, title: true },
   });
   const menuItemMap = new Map(menuItems.map((m) => [m.id, m.title]));
-  const topItems = topItemsRaw.map((t) => ({
-    title: menuItemMap.get(t.menuItemId) ?? "Unknown item",
-    quantity: t._sum.quantity ?? 0,
-    revenue: t._sum.price ?? 0,
-  }));
+  const topItems = [...itemStatsMap.entries()]
+    .map(([menuItemId, s]) => ({
+      title: menuItemMap.get(menuItemId) ?? "Unknown item",
+      quantity: s.quantity,
+      revenue: s.revenue,
+    }))
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
   const maxQuantity = Math.max(...topItems.map((t) => t.quantity), 1);
 
   return (

@@ -94,6 +94,14 @@ export default async function MyOrdersPage() {
                   >
                     {STATUS_LABELS[order.status] ?? order.status}
                   </span>
+                  {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
+                    <Link
+                      href={`/track/${order.id}`}
+                      className="text-xs font-medium text-[#FF4C15] hover:underline"
+                    >
+                      Track order →
+                    </Link>
+                  )}
                 </div>
 
                 <div className="space-y-2 mb-4">
