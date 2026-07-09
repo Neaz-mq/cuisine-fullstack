@@ -27,13 +27,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Webhook not configured" }, { status: 400 });
   }
 
-  // Signature verification needs the exact raw request body — reading it
-  // as .json() first would re-serialize it and break the signature check.
-  const rawBody = await request.text();
+  // TEMPORARY DIAGNOSTIC LOGGING — remove once the signature issue is resolved.
+  console.log("=== STRIPE WEBHOOK DEBUG ===");
+  console.log("webhookSecret (JSON):", JSON.stringify(webhookSecret));
+  console.log("webhookSecret length:", webhookSecret.length);
+  console.log("signature header (JSON):", JSON.stringify(signature));
+  console.log("=============================");
+
+  // Signature verification needs the exact raw bytes Stripe sent. Using
+  // .text() decodes to a string first, which can introduce subtle encoding
+  // differences; arrayBuffer() -> Buffer preserves the exact bytes, which
+  // is what Stripe's SDK expects for HMAC verification.
+  const rawBodyBuffer = Buffer.from(await request.arrayBuffer());
+  console.log("rawBodyBuffer length:", rawBodyBuffer.length);
+  console.log("rawBodyBuffer first 80 bytes:", rawBodyBuffer.subarray(0, 80).toString("utf8"));
+  console.log("rawBodyBuffer last 20 bytes (hex):", rawBodyBuffer.subarray(-20).toString("hex"));
 
   let event: Stripe.Event;
   try {
-    event = getStripeClient().webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = getStripeClient().webhooks.constructEvent(rawBodyBuffer, signature, webhookSecret);
   } catch (err) {
     console.error("Stripe webhook signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
