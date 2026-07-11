@@ -30,6 +30,12 @@ export interface Billing {
  * state/zip are only required for DELIVERY — a DINE_IN order skips them
  * entirely since nothing is being shipped anywhere.
  */
+// Digits only, optional leading "+" for a country code, 7-15 digits — E.164
+// max length. Mirrors the client-side check in Carts.tsx — enforced here
+// too so a direct API call (bypassing the UI entirely) can't submit a
+// phone number containing letters/symbols.
+const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
+
 export function validateBilling(
   billing: Billing,
   orderType: OrderTypeValue = "DELIVERY"
@@ -48,7 +54,13 @@ export function validateBilling(
     orderType === "DINE_IN" ? alwaysRequired : [...alwaysRequired, ...deliveryOnlyRequired];
 
   const missingField = requiredFields.find((f) => !billing?.[f]?.trim());
-  return missingField ? `Billing field "${missingField}" is required` : null;
+  if (missingField) return `Billing field "${missingField}" is required`;
+
+  if (!PHONE_REGEX.test(billing.phone.trim())) {
+    return "Phone number must contain only digits (7-15 digits, optional + country code)";
+  }
+
+  return null;
 }
 
 export interface IncomingItem {

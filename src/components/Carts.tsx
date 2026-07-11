@@ -40,6 +40,12 @@ const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA"> = {
   "food-panda": "FOOD_PANDA",
 };
 
+// Digits only, optional leading "+" for a country code, 7-15 digits — E.164
+// max length. Matches the same rule enforced server-side in
+// src/lib/order-checkout-shared.ts (validateBilling) so a direct API call
+// can't bypass this by skipping the UI.
+const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
+
 const Carts = () => {
   const router = useRouter();
 
@@ -127,7 +133,11 @@ const Carts = () => {
     // still need a name to call out at the table for dine-in orders.
     if (!formData.firstName.trim()) newErrors.firstName = "First name is required.";
     if (!formData.lastName.trim()) newErrors.lastName = "Last name is required.";
-    if (!formData.phoneNumber.trim()) newErrors.phoneNumber = "Phone number is required.";
+    if (!formData.phoneNumber.trim()) {
+      newErrors.phoneNumber = "Phone number is required.";
+    } else if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
+      newErrors.phoneNumber = "Enter a valid phone number (digits only, 7-15 digits).";
+    }
 
     // Everything below is delivery-only — a dine-in order has no
     // destination to ship to and always pays at the table, so none of this
@@ -340,6 +350,18 @@ const Carts = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Strips anything that isn't a digit (or a leading "+" for a country
+  // code) as the user types, instead of only catching it at submit time —
+  // so letters/symbols simply never appear in the field rather than being
+  // typed and then rejected.
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const hasLeadingPlus = raw.trimStart().startsWith("+");
+    const digitsOnly = raw.replace(/\D/g, "");
+    const cleaned = (hasLeadingPlus ? "+" : "") + digitsOnly;
+    setFormData((prev) => ({ ...prev, phoneNumber: cleaned }));
   };
 
   const handleDiscountCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -730,11 +752,13 @@ const Carts = () => {
 
               <input
                 name="phoneNumber"
-                type="text"
+                type="tel"
+                inputMode="numeric"
+                maxLength={16}
                 placeholder="Phone number"
                 className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
                 value={formData.phoneNumber}
-                onChange={handleChange}
+                onChange={handlePhoneChange}
               />
               {errors.phoneNumber && <p className="text-red-500 text-xs">{errors.phoneNumber}</p>}
 
