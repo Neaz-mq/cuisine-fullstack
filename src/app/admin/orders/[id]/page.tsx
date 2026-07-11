@@ -13,10 +13,12 @@ export default async function AdminOrderDetailPage({
 
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: { include: { menuItem: true } }, user: true },
+    include: { items: { include: { menuItem: true } }, user: true, table: true },
   });
 
   if (!order) notFound();
+
+  const isDineIn = order.orderType === "DINE_IN";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -43,7 +45,11 @@ export default async function AdminOrderDetailPage({
             })}
           </p>
         </div>
-        <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
+        <OrderStatusSelect
+          orderId={order.id}
+          currentStatus={order.status}
+          orderType={order.orderType}
+        />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
@@ -60,23 +66,31 @@ export default async function AdminOrderDetailPage({
           ) : (
             <p className="text-xs text-gray-400 mt-1">Guest checkout</p>
           )}
-          <p className="text-sm text-gray-600 mt-2">{order.email}</p>
+          {order.email && <p className="text-sm text-gray-600 mt-2">{order.email}</p>}
           <p className="text-sm text-gray-600">{order.phone}</p>
         </div>
 
-        {/* Delivery Address */}
+        {/* Delivery Address (DELIVERY) / Table (DINE_IN) */}
         <div className="border border-gray-200 rounded-md p-4 bg-white">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Delivery Address
+            {isDineIn ? "Table" : "Delivery Address"}
           </h2>
-          <p className="text-sm text-gray-700">{order.address}</p>
-          {order.apartment && (
-            <p className="text-sm text-gray-700">{order.apartment}</p>
+          {isDineIn ? (
+            <p className="text-sm text-gray-700">
+              Table <span className="font-semibold">{order.table?.label ?? "—"}</span>
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700">{order.address}</p>
+              {order.apartment && (
+                <p className="text-sm text-gray-700">{order.apartment}</p>
+              )}
+              <p className="text-sm text-gray-700">
+                {order.city}, {order.state} {order.zip}
+              </p>
+              <p className="text-sm text-gray-700">{order.country}</p>
+            </>
           )}
-          <p className="text-sm text-gray-700">
-            {order.city}, {order.state} {order.zip}
-          </p>
-          <p className="text-sm text-gray-700">{order.country}</p>
         </div>
       </div>
 
@@ -98,8 +112,19 @@ export default async function AdminOrderDetailPage({
         </div>
         <div className="flex justify-between pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
           <span className="text-gray-500">
-            {order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"} ·{" "}
-            {order.paymentMethod === "COD" ? "Cash on Delivery" : "Online Payment"}
+            {isDineIn
+              ? `Table ${order.table?.label ?? "—"}`
+              : order.shippingMethod === "UBER_EATS"
+              ? "Uber Eats"
+              : order.shippingMethod === "FOOD_PANDA"
+              ? "Food Panda"
+              : "—"}{" "}
+            ·{" "}
+            {order.paymentMethod === "COD"
+              ? isDineIn
+                ? "Pay at Table"
+                : "Cash on Delivery"
+              : "Online Payment"}
           </span>
           <span className="font-bold text-[#2C6252]">
             USD ${order.totalAmount.toFixed(2)}

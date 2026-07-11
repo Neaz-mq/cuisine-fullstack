@@ -31,6 +31,7 @@ export async function GET() {
           menuItem: { select: { title: true } },
         },
       },
+      table: { select: { label: true } },
     },
     orderBy: { createdAt: "asc" },
   });

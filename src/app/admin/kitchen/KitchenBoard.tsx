@@ -16,10 +16,12 @@ type OrderItem = {
 type KitchenOrder = {
   id: string;
   status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY";
+  orderType: "DELIVERY" | "DINE_IN";
   firstName: string;
   lastName: string;
   createdAt: string;
   items: OrderItem[];
+  table: { label: string } | null;
 };
 
 // Same "ping" tone as NotificationBell.tsx — kept as a local copy here since
@@ -72,6 +74,7 @@ function OrderCard({
   const isUrgent =
     order.status !== "OUT_FOR_DELIVERY" &&
     nowMs - new Date(order.createdAt).getTime() > URGENT_AFTER_MS;
+  const isDineIn = order.orderType === "DINE_IN";
 
   return (
     <div
@@ -85,9 +88,16 @@ function OrderCard({
           {elapsedLabel(order.createdAt, nowMs)}
         </p>
       </div>
-      <p className="text-xs text-gray-500 mb-2">
-        {order.firstName} {order.lastName}
-      </p>
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs text-gray-500">
+          {order.firstName} {order.lastName}
+        </p>
+        {isDineIn && (
+          <span className="bg-[#2C6252]/10 text-[#2C6252] text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            Table {order.table?.label ?? "—"}
+          </span>
+        )}
+      </div>
 
       <ul className="text-sm text-gray-700 space-y-0.5 mb-3">
         {order.items.map((item) => (
@@ -104,7 +114,11 @@ function OrderCard({
           onClick={onAdvance}
           className="w-full text-xs font-semibold bg-[#FF4C15] text-white py-1.5 rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
         >
-          {order.status === "PLACED" ? "Start Preparing" : "Mark Ready"}
+          {order.status === "PLACED"
+            ? "Start Preparing"
+            : isDineIn
+            ? "Mark Ready to Serve"
+            : "Mark Ready"}
         </button>
       )}
     </div>

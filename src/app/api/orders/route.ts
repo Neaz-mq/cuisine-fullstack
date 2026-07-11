@@ -6,6 +6,7 @@ import {
   SHIPPING_METHODS,
   ShippingMethod,
   Billing,
+  OrderTypeValue,
   validateBilling,
   resolveOrderItems,
   IncomingItem,
@@ -15,12 +16,18 @@ import {
  * src/app/api/orders/route.ts
  *
  * GET  /api/orders   -> all orders, for the admin dashboard (ADMIN only)
- * POST /api/orders    -> create a Cash-on-Delivery order directly (public —
- *                         guest checkout is allowed, matching /carts which
- *                         isn't behind auth; we attach the account if
- *                         logged in). Online/card payments go through
- *                         /api/checkout/create-session instead, which
- *                         redirects to Stripe before the order is confirmed.
+ * POST /api/orders    -> create an order directly, no payment redirect.
+ *                        Covers two order types:
+ *                          - DELIVERY (default) + Cash on Delivery — same
+ *                            flow as before.
+ *                          - DINE_IN (QR Table Ordering) — always "Pay at
+ *                            Table", which reuses the COD paymentMethod
+ *                            value (see prisma/schema.prisma note on
+ *                            Order.paymentMethod).
+ *                        Online/card payments still go through
+ *                        /api/checkout/create-session instead, which
+ *                        redirects to Stripe before the order is confirmed
+ *                        — that path is DELIVERY-only, dine-in never uses it.
  *
  * See src/lib/order-checkout-shared.ts for the menu-item-resolution shim
  * shared between this route and the Stripe checkout route.
@@ -37,7 +44,7 @@ export async function GET() {
 
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
-      include: { items: { include: { menuItem: true } } },
+      include: { items: { include: { menuItem: true } }, table: true },
     });
 
     return NextResponse.json(orders);
@@ -57,25 +64,53 @@ export async function POST(request: Request) {
       items,
       billing,
       shippingMethod,
+      orderType = "DELIVERY",
+      tableId,
     }: {
       items: IncomingItem[];
       billing: Billing;
-      shippingMethod: ShippingMethod;
+      shippingMethod?: ShippingMethod;
+      orderType?: OrderTypeValue;
+      tableId?: string;
     } = body;
 
-    // This route only ever creates Cash-on-Delivery orders now — Online
-    // payment is handled by /api/checkout/create-session, which redirects
-    // to Stripe before an order is confirmed.
-    const billingError = validateBilling(billing);
+    if (orderType !== "DELIVERY" && orderType !== "DINE_IN") {
+      return NextResponse.json({ error: "Invalid order type" }, { status: 400 });
+    }
+
+    const billingError = validateBilling(billing, orderType);
     if (billingError) {
       return NextResponse.json({ error: billingError }, { status: 400 });
     }
 
-    if (!SHIPPING_METHODS.includes(shippingMethod)) {
-      return NextResponse.json(
-        { error: "Invalid shipping method" },
-        { status: 400 }
-      );
+    let validatedTableId: string | null = null;
+
+    if (orderType === "DINE_IN") {
+      if (!tableId) {
+        return NextResponse.json(
+          { error: "Table is required for dine-in orders" },
+          { status: 400 }
+        );
+      }
+
+      const table = await prisma.restaurantTable.findUnique({ where: { id: tableId } });
+      if (!table || !table.isActive) {
+        return NextResponse.json(
+          {
+            error:
+              "This table is no longer available. Please ask staff for a fresh QR code.",
+          },
+          { status: 409 }
+        );
+      }
+      validatedTableId = table.id;
+    } else {
+      if (!SHIPPING_METHODS.includes(shippingMethod as ShippingMethod)) {
+        return NextResponse.json(
+          { error: "Invalid shipping method" },
+          { status: 400 }
+        );
+      }
     }
 
     const resolution = await resolveOrderItems(items);
@@ -95,19 +130,26 @@ export async function POST(request: Request) {
       data: {
         status: "PLACED",
         totalAmount,
-        email: billing.email,
+        orderType,
         firstName: billing.firstName,
         lastName: billing.lastName,
         phone: billing.phone,
-        country: billing.country,
-        address: billing.address,
-        apartment: billing.apartment || null,
-        city: billing.city,
-        state: billing.state,
-        zip: billing.zip,
-        shippingMethod,
         paymentMethod: "COD",
         userId: session?.user?.id ?? null,
+        ...(orderType === "DELIVERY"
+          ? {
+              email: billing.email,
+              country: billing.country,
+              address: billing.address,
+              apartment: billing.apartment || null,
+              city: billing.city,
+              state: billing.state,
+              zip: billing.zip,
+              shippingMethod: shippingMethod as ShippingMethod,
+            }
+          : {
+              tableId: validatedTableId,
+            }),
         items: {
           create: resolvedItems.map((i) => ({
             menuItemId: i.menuItemId,
@@ -116,10 +158,33 @@ export async function POST(request: Request) {
           })),
         },
       },
-      include: { items: { include: { menuItem: true } } },
+      include: { items: { include: { menuItem: true } }, table: true },
     });
 
-    await sendOrderConfirmationEmail(order);
+    // Dine-in orders never collect an email address, so there's nothing to
+    // send a confirmation to — the customer just watches /track/[orderId]
+    // (or the kitchen calls their name/table).
+    //
+    // Note: address/city/state/zip/shippingMethod/email are typed nullable
+    // by Prisma now (optional as of QR Table Ordering), but validateBilling
+    // above guarantees they're populated for a DELIVERY order — the `as
+    // string` casts here reflect that already-checked invariant, not an
+    // unchecked assumption.
+    if (orderType === "DELIVERY" && order.email) {
+      await sendOrderConfirmationEmail({
+        id: order.id,
+        email: order.email as string,
+        firstName: order.firstName,
+        address: order.address as string,
+        city: order.city as string,
+        state: order.state as string,
+        zip: order.zip as string,
+        totalAmount: order.totalAmount,
+        shippingMethod: order.shippingMethod as string,
+        paymentMethod: order.paymentMethod,
+        items: order.items,
+      });
+    }
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {

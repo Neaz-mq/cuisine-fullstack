@@ -36,6 +36,26 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
+// A dine-in order was never "out for delivery" — same backend enum value,
+// different customer-facing wording (see project notes).
+function statusLabel(status: string, orderType: "DELIVERY" | "DINE_IN") {
+  if (status === "OUT_FOR_DELIVERY" && orderType === "DINE_IN") return "Ready to serve";
+  return STATUS_LABELS[status] ?? status;
+}
+
+function fulfillmentLabel(order: {
+  orderType: "DELIVERY" | "DINE_IN";
+  shippingMethod: string | null;
+  table: { label: string } | null;
+}) {
+  if (order.orderType === "DINE_IN") {
+    return `Table ${order.table?.label ?? "—"}`;
+  }
+  if (order.shippingMethod === "UBER_EATS") return "Uber Eats";
+  if (order.shippingMethod === "FOOD_PANDA") return "Food Panda";
+  return "—";
+}
+
 export default async function MyOrdersPage() {
   const session = await auth();
 
@@ -46,7 +66,7 @@ export default async function MyOrdersPage() {
   const orders = await prisma.order.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
-    include: { items: { include: { menuItem: true } } },
+    include: { items: { include: { menuItem: true } }, table: true },
   });
 
   return (
@@ -93,7 +113,7 @@ export default async function MyOrdersPage() {
                       STATUS_STYLES[order.status] ?? "bg-gray-100 text-gray-700"
                     }`}
                   >
-                    {STATUS_LABELS[order.status] ?? order.status}
+                    {statusLabel(order.status, order.orderType)}
                   </span>
                   {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <Link
@@ -134,9 +154,13 @@ export default async function MyOrdersPage() {
 
                 <div className="flex items-center justify-between pt-3 border-t border-dashed border-gray-200">
                   <span className="text-sm text-gray-500">
-                    {order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"}
+                    {fulfillmentLabel(order)}
                     {" · "}
-                    {order.paymentMethod === "COD" ? "Cash on Delivery" : "Online Payment"}
+                    {order.paymentMethod === "COD"
+                      ? order.orderType === "DINE_IN"
+                        ? "Pay at Table"
+                        : "Cash on Delivery"
+                      : "Online Payment"}
                   </span>
                   <span className="font-bold text-[#2C6252]">
                     USD ${order.totalAmount.toFixed(2)}

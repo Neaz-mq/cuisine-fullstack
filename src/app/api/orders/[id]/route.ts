@@ -30,7 +30,9 @@ export async function GET(
       totalAmount: true,
       firstName: true,
       city: true,
+      orderType: true,
       shippingMethod: true,
+      table: { select: { label: true } },
       items: {
         select: {
           id: true,

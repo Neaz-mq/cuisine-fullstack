@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import ActiveToggle from "./ActiveToggle";
 import DeleteTableButton from "./DeleteTableButton";
+import QrDownloadButton from "./QrDownloadButton";
 
 export default async function AdminTablesPage() {
   const rawTables = await prisma.restaurantTable.findMany({
@@ -60,6 +61,7 @@ export default async function AdminTablesPage() {
               <ActiveToggle tableId={table.id} isActive={table.isActive} />
 
               <div className="flex items-center gap-3 ml-auto">
+                <QrDownloadButton tableId={table.id} tableLabel={table.label} />
                 <Link
                   href={`/admin/tables/${table.id}/edit`}
                   className="text-sm text-gray-600 hover:text-gray-900 font-medium"

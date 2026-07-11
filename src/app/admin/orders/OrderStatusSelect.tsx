@@ -4,12 +4,23 @@ import { useState, useTransition } from "react";
 
 const STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
+// The backend enum value stays OUT_FOR_DELIVERY for both order types
+// (deliberately not adding a separate DINE_IN status — see project notes),
+// but a dine-in order was never "out for delivery", so it displays as
+// "Ready to Serve" instead.
+function labelFor(status: string, orderType?: "DELIVERY" | "DINE_IN") {
+  if (status === "OUT_FOR_DELIVERY" && orderType === "DINE_IN") return "READY TO SERVE";
+  return status.replace(/_/g, " ");
+}
+
 export default function OrderStatusSelect({
   orderId,
   currentStatus,
+  orderType,
 }: {
   orderId: string;
   currentStatus: string;
+  orderType?: "DELIVERY" | "DINE_IN";
 }) {
   const [status, setStatus] = useState(currentStatus);
   const [isPending, startTransition] = useTransition();
@@ -36,7 +47,7 @@ export default function OrderStatusSelect({
     >
       {STATUSES.map((s) => (
         <option key={s} value={s}>
-          {s.replace(/_/g, " ")}
+          {labelFor(s, orderType)}
         </option>
       ))}
     </select>

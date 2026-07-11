@@ -8,6 +8,24 @@ import Pagination from "./Pagination";
 
 const PAGE_SIZE = 10;
 
+// order.shippingMethod is optional now (dine-in orders have none), so this
+// can no longer assume "not Uber Eats therefore Food Panda" — that used to
+// be a safe two-way split, but now a null value would incorrectly render
+// as "Food Panda". Dine-in orders show their table instead of a shipping
+// method at all.
+function fulfillmentLabel(order: {
+  orderType: "DELIVERY" | "DINE_IN";
+  shippingMethod: string | null;
+  table: { label: string } | null;
+}) {
+  if (order.orderType === "DINE_IN") {
+    return `Table ${order.table?.label ?? "—"}`;
+  }
+  if (order.shippingMethod === "UBER_EATS") return "Uber Eats";
+  if (order.shippingMethod === "FOOD_PANDA") return "Food Panda";
+  return "—";
+}
+
 export default async function AdminOrdersPage({
   searchParams,
 }: {
@@ -37,7 +55,7 @@ export default async function AdminOrdersPage({
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { items: { include: { menuItem: true } }, user: true },
+      include: { items: { include: { menuItem: true } }, user: true, table: true },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -89,7 +107,11 @@ export default async function AdminOrdersPage({
                     })}
                   </p>
                 </div>
-                <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
+                <OrderStatusSelect
+                  orderId={order.id}
+                  currentStatus={order.status}
+                  orderType={order.orderType}
+                />
               </div>
 
               <div className="space-y-1 mb-3">
@@ -106,8 +128,12 @@ export default async function AdminOrdersPage({
 
               <div className="flex justify-between pt-2 border-t border-dashed border-gray-200 text-sm">
                 <span className="text-gray-500">
-                  {order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"} ·{" "}
-                  {order.paymentMethod === "COD" ? "Cash on Delivery" : "Online Payment"}
+                  {fulfillmentLabel(order)} ·{" "}
+                  {order.paymentMethod === "COD"
+                    ? order.orderType === "DINE_IN"
+                      ? "Pay at Table"
+                      : "Cash on Delivery"
+                    : "Online Payment"}
                 </span>
                 <span className="font-bold text-[#2C6252]">
                   USD ${order.totalAmount.toFixed(2)}

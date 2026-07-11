@@ -21,17 +21,28 @@ type TrackedOrder = {
   updatedAt: string;
   totalAmount: number;
   firstName: string;
-  city: string;
-  shippingMethod: "UBER_EATS" | "FOOD_PANDA";
+  city: string | null;
+  orderType: "DELIVERY" | "DINE_IN";
+  shippingMethod: "UBER_EATS" | "FOOD_PANDA" | null;
+  table: { label: string } | null;
   items: OrderItem[];
 };
 
-const STEPS = [
-  { key: "PLACED", label: "Order Placed", icon: CheckCircle2 },
-  { key: "PREPARING", label: "Preparing", icon: ChefHat },
-  { key: "OUT_FOR_DELIVERY", label: "Out for Delivery", icon: Truck },
-  { key: "DELIVERED", label: "Delivered", icon: PackageCheck },
-] as const;
+// A dine-in order was never "out for delivery" — same backend status value,
+// just a different customer-facing label/icon story for that step (see
+// project notes on Order.status).
+function stepsFor(orderType: "DELIVERY" | "DINE_IN") {
+  return [
+    { key: "PLACED", label: "Order Placed", icon: CheckCircle2 },
+    { key: "PREPARING", label: "Preparing", icon: ChefHat },
+    {
+      key: "OUT_FOR_DELIVERY",
+      label: orderType === "DINE_IN" ? "Ready to Serve" : "Out for Delivery",
+      icon: orderType === "DINE_IN" ? PackageCheck : Truck,
+    },
+    { key: "DELIVERED", label: orderType === "DINE_IN" ? "Served" : "Delivered", icon: PackageCheck },
+  ] as const;
+}
 
 export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: TrackedOrder }) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder);
@@ -52,6 +63,9 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
 
     return () => clearInterval(interval);
   }, [order.id, order.status]);
+
+  const isDineIn = order.orderType === "DINE_IN";
+  const STEPS = stepsFor(order.orderType);
 
   if (order.status === "CANCELLED") {
     return (
@@ -135,7 +149,7 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
       )}
       {order.status === "DELIVERED" && (
         <p className="text-center text-sm font-medium text-[#2C6252] mb-8">
-          Delivered — enjoy your meal! 🎉
+          {isDineIn ? "Served — enjoy your meal! 🎉" : "Delivered — enjoy your meal! 🎉"}
         </p>
       )}
 
@@ -156,7 +170,9 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
         </div>
         <div className="flex items-center justify-between pt-3 border-t border-dashed border-gray-200">
           <span className="text-sm text-gray-500">
-            {order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"} &middot; {order.city}
+            {isDineIn
+              ? `Table ${order.table?.label ?? "—"}`
+              : `${order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"} \u00b7 ${order.city ?? ""}`}
           </span>
           <span className="font-bold text-[#2C6252]">USD ${order.totalAmount.toFixed(2)}</span>
         </div>

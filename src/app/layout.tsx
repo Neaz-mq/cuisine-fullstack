@@ -7,6 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, Slide } from "react-toastify";
 import AuthProvider from "@/components/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
+import { TableOrderProvider } from "@/context/TableOrderContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,7 +41,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AuthProvider>
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            <TableOrderProvider>{children}</TableOrderProvider>
+          </CartProvider>
         </AuthProvider>
         <ToastContainer
           position="top-right"
