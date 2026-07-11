@@ -7,6 +7,17 @@ import { useCart } from "@/context/CartContext";
 import Select, { SingleValue } from "react-select";
 import { toast } from "react-toastify";
 import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
+import { formatMinutes } from "@/lib/kitchen-eta";
+
+const ETA_POLL_INTERVAL_MS = 15000; // same cadence as KitchenBoard / OrderTrackingTimeline
+
+type KitchenEtaResponse = {
+  kitchenPrepMinutes: number;
+  etaByMethod: {
+    UBER_EATS: { min: number; max: number };
+    FOOD_PANDA: { min: number; max: number };
+  };
+};
 
 interface BillingFormData {
   email: string;
@@ -37,6 +48,32 @@ const Carts = () => {
 
   const { cartItems, increaseQty, decreaseQty, removeFromCart, clearCart } = useCart();
   const [selectedShipping, setSelectedShipping] = useState("uber-eats");
+  const [kitchenEta, setKitchenEta] = useState<KitchenEtaResponse | null>(null);
+
+  // Live Kitchen Queue / Smart ETA — replaces the old static
+  // "Delivery time: 20m/35m" labels with a number that reflects how busy
+  // the kitchen actually is right now (see src/lib/kitchen-eta.ts).
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchEta() {
+      try {
+        const res = await fetch("/api/kitchen/eta");
+        if (!res.ok) return;
+        const data: KitchenEtaResponse = await res.json();
+        if (isMounted) setKitchenEta(data);
+      } catch {
+        // network error — silently retry on next poll, keep showing last-known ETA
+      }
+    }
+
+    fetchEta();
+    const interval = setInterval(fetchEta, ETA_POLL_INTERVAL_MS);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
   const [selectedCountry, setSelectedCountry] = useState<CountryOption | null>(null);
   const [formData, setFormData] = useState<BillingFormData>({
@@ -271,7 +308,11 @@ const Carts = () => {
                 </span>
               </div>
               <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
-                Delivery time: 20m/35m
+                {kitchenEta
+                  ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.UBER_EATS.min)}/${formatMinutes(
+                      kitchenEta.etaByMethod.UBER_EATS.max
+                    )}`
+                  : "Delivery time: calculating…"}
               </p>
             </div>
           </div>
@@ -305,7 +346,11 @@ const Carts = () => {
                 Food panda
               </p>
               <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
-                Delivery time: 1h/1.35h
+                {kitchenEta
+                  ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.FOOD_PANDA.min)}/${formatMinutes(
+                      kitchenEta.etaByMethod.FOOD_PANDA.max
+                    )}`
+                  : "Delivery time: calculating…"}
               </p>
             </div>
           </div>
