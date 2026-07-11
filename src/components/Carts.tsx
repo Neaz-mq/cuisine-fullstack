@@ -165,6 +165,7 @@ const Carts = () => {
     setIsSubmitting(true);
 
     const orderItems = cartItems.map((item) => ({
+      id: item.id,
       title: item.title,
       quantity: item.quantity,
     }));

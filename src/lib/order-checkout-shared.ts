@@ -64,6 +64,7 @@ export function validateBilling(
 }
 
 export interface IncomingItem {
+  id?: string; // real MenuItem.id — present for anything added via the DB-backed /menu page (Items.tsx) or Order Again
   title: string;
   quantity: number;
 }
@@ -77,25 +78,23 @@ export interface ResolvedItem {
 
 /**
  * ---------------------------------------------------------------------
- * IMPORTANT — temporary shim, read before touching this file:
+ * Resolution strategy — id-first, title as a fallback for legacy callers:
  * ---------------------------------------------------------------------
- * The menu-display components (Items.tsx, Popular.tsx, Brew.tsx, etc.)
- * still render a hardcoded menu array instead of fetching from the DB, so
- * CartContext items carry `id: slugify(title)` — NOT a real MenuItem.id.
- * Until those components are wired to a future GET /api/menu, we can't
- * trust the cart's `id` as a foreign key.
+ * Items.tsx (the /menu page) and Order Again both now add cart lines using
+ * the real MenuItem.id — see GET /api/menu. When `item.id` is present, it's
+ * used directly (a straightforward, correct foreign-key lookup).
  *
- * As a stopgap, this resolves each cart line to a real MenuItem by
- * matching on `title` (case-insensitive) instead of id. This is fragile —
- * it breaks if two menu items ever share a title, or if a title is edited
- * in the DB without updating the hardcoded frontend copy. Once the menu
- * components fetch real data and pass through the real MenuItem.id, switch
- * this back to a plain `menuItemId` lookup and delete this shim.
+ * A few homepage marketing sections (Popular.tsx, Signature.tsx,
+ * Weekly.tsx, Category.tsx) still render their own hardcoded item arrays
+ * and add to cart with `id: slugify(title)` — not a real MenuItem.id. For
+ * those, `item.id` won't match any real MenuItem, so resolution falls back
+ * to matching on `title` (case-insensitive), same as before. This keeps
+ * those sections working without a crash while they're still on the
+ * hardcoded shim; migrating them to /api/menu is a separate, tracked
+ * follow-up, not done in this pass.
  *
- * Centralized here (rather than duplicated in /api/orders AND
- * /api/checkout/create-session) so both checkout paths — Cash on Delivery
- * (which now also covers Dine-in / Pay at Table) and Stripe — stay in sync
- * and this only needs fixing in one place later.
+ * Both paths only ever match an isAvailable MenuItem — an item pulled off
+ * the menu mid-checkout is treated as not-found either way.
  * ---------------------------------------------------------------------
  */
 export async function resolveOrderItems(
@@ -116,12 +115,22 @@ export async function resolveOrderItems(
       };
     }
 
-    const menuItem = await prisma.menuItem.findFirst({
-      where: {
-        title: { equals: item.title, mode: "insensitive" },
-        isAvailable: true,
-      },
-    });
+    let menuItem = item.id
+      ? await prisma.menuItem.findFirst({
+          where: { id: item.id, isAvailable: true },
+        })
+      : null;
+
+    // Fallback for the still-hardcoded homepage sections, whose `id` is a
+    // slugified title, not a real MenuItem.id — see note above.
+    if (!menuItem) {
+      menuItem = await prisma.menuItem.findFirst({
+        where: {
+          title: { equals: item.title, mode: "insensitive" },
+          isAvailable: true,
+        },
+      });
+    }
 
     if (!menuItem) {
       notFoundTitles.push(item.title);
