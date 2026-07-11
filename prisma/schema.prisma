@@ -66,20 +66,52 @@ model Order {
   status      OrderStatus @default(PLACED)
   totalAmount Float
 
-  // Billing / contact details captured at checkout
-  email     String
+  // DELIVERY (default) = existing checkout flow, unchanged. DINE_IN = QR
+  // Table Ordering — customer scans a QR code at a physical table, orders
+  // are tied to `table` below instead of a delivery address, and are paid
+  // for at the table (see paymentMethod note below), not delivered.
+  orderType OrderType @default(DELIVERY)
+
+  // Billing / contact details captured at checkout.
+  //
+  // firstName/lastName/phone stay REQUIRED for both order types — staff
+  // still need a name to call out at the table for DINE_IN orders.
+  //
+  // email/country/address/city/state/zip are OPTIONAL as of QR Table
+  // Ordering: a DINE_IN order has no delivery destination, so these are
+  // simply never collected/set for orderType = DINE_IN. They remain
+  // required in practice (application-layer validation) for
+  // orderType = DELIVERY — this is intentionally not enforced at the DB
+  // level, since Prisma/Postgres can't express "required if X" directly.
+  email     String?
   firstName String
   lastName  String
   phone     String
-  country   String
-  address   String
+  country   String?
+  address   String?
   apartment String?
-  city      String
-  state     String
-  zip       String
+  city      String?
+  state     String?
+  zip       String?
 
-  shippingMethod ShippingMethod
-  paymentMethod  PaymentMethod
+  // OPTIONAL as of QR Table Ordering — irrelevant for orderType = DINE_IN
+  // (nothing is being shipped). Still required in practice for DELIVERY
+  // orders, enforced at the application layer.
+  shippingMethod ShippingMethod?
+
+  // For orderType = DINE_IN, this is always COD — reused deliberately
+  // rather than adding a third enum value, since "pay at table" is
+  // functionally identical to "pay on delivery" (staff collects payment
+  // in person, no online charge). The UI labels it "Pay at Table" instead
+  // of "Cash on Delivery" for DINE_IN orders, but the stored value is COD.
+  paymentMethod PaymentMethod
+
+  // Which physical table a DINE_IN order belongs to. Null for DELIVERY
+  // orders. Deliberately NOT required even when orderType = DINE_IN at the
+  // DB level, for the same "can't express conditional-required in Prisma"
+  // reason as the billing fields above — enforced at the application layer.
+  table   RestaurantTable? @relation(fields: [tableId], references: [id])
+  tableId String?
 
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake.
@@ -88,8 +120,9 @@ model Order {
   // Tracks real payment confirmation for ONLINE orders via Stripe Checkout
   // + webhook — separate from `status` (fulfillment stage) because an order
   // can be PLACED in our DB before Stripe has actually confirmed the charge.
-  // For COD orders this is left at its default and isn't currently acted
-  // on anywhere (no "mark paid on delivery" admin action exists yet).
+  // For COD orders (and DINE_IN, which is always COD) this is left at its
+  // default and isn't currently acted on anywhere (no "mark paid on
+  // delivery/at table" admin action exists yet).
   paymentStatus PaymentStatus @default(PENDING)
 
   createdAt DateTime @default(now())
@@ -101,6 +134,13 @@ model Order {
 
   items               OrderItem[]
   loyaltyTransactions LoyaltyTransaction[]
+
+  @@index([tableId])
+}
+
+enum OrderType {
+  DELIVERY
+  DINE_IN
 }
 
 enum OrderStatus {
@@ -155,6 +195,11 @@ model RestaurantTable {
   createdAt DateTime @default(now())
 
   reservations Reservation[]
+  // QR Table Ordering — DINE_IN orders placed against this table (see
+  // Order.tableId above). A table with isActive = false should have its QR
+  // code treated as invalid by the ordering flow, not just hidden from the
+  // reservation picker.
+  orders       Order[]
 }
 
 enum ReservationStatus {
