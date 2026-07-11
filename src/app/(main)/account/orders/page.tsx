@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import { redirect } from "next/navigation";
 import { formatOrderId } from "@/lib/format-order-id";
+import OrderAgainButton from "./OrderAgainButton";
 
 /**
  * src/app/(main)/account/orders/page.tsx
@@ -101,6 +102,18 @@ export default async function MyOrdersPage() {
                     >
                       Track order →
                     </Link>
+                  )}
+                  {(order.status === "DELIVERED" || order.status === "CANCELLED") && (
+                    <OrderAgainButton
+                      items={order.items.map((item) => ({
+                        menuItemId: item.menuItemId,
+                        title: item.menuItem.title,
+                        price: item.menuItem.price,
+                        quantity: item.quantity,
+                        imageUrl: item.menuItem.imageUrl,
+                        isAvailable: item.menuItem.isAvailable,
+                      }))}
+                    />
                   )}
                 </div>
 
