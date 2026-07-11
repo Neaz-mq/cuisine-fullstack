@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
+import { useTableOrder } from "@/context/TableOrderContext";
 import Select, { SingleValue } from "react-select";
 import { toast } from "react-toastify";
 import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
@@ -47,12 +48,21 @@ const Carts = () => {
   }, []);
 
   const { cartItems, increaseQty, decreaseQty, removeFromCart, clearCart } = useCart();
+
+  // QR Table Ordering — when a customer arrived via a table's QR code
+  // (/dine-in?table=<id>), isDineIn is true and tableId/tableLabel are set.
+  // This drives all the conditional UI below: no delivery address, no
+  // shipping method, payment is always "Pay at Table".
+  const { tableId, tableLabel, isDineIn, clearTable } = useTableOrder();
+
   const [selectedShipping, setSelectedShipping] = useState("uber-eats");
   const [kitchenEta, setKitchenEta] = useState<KitchenEtaResponse | null>(null);
 
   // Live Kitchen Queue / Smart ETA — replaces the old static
   // "Delivery time: 20m/35m" labels with a number that reflects how busy
-  // the kitchen actually is right now (see src/lib/kitchen-eta.ts).
+  // the kitchen actually is right now (see src/lib/kitchen-eta.ts). Not
+  // relevant for dine-in (no shipping method section shown at all), but
+  // harmless to keep fetching — it's a cheap, unauthenticated poll.
   useEffect(() => {
     let isMounted = true;
 
@@ -113,18 +123,26 @@ const Carts = () => {
     const newErrors: BillingErrors = {};
     const newPaymentErrors: PaymentErrors = {};
 
-    if (!formData.email.trim()) newErrors.email = "Email is required.";
+    // firstName/lastName/phone are required for both order types — staff
+    // still need a name to call out at the table for dine-in orders.
     if (!formData.firstName.trim()) newErrors.firstName = "First name is required.";
     if (!formData.lastName.trim()) newErrors.lastName = "Last name is required.";
-    if (!formData.address.trim()) newErrors.address = "Address is required.";
-    if (!formData.city.trim()) newErrors.city = "City is required.";
-    if (!formData.state.trim()) newErrors.state = "State is required.";
-    if (!formData.zip.trim()) newErrors.zip = "Zip code is required.";
     if (!formData.phoneNumber.trim()) newErrors.phoneNumber = "Phone number is required.";
-    if (!selectedCountry) newErrors.selectedCountry = "Country is required.";
 
-    if (paymentMethod === "online") {
-      if (!isAgreedToTerms) newPaymentErrors.isAgreedToTerms = "You must agree to the condition.";
+    // Everything below is delivery-only — a dine-in order has no
+    // destination to ship to and always pays at the table, so none of this
+    // applies.
+    if (!isDineIn) {
+      if (!formData.email.trim()) newErrors.email = "Email is required.";
+      if (!formData.address.trim()) newErrors.address = "Address is required.";
+      if (!formData.city.trim()) newErrors.city = "City is required.";
+      if (!formData.state.trim()) newErrors.state = "State is required.";
+      if (!formData.zip.trim()) newErrors.zip = "Zip code is required.";
+      if (!selectedCountry) newErrors.selectedCountry = "Country is required.";
+
+      if (paymentMethod === "online") {
+        if (!isAgreedToTerms) newPaymentErrors.isAgreedToTerms = "You must agree to the condition.";
+      }
     }
 
     setErrors(newErrors);
@@ -136,25 +154,94 @@ const Carts = () => {
 
     setIsSubmitting(true);
 
-    const billing = {
-      email: formData.email,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      phone: formData.phoneNumber,
-      country: selectedCountry?.label ?? "",
-      address: formData.address,
-      apartment: formData.apartment || undefined,
-      city: formData.city,
-      state: formData.state,
-      zip: formData.zip,
-    };
-    const shippingMethod = SHIPPING_METHOD_MAP[selectedShipping];
     const orderItems = cartItems.map((item) => ({
       title: item.title,
       quantity: item.quantity,
     }));
 
     try {
+      // -----------------------------------------------------------------
+      // Dine-in (QR Table Ordering) — always "Pay at Table", created
+      // immediately via the same COD-style endpoint used for delivery COD
+      // orders, just with orderType/tableId instead of address/shipping.
+      // -----------------------------------------------------------------
+      if (isDineIn) {
+        const billing = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phoneNumber,
+        };
+
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: orderItems,
+            billing,
+            orderType: "DINE_IN",
+            tableId,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          toast.error(data?.error ?? "Failed to place order. Please try again.", {
+            position: "top-center",
+            autoClose: 3000,
+            hideProgressBar: true,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
+          return;
+        }
+
+        toast.success("Your order has been sent to the kitchen!", {
+          position: "top-center",
+          autoClose: 2000,
+          hideProgressBar: true,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        setFormData({
+          email: "",
+          firstName: "",
+          lastName: "",
+          address: "",
+          apartment: "",
+          city: "",
+          state: "",
+          zip: "",
+          phoneNumber: "",
+        });
+        setErrors({});
+
+        clearCart();
+        // One scan → one order (v1 scope) — clear the table context so a
+        // second order in the same tab requires a fresh QR scan, rather
+        // than silently reusing this table forever.
+        clearTable();
+        router.push(`/track/${data.id}`);
+        return;
+      }
+
+      const billing = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phoneNumber,
+        country: selectedCountry?.label ?? "",
+        address: formData.address,
+        apartment: formData.apartment || undefined,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+      };
+      const shippingMethod = SHIPPING_METHOD_MAP[selectedShipping];
+
       if (paymentMethod === "online") {
         // Redirect to Stripe's hosted Checkout page. The order is created
         // as PENDING payment on the server before we redirect — it's only
@@ -279,6 +366,9 @@ const Carts = () => {
   // visible one — that's the "sometimes it doesn't visually select" bug.
   // Passing a unique idSuffix keeps the two copies in separate native
   // radio groups while both stay in sync via the shared state.
+  //
+  // Not rendered at all for dine-in orders — see shippingMethodSectionDesktop
+  // / shippingMethodSectionMobile below, which are set to null when isDineIn.
   const renderShippingMethodSection = (idSuffix: string) => (
     <div className="space-y-4">
       <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
@@ -371,62 +461,80 @@ const Carts = () => {
   );
 
   // Same duplicate-DOM issue as shipping — see note above renderShippingMethodSection.
+  // Dine-in shows a static "Pay at Table" panel instead of the online/cod
+  // radio choice — payment always happens in person, there's no online
+  // option for a dine-in order.
   const renderPaymentMethodSection = (idSuffix: string) => (
     <>
       <div className="space-y-4">
         <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
           Payment Method
         </h4>
-        <div className="space-y-3 bg-gray-50 p-4 rounded-md">
-          {/* Online Payment */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="radio"
-              name={`payment-${idSuffix}`}
-              value="online"
-              checked={paymentMethod === "online"}
-              onChange={() => setPaymentMethod("online")}
-              className="hidden"
-            />
-            <span
-              className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
-                paymentMethod === "online" ? "bg-[#2C6252]" : "bg-white"
-              }`}
-            ></span>
-            <div>
-              <p className="font-semibold text-gray-800">Online Payment</p>
-              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
-                Pay securely using a card or mobile wallet.
-              </p>
-            </div>
-          </label>
 
-          {/* Cash on Delivery */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="radio"
-              name={`payment-${idSuffix}`}
-              value="cod"
-              checked={paymentMethod === "cod"}
-              onChange={() => setPaymentMethod("cod")}
-              className="hidden"
-            />
-            <span
-              className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
-                paymentMethod === "cod" ? "bg-[#2C6252]" : "bg-white"
-              }`}
-            ></span>
-            <div>
-              <p className="font-semibold text-gray-800">Cash on Delivery</p>
-              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
-                Pay with cash upon delivery.
-              </p>
+        {isDineIn ? (
+          <div className="space-y-3 bg-gray-50 p-4 rounded-md">
+            <div className="flex items-start gap-3">
+              <span className="w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 bg-[#2C6252]"></span>
+              <div>
+                <p className="font-semibold text-gray-800">Pay at Table</p>
+                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                  A staff member will collect payment at your table when your order is ready.
+                </p>
+              </div>
             </div>
-          </label>
-        </div>
+          </div>
+        ) : (
+          <div className="space-y-3 bg-gray-50 p-4 rounded-md">
+            {/* Online Payment */}
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name={`payment-${idSuffix}`}
+                value="online"
+                checked={paymentMethod === "online"}
+                onChange={() => setPaymentMethod("online")}
+                className="hidden"
+              />
+              <span
+                className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
+                  paymentMethod === "online" ? "bg-[#2C6252]" : "bg-white"
+                }`}
+              ></span>
+              <div>
+                <p className="font-semibold text-gray-800">Online Payment</p>
+                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                  Pay securely using a card or mobile wallet.
+                </p>
+              </div>
+            </label>
+
+            {/* Cash on Delivery */}
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name={`payment-${idSuffix}`}
+                value="cod"
+                checked={paymentMethod === "cod"}
+                onChange={() => setPaymentMethod("cod")}
+                className="hidden"
+              />
+              <span
+                className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
+                  paymentMethod === "cod" ? "bg-[#2C6252]" : "bg-white"
+                }`}
+              ></span>
+              <div>
+                <p className="font-semibold text-gray-800">Cash on Delivery</p>
+                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                  Pay with cash upon delivery.
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
       </div>
 
-      {paymentMethod === "online" && (
+      {!isDineIn && paymentMethod === "online" && (
         <div className="mt-8 p-6 border border-gray-200 space-y-4">
           <div className="flex items-center 3xl:gap-8 2xl:gap-8 xl:gap-8 lg:gap-8 md:gap-8 sm:gap-4 flex-wrap">
             <img
@@ -477,13 +585,18 @@ const Carts = () => {
           isSubmitting ? "opacity-60 cursor-not-allowed" : ""
         }`}
       >
-        {isSubmitting ? "Placing order..." : "Confirm your order"}
+        {isSubmitting
+          ? "Placing order..."
+          : isDineIn
+          ? "Send order to the kitchen"
+          : "Confirm your order"}
       </button>
     </>
   );
 
-  const shippingMethodSectionDesktop = renderShippingMethodSection("desktop");
-  const shippingMethodSectionMobile = renderShippingMethodSection("mobile");
+  // Shipping method doesn't exist for dine-in — nothing is being shipped.
+  const shippingMethodSectionDesktop = isDineIn ? null : renderShippingMethodSection("desktop");
+  const shippingMethodSectionMobile = isDineIn ? null : renderShippingMethodSection("mobile");
   const paymentMethodSectionDesktop = renderPaymentMethodSection("desktop");
   const paymentMethodSectionMobile = renderPaymentMethodSection("mobile");
 
@@ -494,9 +607,21 @@ const Carts = () => {
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
             <div className="space-y-4">
-              <h3 className="3xl:text-3xl 2xl:text-3xl xl:text-3xl lg:text-3xl md:text-2xl sm:text-lg font-semibold text-gray-800">
-                Billing Details
-              </h3>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h3 className="3xl:text-3xl 2xl:text-3xl xl:text-3xl lg:text-3xl md:text-2xl sm:text-lg font-semibold text-gray-800">
+                  {isDineIn ? "Your Details" : "Billing Details"}
+                </h3>
+                {isDineIn && tableLabel && (
+                  <span className="bg-[#2C6252] text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    Table {tableLabel}
+                  </span>
+                )}
+              </div>
+              {isDineIn && (
+                <p className="text-sm text-gray-500 -mt-2">
+                  Just your name and phone number — your order goes straight to the kitchen for this table.
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <input
@@ -519,85 +644,89 @@ const Carts = () => {
               {errors.firstName && <p className="text-red-500 text-xs">{errors.firstName}</p>}
               {errors.lastName && <p className="text-red-500 text-xs">{errors.lastName}</p>}
 
-              <Select<CountryOption>
-                inputId="country-select"
-                instanceId="country-select"
-                options={COUNTRY_OPTIONS}
-                value={selectedCountry}
-                onChange={(option: SingleValue<CountryOption>) => setSelectedCountry(option)}
-                placeholder="Select country"
-                styles={{
-                  menuList: (base) => ({ ...base, maxHeight: 220 }),
-                  control: (base) => ({
-                    ...base,
-                    borderColor: "#d1d5db",
-                    minHeight: "38px",
-                    fontSize: "0.875rem",
-                  }),
-                }}
-              />
-              {errors.selectedCountry && (
-                <p className="text-red-500 text-xs">{errors.selectedCountry}</p>
+              {!isDineIn && (
+                <>
+                  <Select<CountryOption>
+                    inputId="country-select"
+                    instanceId="country-select"
+                    options={COUNTRY_OPTIONS}
+                    value={selectedCountry}
+                    onChange={(option: SingleValue<CountryOption>) => setSelectedCountry(option)}
+                    placeholder="Select country"
+                    styles={{
+                      menuList: (base) => ({ ...base, maxHeight: 220 }),
+                      control: (base) => ({
+                        ...base,
+                        borderColor: "#d1d5db",
+                        minHeight: "38px",
+                        fontSize: "0.875rem",
+                      }),
+                    }}
+                  />
+                  {errors.selectedCountry && (
+                    <p className="text-red-500 text-xs">{errors.selectedCountry}</p>
+                  )}
+
+                  <input
+                    name="address"
+                    type="text"
+                    placeholder="Address line 1 and 2 example"
+                    className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    value={formData.address}
+                    onChange={handleChange}
+                  />
+                  {errors.address && <p className="text-red-500 text-xs">{errors.address}</p>}
+
+                  <input
+                    name="apartment"
+                    type="text"
+                    placeholder="Apartment suite etc (optional)"
+                    className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    value={formData.apartment}
+                    onChange={handleChange}
+                  />
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <input
+                      name="city"
+                      type="text"
+                      placeholder="City"
+                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      value={formData.city}
+                      onChange={handleChange}
+                    />
+                    <input
+                      name="state"
+                      type="text"
+                      placeholder="State"
+                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      value={formData.state}
+                      onChange={handleChange}
+                    />
+                    <input
+                      name="zip"
+                      type="text"
+                      placeholder="Zip"
+                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      value={formData.zip}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  {errors.city && <p className="text-red-500 text-xs">{errors.city}</p>}
+                  {errors.state && <p className="text-red-500 text-xs">{errors.state}</p>}
+                  {errors.zip && <p className="text-red-500 text-xs">{errors.zip}</p>}
+
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email address"
+                    className="w-full border border-gray-300 px-4 py-2 rounded 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    value={formData.email}
+                    onChange={handleChange}
+                  />
+                  {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
+                </>
               )}
-
-              <input
-                name="address"
-                type="text"
-                placeholder="Address line 1 and 2 example"
-                className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                value={formData.address}
-                onChange={handleChange}
-              />
-              {errors.address && <p className="text-red-500 text-xs">{errors.address}</p>}
-
-              <input
-                name="apartment"
-                type="text"
-                placeholder="Apartment suite etc (optional)"
-                className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                value={formData.apartment}
-                onChange={handleChange}
-              />
-
-              <div className="grid grid-cols-3 gap-4">
-                <input
-                  name="city"
-                  type="text"
-                  placeholder="City"
-                  className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
-                  value={formData.city}
-                  onChange={handleChange}
-                />
-                <input
-                  name="state"
-                  type="text"
-                  placeholder="State"
-                  className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
-                  value={formData.state}
-                  onChange={handleChange}
-                />
-                <input
-                  name="zip"
-                  type="text"
-                  placeholder="Zip"
-                  className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
-                  value={formData.zip}
-                  onChange={handleChange}
-                />
-              </div>
-              {errors.city && <p className="text-red-500 text-xs">{errors.city}</p>}
-              {errors.state && <p className="text-red-500 text-xs">{errors.state}</p>}
-              {errors.zip && <p className="text-red-500 text-xs">{errors.zip}</p>}
-
-              <input
-                type="email"
-                name="email"
-                placeholder="Email address"
-                className="w-full border border-gray-300 px-4 py-2 rounded 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                value={formData.email}
-                onChange={handleChange}
-              />
-              {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
 
               <input
                 name="phoneNumber"
@@ -702,7 +831,7 @@ const Carts = () => {
                   <span>$0</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Delivery charges</span>
+                  <span>{isDineIn ? "Table service" : "Delivery charges"}</span>
                   <span className="text-[#2C6252]">Free</span>
                 </div>
               </div>

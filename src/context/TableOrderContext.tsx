@@ -1,6 +1,24 @@
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+// ---------------------------------------------------------------------------
+// QR Table Ordering — Table Context
+//
+// v1 scope (confirmed): "one scan → one order", no persistent running tab/
+// session. sessionStorage (NOT localStorage) is used deliberately — it's
+// wiped when the browser tab is closed, so a customer's phone doesn't keep
+// remembering "Table T5" from a past visit if they open the site normally
+// later. It also naturally isolates per-tab, so two people scanning
+// different tables on the same phone in two tabs don't clobber each other.
+//
+// This only stores WHICH table the customer is at — it is NOT a live
+// session tied to the DB. The actual Order row (orderType=DINE_IN,
+// tableId) is only created once, at checkout, same as any other order.
+// clearTable() is called right after a dine-in order is placed (see
+// Carts.tsx) so a second order in the same tab doesn't silently reuse the
+// same table without a fresh scan.
+// ---------------------------------------------------------------------------
+
 const STORAGE_KEY = "dineInTable";
 
 type TableOrderContextType = {

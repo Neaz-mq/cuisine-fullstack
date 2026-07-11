@@ -6,6 +6,11 @@ export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
 export const ORDER_TYPES = ["DELIVERY", "DINE_IN"] as const;
 export type OrderTypeValue = (typeof ORDER_TYPES)[number];
 
+// email/country/address/city/state/zip are OPTIONAL on the Billing shape as
+// of QR Table Ordering — a DINE_IN order has no delivery destination, so
+// these are simply never collected for it. They're still required in
+// practice for DELIVERY orders — enforced below in validateBilling, not by
+// the type itself, since the same interface now covers both order types.
 export interface Billing {
   email?: string;
   firstName: string;
@@ -19,6 +24,12 @@ export interface Billing {
   zip?: string;
 }
 
+/**
+ * firstName/lastName/phone are always required (staff still need a name to
+ * call out at the table for DINE_IN orders). email/country/address/city/
+ * state/zip are only required for DELIVERY — a DINE_IN order skips them
+ * entirely since nothing is being shipped anywhere.
+ */
 export function validateBilling(
   billing: Billing,
   orderType: OrderTypeValue = "DELIVERY"
@@ -52,6 +63,29 @@ export interface ResolvedItem {
   title: string;
 }
 
+/**
+ * ---------------------------------------------------------------------
+ * IMPORTANT — temporary shim, read before touching this file:
+ * ---------------------------------------------------------------------
+ * The menu-display components (Items.tsx, Popular.tsx, Brew.tsx, etc.)
+ * still render a hardcoded menu array instead of fetching from the DB, so
+ * CartContext items carry `id: slugify(title)` — NOT a real MenuItem.id.
+ * Until those components are wired to a future GET /api/menu, we can't
+ * trust the cart's `id` as a foreign key.
+ *
+ * As a stopgap, this resolves each cart line to a real MenuItem by
+ * matching on `title` (case-insensitive) instead of id. This is fragile —
+ * it breaks if two menu items ever share a title, or if a title is edited
+ * in the DB without updating the hardcoded frontend copy. Once the menu
+ * components fetch real data and pass through the real MenuItem.id, switch
+ * this back to a plain `menuItemId` lookup and delete this shim.
+ *
+ * Centralized here (rather than duplicated in /api/orders AND
+ * /api/checkout/create-session) so both checkout paths — Cash on Delivery
+ * (which now also covers Dine-in / Pay at Table) and Stripe — stay in sync
+ * and this only needs fixing in one place later.
+ * ---------------------------------------------------------------------
+ */
 export async function resolveOrderItems(
   items: IncomingItem[]
 ): Promise<{ ok: true; items: ResolvedItem[] } | { ok: false; error: string }> {
