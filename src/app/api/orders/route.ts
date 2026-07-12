@@ -12,6 +12,8 @@ import {
   findValidCoupon,
   calcDiscountAmount,
   consumeCoupon,
+  getCustomerKey,
+  CouponInfo,
   IncomingItem,
 } from "@/lib/order-checkout-shared";
 
@@ -129,24 +131,23 @@ export async function POST(request: Request) {
       0
     );
 
+    const session = await auth();
+    const customerKey = getCustomerKey(session?.user?.id, billing.phone);
+
     // Pre-check outside the transaction purely for a fast, friendly error
     // message — the actual claim (and the only real concurrency guard)
     // happens inside the transaction via consumeCoupon below.
-    let couponInfo: { id: string; code: string; percentOff: number } | null = null;
+    let couponInfo: CouponInfo | null = null;
     if (couponCode?.trim()) {
-      const couponResult = await findValidCoupon(couponCode);
+      const couponResult = await findValidCoupon(couponCode, subtotal, customerKey);
       if (!couponResult.ok) {
         return NextResponse.json({ error: couponResult.error }, { status: 409 });
       }
       couponInfo = couponResult.coupon;
     }
 
-    const discountAmount = couponInfo
-      ? calcDiscountAmount(subtotal, couponInfo.percentOff)
-      : 0;
+    const discountAmount = couponInfo ? calcDiscountAmount(subtotal, couponInfo) : 0;
     const totalAmount = subtotal - discountAmount;
-
-    const session = await auth();
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -187,7 +188,7 @@ export async function POST(request: Request) {
       });
 
       if (couponInfo) {
-        const claimed = await consumeCoupon(tx, couponInfo.id, created.id);
+        const claimed = await consumeCoupon(tx, couponInfo.id, created.id, customerKey, discountAmount);
         if (!claimed) {
           // Someone else claimed this exact code in the moment between our
           // pre-check and now — abort the whole order, not just the

@@ -117,11 +117,12 @@ model Order {
   // (i.e. it's the actual amount charged/owed). discountAmount and
   // couponCode are denormalized here purely for display (order summary,
   // confirmation email, admin order detail) without needing a join back to
-  // Coupon. The authoritative "was this coupon used, and by which order"
-  // record lives on Coupon.usedByOrderId below.
-  couponCode     String?
-  discountAmount Float   @default(0)
-  coupon         Coupon? // back-relation only — FK lives on Coupon.usedByOrderId
+  // Coupon. The authoritative "was this coupon redeemed, on which order, by
+  // which customer" record lives on CouponRedemption below (see the
+  // Coupon/CouponRedemption models for the full v2 design rationale).
+  couponCode       String?
+  discountAmount   Float             @default(0)
+  couponRedemption CouponRedemption? // back-relation only — FK lives on CouponRedemption.orderId
 
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake.
@@ -189,35 +190,118 @@ model OrderItem {
 }
 
 // ---------------------------------------------------------------------------
-// Discount coupons
+// Discount coupons — v2, market-standard rule engine
 //
-// v1 scope (confirmed): percentage-off only, and SINGLE GLOBAL USE — once
-// any order consumes a code, it's permanently spent for everyone, not
-// just that customer. This is simpler than a per-customer usage ledger
-// and matches how a small single-location restaurant typically hands out
-// codes (e.g. one printed flyer code, one Instagram-giveaway code).
+// Supersedes the v1 "percentage-off, single global use" design. A coupon
+// now carries a full set of independently-optional eligibility rules —
+// discount type (percent or fixed), an expiry window, a minimum order
+// value, a cap on how much a percent coupon can discount, a total
+// redemption cap, and a per-customer redemption cap. Every rule is
+// optional (null = "no restriction on this axis") so a simple "10% off,
+// forever, unlimited" coupon is still just as easy to create as before.
 //
-// usedByOrderId (not a separate "redemption" table) is the source of
-// truth for "has this been used" — claimed atomically in a transaction at
-// order-creation time (see consumeCoupon in order-checkout-shared.ts) so
-// two customers racing to submit the same code can't both succeed.
+// usageCount is a denormalized, atomically-incremented counter (see
+// consumeCoupon in order-checkout-shared.ts) — it's the fast/cheap check
+// for "has the global cap been hit" without a COUNT(*) over
+// CouponRedemption on every checkout. CouponRedemption itself is the
+// authoritative, queryable audit log: one row per successful redemption,
+// carrying which order, which customer, and exactly how much discount was
+// granted — needed both for per-customer limit enforcement and for
+// usage analytics (a hard-deleted Coupon row would otherwise take that
+// history down with it).
 //
-// isActive is independent of usedByOrderId: it only gates an UNUSED
-// coupon (lets admin pull a code before anyone redeems it, e.g. a typo).
-// A used coupon can't be re-activated into being usable again — that
-// would mean two orders both claiming the same single-use discount.
+// isActive is independent of the usage counters — it's a manual
+// admin kill-switch (pull a code immediately, e.g. a typo or abuse),
+// separate from the coupon naturally running out via usageLimit or
+// expiresAt.
 // ---------------------------------------------------------------------------
 model Coupon {
-  id         String   @id @default(cuid())
-  code       String   @unique
-  percentOff Int
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id   String             @id @default(cuid())
+  code String             @unique
+  type CouponDiscountType @default(PERCENT)
 
-  usedByOrderId String?   @unique
-  usedAt        DateTime?
-  order         Order?    @relation(fields: [usedByOrderId], references: [id], onDelete: SetNull)
+  // Exactly one of these is meaningful, matching `type` — enforced at the
+  // application layer (see validateCouponInput in order-checkout-shared.ts),
+  // not at the DB level, since Prisma can't express a conditional-required
+  // column directly.
+  percentOff Int? // 1-100, required when type = PERCENT
+  fixedOff   Float? // currency amount, required when type = FIXED
+
+  // Optional cap on the computed discount amount — mainly guards PERCENT
+  // coupons from granting an unexpectedly large discount on a big order
+  // (e.g. "20% off, capped at $15"). Ignored for FIXED coupons, since a
+  // fixed amount is already its own cap.
+  maxDiscountAmount Float?
+
+  // Optional minimum subtotal required to redeem (e.g. "min order $20").
+  minOrderValue Float?
+
+  // Optional redemption window. Both null = no time restriction. A coupon
+  // with only startsAt set isn't redeemable before that instant; only
+  // expiresAt set isn't redeemable after it.
+  startsAt  DateTime?
+  expiresAt DateTime?
+
+  // Optional global usage cap across ALL customers combined (e.g. "first
+  // 100 redemptions"). Null = unlimited. usageCount is the atomically
+  // incremented counter checked against this cap at redemption time.
+  usageLimit Int?
+  usageCount Int  @default(0)
+
+  // Optional per-customer cap (e.g. "one use per customer"). Null =
+  // unlimited per customer. Defaults to 1, matching the most common
+  // real-world "one redemption per person" coupon. Enforced by counting
+  // that customer's CouponRedemption rows for this coupon — see
+  // consumeCoupon's inline comment for the concurrency caveat on this
+  // specific check.
+  perCustomerLimit Int? @default(1)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@index([isActive])
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+}
+
+// One row per successful redemption — the audit trail a hard single-use
+// flag on Coupon could never provide, and the source of truth for
+// per-customer limit enforcement (findValidCoupon/consumeCoupon count a
+// customer's rows here, scoped to one coupon, rather than trusting a
+// boolean).
+model CouponRedemption {
+  id       String @id @default(cuid())
+  coupon   Coupon @relation(fields: [couponId], references: [id])
+  couponId String
+
+  // One redemption per order, enforced by the @unique below — an order
+  // can only ever have consumed one coupon (matches Order.couponCode
+  // being a single nullable field, not a list).
+  order   Order  @relation(fields: [orderId], references: [id])
+  orderId String @unique
+
+  // Identifies "who" redeemed this for per-customer-limit purposes: the
+  // logged-in User.id when available, otherwise the normalized phone
+  // number from billing (guest checkout is allowed — see Order.userId).
+  // Not a foreign key on purpose, since a guest has no User row at all.
+  customerKey String
+
+  // The actual discount amount granted on this specific order — kept here
+  // (in addition to the denormalized Order.discountAmount) so redemption
+  // history/analytics survive independently of the Order row's own
+  // display fields, and so "how much did this coupon cost us in total"
+  // is a simple SUM(discountAmount) over one coupon's redemptions.
+  discountAmount Float
+
+  createdAt DateTime @default(now())
+
+  @@index([couponId, customerKey])
 }
 
 // ---------------------------------------------------------------------------

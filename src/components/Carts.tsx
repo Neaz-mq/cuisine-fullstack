@@ -108,7 +108,9 @@ const Carts = () => {
   const [discountCode, setDiscountCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
-    percentOff: number;
+    type: "PERCENT" | "FIXED";
+    percentOff: number | null;
+    fixedOff: number | null;
   } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -117,13 +119,20 @@ const Carts = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  // Recomputed from the applied coupon's percentOff on every render — not
-  // frozen as a dollar amount at the moment "Apply" was clicked — so it
-  // stays correct if the customer changes quantities afterward. The
-  // server independently recomputes this again from its own resolved
-  // subtotal at order-creation time; this is purely for display.
+  // Recomputed from the applied coupon's rule on every render — not frozen
+  // as a dollar amount at the moment "Apply" was clicked — so it stays
+  // correct if the customer changes quantities afterward. This mirrors
+  // (but doesn't need to exactly reproduce) the server's own cap/floor
+  // logic in calcDiscountAmount, since the server independently
+  // recomputes the authoritative amount from its own resolved subtotal at
+  // order-creation time — this is purely for display.
   const discountAmount = appliedCoupon
-    ? Math.round(subtotal * (appliedCoupon.percentOff / 100) * 100) / 100
+    ? Math.min(
+        appliedCoupon.type === "FIXED"
+          ? appliedCoupon.fixedOff ?? 0
+          : Math.round(subtotal * ((appliedCoupon.percentOff ?? 0) / 100) * 100) / 100,
+        subtotal
+      )
     : 0;
   const total = subtotal - discountAmount;
 
@@ -416,7 +425,11 @@ const Carts = () => {
       const res = await fetch("/api/coupons/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: discountCode, subtotal }),
+        body: JSON.stringify({
+          code: discountCode,
+          subtotal,
+          phone: formData.phoneNumber || undefined,
+        }),
       });
       const data = await res.json();
 
@@ -425,8 +438,15 @@ const Carts = () => {
         return;
       }
 
-      setAppliedCoupon({ code: data.code, percentOff: data.percentOff });
-      toast.success(`"${data.code}" applied — ${data.percentOff}% off!`, {
+      setAppliedCoupon({
+        code: data.code,
+        type: data.type,
+        percentOff: data.percentOff,
+        fixedOff: data.fixedOff,
+      });
+      const discountLabel =
+        data.type === "FIXED" ? `$${Number(data.fixedOff).toFixed(2)} off` : `${data.percentOff}% off`;
+      toast.success(`"${data.code}" applied — ${discountLabel}!`, {
         position: "bottom-center",
         autoClose: 2000,
         hideProgressBar: true,
@@ -899,7 +919,10 @@ const Carts = () => {
               {appliedCoupon ? (
                 <div className="flex items-center justify-between mb-10 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
-                    &quot;{appliedCoupon.code}&quot; applied — {appliedCoupon.percentOff}% off
+                    &quot;{appliedCoupon.code}&quot; applied —{" "}
+                    {appliedCoupon.type === "FIXED"
+                      ? `$${(appliedCoupon.fixedOff ?? 0).toFixed(2)} off`
+                      : `${appliedCoupon.percentOff}% off`}
                   </span>
                   <button
                     onClick={removeCoupon}

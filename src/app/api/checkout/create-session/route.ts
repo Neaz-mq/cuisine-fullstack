@@ -11,6 +11,8 @@ import {
   findValidCoupon,
   calcDiscountAmount,
   consumeCoupon,
+  getCustomerKey,
+  CouponInfo,
   IncomingItem,
 } from "@/lib/order-checkout-shared";
 
@@ -81,21 +83,20 @@ export async function POST(request: Request) {
       0
     );
 
-    let couponInfo: { id: string; code: string; percentOff: number } | null = null;
+    const session = await auth();
+    const customerKey = getCustomerKey(session?.user?.id, billing.phone);
+
+    let couponInfo: CouponInfo | null = null;
     if (couponCode?.trim()) {
-      const couponResult = await findValidCoupon(couponCode);
+      const couponResult = await findValidCoupon(couponCode, subtotal, customerKey);
       if (!couponResult.ok) {
         return NextResponse.json({ error: couponResult.error }, { status: 409 });
       }
       couponInfo = couponResult.coupon;
     }
 
-    const discountAmount = couponInfo
-      ? calcDiscountAmount(subtotal, couponInfo.percentOff)
-      : 0;
+    const discountAmount = couponInfo ? calcDiscountAmount(subtotal, couponInfo) : 0;
     const totalAmount = subtotal - discountAmount;
-
-    const session = await auth();
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
       });
 
       if (couponInfo) {
-        const claimed = await consumeCoupon(tx, couponInfo.id, created.id);
+        const claimed = await consumeCoupon(tx, couponInfo.id, created.id, customerKey, discountAmount);
         if (!claimed) {
           throw new Error("COUPON_ALREADY_USED");
         }
@@ -141,24 +142,39 @@ export async function POST(request: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const stripe = getStripeClient();
 
-    // The percent discount is applied on Stripe's side too, via a one-off
+    // The discount is applied on Stripe's side too, via a one-off
     // Stripe-native coupon scoped to this single session (duration:
     // "once") — rather than hand-adjusting each line item's unit_amount,
     // which would need its own cent-rounding logic to land on the exact
     // same total we already computed above.
-    const stripeDiscounts = couponInfo
-      ? [
-          {
-            coupon: (
-              await stripe.coupons.create({
-                percent_off: couponInfo.percentOff,
-                duration: "once",
-                name: `Coupon ${couponInfo.code}`,
-              })
-            ).id,
-          },
-        ]
-      : undefined;
+    //
+    // Always built from the authoritative `discountAmount` (amount_off,
+    // in cents) rather than percent_off — that's what makes maxDiscountAmount
+    // caps and FIXED-type coupons land correctly on Stripe's hosted page
+    // too, not just in our own DB total. A plain percent_off Stripe coupon
+    // would ignore both the cap and fixed-amount coupons entirely.
+    //
+    // Stripe requires amount_off to be a positive integer, so a discount
+    // that rounds down to 0 cents (e.g. a tiny FIXED coupon against a
+    // near-zero subtotal) is simply omitted rather than sent as an invalid
+    // coupon — our own DB total already reflects the (zero) discount
+    // correctly regardless.
+    const discountCents = Math.round(discountAmount * 100);
+    const stripeDiscounts =
+      couponInfo && discountCents > 0
+        ? [
+            {
+              coupon: (
+                await stripe.coupons.create({
+                  amount_off: discountCents,
+                  currency: "usd",
+                  duration: "once",
+                  name: `Coupon ${couponInfo.code}`,
+                })
+              ).id,
+            },
+          ]
+        : undefined;
 
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",

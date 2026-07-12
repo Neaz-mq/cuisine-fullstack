@@ -157,26 +157,50 @@ export async function resolveOrderItems(
 }
 
 // ---------------------------------------------------------------------------
-// Discount coupons — percentage-off, single global use (see Coupon model
-// in prisma/schema.prisma for the full design rationale).
+// Discount coupons — v2 market-standard rule engine (see Coupon and
+// CouponRedemption models in prisma/schema.prisma for the full design
+// rationale behind each rule).
 // ---------------------------------------------------------------------------
 
 export interface CouponInfo {
   id: string;
   code: string;
-  percentOff: number;
+  type: "PERCENT" | "FIXED";
+  percentOff: number | null;
+  fixedOff: number | null;
+  maxDiscountAmount: number | null;
+  minOrderValue: number | null;
 }
 
 /**
- * Looks up a coupon and checks it's currently redeemable — exists, active,
- * and not already used by another order. Used both for the public
- * "preview the discount before checkout" endpoint AND as the first check
- * inside the order-creation transaction (see consumeCoupon below); the
- * transaction re-checks regardless, since this lookup alone can't prevent
- * a race between two simultaneous orders.
+ * "Who" is redeeming, for per-customer-limit purposes. A logged-in user is
+ * identified by their User.id; a guest by their (normalized) phone number,
+ * since guest checkout has no account to key off of. Phone is normalized
+ * (trimmed, no formatting) so "+1 555-0100" and "15550100" aren't treated
+ * as two different customers.
+ */
+export function getCustomerKey(userId: string | null | undefined, phone: string | null | undefined): string | null {
+  if (userId) return `user:${userId}`;
+  const normalizedPhone = phone?.replace(/[^0-9+]/g, "").trim();
+  return normalizedPhone ? `phone:${normalizedPhone}` : null;
+}
+
+/**
+ * Looks up a coupon and checks every rule that CAN be checked outside a
+ * transaction — exists, active, within its redemption window, subtotal
+ * meets the minimum, the global usage cap isn't already hit, and (when a
+ * customerKey is known) this customer hasn't already hit their personal
+ * cap. Used both for the public "preview the discount before checkout"
+ * endpoint AND as the first check inside the order-creation transaction
+ * (see consumeCoupon below); the transaction re-checks the usage/limit
+ * counters regardless, since this lookup alone can't prevent a race
+ * between two simultaneous orders — see consumeCoupon's own comment for
+ * exactly which checks are re-verified atomically and which aren't.
  */
 export async function findValidCoupon(
-  code: string
+  code: string,
+  subtotal: number,
+  customerKey: string | null
 ): Promise<{ ok: true; coupon: CouponInfo } | { ok: false; error: string }> {
   const trimmed = code?.trim().toUpperCase();
   if (!trimmed) return { ok: false, error: "Enter a coupon code" };
@@ -184,43 +208,263 @@ export async function findValidCoupon(
   const coupon = await prisma.coupon.findUnique({ where: { code: trimmed } });
   if (!coupon) return { ok: false, error: "Invalid coupon code" };
   if (!coupon.isActive) return { ok: false, error: "This coupon is no longer active" };
-  if (coupon.usedByOrderId) return { ok: false, error: "This coupon has already been used" };
+
+  const now = new Date();
+  if (coupon.startsAt && now < coupon.startsAt) {
+    return { ok: false, error: "This coupon isn't active yet" };
+  }
+  if (coupon.expiresAt && now > coupon.expiresAt) {
+    return { ok: false, error: "This coupon has expired" };
+  }
+
+  if (coupon.minOrderValue != null && subtotal < coupon.minOrderValue) {
+    return {
+      ok: false,
+      error: `This coupon requires a minimum order of $${coupon.minOrderValue.toFixed(2)}`,
+    };
+  }
+
+  if (coupon.usageLimit != null && coupon.usageCount >= coupon.usageLimit) {
+    return { ok: false, error: "This coupon has reached its usage limit" };
+  }
+
+  if (coupon.perCustomerLimit != null && customerKey) {
+    const timesUsedByCustomer = await prisma.couponRedemption.count({
+      where: { couponId: coupon.id, customerKey },
+    });
+    if (timesUsedByCustomer >= coupon.perCustomerLimit) {
+      return { ok: false, error: "You've already used this coupon" };
+    }
+  }
 
   return {
     ok: true,
-    coupon: { id: coupon.id, code: coupon.code, percentOff: coupon.percentOff },
+    coupon: {
+      id: coupon.id,
+      code: coupon.code,
+      type: coupon.type,
+      percentOff: coupon.percentOff,
+      fixedOff: coupon.fixedOff,
+      maxDiscountAmount: coupon.maxDiscountAmount,
+      minOrderValue: coupon.minOrderValue,
+    },
   };
 }
 
 // Rounded to cents. Computed from the SERVER-resolved subtotal (real
 // MenuItem prices from resolveOrderItems), never a client-supplied
 // subtotal — a tampered client-side total must not be able to change how
-// much discount is granted.
-export function calcDiscountAmount(subtotal: number, percentOff: number): number {
-  return Math.round(subtotal * (percentOff / 100) * 100) / 100;
+// much discount is granted. Applies maxDiscountAmount as a hard cap
+// (mainly relevant to PERCENT coupons on large orders) and never lets the
+// discount exceed the subtotal itself, so a coupon can never make an
+// order's total negative.
+export function calcDiscountAmount(subtotal: number, coupon: CouponInfo): number {
+  let raw: number;
+  if (coupon.type === "FIXED") {
+    raw = coupon.fixedOff ?? 0;
+  } else {
+    raw = subtotal * ((coupon.percentOff ?? 0) / 100);
+  }
+
+  if (coupon.maxDiscountAmount != null) {
+    raw = Math.min(raw, coupon.maxDiscountAmount);
+  }
+  raw = Math.min(raw, subtotal);
+
+  return Math.round(raw * 100) / 100;
+}
+
+// ---------------------------------------------------------------------------
+// Admin coupon-creation validation — shared so the admin API route and (if
+// ever needed) any other admin surface enforce the exact same rules.
+// ---------------------------------------------------------------------------
+
+export interface CouponCreateInput {
+  code: string;
+  type: "PERCENT" | "FIXED";
+  percentOff?: number;
+  fixedOff?: number;
+  maxDiscountAmount?: number | null;
+  minOrderValue?: number | null;
+  startsAt?: string | null;
+  expiresAt?: string | null;
+  usageLimit?: number | null;
+  perCustomerLimit?: number | null;
+}
+
+export interface ValidatedCouponCreateInput {
+  code: string;
+  type: "PERCENT" | "FIXED";
+  percentOff: number | null;
+  fixedOff: number | null;
+  maxDiscountAmount: number | null;
+  minOrderValue: number | null;
+  startsAt: Date | null;
+  expiresAt: Date | null;
+  usageLimit: number | null;
+  perCustomerLimit: number | null;
+}
+
+export function validateCouponInput(
+  input: CouponCreateInput
+): { ok: true; data: ValidatedCouponCreateInput } | { ok: false; error: string } {
+  const code = input.code?.trim().toUpperCase();
+  if (!code) return { ok: false, error: "Code is required" };
+
+  const type = input.type === "FIXED" ? "FIXED" : "PERCENT";
+
+  let percentOff: number | null = null;
+  let fixedOff: number | null = null;
+
+  if (type === "PERCENT") {
+    if (
+      typeof input.percentOff !== "number" ||
+      !Number.isInteger(input.percentOff) ||
+      input.percentOff < 1 ||
+      input.percentOff > 100
+    ) {
+      return { ok: false, error: "Percent off must be a whole number between 1 and 100" };
+    }
+    percentOff = input.percentOff;
+  } else {
+    if (typeof input.fixedOff !== "number" || !Number.isFinite(input.fixedOff) || input.fixedOff <= 0) {
+      return { ok: false, error: "Fixed discount amount must be a positive number" };
+    }
+    fixedOff = Math.round(input.fixedOff * 100) / 100;
+  }
+
+  let maxDiscountAmount: number | null = null;
+  if (input.maxDiscountAmount != null) {
+    if (typeof input.maxDiscountAmount !== "number" || input.maxDiscountAmount <= 0) {
+      return { ok: false, error: "Max discount cap must be a positive number" };
+    }
+    maxDiscountAmount = Math.round(input.maxDiscountAmount * 100) / 100;
+  }
+
+  let minOrderValue: number | null = null;
+  if (input.minOrderValue != null) {
+    if (typeof input.minOrderValue !== "number" || input.minOrderValue < 0) {
+      return { ok: false, error: "Minimum order value must be zero or a positive number" };
+    }
+    minOrderValue = Math.round(input.minOrderValue * 100) / 100;
+  }
+
+  let startsAt: Date | null = null;
+  if (input.startsAt) {
+    const parsed = new Date(input.startsAt);
+    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "Start date is invalid" };
+    startsAt = parsed;
+  }
+
+  let expiresAt: Date | null = null;
+  if (input.expiresAt) {
+    const parsed = new Date(input.expiresAt);
+    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "Expiry date is invalid" };
+    expiresAt = parsed;
+  }
+
+  if (startsAt && expiresAt && startsAt >= expiresAt) {
+    return { ok: false, error: "Start date must be before the expiry date" };
+  }
+
+  let usageLimit: number | null = null;
+  if (input.usageLimit != null) {
+    if (!Number.isInteger(input.usageLimit) || input.usageLimit < 1) {
+      return { ok: false, error: "Usage limit must be a positive whole number" };
+    }
+    usageLimit = input.usageLimit;
+  }
+
+  // perCustomerLimit is nullable-but-defaulted: explicit `null` means
+  // "unlimited per customer" (admin opted in deliberately), while
+  // `undefined`/omitted falls back to the market-standard default of 1
+  // (one redemption per customer) rather than silently meaning unlimited.
+  let perCustomerLimit: number | null | undefined = input.perCustomerLimit;
+  if (perCustomerLimit === undefined) {
+    perCustomerLimit = 1;
+  } else if (perCustomerLimit !== null) {
+    if (!Number.isInteger(perCustomerLimit) || perCustomerLimit < 1) {
+      return { ok: false, error: "Per-customer limit must be a positive whole number" };
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      code,
+      type,
+      percentOff,
+      fixedOff,
+      maxDiscountAmount,
+      minOrderValue,
+      startsAt,
+      expiresAt,
+      usageLimit,
+      perCustomerLimit,
+    },
+  };
 }
 
 /**
- * Atomically claims a coupon for `orderId` inside an existing transaction.
- * Must run in the SAME transaction as the Order row it's being attached
- * to — if the order creation later fails and the transaction rolls back,
- * the coupon claim rolls back with it, so the code isn't burned on a
- * failed order.
+ * Atomically claims one redemption of `couponId` for `orderId`/`customerKey`
+ * inside an existing transaction. Must run in the SAME transaction as the
+ * Order row it's being attached to — if the order creation later fails and
+ * the transaction rolls back, the claim (and the CouponRedemption row)
+ * rolls back with it, so the code isn't burned on a failed order.
  *
- * The `where: { usedByOrderId: null }` on the update is the actual
- * concurrency guard: if two orders race to spend the same code,
- * updateMany's affected-row count tells us which one (if either) actually
- * won — findValidCoupon above is only an optimistic pre-check, not
- * sufficient on its own to prevent a double-spend.
+ * Concurrency guarantees, by rule:
+ * - Global usage cap (usageLimit/usageCount): fully race-safe. The
+ *   `updateMany` below is the actual guard — its WHERE clause re-checks
+ *   `usageCount < usageLimit` at the DB level and its affected-row count
+ *   tells us whether THIS call actually won the last slot. findValidCoupon
+ *   above is only an optimistic pre-check for a fast error message, never
+ *   sufficient alone to prevent two simultaneous orders from both claiming
+ *   the last redemption.
+ * - Per-customer cap (perCustomerLimit): re-checked here via a count
+ *   query in the same transaction, not via a single atomic update, since
+ *   it's keyed on customerKey rather than a single row's version. This
+ *   closes the same race findValidCoupon already narrowed for the common
+ *   case, but a customer submitting two requests for the same coupon in
+ *   the same instant (e.g. a double-click that bypasses the UI's own
+ *   disabled-button guard) could in theory still slip both through. Given
+ *   the blast radius — one extra discount to one real customer, not an
+ *   uncapped drain of the coupon — this is accepted as a known, low-risk
+ *   limitation rather than adding row-level locking for it.
  */
 export async function consumeCoupon(
   tx: Prisma.TransactionClient,
   couponId: string,
-  orderId: string
+  orderId: string,
+  customerKey: string | null,
+  discountAmount: number
 ): Promise<boolean> {
-  const result = await tx.coupon.updateMany({
-    where: { id: couponId, usedByOrderId: null },
-    data: { usedByOrderId: orderId, usedAt: new Date() },
+  const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
+  if (!coupon || !coupon.isActive) return false;
+
+  if (coupon.perCustomerLimit != null && customerKey) {
+    const timesUsedByCustomer = await tx.couponRedemption.count({
+      where: { couponId, customerKey },
+    });
+    if (timesUsedByCustomer >= coupon.perCustomerLimit) return false;
+  }
+
+  const claim = await tx.coupon.updateMany({
+    where: {
+      id: couponId,
+      ...(coupon.usageLimit != null ? { usageCount: { lt: coupon.usageLimit } } : {}),
+    },
+    data: { usageCount: { increment: 1 } },
   });
-  return result.count === 1;
+  if (claim.count !== 1) return false;
+
+  await tx.couponRedemption.create({
+    data: {
+      couponId,
+      orderId,
+      customerKey: customerKey ?? "unknown",
+      discountAmount,
+    },
+  });
+
+  return true;
 }
