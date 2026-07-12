@@ -87,15 +87,16 @@ export async function POST(request: Request) {
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
 
     let couponInfo: CouponInfo | null = null;
+    let discountAmount = 0;
     if (couponCode?.trim()) {
-      const couponResult = await findValidCoupon(couponCode, subtotal, customerKey);
+      const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
       if (!couponResult.ok) {
         return NextResponse.json({ error: couponResult.error }, { status: 409 });
       }
       couponInfo = couponResult.coupon;
+      discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
     }
 
-    const discountAmount = couponInfo ? calcDiscountAmount(subtotal, couponInfo) : 0;
     const totalAmount = subtotal - discountAmount;
 
     const order = await prisma.$transaction(async (tx) => {

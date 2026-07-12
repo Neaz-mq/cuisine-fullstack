@@ -20,10 +20,29 @@ function isExpired(coupon: { expiresAt: Date | null }) {
   return !!coupon.expiresAt && coupon.expiresAt < new Date();
 }
 
+function formatRestriction(coupon: {
+  restrictedCategories: { id: string; name: string }[];
+  restrictedItems: { id: string; title: string }[];
+}) {
+  if (coupon.restrictedCategories.length > 0) {
+    return `Only: ${coupon.restrictedCategories.map((c) => c.name).join(", ")}`;
+  }
+  if (coupon.restrictedItems.length > 0) {
+    return coupon.restrictedItems.length <= 3
+      ? `Only: ${coupon.restrictedItems.map((i) => i.title).join(", ")}`
+      : `Only: ${coupon.restrictedItems.length} specific items`;
+  }
+  return null;
+}
+
 export default async function AdminCouponsPage() {
   const coupons = await prisma.coupon.findMany({
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { redemptions: true } } },
+    include: {
+      _count: { select: { redemptions: true } },
+      restrictedCategories: { select: { id: true, name: true } },
+      restrictedItems: { select: { id: true, title: true } },
+    },
   });
 
   return (
@@ -77,6 +96,12 @@ export default async function AdminCouponsPage() {
                         : `Max ${coupon.perCustomerLimit}/customer`}
                     </span>
                   </div>
+
+                  {formatRestriction(coupon) && (
+                    <p className="text-[11px] text-amber-600 font-medium mt-1">
+                      {formatRestriction(coupon)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

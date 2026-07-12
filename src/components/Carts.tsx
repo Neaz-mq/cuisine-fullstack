@@ -111,6 +111,15 @@ const Carts = () => {
     type: "PERCENT" | "FIXED";
     percentOff: number | null;
     fixedOff: number | null;
+    // Snapshot of the eligible-lines subtotal at the moment "Apply" was
+    // clicked — for an item/category-restricted coupon this may be less
+    // than the full cart subtotal. Frozen at apply-time rather than
+    // recomputed live (the cart here doesn't carry each item's
+    // categoryId, so the client can't re-derive eligibility on its own);
+    // the server re-validates and recomputes authoritatively at order
+    // creation regardless, same as the pre-existing display-only caveat
+    // below.
+    eligibleSubtotal: number;
   } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -121,17 +130,19 @@ const Carts = () => {
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   // Recomputed from the applied coupon's rule on every render — not frozen
   // as a dollar amount at the moment "Apply" was clicked — so it stays
-  // correct if the customer changes quantities afterward. This mirrors
-  // (but doesn't need to exactly reproduce) the server's own cap/floor
-  // logic in calcDiscountAmount, since the server independently
-  // recomputes the authoritative amount from its own resolved subtotal at
-  // order-creation time — this is purely for display.
+  // correct if the customer changes quantities afterward (for an
+  // unrestricted coupon; a restricted coupon's eligibleSubtotal snapshot
+  // is what's frozen instead, see the note above). This mirrors (but
+  // doesn't need to exactly reproduce) the server's own cap/floor logic in
+  // calcDiscountAmount, since the server independently recomputes the
+  // authoritative amount from its own resolved subtotal at order-creation
+  // time — this is purely for display.
   const discountAmount = appliedCoupon
     ? Math.min(
         appliedCoupon.type === "FIXED"
           ? appliedCoupon.fixedOff ?? 0
-          : Math.round(subtotal * ((appliedCoupon.percentOff ?? 0) / 100) * 100) / 100,
-        subtotal
+          : Math.round(appliedCoupon.eligibleSubtotal * ((appliedCoupon.percentOff ?? 0) / 100) * 100) / 100,
+        appliedCoupon.eligibleSubtotal
       )
     : 0;
   const total = subtotal - discountAmount;
@@ -427,7 +438,11 @@ const Carts = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: discountCode,
-          subtotal,
+          items: cartItems.map((item) => ({
+            id: item.id,
+            title: item.title,
+            quantity: item.quantity,
+          })),
           phone: formData.phoneNumber || undefined,
         }),
       });
@@ -443,6 +458,7 @@ const Carts = () => {
         type: data.type,
         percentOff: data.percentOff,
         fixedOff: data.fixedOff,
+        eligibleSubtotal: data.eligibleSubtotal,
       });
       const discountLabel =
         data.type === "FIXED" ? `$${Number(data.fixedOff).toFixed(2)} off` : `${data.percentOff}% off`;

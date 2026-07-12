@@ -44,6 +44,11 @@ model Category {
   id        String     @id @default(cuid())
   name      String     @unique
   menuItems MenuItem[]
+
+  // Coupons restricted to "only this category" — see the restriction note
+  // on Coupon below. Most categories will have zero linked coupons; this
+  // is not the common case, just an available rule.
+  restrictedByCoupons Coupon[] @relation("CouponCategories")
 }
 
 model MenuItem {
@@ -59,6 +64,10 @@ model MenuItem {
   categoryId String
   orderItems OrderItem[]
   reviews    Review[]
+
+  // Coupons restricted to "only this item" — see the restriction note on
+  // Coupon below.
+  restrictedByCoupons Coupon[] @relation("CouponItems")
 }
 
 model Order {
@@ -261,6 +270,20 @@ model Coupon {
   updatedAt DateTime @updatedAt
 
   redemptions CouponRedemption[]
+
+  // Optional item/category scoping — both empty (the default) means "no
+  // restriction, applies to the whole cart," matching every coupon's
+  // behavior before this field existed (TEST10, SAVE5, etc. keep working
+  // unchanged). When either is non-empty, the coupon is only redeemable
+  // if the cart contains at least one matching line, and the discount is
+  // computed against ONLY the matching lines' subtotal — not the whole
+  // cart — see calcDiscountAmount/findValidCoupon in
+  // order-checkout-shared.ts. minOrderValue above still checks the FULL
+  // cart subtotal regardless of this scoping (a deliberate choice: "spend
+  // $15 total, get $5 off the pizzas in that order" rather than "spend
+  // $15 on pizzas specifically").
+  restrictedCategories Category[] @relation("CouponCategories")
+  restrictedItems      MenuItem[] @relation("CouponItems")
 
   @@index([isActive])
 }

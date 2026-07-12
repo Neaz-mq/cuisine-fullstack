@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { findValidCoupon, calcDiscountAmount, getCustomerKey } from "@/lib/order-checkout-shared";
+import {
+  findValidCoupon,
+  calcDiscountAmount,
+  getCustomerKey,
+  resolveOrderItems,
+  IncomingItem,
+} from "@/lib/order-checkout-shared";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -9,19 +15,23 @@ import { checkRateLimit } from "@/lib/rate-limit";
  * POST /api/coupons/validate -> public, unauthenticated. Lets the checkout
  * page preview a discount before submitting the order (so the customer
  * sees the real amount before clicking "Confirm your order"), including
- * every v2 rule that can be previewed: expiry, minimum order value, the
- * global usage cap, and — when we know who's asking (logged-in userId, or
- * the phone number they've typed into billing so far) — their personal
- * per-customer cap too.
+ * every v2 rule that can be previewed: expiry, minimum order value, item/
+ * category restriction, the global usage cap, and — when we know who's
+ * asking (logged-in userId, or the phone number they've typed into
+ * billing so far) — their personal per-customer cap too.
+ *
+ * Takes the cart's `items` (not a bare subtotal) so it can resolve real
+ * prices/categoryIds server-side — required for item/category-restricted
+ * coupons, whose discount only applies to a subset of the cart's lines,
+ * and safer in general since a client-reported subtotal was never
+ * trustworthy anyway.
  *
  * This is a PREVIEW only — it does not consume the coupon. The coupon is
  * only actually spent when an order is created (see consumeCoupon in
  * order-checkout-shared.ts, called from /api/orders and
  * /api/checkout/create-session), inside the same DB transaction as the
  * order itself. That's also where the discount is authoritatively
- * recomputed from server-resolved item prices — the `subtotal` this route
- * returns a preview against is client-reported and only used for display,
- * never trusted for the actual charge.
+ * recomputed from server-resolved item prices.
  */
 export async function POST(request: Request) {
   try {
@@ -42,21 +52,23 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { code, subtotal, phone } = body as { code: string; subtotal: number; phone?: string };
+    const { code, items, phone } = body as { code: string; items: IncomingItem[]; phone?: string };
 
-    if (typeof subtotal !== "number" || subtotal <= 0) {
-      return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    const resolution = await resolveOrderItems(items);
+    if (!resolution.ok) {
+      return NextResponse.json({ error: resolution.error }, { status: 400 });
     }
+    const resolvedItems = resolution.items;
 
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, phone);
 
-    const result = await findValidCoupon(code, subtotal, customerKey);
+    const result = await findValidCoupon(code, resolvedItems, customerKey);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    const discountAmount = calcDiscountAmount(subtotal, result.coupon);
+    const discountAmount = calcDiscountAmount(result.eligibleSubtotal, result.coupon);
 
     return NextResponse.json({
       code: result.coupon.code,
@@ -64,6 +76,7 @@ export async function POST(request: Request) {
       percentOff: result.coupon.percentOff,
       fixedOff: result.coupon.fixedOff,
       discountAmount,
+      eligibleSubtotal: result.eligibleSubtotal,
     });
   } catch (error) {
     console.error("POST /api/coupons/validate error:", error);
