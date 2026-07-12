@@ -106,12 +106,26 @@ const Carts = () => {
 
   const [isAgreedToTerms, setIsAgreedToTerms] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    percentOff: number;
+  } | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const total = subtotal;
+  // Recomputed from the applied coupon's percentOff on every render — not
+  // frozen as a dollar amount at the moment "Apply" was clicked — so it
+  // stays correct if the customer changes quantities afterward. The
+  // server independently recomputes this again from its own resolved
+  // subtotal at order-creation time; this is purely for display.
+  const discountAmount = appliedCoupon
+    ? Math.round(subtotal * (appliedCoupon.percentOff / 100) * 100) / 100
+    : 0;
+  const total = subtotal - discountAmount;
 
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
@@ -191,6 +205,7 @@ const Carts = () => {
             billing,
             orderType: "DINE_IN",
             tableId,
+            couponCode: appliedCoupon?.code,
           }),
         });
 
@@ -229,6 +244,8 @@ const Carts = () => {
           phoneNumber: "",
         });
         setErrors({});
+        setAppliedCoupon(null);
+        setDiscountCode("");
 
         clearCart();
         // One scan → one order (v1 scope) — clear the table context so a
@@ -262,7 +279,12 @@ const Carts = () => {
         const res = await fetch("/api/checkout/create-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: orderItems, billing, shippingMethod }),
+          body: JSON.stringify({
+            items: orderItems,
+            billing,
+            shippingMethod,
+            couponCode: appliedCoupon?.code,
+          }),
         });
 
         const data = await res.json();
@@ -289,7 +311,12 @@ const Carts = () => {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: orderItems, billing, shippingMethod }),
+        body: JSON.stringify({
+          items: orderItems,
+          billing,
+          shippingMethod,
+          couponCode: appliedCoupon?.code,
+        }),
       });
 
       const data = await res.json();
@@ -330,6 +357,8 @@ const Carts = () => {
       setErrors({});
       setIsAgreedToTerms(false);
       setPaymentErrors({});
+      setAppliedCoupon(null);
+      setDiscountCode("");
 
       clearCart();
       router.push(`/track/${data.id}`);
@@ -367,17 +396,55 @@ const Carts = () => {
 
   const handleDiscountCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDiscountCode(e.target.value);
+    setCouponError(null);
   };
 
-  const applyDiscount = () => {
-    toast.info(`Discount code "${discountCode}" applied (for demonstration).`, {
-      position: "bottom-center",
-      autoClose: 2000,
-      hideProgressBar: true,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-    });
+  const applyDiscount = async () => {
+    if (!discountCode.trim()) {
+      setCouponError("Enter a coupon code");
+      return;
+    }
+    if (cartItems.length === 0) {
+      setCouponError("Add an item to your cart first");
+      return;
+    }
+
+    setIsApplyingCoupon(true);
+    setCouponError(null);
+
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: discountCode, subtotal }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setCouponError(data?.error ?? "Invalid coupon code");
+        return;
+      }
+
+      setAppliedCoupon({ code: data.code, percentOff: data.percentOff });
+      toast.success(`"${data.code}" applied — ${data.percentOff}% off!`, {
+        position: "bottom-center",
+        autoClose: 2000,
+        hideProgressBar: true,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } catch {
+      setCouponError("Something went wrong. Please try again.");
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountCode("");
+    setCouponError(null);
   };
 
   // NOTE: this section is rendered TWICE below (once for desktop layout,
@@ -829,21 +896,43 @@ const Carts = () => {
             </div>
 
             <div className="pt-10 border-t border-gray-200">
-              <div className="flex mb-10">
-                <input
-                  type="text"
-                  placeholder="Gift card or discount code"
-                  className="flex-1 border border-gray-300 3xl:px-4 2xl:px-4 xl:px-2 lg:px-2 py-2 md:px-2 sm:px-2 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  value={discountCode}
-                  onChange={handleDiscountCodeChange}
-                />
-                <button
-                  onClick={applyDiscount}
-                  className="bg-gray-400 text-white 3xl:px-6 2xl:px-6 xl:px-2 lg:px-2 md:px-2 sm:px-2 py-2 font-semibold 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] hover:bg-gray-500 transition-colors"
-                >
-                  Apply
-                </button>
-              </div>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between mb-10 bg-green-50 border border-green-200 px-4 py-2 rounded">
+                  <span className="text-sm text-green-800 font-medium">
+                    &quot;{appliedCoupon.code}&quot; applied — {appliedCoupon.percentOff}% off
+                  </span>
+                  <button
+                    onClick={removeCoupon}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium"
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex mb-2">
+                    <input
+                      type="text"
+                      placeholder="Gift card or discount code"
+                      className="flex-1 border border-gray-300 3xl:px-4 2xl:px-4 xl:px-2 lg:px-2 py-2 md:px-2 sm:px-2 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      value={discountCode}
+                      onChange={handleDiscountCodeChange}
+                    />
+                    <button
+                      onClick={applyDiscount}
+                      disabled={isApplyingCoupon}
+                      className="bg-gray-400 text-white 3xl:px-6 2xl:px-6 xl:px-2 lg:px-2 md:px-2 sm:px-2 py-2 font-semibold 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] hover:bg-gray-500 transition-colors disabled:opacity-50"
+                    >
+                      {isApplyingCoupon ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <p className="text-xs text-red-500 mb-8">{couponError}</p>
+                  )}
+                  {!couponError && <div className="mb-10" />}
+                </>
+              )}
             </div>
             <div className="space-y-10 bg-white p-6">
               <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-gray-700 space-y-5">
@@ -853,7 +942,9 @@ const Carts = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Discount</span>
-                  <span>$0</span>
+                  <span className={discountAmount > 0 ? "text-[#2C6252]" : ""}>
+                    {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "$0"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>{isDineIn ? "Table service" : "Delivery charges"}</span>

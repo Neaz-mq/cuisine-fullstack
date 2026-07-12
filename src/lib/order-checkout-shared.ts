@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma";
 
 export const SHIPPING_METHODS = ["UBER_EATS", "FOOD_PANDA"] as const;
 export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
@@ -153,4 +154,73 @@ export async function resolveOrderItems(
   }
 
   return { ok: true, items: resolved };
+}
+
+// ---------------------------------------------------------------------------
+// Discount coupons — percentage-off, single global use (see Coupon model
+// in prisma/schema.prisma for the full design rationale).
+// ---------------------------------------------------------------------------
+
+export interface CouponInfo {
+  id: string;
+  code: string;
+  percentOff: number;
+}
+
+/**
+ * Looks up a coupon and checks it's currently redeemable — exists, active,
+ * and not already used by another order. Used both for the public
+ * "preview the discount before checkout" endpoint AND as the first check
+ * inside the order-creation transaction (see consumeCoupon below); the
+ * transaction re-checks regardless, since this lookup alone can't prevent
+ * a race between two simultaneous orders.
+ */
+export async function findValidCoupon(
+  code: string
+): Promise<{ ok: true; coupon: CouponInfo } | { ok: false; error: string }> {
+  const trimmed = code?.trim().toUpperCase();
+  if (!trimmed) return { ok: false, error: "Enter a coupon code" };
+
+  const coupon = await prisma.coupon.findUnique({ where: { code: trimmed } });
+  if (!coupon) return { ok: false, error: "Invalid coupon code" };
+  if (!coupon.isActive) return { ok: false, error: "This coupon is no longer active" };
+  if (coupon.usedByOrderId) return { ok: false, error: "This coupon has already been used" };
+
+  return {
+    ok: true,
+    coupon: { id: coupon.id, code: coupon.code, percentOff: coupon.percentOff },
+  };
+}
+
+// Rounded to cents. Computed from the SERVER-resolved subtotal (real
+// MenuItem prices from resolveOrderItems), never a client-supplied
+// subtotal — a tampered client-side total must not be able to change how
+// much discount is granted.
+export function calcDiscountAmount(subtotal: number, percentOff: number): number {
+  return Math.round(subtotal * (percentOff / 100) * 100) / 100;
+}
+
+/**
+ * Atomically claims a coupon for `orderId` inside an existing transaction.
+ * Must run in the SAME transaction as the Order row it's being attached
+ * to — if the order creation later fails and the transaction rolls back,
+ * the coupon claim rolls back with it, so the code isn't burned on a
+ * failed order.
+ *
+ * The `where: { usedByOrderId: null }` on the update is the actual
+ * concurrency guard: if two orders race to spend the same code,
+ * updateMany's affected-row count tells us which one (if either) actually
+ * won — findValidCoupon above is only an optimistic pre-check, not
+ * sufficient on its own to prevent a double-spend.
+ */
+export async function consumeCoupon(
+  tx: Prisma.TransactionClient,
+  couponId: string,
+  orderId: string
+): Promise<boolean> {
+  const result = await tx.coupon.updateMany({
+    where: { id: couponId, usedByOrderId: null },
+    data: { usedByOrderId: orderId, usedAt: new Date() },
+  });
+  return result.count === 1;
 }

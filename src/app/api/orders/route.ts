@@ -9,6 +9,9 @@ import {
   OrderTypeValue,
   validateBilling,
   resolveOrderItems,
+  findValidCoupon,
+  calcDiscountAmount,
+  consumeCoupon,
   IncomingItem,
 } from "@/lib/order-checkout-shared";
 
@@ -66,12 +69,14 @@ export async function POST(request: Request) {
       shippingMethod,
       orderType = "DELIVERY",
       tableId,
+      couponCode,
     }: {
       items: IncomingItem[];
       billing: Billing;
       shippingMethod?: ShippingMethod;
       orderType?: OrderTypeValue;
       tableId?: string;
+      couponCode?: string;
     } = body;
 
     if (orderType !== "DELIVERY" && orderType !== "DINE_IN") {
@@ -119,46 +124,80 @@ export async function POST(request: Request) {
     }
     const resolvedItems = resolution.items;
 
-    const totalAmount = resolvedItems.reduce(
+    const subtotal = resolvedItems.reduce(
       (sum, i) => sum + i.price * i.quantity,
       0
     );
 
+    // Pre-check outside the transaction purely for a fast, friendly error
+    // message — the actual claim (and the only real concurrency guard)
+    // happens inside the transaction via consumeCoupon below.
+    let couponInfo: { id: string; code: string; percentOff: number } | null = null;
+    if (couponCode?.trim()) {
+      const couponResult = await findValidCoupon(couponCode);
+      if (!couponResult.ok) {
+        return NextResponse.json({ error: couponResult.error }, { status: 409 });
+      }
+      couponInfo = couponResult.coupon;
+    }
+
+    const discountAmount = couponInfo
+      ? calcDiscountAmount(subtotal, couponInfo.percentOff)
+      : 0;
+    const totalAmount = subtotal - discountAmount;
+
     const session = await auth();
 
-    const order = await prisma.order.create({
-      data: {
-        status: "PLACED",
-        totalAmount,
-        orderType,
-        firstName: billing.firstName,
-        lastName: billing.lastName,
-        phone: billing.phone,
-        paymentMethod: "COD",
-        userId: session?.user?.id ?? null,
-        ...(orderType === "DELIVERY"
-          ? {
-              email: billing.email,
-              country: billing.country,
-              address: billing.address,
-              apartment: billing.apartment || null,
-              city: billing.city,
-              state: billing.state,
-              zip: billing.zip,
-              shippingMethod: shippingMethod as ShippingMethod,
-            }
-          : {
-              tableId: validatedTableId,
-            }),
-        items: {
-          create: resolvedItems.map((i) => ({
-            menuItemId: i.menuItemId,
-            quantity: i.quantity,
-            price: i.price,
-          })),
+    const order = await prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          status: "PLACED",
+          totalAmount,
+          orderType,
+          firstName: billing.firstName,
+          lastName: billing.lastName,
+          phone: billing.phone,
+          paymentMethod: "COD",
+          userId: session?.user?.id ?? null,
+          couponCode: couponInfo?.code ?? null,
+          discountAmount,
+          ...(orderType === "DELIVERY"
+            ? {
+                email: billing.email,
+                country: billing.country,
+                address: billing.address,
+                apartment: billing.apartment || null,
+                city: billing.city,
+                state: billing.state,
+                zip: billing.zip,
+                shippingMethod: shippingMethod as ShippingMethod,
+              }
+            : {
+                tableId: validatedTableId,
+              }),
+          items: {
+            create: resolvedItems.map((i) => ({
+              menuItemId: i.menuItemId,
+              quantity: i.quantity,
+              price: i.price,
+            })),
+          },
         },
-      },
-      include: { items: { include: { menuItem: true } }, table: true },
+        include: { items: { include: { menuItem: true } }, table: true },
+      });
+
+      if (couponInfo) {
+        const claimed = await consumeCoupon(tx, couponInfo.id, created.id);
+        if (!claimed) {
+          // Someone else claimed this exact code in the moment between our
+          // pre-check and now — abort the whole order, not just the
+          // discount, so the customer isn't silently charged full price
+          // for what they believed was a discounted order.
+          throw new Error("COUPON_ALREADY_USED");
+        }
+      }
+
+      return created;
     });
 
     // Dine-in orders never collect an email address, so there's nothing to
@@ -188,6 +227,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
+      return NextResponse.json(
+        { error: "This coupon was just used by someone else. Please remove it and try again." },
+        { status: 409 }
+      );
+    }
     console.error("POST /api/orders error:", error);
     return NextResponse.json(
       { error: "Failed to create order" },

@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "Loyalty", href: "/admin/loyalty" },
   { label: "Reservations", href: "/admin/reservations" },
   { label: "Tables", href: "/admin/tables" },
+  { label: "Coupons", href: "/admin/coupons" },
   { label: "Users", href: "/admin/users" },
   { label: "Settings", href: "/admin/settings" },
 ];

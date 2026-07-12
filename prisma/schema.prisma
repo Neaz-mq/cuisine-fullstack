@@ -113,6 +113,16 @@ model Order {
   table   RestaurantTable? @relation(fields: [tableId], references: [id])
   tableId String?
 
+  // Discount/Coupon — totalAmount above is already net of this discount
+  // (i.e. it's the actual amount charged/owed). discountAmount and
+  // couponCode are denormalized here purely for display (order summary,
+  // confirmation email, admin order detail) without needing a join back to
+  // Coupon. The authoritative "was this coupon used, and by which order"
+  // record lives on Coupon.usedByOrderId below.
+  couponCode     String?
+  discountAmount Float   @default(0)
+  coupon         Coupon? // back-relation only — FK lives on Coupon.usedByOrderId
+
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake.
   pointsAwarded Boolean @default(false)
@@ -176,6 +186,38 @@ model OrderItem {
   orderId    String
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   menuItemId String
+}
+
+// ---------------------------------------------------------------------------
+// Discount coupons
+//
+// v1 scope (confirmed): percentage-off only, and SINGLE GLOBAL USE — once
+// any order consumes a code, it's permanently spent for everyone, not
+// just that customer. This is simpler than a per-customer usage ledger
+// and matches how a small single-location restaurant typically hands out
+// codes (e.g. one printed flyer code, one Instagram-giveaway code).
+//
+// usedByOrderId (not a separate "redemption" table) is the source of
+// truth for "has this been used" — claimed atomically in a transaction at
+// order-creation time (see consumeCoupon in order-checkout-shared.ts) so
+// two customers racing to submit the same code can't both succeed.
+//
+// isActive is independent of usedByOrderId: it only gates an UNUSED
+// coupon (lets admin pull a code before anyone redeems it, e.g. a typo).
+// A used coupon can't be re-activated into being usable again — that
+// would mean two orders both claiming the same single-use discount.
+// ---------------------------------------------------------------------------
+model Coupon {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  percentOff Int
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  usedByOrderId String?   @unique
+  usedAt        DateTime?
+  order         Order?    @relation(fields: [usedByOrderId], references: [id], onDelete: SetNull)
 }
 
 // ---------------------------------------------------------------------------
