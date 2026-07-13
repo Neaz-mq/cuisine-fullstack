@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiScope } from "@/lib/require-admin";
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || (session.user as { role?: string }).role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiScope("menu");
+  if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
   const { title, description, price, imageUrl, categoryId, isAvailable } = body;

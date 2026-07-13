@@ -1,15 +1,10 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireApiScope } from "@/lib/require-admin";
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if ((session.user as { role?: string }).role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiScope("loyalty");
+  if (authResult instanceof NextResponse) return authResult;
 
   const body = await request.json().catch(() => null);
   const userId = body?.userId as string | undefined;

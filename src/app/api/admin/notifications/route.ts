@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiStaff } from "@/lib/require-admin";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || (session.user as { role?: string }).role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const authResult = await requireApiStaff();
+  if (authResult instanceof NextResponse) return authResult;
 
   const { searchParams } = new URL(req.url);
   const since = searchParams.get("since");

@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
+import { isStaffRole } from "@/lib/permissions";
 
 /**
  * src/middleware.ts
@@ -38,7 +39,7 @@ export default auth((req) => {
       loginUrl.searchParams.set("callbackUrl", req.url);
       return NextResponse.redirect(loginUrl);
     }
-    if (role !== "ADMIN") {
+    if (!isStaffRole(role)) {
       return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();

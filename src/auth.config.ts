@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import { isStaffRole } from "@/lib/permissions";
 
 /**
  * auth.config.ts
@@ -45,7 +46,7 @@ export const authConfig: NextAuthConfig = {
       const isOnAccount = request.nextUrl.pathname.startsWith("/account");
 
       if (isOnAdmin) {
-        return isLoggedIn && (auth?.user as { role?: string })?.role === "ADMIN";
+        return isLoggedIn && isStaffRole((auth?.user as { role?: string })?.role);
       }
 
       if (isOnAccount) {

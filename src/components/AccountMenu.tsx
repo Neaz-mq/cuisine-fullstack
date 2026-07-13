@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { User, LogOut, Package, ChevronDown } from "lucide-react";
+import { isStaffRole } from "@/lib/permissions";
 
 /**
  * src/components/AccountMenu.tsx
@@ -100,7 +101,7 @@ const AccountMenu = () => {
             My Orders
           </Link>
 
-          {(session.user as { role?: string })?.role === "ADMIN" && (
+          {isStaffRole((session.user as { role?: string })?.role) && (
             <Link
               href="/admin"
               className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"

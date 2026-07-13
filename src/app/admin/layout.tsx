@@ -1,22 +1,23 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
+import { getScopesForRole, type Scope } from "@/lib/permissions";
 import NotificationBell from "./NotificationBell";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "/admin" },
-  { label: "Orders", href: "/admin/orders" },
-  { label: "Kitchen", href: "/admin/kitchen" },
-  { label: "Menu", href: "/admin/menu" },
-  { label: "Categories", href: "/admin/categories" },
-  { label: "Insights", href: "/admin/insights" },
-  { label: "Reviews", href: "/admin/reviews" },
-  { label: "Loyalty", href: "/admin/loyalty" },
-  { label: "Reservations", href: "/admin/reservations" },
-  { label: "Tables", href: "/admin/tables" },
-  { label: "Coupons", href: "/admin/coupons" },
-  { label: "Users", href: "/admin/users" },
-  { label: "Settings", href: "/admin/settings" },
+const NAV_ITEMS: { label: string; href: string; scope: Scope | null }[] = [
+  { label: "Dashboard", href: "/admin", scope: null }, // always visible; page itself redirects if there's nothing to show
+  { label: "Orders", href: "/admin/orders", scope: "orders" },
+  { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen" },
+  { label: "Menu", href: "/admin/menu", scope: "menu" },
+  { label: "Categories", href: "/admin/categories", scope: "categories" },
+  { label: "Insights", href: "/admin/insights", scope: "insights" },
+  { label: "Reviews", href: "/admin/reviews", scope: "reviews" },
+  { label: "Loyalty", href: "/admin/loyalty", scope: "loyalty" },
+  { label: "Reservations", href: "/admin/reservations", scope: "reservations" },
+  { label: "Tables", href: "/admin/tables", scope: "tables" },
+  { label: "Coupons", href: "/admin/coupons", scope: "coupons" },
+  { label: "Staff", href: "/admin/staff", scope: "staff" },
+  { label: "Settings", href: "/admin/settings", scope: "settings" },
 ];
 
 export default async function AdminLayout({
@@ -25,7 +26,15 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await requireAdmin();
-  const pendingReviewCount = await prisma.review.count({ where: { status: "PENDING" } });
+  const role = (session.user as { role?: string }).role;
+  const scopes = getScopesForRole(role);
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => item.scope === null || scopes.includes(item.scope)
+  );
+
+  const pendingReviewCount = scopes.includes("reviews")
+    ? await prisma.review.count({ where: { status: "PENDING" } })
+    : 0;
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -34,12 +43,15 @@ export default async function AdminLayout({
           <div>
             <p className="text-sm font-semibold text-gray-800">Admin Panel</p>
             <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+            <p className="text-[10px] font-semibold text-[#2C6252] uppercase tracking-wide mt-0.5">
+              {role}
+            </p>
           </div>
           <NotificationBell />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

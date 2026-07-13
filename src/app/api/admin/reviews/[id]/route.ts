@@ -1,26 +1,15 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireApiScope } from "@/lib/require-admin";
 
 const VALID_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
-
-async function checkAdmin() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-  if ((session.user as { role?: string }).role !== "ADMIN") {
-    return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-  return { ok: true as const };
-}
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authCheck = await checkAdmin();
-  if (!authCheck.ok) return authCheck.response;
+  const authResult = await requireApiScope("reviews");
+  if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
@@ -48,8 +37,8 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authCheck = await checkAdmin();
-  if (!authCheck.ok) return authCheck.response;
+  const authResult = await requireApiScope("reviews");
+  if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
 

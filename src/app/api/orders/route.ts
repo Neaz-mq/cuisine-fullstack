@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiScope } from "@/lib/require-admin";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import {
   SHIPPING_METHODS,
@@ -20,7 +21,8 @@ import {
 /**
  * src/app/api/orders/route.ts
  *
- * GET  /api/orders   -> all orders, for the admin dashboard (ADMIN only)
+ * GET  /api/orders   -> all orders, for the admin dashboard (staff with the
+ *                        "orders" or "kitchen" scope)
  * POST /api/orders    -> create an order directly, no payment redirect.
  *                        Covers two order types:
  *                          - DELIVERY (default) + Cash on Delivery — same
@@ -40,12 +42,8 @@ import {
 
 export async function GET() {
   try {
-    const session = await auth();
-    const role = (session?.user as { role?: string } | undefined)?.role;
-
-    if (!session?.user || role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    const authResult = await requireApiScope("orders");
+    if (authResult instanceof NextResponse) return authResult;
 
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },

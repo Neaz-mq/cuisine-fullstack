@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/require-admin";
+import { hasPermission, firstAllowedPath } from "@/lib/permissions";
 
 function formatOrderId(id: string) {
   return `#ORD-${id.slice(-6).toUpperCase()}`;
@@ -18,6 +21,17 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default async function AdminDashboardPage() {
+  // The dashboard shows revenue and other financial data, which is
+  // restricted to the "insights" scope. Roles without it (WAITER,
+  // CASHIER, DELIVERY, KITCHEN) get bounced straight to whatever section
+  // they DO have — showing them an empty/forbidden dashboard on every
+  // login would just be a confusing dead end.
+  const session = await requireAdmin();
+  const role = (session.user as { role?: string }).role;
+  if (!hasPermission(role, "insights")) {
+    redirect(firstAllowedPath(role));
+  }
+
   const now = new Date();
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(now.getDate() - 6);

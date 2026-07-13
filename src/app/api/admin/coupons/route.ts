@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiScope } from "@/lib/require-admin";
 import { validateCouponInput, CouponCreateInput } from "@/lib/order-checkout-shared";
 
-async function requireAdminSession() {
-  const session = await auth();
-  if (!session?.user?.id || (session.user as { role?: string }).role !== "ADMIN") {
-    return null;
-  }
-  return session;
-}
-
 export async function GET() {
-  const session = await requireAdminSession();
-  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const authResult = await requireApiScope("coupons");
+  if (authResult instanceof NextResponse) return authResult;
 
   // _count.redemptions lets the admin list show "used N times" without a
   // separate query per coupon. restrictedCategories/restrictedItems (just
@@ -31,8 +23,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireAdminSession();
-  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const authResult = await requireApiScope("coupons");
+  if (authResult instanceof NextResponse) return authResult;
 
   const body = (await req.json()) as CouponCreateInput;
   const result = validateCouponInput(body);
@@ -40,9 +32,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  // restrictedCategoryIds/restrictedItemIds are relation connects, not
-  // scalar columns — split them out of the validated data before handing
-  // the rest straight to `create`.
   const { restrictedCategoryIds, restrictedItemIds, ...couponFields } = result.data;
 
   try {

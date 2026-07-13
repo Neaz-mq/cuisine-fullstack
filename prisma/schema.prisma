@@ -33,11 +33,62 @@ model User {
   reservations        Reservation[]
   reviews             Review[]
   loyaltyTransactions LoyaltyTransaction[]
+
+  // Present only for staff accounts (role != CUSTOMER). A CUSTOMER user
+  // never has one of these — the Staff management feature is what creates
+  // both the User row and this row together, in one transaction.
+  staffProfile StaffProfile?
 }
 
+// CUSTOMER is the only non-staff role. Every other value is a "staff role"
+// (see lib/permissions.ts:isStaffRole) and gets a StaffProfile row.
+//
+// Renamed from the old two-value { CUSTOMER, ADMIN } enum: ADMIN -> OWNER
+// (full, unrestricted access — same as ADMIN used to mean), plus five new
+// narrower staff roles so day-to-day staff (waiters, kitchen, etc.) don't
+// need full admin access just to do their job.
 enum Role {
   CUSTOMER
-  ADMIN
+  OWNER
+  MANAGER
+  WAITER
+  CASHIER
+  DELIVERY
+  KITCHEN
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
+// One row per staff User (role != CUSTOMER), created together with the User
+// row when an OWNER/MANAGER adds a new staff member via /admin/staff.
+model StaffProfile {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Human-facing sequential ID shown in the Staff UI (e.g. "EMP-0007") —
+  // friendlier to read/say out loud than the cuid in `userId`.
+  employeeId     String         @unique
+  department     String?
+  employmentType EmploymentType @default(FULL_TIME)
+  phone          String?
+  hireDate       DateTime       @default(now())
+
+  // Deactivating a staff member (instead of deleting) keeps their name on
+  // historical orders/audit trails intact, while blocking further login.
+  isActive       Boolean        @default(true)
+
+  // Sensitive fields — only ever read or written by OWNER-role requests.
+  // MANAGER can see/edit everything else on this model but not these two.
+  nid            String?
+  salary         Float?
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 }
 
 model Category {

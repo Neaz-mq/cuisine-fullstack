@@ -2,23 +2,21 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isTableAvailable } from "@/lib/reservations";
+import { requireApiScope } from "@/lib/require-admin";
 
 /**
  * src/app/api/reservations/route.ts
  *
- * GET  /api/reservations   -> all reservations, for the admin dashboard (ADMIN only)
+ * GET  /api/reservations   -> all reservations, for the admin dashboard
+ *                              (staff with the "reservations" scope)
  * POST /api/reservations   -> create a new reservation (public — works without
  *                              login too, matching the /table page which isn't
  *                              behind auth)
  */
 export async function GET() {
   try {
-    const session = await auth();
-    const role = (session?.user as { role?: string } | undefined)?.role;
-
-    if (!session?.user || role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    const authResult = await requireApiScope("reservations");
+    if (authResult instanceof NextResponse) return authResult;
 
     const reservations = await prisma.reservation.findMany({
       orderBy: { reservedAt: "asc" },

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isTableAvailable } from "@/lib/reservations";
+import { requireApiScope } from "@/lib/require-admin";
 
 /**
  * src/app/api/tables/route.ts
  *
  * GET  /api/tables                          -> all active tables, no availability
  * GET  /api/tables?reservedAt=<ISO string>   -> same, plus availability at that time
- * POST /api/tables                          -> create a new table (ADMIN only)
+ * POST /api/tables                          -> create a new table (staff with
+ *                                               the "tables" scope)
  */
 
 /**
@@ -74,12 +75,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    const role = (session?.user as { role?: string } | undefined)?.role;
-
-    if (!session?.user || role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    const authResult = await requireApiScope("tables");
+    if (authResult instanceof NextResponse) return authResult;
 
     const body = await request.json();
     const { label, capacity } = body;

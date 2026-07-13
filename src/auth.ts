@@ -32,6 +32,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials.password as string;
         const user = await prisma.user.findUnique({
           where: { email },
+          include: { staffProfile: { select: { isActive: true } } },
         });
         // user.password null হবে যদি সে Google দিয়ে signup করে থাকে
         if (!user || !user.password) {
@@ -39,6 +40,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
+          return null;
+        }
+        // Deactivated staff can't log in at all, even with the right
+        // password — same treatment as a disabled account anywhere else.
+        if (user.role !== "CUSTOMER" && user.staffProfile?.isActive === false) {
           return null;
         }
         return {
