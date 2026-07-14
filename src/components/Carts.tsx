@@ -105,6 +105,12 @@ const Carts = () => {
   });
 
   const [isAgreedToTerms, setIsAgreedToTerms] = useState(false);
+  // Opt-in checkbox for marketing offer emails — only shown/used for
+  // delivery orders (dine-in never collects an email, so there's nothing
+  // to sync to the Resend Audience for those). Defaults to false, never
+  // pre-checked. See src/lib/resend.ts / src/app/api/orders/route.ts /
+  // src/app/api/checkout/create-session/route.ts for the server side.
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -209,6 +215,8 @@ const Carts = () => {
       // Dine-in (QR Table Ordering) — always "Pay at Table", created
       // immediately via the same COD-style endpoint used for delivery COD
       // orders, just with orderType/tableId instead of address/shipping.
+      // No email is ever collected for dine-in, so marketingConsent is
+      // intentionally omitted here — there's nothing to sync to Resend.
       // -----------------------------------------------------------------
       if (isDineIn) {
         const billing = {
@@ -287,6 +295,11 @@ const Carts = () => {
         city: formData.city,
         state: formData.state,
         zip: formData.zip,
+        // Only meaningful for delivery orders (they're the only ones with
+        // an email on file) — see src/lib/order-checkout-shared.ts Billing
+        // type and the server-side sync logic in /api/orders and
+        // /api/checkout/create-session.
+        marketingConsent,
       };
       const shippingMethod = SHIPPING_METHOD_MAP[selectedShipping];
 
@@ -376,6 +389,7 @@ const Carts = () => {
       setSelectedCountry(null);
       setErrors({});
       setIsAgreedToTerms(false);
+      setMarketingConsent(false);
       setPaymentErrors({});
       setAppliedCoupon(null);
       setDiscountCode("");
@@ -851,6 +865,21 @@ const Carts = () => {
                     onChange={handleChange}
                   />
                   {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
+
+                  {/* Marketing opt-in — delivery orders only, since dine-in
+                      never collects an email to sync to Resend. Unchecked
+                      by default; never pre-selected. */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={marketingConsent}
+                      onChange={(e) => setMarketingConsent(e.target.checked)}
+                      className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    />
+                    <span className="text-gray-700 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]">
+                      Email me about special offers and discounts
+                    </span>
+                  </label>
                 </>
               )}
 

@@ -31,7 +31,8 @@ export type Scope =
   | "loyalty"
   | "settings"
   | "insights"
-  | "staff";
+  | "staff"
+  | "marketing";
 
 const ALL_SCOPES: Scope[] = [
   "menu",
@@ -46,6 +47,7 @@ const ALL_SCOPES: Scope[] = [
   "settings",
   "insights",
   "staff",
+  "marketing",
 ];
 
 /**
@@ -60,6 +62,10 @@ const ALL_SCOPES: Scope[] = [
  * status at some point in the flow), plus whatever's specific to their
  * job. KITCHEN only gets "kitchen" — menu availability toggling from the
  * kitchen board is a possible future addition, not part of this change.
+ *
+ * "marketing" (sending offer broadcasts to the whole customer audience)
+ * is deliberately NOT given to WAITER/CASHIER/DELIVERY/KITCHEN — only
+ * OWNER/MANAGER get it via ALL_SCOPES, same as "staff" and "settings".
  */
 const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
   OWNER: ALL_SCOPES,
@@ -85,6 +91,7 @@ const SCOPE_PATH: Record<Scope, string> = {
   settings: "/admin/settings",
   insights: "/admin/insights",
   staff: "/admin/staff",
+  marketing: "/admin/marketing",
 };
 
 // Nav / redirect priority order — first scope in this list that a role has
@@ -102,6 +109,7 @@ const SCOPE_PRIORITY: Scope[] = [
   "staff",
   "settings",
   "insights",
+  "marketing",
 ];
 
 export function isStaffRole(role?: string | null): role is StaffRole {

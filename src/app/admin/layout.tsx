@@ -16,6 +16,7 @@ const NAV_ITEMS: { label: string; href: string; scope: Scope | null }[] = [
   { label: "Reservations", href: "/admin/reservations", scope: "reservations" },
   { label: "Tables", href: "/admin/tables", scope: "tables" },
   { label: "Coupons", href: "/admin/coupons", scope: "coupons" },
+  { label: "Marketing", href: "/admin/marketing", scope: "marketing" },
   { label: "Staff", href: "/admin/staff", scope: "staff" },
   { label: "Settings", href: "/admin/settings", scope: "settings" },
 ];
