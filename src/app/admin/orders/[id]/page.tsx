@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "../OrderStatusSelect";
+import PaymentStatusBadge from "../PaymentStatusBadge";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -110,8 +111,8 @@ export default async function AdminOrderDetailPage({
             </div>
           ))}
         </div>
-        <div className="flex justify-between pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
-          <span className="text-gray-500">
+        <div className="flex justify-between items-center pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
+          <span className="text-gray-500 flex items-center gap-2">
             {isDineIn
               ? `Table ${order.table?.label ?? "—"}`
               : order.shippingMethod === "UBER_EATS"
@@ -125,6 +126,9 @@ export default async function AdminOrderDetailPage({
                 ? "Pay at Table"
                 : "Cash on Delivery"
               : "Online Payment"}
+            {order.paymentMethod === "ONLINE" && (
+              <PaymentStatusBadge status={order.paymentStatus} />
+            )}
           </span>
           <span className="font-bold text-[#2C6252]">
             USD ${order.totalAmount.toFixed(2)}

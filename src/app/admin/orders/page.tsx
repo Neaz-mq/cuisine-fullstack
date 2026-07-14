@@ -5,6 +5,7 @@ import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "./OrderStatusSelect";
 import OrdersToolbar from "./OrdersToolbar";
 import Pagination from "./Pagination";
+import PaymentStatusBadge from "./PaymentStatusBadge";
 
 const PAGE_SIZE = 10;
 
@@ -126,14 +127,21 @@ export default async function AdminOrdersPage({
                 ))}
               </div>
 
-              <div className="flex justify-between pt-2 border-t border-dashed border-gray-200 text-sm">
-                <span className="text-gray-500">
+              <div className="flex justify-between items-center pt-2 border-t border-dashed border-gray-200 text-sm">
+                <span className="text-gray-500 flex items-center gap-2">
                   {fulfillmentLabel(order)} ·{" "}
                   {order.paymentMethod === "COD"
                     ? order.orderType === "DINE_IN"
                       ? "Pay at Table"
                       : "Cash on Delivery"
                     : "Online Payment"}
+                  {/* Payment status only means anything for online orders —
+                      COD/Pay-at-Table is settled in person, not via
+                      Order.paymentStatus, so a badge there would just be
+                      noise (it sits at its PENDING default forever). */}
+                  {order.paymentMethod === "ONLINE" && (
+                    <PaymentStatusBadge status={order.paymentStatus} />
+                  )}
                 </span>
                 <span className="font-bold text-[#2C6252]">
                   USD ${order.totalAmount.toFixed(2)}
