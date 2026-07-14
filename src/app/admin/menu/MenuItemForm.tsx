@@ -132,15 +132,19 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
       <div className="flex gap-4">
         <div className="flex-1">
           <label className="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-            required
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g. 8.99"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-md text-sm"
+              required
+            />
+          </div>
         </div>
 
         <div className="flex-1">

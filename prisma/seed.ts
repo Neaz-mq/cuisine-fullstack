@@ -42,7 +42,7 @@ const menuItems = [
     title: "Fresh Burger",
     description:
       "We source only the freshest and highest-quality ingredients to ensure every dish bursts with flavor.",
-    price: 300,
+    price: 8.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Burgers",
@@ -51,7 +51,7 @@ const menuItems = [
     title: "Juicy Burger",
     description:
       "Our signature beef patty, cooked to perfection and served on a toasted bun with fresh veggies.",
-    price: 320,
+    price: 9.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Burgers",
@@ -60,7 +60,7 @@ const menuItems = [
     title: "Spicy BBQ Burger",
     description:
       "A smoky and spicy delight with a zesty BBQ sauce, crispy onions, and melted cheese.",
-    price: 310,
+    price: 9.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Burgers",
@@ -69,7 +69,7 @@ const menuItems = [
     title: "Mushroom Swiss Burger",
     description:
       "Earthy mushrooms and melted Swiss cheese complement our succulent beef patty perfectly.",
-    price: 305,
+    price: 9.29,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Burgers",
@@ -80,7 +80,7 @@ const menuItems = [
     title: "Crispy Fried Chicken",
     description:
       "Our chicken is fried to golden perfection, crispy on the outside, juicy on the inside, a true delight.",
-    price: 250,
+    price: 7.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129719/menu8_u5oue6.webp",
     category: "Chicken",
@@ -89,7 +89,7 @@ const menuItems = [
     title: "Spicy Chicken Wings",
     description:
       "Experience the fiery kick of our spicy chicken wings, perfect for those who love a bit of heat.",
-    price: 280,
+    price: 8.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129719/menu8_u5oue6.webp",
     category: "Chicken",
@@ -98,7 +98,7 @@ const menuItems = [
     title: "Grilled Chicken Salad",
     description:
       "Healthy and delicious, our grilled chicken salad is packed with fresh greens and tender chicken.",
-    price: 220,
+    price: 6.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129719/menu8_u5oue6.webp",
     category: "Chicken",
@@ -107,7 +107,7 @@ const menuItems = [
     title: "Chicken Nuggets Meal",
     description:
       "A perfect meal for the little ones, tender chicken nuggets with a side of crispy fries.",
-    price: 180,
+    price: 5.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129719/menu8_u5oue6.webp",
     category: "Chicken",
@@ -118,7 +118,7 @@ const menuItems = [
     title: "Classic Pepperoni Pizza",
     description:
       "A timeless favorite with rich tomato sauce, mozzarella, and savory pepperoni slices.",
-    price: 450,
+    price: 13.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129875/menu9_eaczhq.webp",
     category: "Pizza",
@@ -127,7 +127,7 @@ const menuItems = [
     title: "Margherita Delight",
     description:
       "Simple yet perfect, with fresh basil, mozzarella, and a hint of olive oil on a crispy crust.",
-    price: 400,
+    price: 11.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129875/menu9_eaczhq.webp",
     category: "Pizza",
@@ -136,7 +136,7 @@ const menuItems = [
     title: "Veggie Supreme Pizza",
     description:
       "Loaded with a colorful array of fresh vegetables, olives, and bell peppers.",
-    price: 420,
+    price: 12.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130054/menu10_fggjfb.webp",
     category: "Pizza",
@@ -145,7 +145,7 @@ const menuItems = [
     title: "Chicken BBQ Pizza",
     description:
       "Tangy BBQ sauce, grilled chicken, red onions, and cilantro create a unique flavor.",
-    price: 480,
+    price: 14.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130054/menu10_fggjfb.webp",
     category: "Pizza",
@@ -156,7 +156,7 @@ const menuItems = [
     title: "Garden Fresh Salad",
     description:
       "Crisp, fresh greens with a mix of vibrant vegetables and a light vinaigrette dressing.",
-    price: 150,
+    price: 6.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130270/menu11_yizlj0.webp",
     category: "Salad",
@@ -165,7 +165,7 @@ const menuItems = [
     title: "Caesar Salad Chicken",
     description:
       "Classic Caesar salad with grilled chicken, croutons, and Parmesan cheese.",
-    price: 200,
+    price: 8.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130270/menu11_yizlj0.webp",
     category: "Salad",
@@ -174,7 +174,7 @@ const menuItems = [
     title: "Mediterranean Quinoa Salad",
     description:
       "A hearty and healthy salad with quinoa, olives, feta, and sun-dried tomatoes.",
-    price: 230,
+    price: 9.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130540/menu12_jowol9.webp",
     category: "Salad",
@@ -183,7 +183,7 @@ const menuItems = [
     title: "Cobb Salad Supreme",
     description:
       "A rich Cobb salad with chicken, bacon, avocado, egg, and blue cheese.",
-    price: 280,
+    price: 10.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752130540/menu12_jowol9.webp",
     category: "Salad",
@@ -194,7 +194,7 @@ const menuItems = [
     title: "Crispy French Fries",
     description:
       "Golden, crispy, and perfectly salted french fries, a classic appetizer.",
-    price: 80,
+    price: 4.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Appetizer",
@@ -203,7 +203,7 @@ const menuItems = [
     title: "Onion Rings Sauce",
     description:
       "Sweet and savory onion rings, deep-fried to perfection, served with a special dipping sauce.",
-    price: 100,
+    price: 5.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Appetizer",
@@ -212,7 +212,7 @@ const menuItems = [
     title: "Mozzarella Sticks",
     description:
       "Warm, gooey mozzarella sticks coated in crispy breading, served with marinara.",
-    price: 120,
+    price: 6.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Appetizer",
@@ -221,7 +221,7 @@ const menuItems = [
     title: "Garlic Bread with Cheese",
     description:
       "Toasted garlic bread topped with melted cheese, a perfect companion to any meal.",
-    price: 90,
+    price: 5.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129185/menu6_usoio7.webp",
     category: "Appetizer",
@@ -232,7 +232,7 @@ const menuItems = [
     title: "Classic Coca-Cola",
     description:
       "The refreshing taste of Coca-Cola, perfectly chilled to quench your thirst.",
-    price: 50,
+    price: 2.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Drinks",
@@ -241,7 +241,7 @@ const menuItems = [
     title: "Freshly Squeezed Orange Juice",
     description:
       "Natural and invigorating, our freshly squeezed orange juice is a burst of citrus flavor.",
-    price: 100,
+    price: 3.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Drinks",
@@ -250,7 +250,7 @@ const menuItems = [
     title: "Creamy Vanilla Milkshake",
     description:
       "Indulge in our rich and creamy vanilla milkshake, a sweet treat for any time.",
-    price: 90,
+    price: 3.49,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Drinks",
@@ -259,7 +259,7 @@ const menuItems = [
     title: "Iced Lemon Tea",
     description:
       "Cool down with our refreshing iced lemon tea, perfectly balanced between sweet and tart.",
-    price: 60,
+    price: 2.99,
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Drinks",
@@ -737,13 +737,18 @@ async function main() {
   // is needed.
   //
   // MenuItem has no natural unique key (unlike Category.name or
-  // RestaurantTable.label), so upsert isn't possible here. Instead we clear
-  // out existing menu items first and recreate them fresh — this seed file
-  // is the single source of truth for menu data, so "wipe and reseed" is the
-  // correct idempotent behavior. NOTE: this will fail with a foreign-key
-  // error once real Orders reference MenuItems (OrderItem.menuItemId) — at
-  // that point switch this to an upsert keyed on a new MenuItem.slug field,
-  // or only delete items with isAvailable: true that have zero orderItems.
+  // RestaurantTable.label), so a Prisma-level upsert({ where: { title } })
+  // isn't possible here. We emulate one instead: look up each seed item by
+  // title, UPDATE it if it already exists (so re-running the seed refreshes
+  // price/description/image without touching its id — real Orders still
+  // point at the same MenuItem row), or CREATE it if it doesn't.
+  //
+  // Anything left in the MenuItem table that ISN'T in this run's seed list
+  // (e.g. an old item renamed or removed from the source array) is only
+  // deleted if zero OrderItems reference it. Items that real Orders have
+  // referenced are left alone — a deleteMany({}) here would throw a
+  // foreign-key error (OrderItem_menuItemId_fkey) the moment any real order
+  // has ever been placed, which is exactly what this replaces.
   const SEED_ITEMS_PER_CATEGORY = 3;
 
   const itemsPerCategoryCount = new Map<string, number>();
@@ -754,10 +759,14 @@ async function main() {
     return true;
   });
 
-  const deleted = await prisma.menuItem.deleteMany({});
-  console.log(`🧹 Cleared ${deleted.count} existing MenuItem rows before reseeding`);
+  const existingItems = await prisma.menuItem.findMany({
+    select: { id: true, title: true, _count: { select: { orderItems: true } } },
+  });
+  const existingByTitle = new Map(existingItems.map((i) => [i.title, i]));
+  const seededTitles = new Set(trimmedMenuItems.map((i) => i.title));
 
   let createdCount = 0;
+  let updatedCount = 0;
   for (const item of trimmedMenuItems) {
     const categoryId = categoryMap.get(item.category);
     if (!categoryId) {
@@ -767,19 +776,52 @@ async function main() {
       continue;
     }
 
-    await prisma.menuItem.create({
-      data: {
-        title: item.title,
-        description: item.description,
-        price: item.price,
-        imageUrl: item.imageUrl,
-        categoryId: categoryId,
-      },
-    });
-    createdCount++;
+    const existing = existingByTitle.get(item.title);
+    if (existing) {
+      await prisma.menuItem.update({
+        where: { id: existing.id },
+        data: {
+          description: item.description,
+          price: item.price,
+          imageUrl: item.imageUrl,
+          categoryId,
+        },
+      });
+      updatedCount++;
+    } else {
+      await prisma.menuItem.create({
+        data: {
+          title: item.title,
+          description: item.description,
+          price: item.price,
+          imageUrl: item.imageUrl,
+          categoryId,
+        },
+      });
+      createdCount++;
+    }
   }
 
-  console.log(`✅ ${createdCount} MenuItem rows created`);
+  // Clean up items that used to be seeded but no longer are (e.g. the seed
+  // source array changed) — but only the ones safe to remove.
+  const staleItems = existingItems.filter((i) => !seededTitles.has(i.title));
+  let deletedCount = 0;
+  let skippedCount = 0;
+  for (const stale of staleItems) {
+    if (stale._count.orderItems > 0) {
+      skippedCount++;
+      continue;
+    }
+    await prisma.menuItem.delete({ where: { id: stale.id } });
+    deletedCount++;
+  }
+
+  console.log(
+    `✅ MenuItem rows: ${createdCount} created, ${updatedCount} updated, ${deletedCount} removed` +
+      (skippedCount > 0
+        ? `, ${skippedCount} skipped (referenced by real orders)`
+        : ""),
+  );
 
   // 3) Create all RestaurantTable rows (T-1..T-10, matching the earlier
   //    hardcoded UI). T-4 and T-9 are 2-seaters; the rest are 4-seaters.
