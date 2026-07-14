@@ -30,6 +30,13 @@ import {
  * verified checkout.session.completed event. A client-side "success"
  * redirect alone is never trusted as proof of payment.
  *
+ * marketingConsent is captured here too (not just in /api/orders), because
+ * this is where the Order row for an online payment is actually created —
+ * the webhook only ever UPDATEs that row later, it never sets fields the
+ * customer entered at checkout. If this route didn't capture it,
+ * order.marketingConsent would always be false by the time the webhook
+ * reads it after payment.
+ *
  * If the customer abandons the Stripe page, this order is left behind as
  * PLACED/PENDING (or flipped to CANCELLED/FAILED by the
  * checkout.session.expired webhook, if Stripe sends one before the session
@@ -120,6 +127,9 @@ export async function POST(request: Request) {
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           discountAmount,
+          // Captured now so it's already on the row by the time the
+          // webhook confirms payment and reads it — see doc comment above.
+          marketingConsent: billing.marketingConsent ?? false,
           items: {
             create: resolvedItems.map((i) => ({
               menuItemId: i.menuItemId,

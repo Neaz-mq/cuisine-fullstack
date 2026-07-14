@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
+import { syncCustomerToAudience } from "@/lib/resend";
 import {
   SHIPPING_METHODS,
   ShippingMethod,
@@ -161,6 +162,11 @@ export async function POST(request: Request) {
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           discountAmount,
+          // ⚠️ Requires `marketingConsent?: boolean` added to the Billing
+          // type in order-checkout-shared.ts, and the checkout form to
+          // actually send it. Defaults to false (opt-in, never opt-out by
+          // default) if the client omits it entirely.
+          marketingConsent: billing.marketingConsent ?? false,
           ...(orderType === "DELIVERY"
             ? {
                 email: billing.email,
@@ -223,6 +229,25 @@ export async function POST(request: Request) {
         paymentMethod: order.paymentMethod,
         items: order.items,
       });
+
+      // Marketing sync rides the same conditional as the confirmation
+      // email on purpose — both need order.email, and COD/DINE_IN orders
+      // never have one. syncCustomerToAudience() swallows its own errors
+      // (see resend.ts), so this can never fail order creation.
+      if (order.marketingConsent) {
+        await syncCustomerToAudience({
+          email: order.email,
+          firstName: order.firstName,
+          lastName: order.lastName,
+        });
+
+        if (order.userId) {
+          await prisma.user.update({
+            where: { id: order.userId },
+            data: { marketingConsent: true, marketingConsentAt: new Date() },
+          });
+        }
+      }
     }
 
     return NextResponse.json(order, { status: 201 });

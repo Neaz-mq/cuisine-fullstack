@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripeClient } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
+import { syncCustomerToAudience } from "@/lib/resend";
 
 /**
  * src/app/api/webhooks/stripe/route.ts
@@ -71,6 +72,26 @@ export async function POST(request: Request) {
             include: { items: { include: { menuItem: true } } },
           });
           await sendOrderConfirmationEmail(order);
+
+          // ⚠️ Requires marketingConsent to already be set on this Order
+          // row — it must be captured at order-creation time in
+          // /api/checkout/create-session (before the Stripe redirect),
+          // the same way it's captured in /api/orders for COD orders.
+          // This route only reads it, never asks the customer for it.
+          if (order.marketingConsent && order.email) {
+            await syncCustomerToAudience({
+              email: order.email,
+              firstName: order.firstName,
+              lastName: order.lastName,
+            });
+
+            if (order.userId) {
+              await prisma.user.update({
+                where: { id: order.userId },
+                data: { marketingConsent: true, marketingConsentAt: new Date() },
+              });
+            }
+          }
         }
         break;
       }

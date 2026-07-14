@@ -23,6 +23,7 @@ export interface Billing {
   city?: string;
   state?: string;
   zip?: string;
+  marketingConsent?: boolean;
 }
 
 /**
