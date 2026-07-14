@@ -13,12 +13,12 @@ export default function MarketingPage() {
 
   async function handleSend() {
     if (!subject.trim() || !html.trim()) {
-      setResult({ type: "error", message: "Subject আর message body দুটোই লাগবে।" });
+      setResult({ type: "error", message: "Both subject and message body are required." });
       return;
     }
 
     const confirmed = window.confirm(
-      "এই offer সব subscribed customer-এর কাছে পাঠানো হবে। Confirm করছো?"
+      "This offer will be sent to all subscribed customers. Are you sure you want to continue?"
     );
     if (!confirmed) return;
 
@@ -39,11 +39,11 @@ export default function MarketingPage() {
         return;
       }
 
-      setResult({ type: "success", message: "Broadcast পাঠানো হয়েছে!" });
+      setResult({ type: "success", message: "Broadcast sent successfully!" });
       setSubject("");
       setHtml("");
     } catch {
-      setResult({ type: "error", message: "Network error — আবার চেষ্টা করো।" });
+      setResult({ type: "error", message: "Network error — please try again." });
     } finally {
       setSending(false);
     }
@@ -53,7 +53,7 @@ export default function MarketingPage() {
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-semibold mb-1">Send Offer to Subscribers</h1>
       <p className="text-sm text-gray-500 mb-6">
-        যারা marketing email-এ opt-in করেছে শুধু তাদের কাছেই যাবে।
+        This will only go to customers who have opted in to marketing emails.
       </p>
 
       <div className="space-y-4">
@@ -70,13 +70,13 @@ export default function MarketingPage() {
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            Message (HTML সাপোর্ট করে)
+            Message (HTML supported)
           </label>
           <textarea
             value={html}
             onChange={(e) => setHtml(e.target.value)}
             rows={10}
-            placeholder="<h2>এই সপ্তাহে বিশেষ অফার!</h2><p>...</p>"
+            placeholder="<h2>Special offer this week!</h2><p>...</p>"
             className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
           />
         </div>
