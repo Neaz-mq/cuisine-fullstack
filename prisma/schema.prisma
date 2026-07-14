@@ -23,6 +23,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Persisted marketing preference for logged-in customers — lets us
+  // prefill the checkout consent checkbox on their next order, and is
+  // what the /admin/marketing "audience size" count is based on.
+  // NOT the source of truth for guest checkout consent — see
+  // Order.marketingConsent below for that.
+  marketingConsent   Boolean   @default(false)
+  marketingConsentAt DateTime? // when they last changed it — useful for
+  // proving consent timing if ever disputed
+
   // Running balance, kept in sync with LoyaltyTransaction rows inside the
   // same DB transaction whenever it changes (order delivered, manual admin
   // adjustment). Denormalized on purpose — displaying points for a user list
@@ -195,6 +204,12 @@ model Order {
   // default and isn't currently acted on anywhere (no "mark paid on
   // delivery/at table" admin action exists yet).
   paymentStatus PaymentStatus @default(PENDING)
+
+  // Captured at checkout, independent of User.marketingConsent, because
+  // guest checkout (userId = null) has no User row to store a preference
+  // on. This is what the checkout.session.completed webhook (and the COD
+  // order-creation path) checks before calling syncCustomerToAudience().
+  marketingConsent Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
