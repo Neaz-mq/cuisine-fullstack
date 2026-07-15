@@ -12,16 +12,22 @@ const PAYMENT_LABELS: Record<string, string> = {
   ONLINE: "Online Payment",
 };
 
+// address/city/state/zip/shippingMethod are nullable on the Order model
+// because DINE_IN (QR Table Ordering) orders never collect a delivery
+// destination — see the comment on Order.email in schema.prisma. This
+// email is only ever sent for online-paid DELIVERY orders (see the guard
+// below), so these are only null here in practice for DINE_IN orders,
+// which this function skips entirely.
 interface OrderForEmail {
   id: string;
   email: string | null;
   firstName: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
   totalAmount: number;
-  shippingMethod: string;
+  shippingMethod: string | null;
   paymentMethod: string;
   items: { quantity: number; price: number; menuItem: { title: string } }[];
 }
@@ -33,7 +39,9 @@ interface OrderForEmail {
 export async function sendOrderConfirmationEmail(order: OrderForEmail) {
   // DINE_IN orders never collect an email (see the Order.email comment in
   // schema.prisma) — there's nowhere to send a confirmation to, so this is
-  // an expected no-op rather than a failure.
+  // an expected no-op rather than a failure. Since email is only captured
+  // for DELIVERY orders, this also guarantees address/city/state/zip/
+  // shippingMethod are non-null below.
   if (!order.email) {
     return;
   }
@@ -54,11 +62,13 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
           price: i.price,
         })),
         totalAmount: order.totalAmount,
-        address: order.address,
-        city: order.city,
-        state: order.state,
-        zip: order.zip,
-        shippingMethodLabel: SHIPPING_LABELS[order.shippingMethod] ?? order.shippingMethod,
+        address: order.address ?? "",
+        city: order.city ?? "",
+        state: order.state ?? "",
+        zip: order.zip ?? "",
+        shippingMethodLabel: order.shippingMethod
+          ? SHIPPING_LABELS[order.shippingMethod] ?? order.shippingMethod
+          : "",
         paymentMethodLabel: PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod,
         trackingUrl: `${appUrl}/track/${order.id}`,
       }),

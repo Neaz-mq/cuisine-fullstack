@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, ReactNode } from "react";
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 import { FaMugHot } from "react-icons/fa";
 import { PiPizzaBold } from "react-icons/pi";
@@ -259,7 +259,7 @@ const tabs: Tab[] = [
   { name: "Pizza", icon: <PiPizzaBold size={18} /> },
 ];
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: (i = 1) => ({
     opacity: 1,
