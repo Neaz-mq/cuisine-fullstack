@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 import { toast } from "react-toastify";
 import Select, { SingleValue } from "react-select";
@@ -25,7 +25,7 @@ interface TableOption {
   label: string;
 }
 
-const fadeInUp = {
+const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 40 },
   visible: (i = 1) => ({
     opacity: 1,
@@ -39,12 +39,12 @@ const tableContainer = {
   visible: { transition: { staggerChildren: 0.1, delayChildren: 0.3 } },
 };
 
-const tableItem = {
+const tableItem: Variants = {
   hidden: { opacity: 0, scale: 0.85 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } },
 };
 
-const inputField = {
+const inputField: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i = 1) => ({
     opacity: 1,

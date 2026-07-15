@@ -2,18 +2,13 @@
 
 import Link from "next/link";
 import Container from "@/components/Container";
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import { useState, useEffect } from "react";
 
-interface TextVariant {
-  opacity: number;
-  y: number;
-  transition?: { delay: number; duration: number; ease: string };
-}
 
-const textVariants = {
+const textVariants: Variants = {
   hidden: { opacity: 0, y: 30 },
-  visible: (i: number): TextVariant => ({
+  visible: (i: number) => ({
     opacity: 1,
     y: 0,
     transition: { delay: i * 0.2, duration: 0.6, ease: "easeOut" },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { toast } from "react-toastify";
@@ -23,7 +23,7 @@ interface TimeLeft {
   seconds: number;
 }
 
-const fadeInUp = {
+const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: (i = 1) => ({
     opacity: 1,

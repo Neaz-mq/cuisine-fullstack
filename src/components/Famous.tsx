@@ -1,10 +1,10 @@
 "use client";
 
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 
 // Animation Variants
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 40 },
   visible: (i = 0) => ({
     opacity: 1,
@@ -17,7 +17,7 @@ const fadeUp = {
   }),
 };
 
-const slideRight = {
+const slideRight: Variants = {
   hidden: { opacity: 0, x: 40 },
   visible: {
     opacity: 1,
