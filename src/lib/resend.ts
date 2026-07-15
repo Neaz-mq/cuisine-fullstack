@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { render } from "@react-email/render";
+import OfferBroadcastEmail from "@/emails/OfferBroadcastEmail";
 
 // Lazily instantiated so that importing this module never throws even if
 // RESEND_API_KEY isn't set yet (e.g. local dev before the .env is filled
@@ -97,15 +99,35 @@ export async function removeCustomerFromAudience(email: string): Promise<void> {
  */
 export async function sendOfferBroadcast(params: {
   subject: string;
-  html: string;
+  headline: string;
+  bodyHtml: string;
+  ctaText: string;
+  ctaUrl: string;
 }): Promise<{ broadcastId: string }> {
   const resend = getResendClient();
+
+  // Render the branded template to HTML ourselves (rather than relying on
+  // whatever "react" support broadcasts.create may or may not have) so this
+  // works reliably regardless of Resend SDK version.
+  const html = await render(
+    OfferBroadcastEmail({
+      headline: params.headline,
+      bodyHtml: params.bodyHtml,
+      ctaText: params.ctaText,
+      ctaUrl: params.ctaUrl,
+      previewText: params.subject,
+    })
+  );
 
   const created = await resend.broadcasts.create({
     audienceId: getAudienceId(),
     from: MARKETING_EMAIL_FROM,
     subject: params.subject,
-    html: params.html,
+    html,
+    // Shown as the broadcast's internal name in the Resend dashboard —
+    // purely cosmetic, doesn't affect what recipients see. Falls back to
+    // the subject so broadcasts aren't left as "Untitled" in the list.
+    name: params.subject,
     // Resend automatically injects the unsubscribe link/header (RFC 8058)
     // into broadcast sends — no manual unsubscribe link needed in `html`.
   });

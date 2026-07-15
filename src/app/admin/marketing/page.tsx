@@ -5,7 +5,10 @@ import { useState } from "react";
 
 export default function MarketingPage() {
   const [subject, setSubject] = useState("");
+  const [headline, setHeadline] = useState("");
   const [html, setHtml] = useState("");
+  const [ctaText, setCtaText] = useState("Order Now");
+  const [ctaUrl, setCtaUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<
     { type: "success" | "error"; message: string } | null
@@ -29,7 +32,7 @@ export default function MarketingPage() {
       const res = await fetch("/api/admin/marketing/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, html }),
+        body: JSON.stringify({ subject, headline, html, ctaText, ctaUrl }),
       });
 
       const data = await res.json();
@@ -41,7 +44,10 @@ export default function MarketingPage() {
 
       setResult({ type: "success", message: "Broadcast sent successfully!" });
       setSubject("");
+      setHeadline("");
       setHtml("");
+      setCtaText("Order Now");
+      setCtaUrl("");
     } catch {
       setResult({ type: "error", message: "Network error — please try again." });
     } finally {
@@ -54,11 +60,14 @@ export default function MarketingPage() {
       <h1 className="text-2xl font-semibold mb-1">Send Offer to Subscribers</h1>
       <p className="text-sm text-gray-500 mb-6">
         This will only go to customers who have opted in to marketing emails.
+        Recipients see a branded email with your headline, offer details, and
+        a call-to-action button — matching the design of your order
+        confirmation emails.
       </p>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Subject</label>
+          <label className="block text-sm font-medium mb-1">Subject line</label>
           <input
             type="text"
             value={subject}
@@ -66,6 +75,26 @@ export default function MarketingPage() {
             placeholder="Weekend Special: 20% off on all pizzas!"
             className="w-full border rounded-lg px-3 py-2"
           />
+          <p className="text-xs text-gray-400 mt-1">
+            What shows in the recipient&apos;s inbox as the email subject.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Headline <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value)}
+            placeholder="Defaults to the subject line if left blank"
+            className="w-full border rounded-lg px-3 py-2"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            The large bold text shown at the top of the email itself. Can be
+            shorter and punchier than the subject line.
+          </p>
         </div>
 
         <div>
@@ -75,10 +104,38 @@ export default function MarketingPage() {
           <textarea
             value={html}
             onChange={(e) => setHtml(e.target.value)}
-            rows={10}
-            placeholder="<h2>Special offer this week!</h2><p>...</p>"
+            rows={8}
+            placeholder="<p>This weekend only — enjoy 20% off every pizza on our menu. Just show this email at checkout.</p>"
             className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
           />
+          <p className="text-xs text-gray-400 mt-1">
+            Rendered inside the branded email template, below the headline.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Button text</label>
+            <input
+              type="text"
+              value={ctaText}
+              onChange={(e) => setCtaText(e.target.value)}
+              placeholder="Order Now"
+              className="w-full border rounded-lg px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Button link <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={ctaUrl}
+              onChange={(e) => setCtaUrl(e.target.value)}
+              placeholder="Defaults to your site's homepage"
+              className="w-full border rounded-lg px-3 py-2"
+            />
+          </div>
         </div>
 
         {result && (

@@ -4,17 +4,18 @@ import { requireApiScope } from "@/lib/require-admin";
 import { sendOfferBroadcast } from "@/lib/resend";
 
 export async function POST(request: Request) {
-  // ⚠️ "marketing" needs to exist as a valid scope string in your
-  // permissions.ts / require-admin.ts — same pattern as "orders" in
-  // src/app/api/orders/route.ts. If you haven't added a MARKETING scope
-  // yet, temporarily swap this for a scope you know exists (e.g. "orders")
-  // just to unblock testing, then add the real scope afterward.
   const authResult = await requireApiScope("marketing");
   if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body = await request.json();
-    const { subject, html } = body as { subject?: string; html?: string };
+    const { subject, headline, html, ctaText, ctaUrl } = body as {
+      subject?: string;
+      headline?: string;
+      html?: string;
+      ctaText?: string;
+      ctaUrl?: string;
+    };
 
     if (!subject?.trim() || !html?.trim()) {
       return NextResponse.json(
@@ -23,7 +24,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await sendOfferBroadcast({ subject, html });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    const result = await sendOfferBroadcast({
+      subject: subject.trim(),
+      // Headline is the large hero text shown at the top of the email —
+      // falls back to the subject line so this field stays optional in
+      // the admin UI without breaking the template.
+      headline: headline?.trim() || subject.trim(),
+      bodyHtml: html,
+      ctaText: ctaText?.trim() || "Order Now",
+      ctaUrl: ctaUrl?.trim() || appUrl,
+    });
+
     return NextResponse.json({ success: true, broadcastId: result.broadcastId });
   } catch (error) {
     console.error("POST /api/admin/marketing/broadcast error:", error);
