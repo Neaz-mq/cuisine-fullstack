@@ -10,6 +10,7 @@ const navItems = [
   { name: "Home", path: "/" },
   { name: "Menu", path: "/menu" },
   { name: "Our Chefs", path: "/chefs" },
+  { name: "Gift Cards", path: "/gift-cards" },
 ];
 
 const Navbar = () => {

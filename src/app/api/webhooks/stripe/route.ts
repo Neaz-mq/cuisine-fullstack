@@ -4,6 +4,8 @@ import { getStripeClient } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import { syncCustomerToAudience } from "@/lib/resend";
+import { createGiftCard } from "@/lib/gift-cards";
+import { sendGiftCardEmail } from "@/lib/send-gift-card-email";
 
 /**
  * src/app/api/webhooks/stripe/route.ts
@@ -63,6 +65,45 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Gift-card purchases never have an orderId — they're
+        // distinguished by metadata.purpose, set only in
+        // /api/gift-cards/purchase. Handled entirely separately from the
+        // order-payment path below since there's no Order row involved
+        // at all (see the doc comment on that route for why).
+        if (session.metadata?.purpose === "gift_card") {
+          const amount = Number(session.metadata.amount);
+          if (Number.isFinite(amount) && amount > 0) {
+            const giftCard = await createGiftCard({
+              amount,
+              type: "PURCHASE",
+              stripeSessionId: session.id,
+              purchaserEmail: session.metadata.purchaserEmail || null,
+              purchaserName: session.metadata.purchaserName || null,
+              recipientEmail: session.metadata.recipientEmail || null,
+              recipientName: session.metadata.recipientName || null,
+              message: session.metadata.message || null,
+            });
+
+            if (giftCard.recipientEmail) {
+              await sendGiftCardEmail({
+                code: giftCard.code,
+                amount: giftCard.initialAmount,
+                recipientEmail: giftCard.recipientEmail,
+                recipientName: giftCard.recipientName || "there",
+                purchaserName: giftCard.purchaserName,
+                message: giftCard.message,
+              });
+            }
+          } else {
+            console.error(
+              "Stripe webhook: gift_card session completed with invalid amount metadata",
+              session.id
+            );
+          }
+          break;
+        }
+
         const orderId = session.metadata?.orderId;
 
         if (orderId) {

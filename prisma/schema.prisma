@@ -193,6 +193,20 @@ model Order {
   discountAmount   Float             @default(0)
   couponRedemption CouponRedemption? // back-relation only — FK lives on CouponRedemption.orderId
 
+  // Gift card redemption — same denormalized-display pattern as the
+  // coupon fields above. giftCardAmount is already netted out of
+  // totalAmount (the amount actually charged/owed). The authoritative
+  // "which card, how much, on which order" record lives on
+  // GiftCardTransaction below (type REDEEM) — giftCardCode/giftCardAmount
+  // here exist purely so the order summary, confirmation email, and admin
+  // order detail can show "Gift card XXXX applied — $12.00" without a
+  // join back to GiftCard. A single order can only ever redeem ONE gift
+  // card (matches the checkout UI, one code field at a time), same
+  // simplification as couponCode being a single nullable field.
+  giftCardCode         String?
+  giftCardAmount       Float                 @default(0)
+  giftCardTransactions GiftCardTransaction[]
+
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake.
   pointsAwarded Boolean @default(false)
@@ -534,4 +548,92 @@ model LoyaltyTransaction {
 enum LoyaltyReason {
   ORDER_DELIVERED
   MANUAL_ADJUSTMENT
+}
+
+// ---------------------------------------------------------------------------
+// Gift cards
+//
+// A gift card is purchased by one customer (or issued manually by an
+// admin — comp/refund case) and redeemed, in full or in part, against a
+// future order by whoever holds the code. Unlike a Coupon (a discount
+// rule, reusable up to its limits), a GiftCard carries an actual dollar
+// balance that is *spent down* over one or more redemptions until it hits
+// zero — closer to a prepaid debit instrument than a discount code.
+//
+// balance is a denormalized running total, kept in sync with
+// GiftCardTransaction rows inside the same DB transaction whenever it
+// changes (a purchase credits it, an order redemption debits it) — same
+// ledger + cached balance pattern as User.loyaltyPoints /
+// LoyaltyTransaction. GiftCardTransaction is the authoritative,
+// queryable audit log a bare balance column alone could never provide.
+//
+// isActive is an admin kill-switch (pull a card immediately, e.g. fraud
+// or a support request), independent of balance reaching zero naturally
+// through redemption.
+// ---------------------------------------------------------------------------
+model GiftCard {
+  id      String @id @default(cuid())
+  code    String @unique
+
+  // The balance still available to redeem. Starts at initialAmount and
+  // only ever decreases (via REDEEM transactions) or increases (via a
+  // manual admin ADJUSTMENT, e.g. a goodwill top-up) — never reset.
+  initialAmount Float
+  balance       Float
+
+  // Set once a Stripe Checkout Session for purchasing this card completes
+  // (see checkout.session.completed handling in
+  // src/app/api/webhooks/stripe/route.ts) — null for cards an admin
+  // issues manually (comp/refund case), which are credited immediately
+  // with no associated payment.
+  stripeSessionId String? @unique
+
+  // Who bought/received it — captured for the delivery email and admin
+  // search, not used for redemption eligibility (anyone holding a valid,
+  // active, non-zero-balance code may redeem it, matching how real gift
+  // cards work — no login/ownership check at redemption time).
+  purchaserEmail String?
+  purchaserName  String?
+  recipientEmail String?
+  recipientName  String?
+  message        String? // optional personal note included in the delivery email
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions GiftCardTransaction[]
+
+  @@index([isActive])
+}
+
+enum GiftCardTransactionType {
+  PURCHASE   // initial credit when a customer buys the card via Stripe
+  ISSUE      // initial credit when an admin manually issues the card (no payment)
+  REDEEM     // debit when applied against an order — orderId is set
+  ADJUSTMENT // manual admin balance correction (top-up or deduction), no orderId
+}
+
+// One row per balance-changing event — the audit trail a bare
+// GiftCard.balance column alone could never provide, mirroring
+// LoyaltyTransaction's ledger design. `amount` is signed: positive =
+// credit (PURCHASE/ISSUE/a top-up ADJUSTMENT), negative = debit
+// (REDEEM/a deduction ADJUSTMENT).
+model GiftCardTransaction {
+  id     String                  @id @default(cuid())
+  amount Float
+  type   GiftCardTransactionType
+  note   String?
+
+  giftCard   GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  giftCardId String
+
+  // Set only for REDEEM — which order this redemption paid down. Optional
+  // because PURCHASE/ISSUE/ADJUSTMENT aren't tied to any order.
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([giftCardId, createdAt])
 }

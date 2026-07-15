@@ -18,6 +18,7 @@ import {
   CouponInfo,
   IncomingItem,
 } from "@/lib/order-checkout-shared";
+import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardInfo } from "@/lib/gift-cards";
 
 /**
  * src/app/api/orders/route.ts
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
       orderType = "DELIVERY",
       tableId,
       couponCode,
+      giftCardCode,
     }: {
       items: IncomingItem[];
       billing: Billing;
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
       orderType?: OrderTypeValue;
       tableId?: string;
       couponCode?: string;
+      giftCardCode?: string;
     } = body;
 
     if (orderType !== "DELIVERY" && orderType !== "DINE_IN") {
@@ -147,7 +150,23 @@ export async function POST(request: Request) {
       discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
     }
 
-    const totalAmount = subtotal - discountAmount;
+    const totalAfterCoupon = subtotal - discountAmount;
+
+    // Pre-check outside the transaction purely for a fast, friendly error
+    // message — the actual claim (and the only real concurrency guard)
+    // happens inside the transaction via redeemGiftCard below.
+    let giftCardInfo: GiftCardInfo | null = null;
+    let giftCardAmount = 0;
+    if (giftCardCode?.trim()) {
+      const giftCardResult = await findValidGiftCard(giftCardCode);
+      if (!giftCardResult.ok) {
+        return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
+      }
+      giftCardInfo = giftCardResult.giftCard;
+      giftCardAmount = calcGiftCardAmountToApply(totalAfterCoupon, giftCardInfo.balance);
+    }
+
+    const totalAmount = totalAfterCoupon - giftCardAmount;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -162,6 +181,8 @@ export async function POST(request: Request) {
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           discountAmount,
+          giftCardCode: giftCardInfo?.code ?? null,
+          giftCardAmount,
           // ⚠️ Requires `marketingConsent?: boolean` added to the Billing
           // type in order-checkout-shared.ts, and the checkout form to
           // actually send it. Defaults to false (opt-in, never opt-out by
@@ -200,6 +221,15 @@ export async function POST(request: Request) {
           // discount, so the customer isn't silently charged full price
           // for what they believed was a discounted order.
           throw new Error("COUPON_ALREADY_USED");
+        }
+      }
+
+      if (giftCardInfo && giftCardAmount > 0) {
+        const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
+        if (!redeemed) {
+          // Same race as the coupon check above — someone else spent the
+          // balance we were counting on between the pre-check and now.
+          throw new Error("GIFT_CARD_RACE");
         }
       }
 
@@ -255,6 +285,12 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
       return NextResponse.json(
         { error: "This coupon was just used by someone else. Please remove it and try again." },
+        { status: 409 }
+      );
+    }
+    if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
+      return NextResponse.json(
+        { error: "This gift card's balance just changed. Please remove it and try again." },
         { status: 409 }
       );
     }

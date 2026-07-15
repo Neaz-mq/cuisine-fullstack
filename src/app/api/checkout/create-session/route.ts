@@ -15,6 +15,7 @@ import {
   CouponInfo,
   IncomingItem,
 } from "@/lib/order-checkout-shared";
+import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardInfo } from "@/lib/gift-cards";
 
 /**
  * src/app/api/checkout/create-session/route.ts
@@ -60,11 +61,13 @@ export async function POST(request: Request) {
       billing,
       shippingMethod,
       couponCode,
+      giftCardCode,
     }: {
       items: IncomingItem[];
       billing: Billing;
       shippingMethod: ShippingMethod;
       couponCode?: string;
+      giftCardCode?: string;
     } = body;
 
     const billingError = validateBilling(billing);
@@ -104,7 +107,20 @@ export async function POST(request: Request) {
       discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
     }
 
-    const totalAmount = subtotal - discountAmount;
+    const totalAfterCoupon = subtotal - discountAmount;
+
+    let giftCardInfo: GiftCardInfo | null = null;
+    let giftCardAmount = 0;
+    if (giftCardCode?.trim()) {
+      const giftCardResult = await findValidGiftCard(giftCardCode);
+      if (!giftCardResult.ok) {
+        return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
+      }
+      giftCardInfo = giftCardResult.giftCard;
+      giftCardAmount = calcGiftCardAmountToApply(totalAfterCoupon, giftCardInfo.balance);
+    }
+
+    const totalAmount = totalAfterCoupon - giftCardAmount;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -127,6 +143,8 @@ export async function POST(request: Request) {
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           discountAmount,
+          giftCardCode: giftCardInfo?.code ?? null,
+          giftCardAmount,
           // Captured now so it's already on the row by the time the
           // webhook confirms payment and reads it — see doc comment above.
           marketingConsent: billing.marketingConsent ?? false,
@@ -147,6 +165,13 @@ export async function POST(request: Request) {
         }
       }
 
+      if (giftCardInfo && giftCardAmount > 0) {
+        const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
+        if (!redeemed) {
+          throw new Error("GIFT_CARD_RACE");
+        }
+      }
+
       return created;
     });
 
@@ -159,28 +184,34 @@ export async function POST(request: Request) {
     // which would need its own cent-rounding logic to land on the exact
     // same total we already computed above.
     //
-    // Always built from the authoritative `discountAmount` (amount_off,
+    // Stripe Checkout Sessions (payment mode) only accept a single
+    // `discounts` entry, so a coupon discount AND a gift-card amount are
+    // combined into ONE Stripe coupon covering both — its amount_off is
+    // simply discountAmount + giftCardAmount together. Our own DB total
+    // (totalAmount above) already nets out both the same way, so the two
+    // stay in lockstep regardless of which one (or both) applied.
+    //
+    // Always built from the authoritative combined amount (amount_off,
     // in cents) rather than percent_off — that's what makes maxDiscountAmount
     // caps and FIXED-type coupons land correctly on Stripe's hosted page
     // too, not just in our own DB total. A plain percent_off Stripe coupon
     // would ignore both the cap and fixed-amount coupons entirely.
     //
-    // Stripe requires amount_off to be a positive integer, so a discount
-    // that rounds down to 0 cents (e.g. a tiny FIXED coupon against a
-    // near-zero subtotal) is simply omitted rather than sent as an invalid
-    // coupon — our own DB total already reflects the (zero) discount
-    // correctly regardless.
-    const discountCents = Math.round(discountAmount * 100);
+    // Stripe requires amount_off to be a positive integer, so a combined
+    // discount that rounds down to 0 cents is simply omitted rather than
+    // sent as an invalid coupon — our own DB total already reflects the
+    // (zero) discount correctly regardless.
+    const combinedDiscountCents = Math.round((discountAmount + giftCardAmount) * 100);
     const stripeDiscounts =
-      couponInfo && discountCents > 0
+      combinedDiscountCents > 0
         ? [
             {
               coupon: (
                 await stripe.coupons.create({
-                  amount_off: discountCents,
+                  amount_off: combinedDiscountCents,
                   currency: "usd",
                   duration: "once",
-                  name: `Coupon ${couponInfo.code}`,
+                  name: [couponInfo?.code, giftCardInfo?.code].filter(Boolean).join(" + ") || "Discount",
                 })
               ).id,
             },
@@ -217,6 +248,12 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
       return NextResponse.json(
         { error: "This coupon was just used by someone else. Please remove it and try again." },
+        { status: 409 }
+      );
+    }
+    if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
+      return NextResponse.json(
+        { error: "This gift card's balance just changed. Please remove it and try again." },
         { status: 409 }
       );
     }

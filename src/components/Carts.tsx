@@ -129,6 +129,22 @@ const Carts = () => {
   } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+
+  // Gift card — separate from the coupon above (both can be applied to
+  // the same order, coupon discount first then gift card against what's
+  // left, see the total calculation below). amountToApply is a snapshot
+  // of what the server said it would deduct at the moment "Apply" was
+  // clicked — recomputed against the live subtotal/discount below rather
+  // than trusted verbatim as the cart changes, same reasoning as the
+  // coupon's eligibleSubtotal snapshot above. The server re-validates and
+  // re-debits authoritatively at order creation regardless.
+  const [appliedGiftCard, setAppliedGiftCard] = useState<{
+    code: string;
+    balance: number;
+  } | null>(null);
+  const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
+  const [giftCardError, setGiftCardError] = useState<string | null>(null);
+
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -152,6 +168,15 @@ const Carts = () => {
       )
     : 0;
   const total = subtotal - discountAmount;
+
+  // Same "min(what's owed, what's left on the card)" logic as
+  // calcGiftCardAmountToApply on the server — purely for display, the
+  // server independently recomputes the authoritative amount from its
+  // own resolved total at order-creation time.
+  const giftCardAmountApplied = appliedGiftCard
+    ? Math.min(Math.max(total, 0), appliedGiftCard.balance)
+    : 0;
+  const finalTotal = total - giftCardAmountApplied;
 
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
@@ -234,6 +259,7 @@ const Carts = () => {
             orderType: "DINE_IN",
             tableId,
             couponCode: appliedCoupon?.code,
+            giftCardCode: appliedGiftCard?.code,
           }),
         });
 
@@ -274,6 +300,7 @@ const Carts = () => {
         setErrors({});
         setAppliedCoupon(null);
         setDiscountCode("");
+        setAppliedGiftCard(null);
 
         clearCart();
         // One scan → one order (v1 scope) — clear the table context so a
@@ -317,6 +344,7 @@ const Carts = () => {
             billing,
             shippingMethod,
             couponCode: appliedCoupon?.code,
+            giftCardCode: appliedGiftCard?.code,
           }),
         });
 
@@ -349,6 +377,7 @@ const Carts = () => {
           billing,
           shippingMethod,
           couponCode: appliedCoupon?.code,
+          giftCardCode: appliedGiftCard?.code,
         }),
       });
 
@@ -393,6 +422,7 @@ const Carts = () => {
       setPaymentErrors({});
       setAppliedCoupon(null);
       setDiscountCode("");
+      setAppliedGiftCard(null);
 
       clearCart();
       router.push(`/track/${data.id}`);
@@ -435,7 +465,7 @@ const Carts = () => {
 
   const applyDiscount = async () => {
     if (!discountCode.trim()) {
-      setCouponError("Enter a coupon code");
+      setCouponError("Enter a coupon or gift card code");
       return;
     }
     if (cartItems.length === 0) {
@@ -463,7 +493,11 @@ const Carts = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        setCouponError(data?.error ?? "Invalid coupon code");
+        // The shared "Gift card or discount code" field could be either
+        // kind — a coupon miss isn't necessarily wrong, it just might be
+        // a gift card code instead, so fall back and try that lookup
+        // before showing an error.
+        await applyGiftCard();
         return;
       }
 
@@ -489,6 +523,44 @@ const Carts = () => {
     } finally {
       setIsApplyingCoupon(false);
     }
+  };
+
+  const applyGiftCard = async () => {
+    setIsApplyingGiftCard(true);
+    setGiftCardError(null);
+
+    try {
+      const res = await fetch("/api/gift-cards/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: discountCode, orderTotal: total }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setCouponError(data?.error ?? "Invalid coupon or gift card code");
+        return;
+      }
+
+      setAppliedGiftCard({ code: data.code, balance: data.balance });
+      toast.success(`Gift card "${data.code}" applied — $${Number(data.amountToApply).toFixed(2)} off!`, {
+        position: "bottom-center",
+        autoClose: 2000,
+        hideProgressBar: true,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } catch {
+      setCouponError("Something went wrong. Please try again.");
+    } finally {
+      setIsApplyingGiftCard(false);
+    }
+  };
+
+  const removeGiftCard = () => {
+    setAppliedGiftCard(null);
+    setGiftCardError(null);
   };
 
   const removeCoupon = () => {
@@ -998,8 +1070,29 @@ const Carts = () => {
                   {couponError && (
                     <p className="text-xs text-red-500 mb-8">{couponError}</p>
                   )}
-                  {!couponError && <div className="mb-10" />}
+                  {!couponError && <div className="mb-4" />}
                 </>
+              )}
+
+              {appliedGiftCard ? (
+                <div className="flex items-center justify-between mb-10 bg-green-50 border border-green-200 px-4 py-2 rounded">
+                  <span className="text-sm text-green-800 font-medium">
+                    Gift card &quot;{appliedGiftCard.code}&quot; applied — ${giftCardAmountApplied.toFixed(2)} off
+                    {appliedGiftCard.balance > giftCardAmountApplied &&
+                      ` (${(appliedGiftCard.balance - giftCardAmountApplied).toFixed(2)} left on card)`}
+                  </span>
+                  <button
+                    onClick={removeGiftCard}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium"
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                isApplyingGiftCard && (
+                  <p className="text-xs text-gray-400 mb-8">Checking gift card…</p>
+                )
               )}
             </div>
             <div className="space-y-10 bg-white p-6">
@@ -1014,6 +1107,12 @@ const Carts = () => {
                     {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "$0"}
                   </span>
                 </div>
+                {giftCardAmountApplied > 0 && (
+                  <div className="flex justify-between">
+                    <span>Gift card</span>
+                    <span className="text-[#2C6252]">-${giftCardAmountApplied.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>{isDineIn ? "Table service" : "Delivery charges"}</span>
                   <span className="text-[#2C6252]">Free</span>
@@ -1023,7 +1122,7 @@ const Carts = () => {
               <div className="border-t border-dashed border-gray-300 my-4"></div>
               <div className="flex justify-between 3xl:text-md 2xl:text-md xl:text-md lg:text-md md:text-md sm:text-xs font-bold pt-2">
                 <span>Total</span>
-                <span className="text-[#2C6252]">USD ${total.toFixed(2)}</span>
+                <span className="text-[#2C6252]">USD ${finalTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
