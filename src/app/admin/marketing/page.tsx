@@ -6,7 +6,7 @@ import { useState } from "react";
 export default function MarketingPage() {
   const [subject, setSubject] = useState("");
   const [headline, setHeadline] = useState("");
-  const [html, setHtml] = useState("");
+  const [message, setMessage] = useState("");
   const [ctaText, setCtaText] = useState("Order Now");
   const [ctaUrl, setCtaUrl] = useState("");
   const [sending, setSending] = useState(false);
@@ -15,7 +15,7 @@ export default function MarketingPage() {
   >(null);
 
   async function handleSend() {
-    if (!subject.trim() || !html.trim()) {
+    if (!subject.trim() || !message.trim()) {
       setResult({ type: "error", message: "Both subject and message body are required." });
       return;
     }
@@ -32,7 +32,7 @@ export default function MarketingPage() {
       const res = await fetch("/api/admin/marketing/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, headline, html, ctaText, ctaUrl }),
+        body: JSON.stringify({ subject, headline, message, ctaText, ctaUrl }),
       });
 
       const data = await res.json();
@@ -45,7 +45,7 @@ export default function MarketingPage() {
       setResult({ type: "success", message: "Broadcast sent successfully!" });
       setSubject("");
       setHeadline("");
-      setHtml("");
+      setMessage("");
       setCtaText("Order Now");
       setCtaUrl("");
     } catch {
@@ -99,17 +99,18 @@ export default function MarketingPage() {
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            Message (HTML supported)
+            Message
           </label>
           <textarea
-            value={html}
-            onChange={(e) => setHtml(e.target.value)}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             rows={8}
-            placeholder="<p>This weekend only — enjoy 20% off every pizza on our menu. Just show this email at checkout.</p>"
-            className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+            placeholder={"This weekend only — enjoy 20% off every pizza on our menu.\nJust show this email at checkout, or order online now."}
+            className="w-full border rounded-lg px-3 py-2 text-sm"
           />
           <p className="text-xs text-gray-400 mt-1">
-            Rendered inside the branded email template, below the headline.
+            Just type normally. Press Enter to start a new line — each line
+            becomes its own paragraph in the email.
           </p>
         </div>
 

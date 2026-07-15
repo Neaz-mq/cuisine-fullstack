@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
 import { sendOfferBroadcast } from "@/lib/resend";
+import { plainTextToHtml } from "@/lib/plain-text-to-html";
 
 export async function POST(request: Request) {
   const authResult = await requireApiScope("marketing");
@@ -9,15 +10,15 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { subject, headline, html, ctaText, ctaUrl } = body as {
+    const { subject, headline, message, ctaText, ctaUrl } = body as {
       subject?: string;
       headline?: string;
-      html?: string;
+      message?: string;
       ctaText?: string;
       ctaUrl?: string;
     };
 
-    if (!subject?.trim() || !html?.trim()) {
+    if (!subject?.trim() || !message?.trim()) {
       return NextResponse.json(
         { error: "Subject and message body are required" },
         { status: 400 }
@@ -32,7 +33,9 @@ export async function POST(request: Request) {
       // falls back to the subject line so this field stays optional in
       // the admin UI without breaking the template.
       headline: headline?.trim() || subject.trim(),
-      bodyHtml: html,
+      // Admins type plain text (no HTML knowledge required) — converted
+      // to safe paragraph HTML here before it reaches the email template.
+      bodyHtml: plainTextToHtml(message),
       ctaText: ctaText?.trim() || "Order Now",
       ctaUrl: ctaUrl?.trim() || appUrl,
     });
