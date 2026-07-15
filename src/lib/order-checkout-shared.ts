@@ -38,12 +38,18 @@ export interface Billing {
 // phone number containing letters/symbols.
 const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
 
+// Only the string-valued Billing fields can appear in the required-fields
+// lists below — marketingConsent is a boolean and is never "required" in
+// this sense, so it's excluded here rather than relying on callers to
+// remember not to add it.
+type RequiredBillingField = Exclude<keyof Billing, "marketingConsent">;
+
 export function validateBilling(
   billing: Billing,
   orderType: OrderTypeValue = "DELIVERY"
 ): string | null {
-  const alwaysRequired: (keyof Billing)[] = ["firstName", "lastName", "phone"];
-  const deliveryOnlyRequired: (keyof Billing)[] = [
+  const alwaysRequired: RequiredBillingField[] = ["firstName", "lastName", "phone"];
+  const deliveryOnlyRequired: RequiredBillingField[] = [
     "email",
     "country",
     "address",

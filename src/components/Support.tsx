@@ -1,9 +1,9 @@
 "use client";
 
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: (i = 0) => ({
     opacity: 1,

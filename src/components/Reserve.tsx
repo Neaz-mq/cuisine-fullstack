@@ -351,7 +351,7 @@ const Reserve = () => {
                     date.getFullYear() === today.getFullYear()
                   )
                     return "border border-[#2C6252] rounded-full";
-                  return undefined;
+                  return "";
                 }}
                 id="date-time"
               />

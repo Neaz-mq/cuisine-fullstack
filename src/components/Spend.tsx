@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Container from "@/components/Container";
-import { motion as Motion } from "framer-motion";
+import { motion as Motion, type Variants } from "framer-motion";
 
 // Motion variants
 const textContainer = {
@@ -13,7 +13,7 @@ const textContainer = {
   },
 };
 
-const letter = {
+const letter: Variants = {
   hidden: { opacity: 0, y: 30, scale: 0.8 },
   visible: {
     opacity: 1,
