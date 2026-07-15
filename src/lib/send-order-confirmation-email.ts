@@ -14,7 +14,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 interface OrderForEmail {
   id: string;
-  email: string;
+  email: string | null;
   firstName: string;
   address: string;
   city: string;
@@ -31,6 +31,13 @@ interface OrderForEmail {
 // succeeded in the database by the time this runs. Errors are logged so
 // they're visible in server logs without surfacing to the customer.
 export async function sendOrderConfirmationEmail(order: OrderForEmail) {
+  // DINE_IN orders never collect an email (see the Order.email comment in
+  // schema.prisma) — there's nowhere to send a confirmation to, so this is
+  // an expected no-op rather than a failure.
+  if (!order.email) {
+    return;
+  }
+
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 

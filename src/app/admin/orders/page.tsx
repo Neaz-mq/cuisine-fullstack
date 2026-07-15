@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Prisma } from "@/generated/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "./OrderStatusSelect";

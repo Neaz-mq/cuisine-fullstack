@@ -8,6 +8,7 @@ import {
   canViewSensitiveStaffFields,
   type StaffRole,
 } from "@/lib/permissions";
+import type { EmploymentType } from "@/generated/prisma/client";
 
 function serialize(
   user: {
@@ -175,7 +176,7 @@ export async function PATCH(
 
   const profileData: {
     department?: string | null;
-    employmentType?: string;
+    employmentType?: EmploymentType;
     phone?: string | null;
     hireDate?: Date;
     isActive?: boolean;

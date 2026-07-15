@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@/generated/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export const SHIPPING_METHODS = ["UBER_EATS", "FOOD_PANDA"] as const;
 export type ShippingMethod = (typeof SHIPPING_METHODS)[number];

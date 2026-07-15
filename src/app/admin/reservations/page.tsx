@@ -1,4 +1,4 @@
-import { Prisma } from "@/generated/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import ReservationsToolbar from "./ReservationsToolbar";
 import ReservationStatusSelect from "./ReservationStatusSelect";
