@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { minutesAgo } from "@/lib/time";
 import KitchenBoard from "./KitchenBoard";
 
-const READY_COLUMN_WINDOW_MS = 15 * 60 * 1000;
+const READY_COLUMN_WINDOW_MINUTES = 15;
 
 export default async function KitchenDisplayPage() {
-  const readySince = new Date(Date.now() - READY_COLUMN_WINDOW_MS);
+  const readySince = minutesAgo(READY_COLUMN_WINDOW_MINUTES);
 
   const orders = await prisma.order.findMany({
     where: {

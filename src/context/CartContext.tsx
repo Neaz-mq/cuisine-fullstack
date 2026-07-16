@@ -26,7 +26,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
+    // Deliberately hydrated from localStorage in an effect (not a lazy
+    // useState initializer) so the first client render matches the
+    // server-rendered markup (empty cart) and only updates after mount —
+    // avoiding a hydration mismatch. This is exactly the "synchronize with
+    // an external system" case the effect docs describe, not a value that
+    // could instead be derived during render.
     const stored = localStorage.getItem("cart");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored) setCartItems(JSON.parse(stored));
   }, []);
 

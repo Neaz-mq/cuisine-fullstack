@@ -81,7 +81,7 @@ const Testimonials = () => {
                 className="text-[#CCCCCC] 3xl:mt-14 2xl:mt-8 xl:mt-6 lg:mt-3 md:mt-3 sm:mt-3 max-w-md 3xl:text-[16px] 2xl:text-[16px] xl:text-[12px] lg:text-[10px] md:text-[10px] sm:text-[10px] 3xl:ml-3 2xl:-ml-[1rem] xl:ml-[1.2rem] lg:-ml-5 md:-ml-11 sm:-ml-[7.8rem]"
                 tabIndex={0}
               >
-                When I research companies online, I don't just want to hear the company's pitch; I want to hear from its customers.
+                When I research companies online, I don&apos;t just want to hear the company&apos;s pitch; I want to hear from its customers.
               </p>
               <Motion.div
                 initial={{ scale: 0.8, opacity: 0 }}

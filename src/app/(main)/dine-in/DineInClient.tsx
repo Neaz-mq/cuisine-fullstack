@@ -8,15 +8,15 @@ export default function DineInClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setTable } = useTableOrder();
-  const [status, setStatus] = useState<"checking" | "invalid">("checking");
-
   const tableId = searchParams.get("table");
+  const [status, setStatus] = useState<"checking" | "invalid">(() =>
+    tableId ? "checking" : "invalid"
+  );
 
   useEffect(() => {
-    if (!tableId) {
-      setStatus("invalid");
-      return;
-    }
+    // The no-tableId case is already reflected in the initial state above,
+    // so there's nothing to synchronize here.
+    if (!tableId) return;
 
     let cancelled = false;
 

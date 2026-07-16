@@ -36,11 +36,17 @@ export const TableOrderProvider = ({ children }: { children: ReactNode }) => {
   const [tableLabel, setTableLabel] = useState<string | null>(null);
 
   useEffect(() => {
+    // Same reasoning as CartContext: hydrated from sessionStorage in an
+    // effect (not a lazy useState initializer) so the first client render
+    // matches the server-rendered markup (no table) and only updates after
+    // mount. Legitimate "synchronize with an external system" effect use,
+    // not derived render state.
     try {
       const stored = sessionStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed?.tableId && parsed?.tableLabel) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setTableId(parsed.tableId);
           setTableLabel(parsed.tableLabel);
         }

@@ -93,8 +93,8 @@ const Spend = () => {
           </header>
 
           <p className="text-[#D7D7D7] text-xs 3xl:text-base 2xl:text-base xl:text-sm lg:text-xs md:text-xs mt-4 max-w-md md:mx-auto 3xl:mx-0 2xl:mx-0 xl:mx-0 lg:mx-0">
-            Discover unforgettable moments at Flavors & Feast — where every bite brings joy. Whether it's a romantic
-            evening, a friends' hangout, or a cozy weekend brunch, we've got unbeatable food deals just for you.
+            Discover unforgettable moments at Flavors & Feast — where every bite brings joy. Whether it&apos;s a romantic
+            evening, a friends&apos; hangout, or a cozy weekend brunch, we&apos;ve got unbeatable food deals just for you.
           </p>
 
           {/* Mobile Image */}

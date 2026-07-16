@@ -32,12 +32,20 @@ export default function CouponForm() {
   // behavior: applies to the whole cart.
   const [restrictionScope, setRestrictionScope] = useState<RestrictionScope>("NONE");
   const [menu, setMenu] = useState<MenuCategory[]>([]);
-  const [menuLoading, setMenuLoading] = useState(false);
+  // Only set from the effect's async failure branch (never synchronously),
+  // so "loading" below can be derived instead of tracked as its own state
+  // that gets flipped true/false synchronously in the effect body.
+  const [menuLoadFailed, setMenuLoadFailed] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // "Loading" is true whenever we need the menu but don't have it yet and
+  // haven't already failed to fetch it — derived from existing state
+  // rather than a separate flag flipped synchronously inside the effect.
+  const menuLoading = restrictionScope !== "NONE" && menu.length === 0 && !menuLoadFailed;
 
   // Menu is only needed once the admin actually wants to restrict a
   // coupon, so it's fetched lazily on first switch to Categories/Items
@@ -45,14 +53,15 @@ export default function CouponForm() {
   // already-grouped-by-category endpoint the customer-facing /menu page
   // uses — reused here rather than adding a parallel admin-only route.
   useEffect(() => {
-    if (restrictionScope === "NONE" || menu.length > 0 || menuLoading) return;
-    setMenuLoading(true);
+    if (restrictionScope === "NONE" || menu.length > 0 || menuLoadFailed) return;
     fetch("/api/menu")
       .then((res) => res.json())
       .then((data) => setMenu(Array.isArray(data) ? data : []))
-      .catch(() => setError("Couldn't load menu items/categories. Please try again."))
-      .finally(() => setMenuLoading(false));
-  }, [restrictionScope, menu.length, menuLoading]);
+      .catch(() => {
+        setMenuLoadFailed(true);
+        setError("Couldn't load menu items/categories. Please try again.");
+      });
+  }, [restrictionScope, menu.length, menuLoadFailed]);
 
   function toggleSet(set: Set<string>, setter: (s: Set<string>) => void, id: string) {
     const next = new Set(set);

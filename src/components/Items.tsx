@@ -114,9 +114,15 @@ const Items = () => {
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
-  useEffect(() => {
+  // Reset the "show all" toggle whenever the selected category changes.
+  // Done during render (React's documented pattern for "adjusting state
+  // when a prop/value changes") instead of in an effect, since setting
+  // state synchronously inside an effect body causes an extra render.
+  const [prevSelected, setPrevSelected] = useState(selected);
+  if (selected !== prevSelected) {
+    setPrevSelected(selected);
     setShowAllItemsSm(false);
-  }, [selected]);
+  }
 
   if (isLoading) {
     return (

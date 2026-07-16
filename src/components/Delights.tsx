@@ -66,7 +66,7 @@ const Delights = () => {
             </div>
             <div className="flex sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row items-center justify-between mt-6">
               <p className="text-xs text-[#AAAAAA] 3xl:w-2/3 2xl:w-2/3 xl:w-2/3 lg:w-2/3 pr-4">
-                At Ocean's Bounty, every dish tells a story of the sea — fresh,
+                At Ocean&apos;s Bounty, every dish tells a story of the sea — fresh,
                 vibrant, and full of life. We believe great seafood should taste like a
                 seaside escape, where the salt air kisses your skin and every bite
                 feels like a wave of pure flavor.
