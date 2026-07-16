@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
+import { updateCategorySchema } from "@/lib/validations/admin";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function PATCH(
   req: NextRequest,
@@ -10,16 +12,14 @@ export async function PATCH(
   if (result instanceof NextResponse) return result;
 
   const { id } = await params;
-  const body = await req.json();
 
-  if (!body.name || typeof body.name !== "string" || !body.name.trim()) {
-    return NextResponse.json({ error: "Category name is required" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, updateCategorySchema);
+  if (parsed instanceof NextResponse) return parsed;
 
   try {
     const updated = await prisma.category.update({
       where: { id },
-      data: { name: body.name.trim() },
+      data: { name: parsed.name },
     });
     return NextResponse.json(updated);
   } catch {

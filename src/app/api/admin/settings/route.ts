@@ -1,26 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
+import { updateSettingsSchema } from "@/lib/validations/admin";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function PATCH(req: NextRequest) {
   const authResult = await requireApiScope("settings");
   if (authResult instanceof NextResponse) return authResult;
 
-  const body = await req.json();
-  const { timezone, kitchenOpenHour, kitchenCloseHour } = body;
-
-  if (
-    typeof timezone !== "string" ||
-    typeof kitchenOpenHour !== "number" ||
-    typeof kitchenCloseHour !== "number" ||
-    kitchenOpenHour < 0 ||
-    kitchenOpenHour > 23 ||
-    kitchenCloseHour < 0 ||
-    kitchenCloseHour > 23 ||
-    kitchenOpenHour === kitchenCloseHour
-  ) {
-    return NextResponse.json({ error: "Invalid settings values" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, updateSettingsSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { timezone, kitchenOpenHour, kitchenCloseHour } = parsed;
 
   const updated = await prisma.restaurantSettings.upsert({
     where: { id: "singleton" },

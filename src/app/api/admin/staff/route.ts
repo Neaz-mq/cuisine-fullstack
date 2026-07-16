@@ -3,12 +3,13 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import {
-  STAFF_ROLES,
   canManageStaffRole,
   canViewSensitiveStaffFields,
   type StaffRole,
 } from "@/lib/permissions";
 import { nextEmployeeId } from "@/lib/staff";
+import { createStaffSchema } from "@/lib/validations/staff";
+import { parseBody } from "@/lib/validations/parse";
 
 /**
  * src/app/api/admin/staff/route.ts
@@ -101,8 +102,9 @@ export async function POST(req: NextRequest) {
   if (authResult instanceof NextResponse) return authResult;
 
   const actingRole = (authResult.user as { role?: string }).role;
-  const body = await req.json();
 
+  const parsed = await parseBody(req, createStaffSchema);
+  if (parsed instanceof NextResponse) return parsed;
   const {
     name,
     email,
@@ -114,23 +116,8 @@ export async function POST(req: NextRequest) {
     hireDate,
     nid,
     salary,
-  } = body;
+  } = parsed;
 
-  if (!name || typeof name !== "string" || !name.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
-  }
-  if (!email || typeof email !== "string" || !email.includes("@")) {
-    return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
-  }
-  if (!password || typeof password !== "string" || password.length < 8) {
-    return NextResponse.json(
-      { error: "Password must be at least 8 characters" },
-      { status: 400 }
-    );
-  }
-  if (!STAFF_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Invalid staff role" }, { status: 400 });
-  }
   if (!canManageStaffRole(actingRole, role as StaffRole)) {
     return NextResponse.json(
       { error: "Only an owner can create another owner account." },

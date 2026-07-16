@@ -9,6 +9,8 @@ import {
   type StaffRole,
 } from "@/lib/permissions";
 import type { EmploymentType } from "@/generated/prisma/client";
+import { updateStaffSchema } from "@/lib/validations/staff";
+import { parseBody } from "@/lib/validations/parse";
 
 function serialize(
   user: {
@@ -129,7 +131,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const parsed = await parseBody(req, updateStaffSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const body = parsed;
   const isSelf = id === actingUserId;
 
   if (body.isActive === false && isSelf) {
@@ -184,7 +188,7 @@ export async function PATCH(
     salary?: number | null;
   } = {};
   if (body.department !== undefined) profileData.department = body.department?.trim() || null;
-  if (["FULL_TIME", "PART_TIME", "CONTRACT"].includes(body.employmentType)) {
+  if (body.employmentType !== undefined) {
     profileData.employmentType = body.employmentType;
   }
   if (body.phone !== undefined) profileData.phone = body.phone?.trim() || null;

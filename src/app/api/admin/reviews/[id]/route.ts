@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
-
-const VALID_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
+import { updateReviewStatusSchema } from "@/lib/validations/admin";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function PATCH(
   request: Request,
@@ -12,20 +12,14 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
-  const body = await request.json().catch(() => null);
-  const status = body?.status;
 
-  if (!status || !VALID_STATUSES.includes(status)) {
-    return NextResponse.json(
-      { error: "status must be one of PENDING, APPROVED, REJECTED" },
-      { status: 400 }
-    );
-  }
+  const parsed = await parseBody(request, updateReviewStatusSchema);
+  if (parsed instanceof NextResponse) return parsed;
 
   try {
     const review = await prisma.review.update({
       where: { id },
-      data: { status },
+      data: { status: parsed.status },
     });
     return NextResponse.json({ review });
   } catch {

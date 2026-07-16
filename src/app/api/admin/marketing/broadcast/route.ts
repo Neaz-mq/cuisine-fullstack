@@ -3,36 +3,26 @@ import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
 import { sendOfferBroadcast } from "@/lib/resend";
 import { plainTextToHtml } from "@/lib/plain-text-to-html";
+import { broadcastSchema } from "@/lib/validations/admin";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function POST(request: Request) {
   const authResult = await requireApiScope("marketing");
   if (authResult instanceof NextResponse) return authResult;
 
+  const parsed = await parseBody(request, broadcastSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { subject, headline, message, ctaText, ctaUrl } = parsed;
+
   try {
-    const body = await request.json();
-    const { subject, headline, message, ctaText, ctaUrl } = body as {
-      subject?: string;
-      headline?: string;
-      message?: string;
-      ctaText?: string;
-      ctaUrl?: string;
-    };
-
-    if (!subject?.trim() || !message?.trim()) {
-      return NextResponse.json(
-        { error: "Subject and message body are required" },
-        { status: 400 }
-      );
-    }
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     const result = await sendOfferBroadcast({
-      subject: subject.trim(),
+      subject,
       // Headline is the large hero text shown at the top of the email —
       // falls back to the subject line so this field stays optional in
       // the admin UI without breaking the template.
-      headline: headline?.trim() || subject.trim(),
+      headline: headline?.trim() || subject,
       // Admins type plain text (no HTML knowledge required) — converted
       // to safe paragraph HTML here before it reaches the email template.
       bodyHtml: plainTextToHtml(message),

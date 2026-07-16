@@ -1,22 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
+import { loyaltyAdjustSchema } from "@/lib/validations/admin";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function POST(request: Request) {
   const authResult = await requireApiScope("loyalty");
   if (authResult instanceof NextResponse) return authResult;
 
-  const body = await request.json().catch(() => null);
-  const userId = body?.userId as string | undefined;
-  const points = Number(body?.points);
-  const note = (body?.note as string | undefined)?.trim() || null;
-
-  if (!userId || !Number.isInteger(points) || points === 0) {
-    return NextResponse.json(
-      { error: "userId and a non-zero integer 'points' are required" },
-      { status: 400 }
-    );
-  }
+  const parsed = await parseBody(request, loyaltyAdjustSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { userId, points, note } = parsed;
 
   try {
     const [, transaction] = await prisma.$transaction([
@@ -28,7 +22,7 @@ export async function POST(request: Request) {
         data: {
           points,
           reason: "MANUAL_ADJUSTMENT",
-          note,
+          note: note || null,
           userId,
         },
       }),
