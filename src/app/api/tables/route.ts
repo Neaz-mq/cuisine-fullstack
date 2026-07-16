@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isTableAvailable } from "@/lib/reservations";
 import { requireApiScope } from "@/lib/require-admin";
+import { publicCreateTableSchema, tablesAvailabilityQuerySchema } from "@/lib/validations/admin";
+import { parseBody, parseQuery } from "@/lib/validations/parse";
 
 /**
  * src/app/api/tables/route.ts
@@ -34,7 +36,9 @@ function naturalSortByLabel<T extends { label: string }>(items: T[]): T[] {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const reservedAtParam = searchParams.get("reservedAt");
+    const parsedQuery = parseQuery(searchParams, tablesAvailabilityQuerySchema);
+    if (parsedQuery instanceof NextResponse) return parsedQuery;
+    const { reservedAt: reservedAtParam } = parsedQuery;
 
     const tables = naturalSortByLabel(
       await prisma.restaurantTable.findMany({
@@ -49,12 +53,6 @@ export async function GET(request: Request) {
     }
 
     const reservedAt = new Date(reservedAtParam);
-    if (Number.isNaN(reservedAt.getTime())) {
-      return NextResponse.json(
-        { error: "reservedAt must be a valid date/time" },
-        { status: 400 }
-      );
-    }
 
     const withAvailability = await Promise.all(
       tables.map(async (table) => ({
@@ -78,20 +76,14 @@ export async function POST(request: Request) {
     const authResult = await requireApiScope("tables");
     if (authResult instanceof NextResponse) return authResult;
 
-    const body = await request.json();
-    const { label, capacity } = body;
-
-    if (!label || typeof label !== "string") {
-      return NextResponse.json(
-        { error: "Table label is required" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(request, publicCreateTableSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { label, capacity } = parsed;
 
     const table = await prisma.restaurantTable.create({
       data: {
         label,
-        capacity: typeof capacity === "number" && capacity > 0 ? capacity : 4,
+        capacity: capacity ?? 4,
       },
     });
 

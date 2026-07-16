@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import type { Prisma } from "@/generated/prisma/client";
+import { adjustGiftCardSchema } from "@/lib/validations/coupon";
+import { parseBody } from "@/lib/validations/parse";
 
 /**
  * PATCH /api/admin/gift-cards/[id]
@@ -25,28 +27,18 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
-  const body = await req.json();
+
+  const parsed = await parseBody(req, adjustGiftCardSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const body = parsed;
 
   const data: Prisma.GiftCardUpdateInput = {};
 
   if (body.isActive !== undefined) {
-    if (typeof body.isActive !== "boolean") {
-      return NextResponse.json({ error: "isActive must be a boolean" }, { status: 400 });
-    }
     data.isActive = body.isActive;
   }
 
-  let adjustment: number | null = null;
-  if (body.adjustment !== undefined) {
-    if (typeof body.adjustment !== "number" || !Number.isFinite(body.adjustment) || body.adjustment === 0) {
-      return NextResponse.json({ error: "Adjustment must be a non-zero number" }, { status: 400 });
-    }
-    adjustment = Math.round(body.adjustment * 100) / 100;
-  }
-
-  if (Object.keys(data).length === 0 && adjustment === null) {
-    return NextResponse.json({ error: "No editable fields provided" }, { status: 400 });
-  }
+  const adjustment = body.adjustment !== undefined ? Math.round(body.adjustment * 100) / 100 : null;
 
   try {
     const updated = await prisma.$transaction(async (tx) => {

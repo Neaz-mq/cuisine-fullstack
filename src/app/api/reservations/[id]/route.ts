@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
-
-const VALID_STATUSES = ["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"];
+import { reservationStatusUpdateSchema } from "@/lib/validations/reservation";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function PATCH(
   req: NextRequest,
@@ -12,15 +12,13 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
-  const body = await req.json();
 
-  if (!VALID_STATUSES.includes(body.status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, reservationStatusUpdateSchema);
+  if (parsed instanceof NextResponse) return parsed;
 
   const updated = await prisma.reservation.update({
     where: { id },
-    data: { status: body.status },
+    data: { status: parsed.status },
   });
 
   return NextResponse.json(updated);

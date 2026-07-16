@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { createGiftCard } from "@/lib/gift-cards";
 import { sendGiftCardEmail } from "@/lib/send-gift-card-email";
+import { issueGiftCardSchema } from "@/lib/validations/coupon";
+import { parseBody } from "@/lib/validations/parse";
 
 export async function GET(req: NextRequest) {
   const authResult = await requireApiScope("giftCards");
@@ -35,29 +37,9 @@ export async function POST(req: NextRequest) {
   const authResult = await requireApiScope("giftCards");
   if (authResult instanceof NextResponse) return authResult;
 
-  const body = await req.json();
-  const {
-    amount,
-    recipientEmail,
-    recipientName,
-    purchaserName,
-    message,
-    note,
-  }: {
-    amount: number;
-    recipientEmail: string;
-    recipientName?: string;
-    purchaserName?: string;
-    message?: string;
-    note?: string;
-  } = body;
-
-  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
-  }
-  if (!recipientEmail?.trim()) {
-    return NextResponse.json({ error: "Recipient email is required" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, issueGiftCardSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { amount, recipientEmail, recipientName, purchaserName, message, note } = parsed;
 
   // Manually issued cards (comp/refund/goodwill) are credited immediately
   // — there's no Stripe payment involved, unlike a customer purchase via

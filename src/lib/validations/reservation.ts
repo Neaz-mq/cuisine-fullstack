@@ -21,3 +21,10 @@ export const createReservationSchema = z.object({
   guestCount: z.coerce.number().int().positive("Guest count must be at least 1"),
   reservedAt: nonEmptyString("Reservation date/time"),
 });
+
+/** PATCH /api/reservations/[id] — staff moving a reservation through its
+ * lifecycle (confirm, seat, mark a no-show, etc). Same enum values as
+ * Prisma's ReservationStatus. */
+export const reservationStatusUpdateSchema = z.object({
+  status: z.enum(["PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"]),
+}); 

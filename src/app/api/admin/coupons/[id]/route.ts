@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import type { Prisma } from "@/generated/prisma/client";
+import { updateCouponSchema } from "@/lib/validations/coupon";
+import { parseBody } from "@/lib/validations/parse";
 
 /**
  * PATCH /api/admin/coupons/[id]
@@ -25,64 +27,20 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
-  const body = await req.json();
+
+  const parsed = await parseBody(req, updateCouponSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const body = parsed;
 
   const data: Prisma.CouponUpdateInput = {};
 
-  if (body.isActive !== undefined) {
-    if (typeof body.isActive !== "boolean") {
-      return NextResponse.json({ error: "isActive must be a boolean" }, { status: 400 });
-    }
-    data.isActive = body.isActive;
-  }
-
-  if (body.minOrderValue !== undefined) {
-    if (body.minOrderValue !== null && (typeof body.minOrderValue !== "number" || body.minOrderValue < 0)) {
-      return NextResponse.json({ error: "Minimum order value must be zero or a positive number" }, { status: 400 });
-    }
-    data.minOrderValue = body.minOrderValue;
-  }
-
-  if (body.maxDiscountAmount !== undefined) {
-    if (body.maxDiscountAmount !== null && (typeof body.maxDiscountAmount !== "number" || body.maxDiscountAmount <= 0)) {
-      return NextResponse.json({ error: "Max discount cap must be a positive number" }, { status: 400 });
-    }
-    data.maxDiscountAmount = body.maxDiscountAmount;
-  }
-
-  if (body.startsAt !== undefined) {
-    const parsed = body.startsAt ? new Date(body.startsAt) : null;
-    if (body.startsAt && Number.isNaN(parsed?.getTime())) {
-      return NextResponse.json({ error: "Start date is invalid" }, { status: 400 });
-    }
-    data.startsAt = parsed;
-  }
-
-  if (body.expiresAt !== undefined) {
-    const parsed = body.expiresAt ? new Date(body.expiresAt) : null;
-    if (body.expiresAt && Number.isNaN(parsed?.getTime())) {
-      return NextResponse.json({ error: "Expiry date is invalid" }, { status: 400 });
-    }
-    data.expiresAt = parsed;
-  }
-
-  if (body.usageLimit !== undefined) {
-    if (body.usageLimit !== null && (!Number.isInteger(body.usageLimit) || body.usageLimit < 1)) {
-      return NextResponse.json({ error: "Usage limit must be a positive whole number" }, { status: 400 });
-    }
-    data.usageLimit = body.usageLimit;
-  }
-
-  if (body.perCustomerLimit !== undefined) {
-    if (body.perCustomerLimit !== null && (!Number.isInteger(body.perCustomerLimit) || body.perCustomerLimit < 1)) {
-      return NextResponse.json({ error: "Per-customer limit must be a positive whole number" }, { status: 400 });
-    }
-    data.perCustomerLimit = body.perCustomerLimit;
-  }
-
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "No editable fields provided" }, { status: 400 });
-  }
+  if (body.isActive !== undefined) data.isActive = body.isActive;
+  if (body.minOrderValue !== undefined) data.minOrderValue = body.minOrderValue;
+  if (body.maxDiscountAmount !== undefined) data.maxDiscountAmount = body.maxDiscountAmount;
+  if (body.startsAt !== undefined) data.startsAt = body.startsAt;
+  if (body.expiresAt !== undefined) data.expiresAt = body.expiresAt;
+  if (body.usageLimit !== undefined) data.usageLimit = body.usageLimit;
+  if (body.perCustomerLimit !== undefined) data.perCustomerLimit = body.perCustomerLimit;
 
   try {
     const updated = await prisma.coupon.update({ where: { id }, data });

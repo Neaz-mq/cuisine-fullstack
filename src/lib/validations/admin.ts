@@ -30,6 +30,41 @@ export const updateTableSchema = createTableSchema
     message: "Provide at least one field to update",
   });
 
+/** POST /api/tables (public-facing, staff-scoped route, distinct from
+ * /api/admin/tables) — same fields but `capacity` is optional here since
+ * the route falls back to a default of 4 rather than rejecting a missing
+ * value, and there's no `isActive` toggle on creation. */
+export const publicCreateTableSchema = z.object({
+  label: nonEmptyString("Table label"),
+  capacity: z.number().int().positive().optional(),
+});
+
+/** GET /api/tables?reservedAt=... — optional ISO date/time string used to
+ * compute per-table availability. Previously checked with a manual
+ * `Number.isNaN(new Date(...).getTime())` inline in the route; same rule,
+ * just expressed as a schema so it goes through parseQuery like every
+ * other query-param route. */
+export const tablesAvailabilityQuerySchema = z.object({
+  reservedAt: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((s) => !Number.isNaN(new Date(s).getTime()), "reservedAt must be a valid date/time")
+    .optional(),
+});
+
+/** GET /api/admin/notifications?since=... — optional cursor timestamp for
+ * "how many new orders since I last checked". Same "just needs to parse as
+ * a date" rule as tablesAvailabilityQuerySchema above. */
+export const notificationsQuerySchema = z.object({
+  since: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((s) => !Number.isNaN(new Date(s).getTime()), "since must be a valid date/time")
+    .optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------

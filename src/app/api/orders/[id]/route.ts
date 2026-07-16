@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScopeAny } from "@/lib/require-admin";
-
-const VALID_STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
+import { orderStatusUpdateSchema } from "@/lib/validations/order";
+import { parseBody } from "@/lib/validations/parse";
 
 // 1 loyalty point per $10 spent, rounded down.
 const POINTS_PER_CURRENCY_UNIT = 10;
@@ -59,11 +59,10 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
-  const body = await req.json();
 
-  if (!VALID_STATUSES.includes(body.status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, orderStatusUpdateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { status } = parsed;
 
   const existingOrder = await prisma.order.findUnique({
     where: { id },
@@ -78,7 +77,7 @@ export async function PATCH(
   // for orders placed by a logged-in user (guest checkout has no userId to
   // credit).
   const shouldAwardPoints =
-    body.status === "DELIVERED" &&
+    status === "DELIVERED" &&
     !existingOrder.pointsAwarded &&
     !!existingOrder.userId;
 
@@ -88,7 +87,7 @@ export async function PATCH(
     const [updated] = await prisma.$transaction([
       prisma.order.update({
         where: { id },
-        data: { status: body.status, pointsAwarded: true },
+        data: { status, pointsAwarded: true },
       }),
       ...(pointsEarned > 0
         ? [
@@ -113,7 +112,7 @@ export async function PATCH(
 
   const updated = await prisma.order.update({
     where: { id },
-    data: { status: body.status },
+    data: { status },
   });
 
   return NextResponse.json(updated);
