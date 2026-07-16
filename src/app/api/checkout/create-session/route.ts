@@ -3,9 +3,6 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
 import {
-  SHIPPING_METHODS,
-  ShippingMethod,
-  Billing,
   validateBilling,
   resolveOrderItems,
   findValidCoupon,
@@ -13,9 +10,10 @@ import {
   consumeCoupon,
   getCustomerKey,
   CouponInfo,
-  IncomingItem,
 } from "@/lib/order-checkout-shared";
 import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardInfo } from "@/lib/gift-cards";
+import { parseBody } from "@/lib/validations/parse";
+import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 
 /**
  * src/app/api/checkout/create-session/route.ts
@@ -55,31 +53,13 @@ import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardI
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const {
-      items,
-      billing,
-      shippingMethod,
-      couponCode,
-      giftCardCode,
-    }: {
-      items: IncomingItem[];
-      billing: Billing;
-      shippingMethod: ShippingMethod;
-      couponCode?: string;
-      giftCardCode?: string;
-    } = body;
+    const parsed = await parseBody(request, createCheckoutSessionSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { items, billing, shippingMethod, couponCode, giftCardCode } = parsed;
 
     const billingError = validateBilling(billing);
     if (billingError) {
       return NextResponse.json({ error: billingError }, { status: 400 });
-    }
-
-    if (!SHIPPING_METHODS.includes(shippingMethod)) {
-      return NextResponse.json(
-        { error: "Invalid shipping method" },
-        { status: 400 }
-      );
     }
 
     const resolution = await resolveOrderItems(items);

@@ -5,9 +5,10 @@ import {
   calcDiscountAmount,
   getCustomerKey,
   resolveOrderItems,
-  IncomingItem,
 } from "@/lib/order-checkout-shared";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { parseBody } from "@/lib/validations/parse";
+import { validateCouponSchema } from "@/lib/validations/coupon";
 
 /**
  * src/app/api/coupons/validate/route.ts
@@ -51,8 +52,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { code, items, phone } = body as { code: string; items: IncomingItem[]; phone?: string };
+    const parsed = await parseBody(request, validateCouponSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { code, items, phone } = parsed;
 
     const resolution = await resolveOrderItems(items);
     if (!resolution.ok) {

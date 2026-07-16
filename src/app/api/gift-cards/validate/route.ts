@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { findValidGiftCard, calcGiftCardAmountToApply } from "@/lib/gift-cards";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { parseBody } from "@/lib/validations/parse";
+import { validateGiftCardSchema } from "@/lib/validations/coupon";
 
 /**
  * src/app/api/gift-cards/validate/route.ts
@@ -34,12 +36,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { code, orderTotal }: { code: string; orderTotal: number } = body;
-
-    if (typeof orderTotal !== "number" || !Number.isFinite(orderTotal) || orderTotal < 0) {
-      return NextResponse.json({ error: "Invalid order total" }, { status: 400 });
-    }
+    const parsed = await parseBody(request, validateGiftCardSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { code, orderTotal } = parsed;
 
     const result = await findValidGiftCard(code);
     if (!result.ok) {

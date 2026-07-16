@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/stripe";
+import { parseBody } from "@/lib/validations/parse";
+import { purchaseGiftCardSchema } from "@/lib/validations/coupon";
 
 /**
  * src/app/api/gift-cards/purchase/route.ts
@@ -19,38 +21,11 @@ import { getStripeClient } from "@/lib/stripe";
  * since Stripe hands that back to us verbatim on the webhook event.
  */
 
-const MIN_AMOUNT = 5;
-const MAX_AMOUNT = 500;
-
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const {
-      amount,
-      purchaserEmail,
-      purchaserName,
-      recipientEmail,
-      recipientName,
-      message,
-    }: {
-      amount: number;
-      purchaserEmail: string;
-      purchaserName?: string;
-      recipientEmail?: string;
-      recipientName?: string;
-      message?: string;
-    } = body;
-
-    if (typeof amount !== "number" || !Number.isFinite(amount) || amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
-      return NextResponse.json(
-        { error: `Gift card amount must be between $${MIN_AMOUNT} and $${MAX_AMOUNT}` },
-        { status: 400 }
-      );
-    }
-
-    if (!purchaserEmail?.trim()) {
-      return NextResponse.json({ error: "Your email is required" }, { status: 400 });
-    }
+    const parsed = await parseBody(request, purchaseGiftCardSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { amount, purchaserEmail, purchaserName, recipientEmail, recipientName, message } = parsed;
 
     // Defaults to the purchaser themselves when no recipient is given —
     // covers the common "buy one for myself to use later" case without

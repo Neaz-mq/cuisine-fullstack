@@ -2,14 +2,14 @@
   "name": "cuisine-fullstack",
   "version": "0.1.0",
   "private": true,
- "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "eslint",
-  "test": "vitest run",
-  "test:watch": "vitest"
-},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
@@ -34,7 +34,8 @@
     "react-select": "^5.10.2",
     "react-toastify": "^11.1.0",
     "resend": "^6.17.1",
-    "stripe": "^22.3.0"
+    "stripe": "^22.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

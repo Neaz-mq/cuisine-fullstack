@@ -7,8 +7,6 @@ import { syncCustomerToAudience } from "@/lib/resend";
 import {
   SHIPPING_METHODS,
   ShippingMethod,
-  Billing,
-  OrderTypeValue,
   validateBilling,
   resolveOrderItems,
   findValidCoupon,
@@ -16,9 +14,10 @@ import {
   consumeCoupon,
   getCustomerKey,
   CouponInfo,
-  IncomingItem,
 } from "@/lib/order-checkout-shared";
 import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardInfo } from "@/lib/gift-cards";
+import { parseBody } from "@/lib/validations/parse";
+import { createOrderSchema } from "@/lib/validations/checkout";
 
 /**
  * src/app/api/orders/route.ts
@@ -64,28 +63,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const {
-      items,
-      billing,
-      shippingMethod,
-      orderType = "DELIVERY",
-      tableId,
-      couponCode,
-      giftCardCode,
-    }: {
-      items: IncomingItem[];
-      billing: Billing;
-      shippingMethod?: ShippingMethod;
-      orderType?: OrderTypeValue;
-      tableId?: string;
-      couponCode?: string;
-      giftCardCode?: string;
-    } = body;
-
-    if (orderType !== "DELIVERY" && orderType !== "DINE_IN") {
-      return NextResponse.json({ error: "Invalid order type" }, { status: 400 });
-    }
+    const parsed = await parseBody(request, createOrderSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { items, billing, shippingMethod, orderType, tableId, couponCode, giftCardCode } = parsed;
 
     const billingError = validateBilling(billing, orderType);
     if (billingError) {

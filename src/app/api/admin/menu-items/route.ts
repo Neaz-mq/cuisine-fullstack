@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
+import { parseBody } from "@/lib/validations/parse";
+import { createMenuItemSchema } from "@/lib/validations/menu-item";
 
 export async function POST(req: NextRequest) {
   const authResult = await requireApiScope("menu");
   if (authResult instanceof NextResponse) return authResult;
 
-  const body = await req.json();
-  const { title, description, price, imageUrl, categoryId, isAvailable } = body;
-
-  if (!title || !description || typeof price !== "number" || !categoryId) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, createMenuItemSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { title, description, price, imageUrl, categoryId, isAvailable } = parsed;
 
   const item = await prisma.menuItem.create({
-    data: { title, description, price, imageUrl, categoryId, isAvailable: isAvailable ?? true },
+    data: { title, description, price, imageUrl: imageUrl || null, categoryId, isAvailable },
   });
 
   return NextResponse.json(item, { status: 201 });

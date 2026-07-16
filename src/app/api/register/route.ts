@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { parseBody } from "@/lib/validations/parse";
+import { registerSchema } from "@/lib/validations/auth";
 
 /**
  * src/app/api/register/route.ts
@@ -15,23 +17,9 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, email, password } = body;
-
-    // ---- Basic validation ----
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password are both required" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(request, registerSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { name, email, password } = parsed;
 
     // ---- Check if email already exists ----
     const existingUser = await prisma.user.findUnique({

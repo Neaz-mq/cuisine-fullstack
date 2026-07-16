@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isTableAvailable } from "@/lib/reservations";
 import { requireApiScope } from "@/lib/require-admin";
+import { parseBody } from "@/lib/validations/parse";
+import { createReservationSchema } from "@/lib/validations/reservation";
 
 /**
  * src/app/api/reservations/route.ts
@@ -35,16 +37,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { tableId, customerName, phone, guestCount, reservedAt } = body;
-
-    // ---- Basic validation (matches the convention in the register route) ----
-    if (!tableId || !customerName || !phone || !guestCount || !reservedAt) {
-      return NextResponse.json(
-        { error: "All fields are required" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(request, createReservationSchema);
+    if (parsed instanceof NextResponse) return parsed;
+    const { tableId, customerName, phone, guestCount, reservedAt } = parsed;
 
     const parsedDate = new Date(reservedAt);
     if (Number.isNaN(parsedDate.getTime())) {
@@ -100,7 +95,7 @@ export async function POST(request: Request) {
             tableId,
             customerName,
             phone,
-            guestCount: Number(guestCount),
+            guestCount,
             reservedAt: parsedDate,
             status: "CONFIRMED",
             userId: session?.user?.id ?? null,
