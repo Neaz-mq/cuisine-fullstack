@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion as Motion, type Transition } from "framer-motion";
 import Container from "@/components/Container";
+
+const MotionImage = Motion(Image);
 
 const fadeInUp = {
   initial: { opacity: 0, y: 40 },
@@ -39,9 +42,12 @@ const Delights = () => {
             Deep Blue <br /> Delights
           </h2>
 
-          <Motion.img
+          <MotionImage
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752055520/menu2_cvwcfg.webp"
             alt="Shrimp dish with fresh ingredients"
+            width={800}
+            height={800}
+            sizes="(min-width: 768px) 50vw, 100vw"
             className="w-full h-auto object-cover sm:mt-5 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 md:mt-0"
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
@@ -99,9 +105,12 @@ const Delights = () => {
 
         {/* Top Right - Sushi */}
         <Motion.div {...fadeInUp} className="flex justify-center items-center mt-5 w-full">
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752056680/menu3_yskhz3.webp"
             alt="Assorted sushi served with traditional garnish"
+            width={800}
+            height={700}
+            sizes="(min-width: 1536px) 100vw, 29rem"
             className="3xl:w-full 2xl:w-[32rem] xl:w-[29rem] sm:w-[29rem] 3xl:h-[700px] 2xl:h-[650px] xl:h-[640px] lg:h-[600px] md:h-[500px] sm:h-[150px] object-cover sm:ml-6"
           />
         </Motion.div>
@@ -118,12 +127,13 @@ const Delights = () => {
           {...fadeInUp}
           className="relative overflow-hidden w-full h-[350px] 3xl:h-[700px] 2xl:h-[680px] xl:h-[680px] lg:h-auto md:h-auto sm:h-auto 3xl:left-7 2xl:left-7 xl:left-6 lg:left-6 md:left-6 sm:left-6 3xl:-top-4 2xl:-top-0 sm:hidden md:block lg:block xl:block 2xl:block 3xl:block"
         >
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752056828/menu4_kx7c9q.webp"
             alt="Chef preparing seafood dishes"
+            width={630}
+            height={700}
+            sizes="(min-width: 1536px) 39.2rem, 27.5rem"
             className="absolute inset-0 3xl:w-[39.2rem] 2xl:w-[33.1rem] xl:w-[27.5rem] lg:w-[22rem] md:w-[22rem] sm:w-[42rem] h-auto object-cover object-center"
-            loading="lazy"
-            decoding="async"
           />
           <Motion.div
             initial={{ x: 300, opacity: 0 }}

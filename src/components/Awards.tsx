@@ -1,7 +1,12 @@
 "use client";
 
 import { motion as Motion } from "framer-motion";
+import Image from "next/image";
 import Container from "@/components/Container";
+
+// framer-motion needs its own component wrapper to animate a forwarded-ref
+// component like next/image's <Image>.
+const MotionImage = Motion(Image);
 
 const Awards = () => {
   return (
@@ -10,20 +15,23 @@ const Awards = () => {
 
         {/* Foreground Image (Chef) */}
         <div className="absolute left-1/2 sm:top-[10%] md:top-[25%] lg:top-[33%] xl:top-[44%] 2xl:top-[50%] 3xl:top-[54%] z-10 3xl:translate-x-[-50%] 2xl:translate-x-[-50%] xl:translate-x-[-48%] lg:translate-x-[-48%] md:translate-x-[-48%] sm:translate-x-[-44%] translate-y-[-104%] flex items-center justify-center">
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752057824/chef1_aauap9.webp"
             alt="Award-winning chef with culinary excellence"
-            className="sm:w-[245px] md:w-[550px] lg:w-[820px] 2xl:w-[1100px] xl:w-[950px] 3xl:w-[1250px] max-w-none"            
+            width={1250}
+            height={1660}
+            className="sm:w-[245px] md:w-[550px] lg:w-[820px] 2xl:w-[1100px] xl:w-[950px] 3xl:w-[1250px] max-w-none h-auto object-contain"
           />
         </div>
 
         {/* Centered Specialty Image */}
         <div className="relative flex justify-start sm:ml-32 md:ml-20 lg:ml-32 2xl:ml-32 xl:ml-32 3xl:ml-0 sm:w-[200px] md:w-[600px] lg:w-[600px] xl:w-[1100px] 2xl:w-[1100px] 3xl:w-full 3xl:justify-center sm:hidden md:hidden lg:block xl:block 2xl:block 3xl:block">
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1744863980/Specialty_c98mbf.png"
             alt="Our food specialty display"
-            className="sm:mt-36 md:mt-36 lg:mt-36 xl:mt-52 2xl:mt-52 3xl:-mt-1"
-            loading="lazy"
+            width={1100}
+            height={850}
+            className="sm:mt-36 md:mt-36 lg:mt-36 xl:mt-52 2xl:mt-52 3xl:-mt-1 max-w-full h-auto object-contain"
           />
         </div>
 
@@ -34,11 +42,12 @@ const Awards = () => {
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           aria-label="Award badge animation"
         >
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1744793790/Group_253_oyljhb.png"
-            className="sm:w-12 md:w-32 lg:w-32 xl:w-44 2xl:w-44 3xl:w-full rounded-full"
+            width={200}
+            height={200}
+            className="sm:w-12 md:w-32 lg:w-32 xl:w-44 2xl:w-44 3xl:w-full h-auto rounded-full object-contain"
             alt="Award badge"
-            loading="lazy"
           />
         </Motion.div>
 
@@ -56,7 +65,7 @@ const Awards = () => {
 
         {/* Decorative Blur Element */}
         <div className="absolute left-1/2 sm:top-[28rem] md:top-[28rem] lg:top-[28rem] xl:top-[42rem] 2xl:top-[42rem] 3xl:top-[37rem] z-50 lg:-translate-x-[330px] xl:-translate-x-[400px] 2xl:-translate-x-[400px] 3xl:-translate-x-[500px] sm:hidden md:hidden lg:block xl:block 2xl:block 3xl:block">
-          <img className='opacity-20 blur-sm' src="/Ellipse 9.svg" alt="Decorative ellipse blur" loading="lazy" />
+          <Image className='opacity-20 blur-sm' src="/Ellipse 9.svg" alt="Decorative ellipse blur" width={111} height={111} />
         </div>
 
         {/* Experiences Tag */}
@@ -68,7 +77,7 @@ const Awards = () => {
           aria-label="Years of experience rotating badge"
         >
           <div className="inline-flex items-center justify-center gap-2 w-full h-full">
-            <img src="/year.png" className="3xl:w-4 2xl:w-4 xl:w-4 lg:w-3 md:w-3" alt="Years of experience badge" loading="lazy" />
+            <Image src="/year.png" width={19} height={19} className="3xl:w-4 2xl:w-4 xl:w-4 lg:w-3 md:w-3 h-auto" alt="Years of experience badge" />
             <span className="3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[10px] md:text-[8px] font-medium text-[#FF4C15]">
               experiences
             </span>
@@ -115,13 +124,14 @@ const Awards = () => {
                 kitchen
               </Motion.span>
             </Motion.div>
-            <Motion.img
+            <MotionImage
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1744868965/Mask_Group_3_zd2ur0.png"
-              className="mt-2 3xl:w-40 2xl:w-40 xl:w-32 lg:w-24 md:w-24 sm:w-10"
+              width={400}
+              height={400}
+              className="mt-2 3xl:w-40 2xl:w-40 xl:w-32 lg:w-24 md:w-24 sm:w-10 h-auto object-contain"
               alt="Live kitchen photo"
               animate={{ scale: [1, 1.03, 1] }}
               transition={{ repeat: Infinity, duration: 2 }}
-              loading="lazy"
             />
             <Motion.div
               className="absolute -top-6 3xl:w-8 3xl:h-8 2xl:w-8 2xl:h-8 xl:w-8 xl:h-8 lg:w-8 lg:h-8 md:w-8 md:h-8 sm:w-4 sm:h-4 bg-transparent"

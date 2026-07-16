@@ -4,8 +4,11 @@ import { useState, useEffect } from "react";
 import AOS from "aos";
 import "aos/dist/aos.css";
 import Link from "next/link";
+import Image from "next/image";
 import { motion as Motion } from "framer-motion";
 import Container from "@/components/Container";
+
+const MotionImage = Motion(Image);
 
 const Banner = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,12 +28,13 @@ const Banner = () => {
               transition={{ duration: 1 }}
               className="relative 3xl:p-8 2xl:p-8 xl:p-8 lg:p-0 md:p-0 3xl:top-4 2xl:top-4 xl:top-4 lg:top-8 md:top-3 3xl:left-2 2xl:-left-12 xl:-left-6 lg:-left-8 md:-left-12 sm:-left-12"
             >
-              <img
+              <Image
                 className="absolute 3xl:left-[-20px] 3xl:right-10 3xl:-top-10 2xl:left-[-20px] 2xl:right-10 2xl:-top-10 xl:left-[-20px] xl:right-10 xl:-top-10 lg:left-[-36px] lg:right-16 lg:-top-16 md:left-[-36px] md:right-16 md:-top-16 opacity-60 blur-sm md:hidden sm:hidden 3xl:block 2xl:block xl:block lg:block"
                 src="/Ellipse 9.svg"
                 alt="Background Ellipse"
+                width={111}
+                height={111}
                 aria-hidden="true"
-                loading="lazy"
               />
 
               <div className="3xl:ml-4 2xl:ml-4 xl:ml-4 lg:ml-4 md:ml-16 sm:ml-16">
@@ -42,7 +46,7 @@ const Banner = () => {
                     >
                       <span>Up to 50% Off</span>
                       <div className="bg-white md:p-2 sm:p-1 rounded-full flex items-center justify-center">
-                        <img src="/arrow.svg" alt="Arrow Right" className="h-3 w-3" />
+                        <Image src="/arrow.svg" alt="Arrow Right" width={16} height={16} className="h-3 w-3" />
                       </div>
                     </button>
                   </Link>
@@ -67,7 +71,7 @@ const Banner = () => {
                         <span className="text-[#2C6252]">kitchen</span>
                       </span>
                       <div className="bg-[#FF4C15] rounded-full p-2 ml-2 3xl:w-8 2xl:w-8 xl:w-8 lg:w-6 md:w-6 sm:w-6 3xl:h-8 2xl:h-8 xl:h-8 lg:h-6 md:h-6 sm:h-6 flex items-center justify-center">
-                        <img src="/Polygon 2.svg" alt="Play icon" className="h-2 w-5" />
+                        <Image src="/Polygon 2.svg" alt="Play icon" width={11} height={12} className="h-2 w-5" />
                       </div>
                     </button>
                   </div>
@@ -100,7 +104,7 @@ const Banner = () => {
                     >
                       <span>Up to 50% Off</span>
                       <div className="bg-white p-2 rounded-full flex items-center justify-center">
-                        <img src="/arrow.svg" alt="Arrow Right" className="h-3 w-3" />
+                        <Image src="/arrow.svg" alt="Arrow Right" width={16} height={16} className="h-3 w-3" />
                       </div>
                     </button>
                   </Link>
@@ -168,17 +172,20 @@ const Banner = () => {
                     transition={{ delay: 0.6 + i * 0.3, duration: 0.8 }}
                     className="relative"
                   >
-                    <img
+                    <Image
                       src={item.src}
                       alt={`Dish ${i + 1}`}
-                      className={`3xl:w-auto 2xl:w-auto xl:w-auto lg:w-40 md:w-40 ${item.extraClass || ""}`}
-                      loading="lazy"
+                      width={400}
+                      height={400}
+                      className={`3xl:w-auto 2xl:w-auto xl:w-auto lg:w-40 md:w-40 h-auto object-contain ${item.extraClass || ""}`}
                     />
                     <div className={`absolute right-[-20px]  ${item.priceTopClass}`}>
-                      <Motion.img
+                      <MotionImage
                         src="/flowershape.svg"
                         alt="Price Tag"
-                        className="w-16"
+                        width={68}
+                        height={68}
+                        className="w-16 h-auto"
                         animate={{ rotate: 360 }}
                         transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
                       />
@@ -197,11 +204,14 @@ const Banner = () => {
               transition={{ duration: 1 }}
               className="relative z-0 3xl:-mt-28 3xl:-ml-20 2xl:-ml-32 w-full 2xl:-mt-28 xl:-mt-20 xl:-ml-28 lg:-mt-[4.5rem] md:-mt-[5.4rem] lg:-ml-44 md:-ml-44 sm:-ml-52 sm:-mr-20 3xl:-mr-0 2xl:-mr-0 xl:-mr-0 lg:-mr-0 md:-mr-0 object-cover sm:w-full sm:-mt-8 3xl:w-full 2xl:w-full xl:w-full lg:w-full md:w-full"
             >
-              <img
+              <Image
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752045017/banner1_p7xkxk.webp"
                 alt="Delicious Dish"
+                width={1200}
+                height={1200}
+                priority
+                sizes="(min-width: 1536px) 100vw, (min-width: 768px) 44rem, 100vw"
                 className="3xl:w-full 2xl:w-full xl:w-[44rem] lg:w-[32rem] md:w-[32rem] 3xl:-ml-24 2xl:-ml-10 xl:-ml-16 lg:-ml-0 md:ml-32 sm:ml-24 3xl:h-[50rem] 2xl:h-[44rem] xl:h-[38rem] lg:h-[30rem] md:h-[34rem] object-cover sm:w-full sm:h-[13rem]"
-                loading="lazy"
               />
             </Motion.div>
           </div>

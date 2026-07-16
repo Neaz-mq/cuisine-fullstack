@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { motion as Motion, type Variants } from "framer-motion";
 
@@ -48,10 +49,13 @@ const Spend = () => {
           viewport={{ once: true }}
           style={{ perspective: 900 }}
         >
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752120958/table1_jf0nwc.webp"
             alt="Couple enjoying quality dining time at Flavors & Feast"
-            className="w-[90%] max-w-md lg:max-w-full h-auto hidden md:block 3xl:block 2xl:block xl:block lg:block"
+            width={700}
+            height={500}
+            sizes="(min-width: 1024px) 40vw, 90vw"
+            className="w-[90%] max-w-md lg:max-w-full h-auto hidden md:block 3xl:block 2xl:block xl:block lg:block object-contain"
           />
         </Motion.div>
 
@@ -98,10 +102,13 @@ const Spend = () => {
           </p>
 
           {/* Mobile Image */}
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752120958/table1_jf0nwc.webp"
             alt="Couple enjoying quality dining time at Flavors & Feast"
-            className="w-[90%] max-w-md h-auto block md:hidden mx-auto mt-4"
+            width={700}
+            height={500}
+            sizes="90vw"
+            className="w-[90%] max-w-md h-auto block md:hidden mx-auto mt-4 object-contain"
           />
 
           {/* Kitchen-aware Checkout Button */}

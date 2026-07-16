@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion as Motion } from "framer-motion";
 import Container from "@/components/Container";
 
@@ -99,9 +100,12 @@ const Members = () => {
               transition={{ duration: 1.2, ease: "easeInOut", type: "tween" }}
               viewport={{ once: true }}
             >
-              <img
+              <Image
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752059008/chef4_pgbdux.webp"
                 alt="Portrait of happy male chef in uniform"
+                width={800}
+                height={1000}
+                sizes="(min-width: 1024px) 40vw, 90vw"
                 className="object-contain h-auto 3xl:w-full 2xl:w-full xl:w-full lg:w-full md:w-full sm:w-52 3xl:-ml-2 2xl:ml-6 xl:-ml-16 lg:ml-4 sm:ml-6 xl:mt-[5.93rem] 3xl:mt-0 2xl:mt-0 lg:mt-[5.93rem]"
                 onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                   const target = e.target as HTMLImageElement;
@@ -133,9 +137,12 @@ const Members = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, ease: "easeOut" }}
               >
-                <img
+                <Image
                   src={member.image}
                   alt={`Team member ${member.name}`}
+                  width={250}
+                  height={300}
+                  sizes="(min-width: 1024px) 20vw, 45vw"
                   className="absolute bottom-0 w-full h-[120%] object-contain z-0"
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                     const target = e.target as HTMLImageElement;

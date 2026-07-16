@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { motion as Motion } from "framer-motion";
 
@@ -59,9 +60,12 @@ const Brew = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="relative 3xl:top-28 2xl:top-28 xl:top-28 lg:top-28 md:top-36 sm:top-16"
           >
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1752122855/order6_cmhxns.webp"
               alt="Roast Brew Dish with weekly offer"
+              width={1200}
+              height={900}
+              sizes="(min-width: 1024px) 50vw, 100vw"
               className="w-full h-auto object-cover"
             />
             <Motion.figcaption

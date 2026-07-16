@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 
@@ -69,9 +70,12 @@ const Famous = () => {
             role="img"
             aria-label="Famous Chef Image with Label"
           >
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1752058500/chef2_ivfy0a.webp"
               alt="Portrait of a world-famous chef"
+              width={800}
+              height={1000}
+              sizes="(min-width: 1024px) 50vw, 100vw"
               className="w-full h-auto object-cover"
             />
             <Motion.figcaption

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
@@ -143,7 +144,6 @@ const Carts = () => {
     balance: number;
   } | null>(null);
   const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
-  const [giftCardError, setGiftCardError] = useState<string | null>(null);
 
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
@@ -527,7 +527,6 @@ const Carts = () => {
 
   const applyGiftCard = async () => {
     setIsApplyingGiftCard(true);
-    setGiftCardError(null);
 
     try {
       const res = await fetch("/api/gift-cards/validate", {
@@ -560,7 +559,6 @@ const Carts = () => {
 
   const removeGiftCard = () => {
     setAppliedGiftCard(null);
-    setGiftCardError(null);
   };
 
   const removeCoupon = () => {
@@ -595,10 +593,12 @@ const Carts = () => {
           }`}
         >
           <div className="flex items-center gap-4">
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751346396/63cecf750aa7463091b17adf_5310366-uber-eats-logo-png-and-vector-logo-download-uber-eats-png-3500_3500_preview_thtrrl.png"
               alt="Uber Eats"
-              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8"
+              width={48}
+              height={48}
+              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8 object-contain"
             />
             <div>
               <div className="flex items-center gap-2">
@@ -638,10 +638,12 @@ const Carts = () => {
           }`}
         >
           <div className="flex items-center gap-4">
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751346468/Group_973_w3ofel.png"
               alt="Food Panda"
-              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8"
+              width={48}
+              height={48}
+              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8 object-contain"
             />
             <div>
               <p className="font-semibold text-gray-800 sm:text-[11px] 3xl:text-[16px] 2xl:text-[16px] xl:text-[16px] lg:text-[16px] md:text-[15px]">
@@ -749,20 +751,26 @@ const Carts = () => {
       {!isDineIn && paymentMethod === "online" && (
         <div className="mt-8 p-6 border border-gray-200 space-y-4">
           <div className="flex items-center 3xl:gap-8 2xl:gap-8 xl:gap-8 lg:gap-8 md:gap-8 sm:gap-4 flex-wrap">
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348676/pngegg_84_rh7u9t.png"
               alt="Mastercard"
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+              width={64}
+              height={40}
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
             />
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348700/pngegg_85_i6czbr.png"
               alt="Visa"
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+              width={64}
+              height={40}
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
             />
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348721/pngegg_86_icrxs1.png"
               alt="American Express"
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6"
+              width={64}
+              height={40}
+              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
             />
           </div>
 
@@ -984,9 +992,12 @@ const Carts = () => {
                 cartItems.map((item) => (
                   <div key={item.id} className="flex items-start sm:gap-2 md:gap-4 3xl:gap-4 2xl:gap-4 xl:gap-4 lg:gap-4">
                     {item.imageUrl && (
-                      <img
+                      <Image
                         src={item.imageUrl}
                         alt={item.title}
+                        width={64}
+                        height={64}
+                        unoptimized
                         className="3xl:w-16 3xl:h-16 2xl:w-16 2xl:h-16 xl:w-16 xl:h-16 lg:w-16 lg:h-16 md:w-16 md:h-16 sm:w-10 sm:h-10 object-cover"
                       />
                     )}

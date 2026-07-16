@@ -77,7 +77,37 @@ const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
 ];
 
+// Hostname for the Supabase project, derived the same way as `supabaseOrigin`
+// above but split out to a bare hostname for `images.remotePatterns`, which
+// needs `protocol`/`hostname` separately rather than a full origin string.
+const supabaseHostname = supabaseOrigin
+  ? new URL(supabaseOrigin).hostname
+  : undefined;
+
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      // Marketing/content images (chef photos, menu banners, etc.) hosted
+      // on Cloudinary under this project's single cloud name.
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/dxohwanal/**",
+      },
+      // Menu item photos uploaded via /api/admin/upload-image, served back
+      // out through Supabase Storage's public URL convention:
+      // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<file>
+      ...(supabaseHostname
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseHostname,
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
+    ],
+  },
   async headers() {
     return [
       {

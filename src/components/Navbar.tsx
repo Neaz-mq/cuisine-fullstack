@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { memo, useMemo, useState, useCallback } from "react";
+import { memo, useState, useCallback } from "react";
 import { HiMenuAlt3 } from "react-icons/hi";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
@@ -196,10 +197,12 @@ const Popular = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
             viewport={{ once: true }}
           >
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1752122434/order5_fvpldv.webp"
               alt="Weekly best sales products"
-              className="absolute inset-0 w-full h-full object-cover z-0"
+              fill
+              sizes="(min-width: 1024px) 33vw, 100vw"
+              className="object-cover z-0"
             />
             <div className="absolute inset-0 bg-black/40 z-10" aria-hidden="true"></div>
             <div className="relative z-20 text-white bg-[#FF4C15] 3xl:p-10 2xl:p-8 xl:p-8 lg:p-8 md:p-8 sm:p-6 3xl:bottom-36 2xl:bottom-44 xl:bottom-52 lg:bottom-52 md:bottom-52 sm:bottom-10 mx-6">
@@ -270,8 +273,14 @@ const Popular = () => {
                 custom={index}
                 variants={fadeInUp}
               >
-                <figure className="w-full h-52 overflow-hidden">
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                <figure className="relative w-full h-52 overflow-hidden">
+                  <Image
+                    src={item.image}
+                    alt={item.title}
+                    fill
+                    sizes="(min-width: 768px) 25vw, 50vw"
+                    className="object-cover"
+                  />
                 </figure>
                 <div className="flex flex-col flex-grow mt-6">
                   <h3 className="3xl:text-xl 2xl:text-xl xl:text-xl lg:text-lg font-semibold text-[#2C6252] mb-1">
@@ -292,7 +301,7 @@ const Popular = () => {
                           className="bg-[#2C6252] text-white p-2"
                           aria-label={`Add ${item.title} to cart`}
                         >
-                          <img src="/Path 2764.svg" alt="Add to cart" />
+                          <Image src="/Path 2764.svg" alt="Add to cart" width={14} height={14} />
                         </button>
                       ) : (
                         <button

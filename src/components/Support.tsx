@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 
@@ -35,9 +36,12 @@ const Support = () => {
             role="img"
             aria-label="Chef Image"
           >
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1752058752/chef3_xhva7c.webp"
               alt="Chef holding a dish smiling"
+              width={700}
+              height={900}
+              sizes="90vw"
               className="w-full h-auto object-cover"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -78,7 +82,7 @@ const Support = () => {
                   viewport={{ once: true }}
                 >
                   <div className="mb-4 bg-white 3xl:p-3 2xl:p-3 xl:p-0 lg:p-0 flex items-end justify-end w-full">
-                    <img src={card.icon} alt={`${card.title} icon`} />
+                    <Image src={card.icon} alt={`${card.title} icon`} width={66} height={66} />
                   </div>
                   <h3 className="text-xl 3xl:text-2xl 2xl:text-2xl xl:text-lg lg:text-lg md:text-base sm:text-base font-bold text-[#3F7765] mb-2 mt-2">
                     {card.title}
@@ -124,9 +128,12 @@ const Support = () => {
             role="img"
             aria-label="Chef Image"
           >
-            <img
+            <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1752058752/chef3_xhva7c.webp"
               alt="Chef holding a dish smiling"
+              width={700}
+              height={900}
+              sizes="(min-width: 1536px) 33vw, 16rem"
               className="3xl:w-full 2xl:w-full xl:w-full lg:w-64 h-full object-cover 3xl:max-h-[605px] 2xl:max-h-[565px] xl:max-h-[565px] lg:max-h-[565px]"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, ReactNode } from "react";
+import Image from "next/image";
 import { motion as Motion, type Variants } from "framer-motion";
 import Container from "@/components/Container";
 import { FaMugHot } from "react-icons/fa";
@@ -441,9 +442,12 @@ const FoodCard = ({ item, addToCart, cartItems, index }: FoodCardProps) => {
       aria-label={`Food card: ${item.title}`}
     >
       <figure className="w-full 3xl:h-60 2xl:h-60 xl:h-44 lg:h-36 overflow-hidden">
-        <img
+        <Image
           src={item.image}
           alt={item.title}
+          width={400}
+          height={300}
+          sizes="(min-width: 1024px) 25vw, 50vw"
           className="w-full h-full object-cover"
           onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
             const target = e.target as HTMLImageElement;
@@ -474,7 +478,7 @@ const FoodCard = ({ item, addToCart, cartItems, index }: FoodCardProps) => {
                 onClick={handleClick}
                 aria-label={`Add ${item.title} to cart`}
               >
-                <img src="/Path 2764.svg" alt="Add to cart" />
+                <Image src="/Path 2764.svg" alt="Add to cart" width={14} height={14} />
               </button>
             ) : (
               <button
