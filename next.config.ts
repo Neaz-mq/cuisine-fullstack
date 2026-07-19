@@ -28,8 +28,13 @@ const csp = [
   `style-src 'self' 'unsafe-inline'`,
   // 'data:' covers the QR codes generated client-side by the `qrcode`
   // package (rendered as data:image/png;base64 <img> tags); the Supabase
-  // origin covers menu-item photos uploaded via /api/admin/upload-image.
-  `img-src 'self' data: blob: ${supabaseOrigin}`,
+  // origin covers menu-item photos uploaded via /api/admin/upload-image;
+  // res.cloudinary.com covers marketing/content photos — some are loaded
+  // through next/image (proxied same-origin via /_next/image, so CSP
+  // wouldn't even see the cross-origin request) but others are still
+  // plain <img> tags that hit Cloudinary directly, so it must be listed
+  // here explicitly or the browser blocks them outright.
+  `img-src 'self' data: blob: https://res.cloudinary.com ${supabaseOrigin}`,
   `font-src 'self' data:`,
   // Supabase origin for storage uploads/reads, self for the app's own API
   // routes.
