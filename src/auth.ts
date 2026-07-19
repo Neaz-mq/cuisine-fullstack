@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * auth.ts
@@ -24,10 +25,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
+
+        // Password guessing is the obvious attack against this endpoint —
+        // unlike coupon/gift-card codes (rate-limited elsewhere), a login
+        // attempt has no separate "preview" step, so this check has to
+        // live right here. IP-scoped like the rest of rate-limit.ts's
+        // usage: makes a single script grinding through a password list
+        // impractical without blocking normal mistyped-password retries.
+        const rateLimitResult = checkRateLimit(request, "login", {
+          limit: 10,
+          windowMs: 5 * 60_000,
+        });
+        if (!rateLimitResult.allowed) {
+          return null;
+        }
+
         const email = credentials.email as string;
         const password = credentials.password as string;
         const user = await prisma.user.findUnique({

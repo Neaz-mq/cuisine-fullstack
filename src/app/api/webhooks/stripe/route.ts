@@ -72,6 +72,26 @@ export async function POST(request: Request) {
         // order-payment path below since there's no Order row involved
         // at all (see the doc comment on that route for why).
         if (session.metadata?.purpose === "gift_card") {
+          // IDEMPOTENCY: Stripe delivers webhooks at-least-once — the same
+          // checkout.session.completed event can arrive twice (retry after
+          // a timeout on our end, duplicate delivery, etc). Without this
+          // check, a retry would attempt a second createGiftCard() call for
+          // the same session. The DB's stripeSessionId @unique constraint
+          // stops a literal duplicate row from being written, but
+          // createGiftCard's own retry-on-P2002 loop can't tell "code
+          // collision" apart from "this session was already processed" —
+          // it would burn all 5 attempts on the latter and throw, causing
+          // Stripe to see a 500 and keep retrying forever. Checking first
+          // avoids calling createGiftCard (and re-sending the delivery
+          // email) at all once this session has already been handled.
+          const existing = await prisma.giftCard.findUnique({
+            where: { stripeSessionId: session.id },
+            select: { id: true },
+          });
+          if (existing) {
+            break;
+          }
+
           const amount = Number(session.metadata.amount);
           if (Number.isFinite(amount) && amount > 0) {
             const giftCard = await createGiftCard({
@@ -107,6 +127,20 @@ export async function POST(request: Request) {
         const orderId = session.metadata?.orderId;
 
         if (orderId) {
+          // IDEMPOTENCY: same at-least-once delivery concern as the gift
+          // card branch above. Re-setting paymentStatus to PAID on a
+          // retry is harmless on its own, but sendOrderConfirmationEmail
+          // and syncCustomerToAudience are NOT idempotent — without this
+          // check, every redelivery of this event resends the customer's
+          // order confirmation email. Skip entirely once already PAID.
+          const existingOrder = await prisma.order.findUnique({
+            where: { id: orderId },
+            select: { paymentStatus: true },
+          });
+          if (existingOrder?.paymentStatus === "PAID") {
+            break;
+          }
+
           const order = await prisma.order.update({
             where: { id: orderId },
             data: { paymentStatus: "PAID" },

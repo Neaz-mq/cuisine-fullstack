@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validations/parse";
 import { registerSchema } from "@/lib/validations/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * src/app/api/register/route.ts
@@ -17,6 +18,22 @@ import { registerSchema } from "@/lib/validations/auth";
  */
 export async function POST(request: Request) {
   try {
+    // A real signup is a rare, deliberate action for one visitor — a
+    // script hammering this endpoint to mass-create accounts (spam,
+    // credential-stuffing setup, inventory-hoarding bots, etc) is not.
+    // Capped generously enough that no legitimate person will ever
+    // notice it. See rate-limit.ts for the in-memory-vs-Redis tradeoff.
+    const rateLimitResult = checkRateLimit(request, "register", {
+      limit: 5,
+      windowMs: 10 * 60_000,
+    });
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+      );
+    }
+
     const parsed = await parseBody(request, registerSchema);
     if (parsed instanceof NextResponse) return parsed;
     const { name, email, password } = parsed;
