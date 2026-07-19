@@ -235,7 +235,26 @@ model Order {
   items               OrderItem[]
   loyaltyTransactions LoyaltyTransaction[]
 
+  // tableId: DINE_IN orders looked up by table (unchanged, pre-existing).
+  //
+  // userId + createdAt: GET /api/orders/mine does `WHERE userId = ?
+  // ORDER BY createdAt DESC` — every logged-in customer's order-history
+  // page hits this exact pattern. Without it, that's a full table scan
+  // once Order grows past a few hundred rows.
+  //
+  // status: the Kitchen board (GET /api/admin/kitchen/orders) polls this
+  // table every 15s (see ETA_POLL_INTERVAL_MS) filtering `status IN
+  // (PLACED, PREPARING)` — the single hottest read in the app. Also used
+  // by the admin Orders list's status filter.
+  //
+  // createdAt (alone): the admin Orders list's default view — no status
+  // filter, sorted newest-first — needs its own index since the
+  // [userId, createdAt] composite above can't serve a query with no
+  // userId predicate.
   @@index([tableId])
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum OrderType {
