@@ -3,8 +3,26 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { User, LogOut, Package, ChevronDown } from "lucide-react";
-import { isStaffRole } from "@/lib/permissions";
+import { User, LogOut, Package, ChevronDown, Truck, ChefHat, ClipboardList, LayoutDashboard } from "lucide-react";
+import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
+
+/** Icon to pair with staffMenuLabel's text — kept here (not in
+ * permissions.ts) since that file is imported by server code too and
+ * shouldn't pull in a UI icon library. */
+function StaffMenuIcon({ role }: { role?: string | null }) {
+  const className = "w-4 h-4";
+  switch (role) {
+    case "DELIVERY":
+      return <Truck className={className} />;
+    case "KITCHEN":
+      return <ChefHat className={className} />;
+    case "WAITER":
+    case "CASHIER":
+      return <ClipboardList className={className} />;
+    default:
+      return <LayoutDashboard className={className} />;
+  }
+}
 
 /**
  * src/components/AccountMenu.tsx
@@ -103,12 +121,12 @@ const AccountMenu = () => {
 
           {isStaffRole((session.user as { role?: string })?.role) && (
             <Link
-              href="/admin"
+              href={firstAllowedPath((session.user as { role?: string })?.role)}
               className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               onClick={() => setIsOpen(false)}
             >
-              <User className="w-4 h-4" />
-              Admin Dashboard
+              <StaffMenuIcon role={(session.user as { role?: string })?.role} />
+              {staffMenuLabel((session.user as { role?: string })?.role)}
             </Link>
           )}
 

@@ -152,6 +152,26 @@ export function firstAllowedPath(role?: string | null): string {
   return first ? SCOPE_PATH[first] : "/admin";
 }
 
+/** Human-facing label for each role's "home" link in the storefront
+ * account dropdown (AccountMenu.tsx) — pairs with firstAllowedPath, which
+ * gives the destination. OWNER/MANAGER see the actual admin dashboard, so
+ * "Admin Dashboard" fits; every other role only ever lands on their own
+ * narrow section (their firstAllowedPath), so the label names that
+ * section instead of the generic "Admin Dashboard" — a DELIVERY rider
+ * isn't going to an admin dashboard, they're going to their deliveries. */
+const STAFF_MENU_LABEL: Record<StaffRole, string> = {
+  OWNER: "Admin Dashboard",
+  MANAGER: "Admin Dashboard",
+  WAITER: "Orders",
+  CASHIER: "Orders",
+  DELIVERY: "My Deliveries",
+  KITCHEN: "Kitchen Display",
+};
+
+export function staffMenuLabel(role?: string | null): string {
+  return isStaffRole(role) ? STAFF_MENU_LABEL[role] : "Admin Dashboard";
+}
+
 /** Can this role create/edit/deactivate a target user with `targetRole`?
  * OWNER can manage anyone. MANAGER can manage anyone except another OWNER
  * (and can't promote someone TO OWNER either — same rule, both directions). */
