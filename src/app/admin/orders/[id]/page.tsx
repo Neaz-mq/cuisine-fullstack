@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "../OrderStatusSelect";
 import PaymentStatusBadge from "../PaymentStatusBadge";
+import AssignRiderPanel from "./AssignRiderPanel";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -14,7 +15,12 @@ export default async function AdminOrderDetailPage({
 
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: { include: { menuItem: true } }, user: true, table: true },
+    include: {
+      items: { include: { menuItem: true } },
+      user: true,
+      table: true,
+      deliveryTracking: { select: { riderId: true } },
+    },
   });
 
   if (!order) notFound();
@@ -95,6 +101,12 @@ export default async function AdminOrderDetailPage({
         </div>
       </div>
 
+      {!isDineIn && (
+        <div className="mb-6">
+          <AssignRiderPanel orderId={order.id} currentRiderId={order.deliveryTracking?.riderId ?? null} />
+        </div>
+      )}
+
       {/* Order Items */}
       <div className="border border-gray-200 rounded-md p-4 bg-white mb-6">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -119,6 +131,8 @@ export default async function AdminOrderDetailPage({
               ? "Uber Eats"
               : order.shippingMethod === "FOOD_PANDA"
               ? "Food Panda"
+              : order.shippingMethod === "OWN_DELIVERY"
+              ? "Our Own Delivery"
               : "—"}{" "}
             ·{" "}
             {order.paymentMethod === "COD"

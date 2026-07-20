@@ -3,9 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScopeAny } from "@/lib/require-admin";
 import { orderStatusUpdateSchema } from "@/lib/validations/order";
 import { parseBody } from "@/lib/validations/parse";
-
-// 1 loyalty point per $10 spent, rounded down.
-const POINTS_PER_CURRENCY_UNIT = 10;
+import { markOrderDelivered } from "@/lib/mark-order-delivered";
 
 // Public, unauthenticated lookup for the /track/[orderId] page. Guest
 // checkout customers have no account to log into, so tracking has to work
@@ -14,6 +12,11 @@ const POINTS_PER_CURRENCY_UNIT = 10;
 // links). Deliberately selects only tracking-relevant fields — not phone,
 // full address, or email — to limit what's exposed on an endpoint with no
 // auth check.
+//
+// deliveryTracking is included for the same reason but goes further:
+// riderId/rider name/phone are NEVER selected here, only the coordinates
+// and timestamp the live map needs. A guest with just the order link
+// should be able to see "your rider is here on the map", not who they are.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -41,6 +44,16 @@ export async function GET(
           menuItem: { select: { title: true } },
         },
       },
+      deliveryTracking: {
+        select: {
+          riderLat: true,
+          riderLng: true,
+          riderLocationUpdatedAt: true,
+          destLat: true,
+          destLng: true,
+          deliveredAt: true,
+        },
+      },
     },
   });
 
@@ -64,50 +77,24 @@ export async function PATCH(
   if (parsed instanceof NextResponse) return parsed;
   const { status } = parsed;
 
-  const existingOrder = await prisma.order.findUnique({
-    where: { id },
-    select: { userId: true, totalAmount: true, pointsAwarded: true },
-  });
-
-  if (!existingOrder) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  // DELIVERED goes through the shared helper (loyalty points + closing
+  // out DeliveryTracking) — same code path a rider's own "Mark Delivered"
+  // button uses, see POST /api/rider/deliveries/[orderId]/deliver.
+  if (status === "DELIVERED") {
+    const result = await markOrderDelivered(id);
+    if (!result.ok) {
+      const statusCode = result.error === "Order not found" ? 404 : 400;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
+    }
+    return NextResponse.json(result.order);
   }
 
-  // Only credit points the first time an order reaches DELIVERED, and only
-  // for orders placed by a logged-in user (guest checkout has no userId to
-  // credit).
-  const shouldAwardPoints =
-    status === "DELIVERED" &&
-    !existingOrder.pointsAwarded &&
-    !!existingOrder.userId;
-
-  if (shouldAwardPoints) {
-    const pointsEarned = Math.floor(existingOrder.totalAmount / POINTS_PER_CURRENCY_UNIT);
-
-    const [updated] = await prisma.$transaction([
-      prisma.order.update({
-        where: { id },
-        data: { status, pointsAwarded: true },
-      }),
-      ...(pointsEarned > 0
-        ? [
-            prisma.user.update({
-              where: { id: existingOrder.userId as string },
-              data: { loyaltyPoints: { increment: pointsEarned } },
-            }),
-            prisma.loyaltyTransaction.create({
-              data: {
-                points: pointsEarned,
-                reason: "ORDER_DELIVERED",
-                userId: existingOrder.userId as string,
-                orderId: id,
-              },
-            }),
-          ]
-        : []),
-    ]);
-
-    return NextResponse.json(updated);
+  const existingOrder = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existingOrder) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
   const updated = await prisma.order.update({

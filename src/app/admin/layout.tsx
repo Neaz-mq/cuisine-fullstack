@@ -7,6 +7,7 @@ import NotificationBell from "./NotificationBell";
 const NAV_ITEMS: { label: string; href: string; scope: Scope | null }[] = [
   { label: "Dashboard", href: "/admin", scope: null }, // always visible; page itself redirects if there's nothing to show
   { label: "Orders", href: "/admin/orders", scope: "orders" },
+  { label: "My Deliveries", href: "/admin/my-deliveries", scope: "myDeliveries" },
   { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen" },
   { label: "Menu", href: "/admin/menu", scope: "menu" },
   { label: "Categories", href: "/admin/categories", scope: "categories" },

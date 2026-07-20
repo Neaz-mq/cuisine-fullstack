@@ -26,6 +26,7 @@ export async function GET() {
     etaByMethod: {
       UBER_EATS: calcShippingEta(kitchenPrepMinutes, "UBER_EATS"),
       FOOD_PANDA: calcShippingEta(kitchenPrepMinutes, "FOOD_PANDA"),
+      OWN_DELIVERY: calcShippingEta(kitchenPrepMinutes, "OWN_DELIVERY"),
     },
   });
 }

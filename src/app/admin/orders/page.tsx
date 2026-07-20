@@ -24,6 +24,7 @@ function fulfillmentLabel(order: {
   }
   if (order.shippingMethod === "UBER_EATS") return "Uber Eats";
   if (order.shippingMethod === "FOOD_PANDA") return "Food Panda";
+  if (order.shippingMethod === "OWN_DELIVERY") return "Our Own Delivery";
   return "—";
 }
 

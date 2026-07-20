@@ -43,9 +43,15 @@ const MAX_PREP_MINUTES = 45; // cap so a slammed kitchen doesn't show an absurd 
 // already the numbers baked into the old static labels ("20m/35m",
 // "1h/1.35h"), just now added on TOP of a real prep estimate instead of
 // being the whole story.
-export const SHIPPING_TRANSIT_MINUTES: Record<"UBER_EATS" | "FOOD_PANDA", { min: number; max: number }> = {
+export const SHIPPING_TRANSIT_MINUTES: Record<
+  "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY",
+  { min: number; max: number }
+> = {
   UBER_EATS: { min: 20, max: 35 },
   FOOD_PANDA: { min: 60, max: 81 },
+  // Our own rider, dispatched straight from the kitchen — no third-party
+  // pickup/handoff wait, so this is intentionally the fastest option.
+  OWN_DELIVERY: { min: 15, max: 30 },
 };
 
 export function calcKitchenPrepMinutes(queueLength: number): number {
@@ -57,7 +63,7 @@ export type ShippingEtaRange = { min: number; max: number };
 
 export function calcShippingEta(
   kitchenPrepMinutes: number,
-  method: "UBER_EATS" | "FOOD_PANDA"
+  method: "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY"
 ): ShippingEtaRange {
   const transit = SHIPPING_TRANSIT_MINUTES[method];
   return {

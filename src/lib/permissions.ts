@@ -33,7 +33,8 @@ export type Scope =
   | "settings"
   | "insights"
   | "staff"
-  | "marketing";
+  | "marketing"
+  | "myDeliveries";
 
 const ALL_SCOPES: Scope[] = [
   "menu",
@@ -50,6 +51,7 @@ const ALL_SCOPES: Scope[] = [
   "insights",
   "staff",
   "marketing",
+  "myDeliveries",
 ];
 
 /**
@@ -60,10 +62,14 @@ const ALL_SCOPES: Scope[] = [
  * — see the staff API routes for those checks, which are finer-grained
  * than this scope matrix supports).
  *
- * WAITER / CASHIER / DELIVERY all share "orders" (all three touch order
- * status at some point in the flow), plus whatever's specific to their
- * job. KITCHEN only gets "kitchen" — menu availability toggling from the
- * kitchen board is a possible future addition, not part of this change.
+ * WAITER / CASHIER share "orders" (both touch order status at some point
+ * in the flow), plus whatever's specific to their job. DELIVERY gets its
+ * own narrower "myDeliveries" scope instead of "orders" — a rider should
+ * only ever see the handful of orders assigned to them (their own
+ * /admin/my-deliveries dashboard), never the restaurant's whole order
+ * book with every customer's name/address on it. KITCHEN only gets
+ * "kitchen" — menu availability toggling from the kitchen board is a
+ * possible future addition, not part of this change.
  *
  * "marketing" (sending offer broadcasts to the whole customer audience)
  * is deliberately NOT given to WAITER/CASHIER/DELIVERY/KITCHEN — only
@@ -74,7 +80,7 @@ const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
   MANAGER: ALL_SCOPES,
   WAITER: ["orders", "tables", "reservations"],
   CASHIER: ["orders", "tables", "loyalty"],
-  DELIVERY: ["orders"],
+  DELIVERY: ["myDeliveries"],
   KITCHEN: ["kitchen"],
 };
 
@@ -95,12 +101,14 @@ const SCOPE_PATH: Record<Scope, string> = {
   insights: "/admin/insights",
   staff: "/admin/staff",
   marketing: "/admin/marketing",
+  myDeliveries: "/admin/my-deliveries",
 };
 
 // Nav / redirect priority order — first scope in this list that a role has
 // is treated as "their" home section.
 const SCOPE_PRIORITY: Scope[] = [
   "orders",
+  "myDeliveries",
   "kitchen",
   "tables",
   "reservations",

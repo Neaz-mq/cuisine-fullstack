@@ -1,9 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { CheckCircle2, ChefHat, Truck, PackageCheck, Circle, XCircle } from "lucide-react";
 import { formatOrderId } from "@/lib/format-order-id";
+
+// Leaflet touches `window` at import time, which breaks SSR — loaded
+// client-side only, same pattern as any other browser-only widget in a
+// Next.js App Router page.
+const LiveDeliveryMap = dynamic(() => import("@/components/LiveDeliveryMap"), {
+  ssr: false,
+  loading: () => <div className="h-64 w-full mb-8 bg-gray-100 rounded-md animate-pulse" />,
+});
 
 const POLL_INTERVAL_MS = 15000; // same cadence as the admin Kitchen board
 
@@ -12,6 +21,15 @@ type OrderItem = {
   quantity: number;
   price: number;
   menuItem: { title: string };
+};
+
+type DeliveryTracking = {
+  riderLat: number;
+  riderLng: number;
+  riderLocationUpdatedAt: string;
+  destLat: number;
+  destLng: number;
+  deliveredAt: string | null;
 };
 
 type TrackedOrder = {
@@ -23,9 +41,10 @@ type TrackedOrder = {
   firstName: string;
   city: string | null;
   orderType: "DELIVERY" | "DINE_IN";
-  shippingMethod: "UBER_EATS" | "FOOD_PANDA" | null;
+  shippingMethod: "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY" | null;
   table: { label: string } | null;
   items: OrderItem[];
+  deliveryTracking: DeliveryTracking | null;
 };
 
 // A dine-in order was never "out for delivery" — same backend status value,
@@ -153,6 +172,17 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
         </p>
       )}
 
+      {order.status === "OUT_FOR_DELIVERY" &&
+        order.orderType === "DELIVERY" &&
+        order.deliveryTracking &&
+        !order.deliveryTracking.deliveredAt && (
+          <LiveDeliveryMap
+            rider={{ lat: order.deliveryTracking.riderLat, lng: order.deliveryTracking.riderLng }}
+            destination={{ lat: order.deliveryTracking.destLat, lng: order.deliveryTracking.destLng }}
+            lastUpdatedAt={order.deliveryTracking.riderLocationUpdatedAt}
+          />
+        )}
+
       {/* Order summary */}
       <div className="border border-gray-200 rounded-md p-5">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
@@ -172,7 +202,13 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
           <span className="text-sm text-gray-500">
             {isDineIn
               ? `Table ${order.table?.label ?? "—"}`
-              : `${order.shippingMethod === "UBER_EATS" ? "Uber Eats" : "Food Panda"} \u00b7 ${order.city ?? ""}`}
+              : `${
+                  order.shippingMethod === "UBER_EATS"
+                    ? "Uber Eats"
+                    : order.shippingMethod === "OWN_DELIVERY"
+                    ? "Our Own Delivery"
+                    : "Food Panda"
+                } \u00b7 ${order.city ?? ""}`}
           </span>
           <span className="font-bold text-[#2C6252]">USD ${order.totalAmount.toFixed(2)}</span>
         </div>

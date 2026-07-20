@@ -33,8 +33,11 @@ const csp = [
   // through next/image (proxied same-origin via /_next/image, so CSP
   // wouldn't even see the cross-origin request) but others are still
   // plain <img> tags that hit Cloudinary directly, so it must be listed
-  // here explicitly or the browser blocks them outright.
-  `img-src 'self' data: blob: https://res.cloudinary.com ${supabaseOrigin}`,
+  // here explicitly or the browser blocks them outright. tile.openstreetmap.org
+  // covers the live delivery map's map tiles (LiveDeliveryMap.tsx) — Leaflet
+  // renders tiles as plain <img> tags against OSM's *.tile.openstreetmap.org
+  // subdomains (a,b,c load-balanced), so all three need to be allowed.
+  `img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org ${supabaseOrigin}`,
   `font-src 'self' data:`,
   // Supabase origin for storage uploads/reads, self for the app's own API
   // routes.
@@ -66,10 +69,13 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // Explicitly deny access to sensitive browser APIs this app never
   // needs — narrows the attack surface if a third-party script ever got
-  // injected.
+  // injected. geolocation is scoped to 'self' (not left at "never") as of
+  // the delivery-rider live tracking feature — /admin/my-deliveries needs
+  // navigator.geolocation.watchPosition() to share a rider's position;
+  // still blocked for any cross-origin/embedded context.
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
   },
   // Force HTTPS for a year, including subdomains. Harmless locally over
   // HTTP (browsers only honor this over an HTTPS response in the first

@@ -5,6 +5,7 @@ import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 const SHIPPING_LABELS: Record<string, string> = {
   UBER_EATS: "Uber Eats",
   FOOD_PANDA: "Food Panda",
+  OWN_DELIVERY: "Our Own Delivery",
 };
 
 const PAYMENT_LABELS: Record<string, string> = {

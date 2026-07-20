@@ -31,6 +31,16 @@ export default async function TrackOrderPage({
           menuItem: { select: { title: true } },
         },
       },
+      deliveryTracking: {
+        select: {
+          riderLat: true,
+          riderLng: true,
+          riderLocationUpdatedAt: true,
+          destLat: true,
+          destLng: true,
+          deliveredAt: true,
+        },
+      },
     },
   });
 

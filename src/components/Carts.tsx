@@ -7,6 +7,7 @@ import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
 import Select, { SingleValue } from "react-select";
+import { Truck } from "lucide-react";
 import { toast } from "react-toastify";
 import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -18,6 +19,7 @@ type KitchenEtaResponse = {
   etaByMethod: {
     UBER_EATS: { min: number; max: number };
     FOOD_PANDA: { min: number; max: number };
+    OWN_DELIVERY: { min: number; max: number };
   };
 };
 
@@ -36,9 +38,10 @@ interface BillingFormData {
 type BillingErrors = Partial<Record<keyof BillingFormData | "selectedCountry", string>>;
 type PaymentErrors = Partial<Record<"isAgreedToTerms", string>>;
 
-const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA"> = {
+const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY"> = {
   "uber-eats": "UBER_EATS",
   "food-panda": "FOOD_PANDA",
+  "own-delivery": "OWN_DELIVERY",
 };
 
 // Digits only, optional leading "+" for a country code, 7-15 digits — E.164
@@ -666,6 +669,47 @@ const Carts = () => {
               value="food-panda"
               checked={selectedShipping === "food-panda"}
               onChange={() => setSelectedShipping("food-panda")}
+              className="accent-green-700"
+            />
+          </div>
+        </label>
+
+        {/* Restaurant's own delivery rider — live GPS tracked */}
+        <label
+          className={`flex items-center justify-between border px-4 py-3 cursor-pointer ${
+            selectedShipping === "own-delivery" ? "border-gray-500 bg-gray-50" : "border-gray-200"
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-[#2C6252]/10 flex items-center justify-center shrink-0">
+              <Truck className="w-6 h-6 text-[#2C6252]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-gray-800 sm:text-[11px] 3xl:text-[16px] 2xl:text-[16px] xl:text-[16px] lg:text-[16px] md:text-[15px]">
+                  Our Own Delivery
+                </p>
+                <span className="bg-green-100 text-green-700 text-[8px] px-2 py-0.5 rounded-full">
+                  Live tracking
+                </span>
+              </div>
+              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
+                {kitchenEta
+                  ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.OWN_DELIVERY.min)}/${formatMinutes(
+                      kitchenEta.etaByMethod.OWN_DELIVERY.max
+                    )}`
+                  : "Delivery time: calculating…"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
+            Free
+            <input
+              type="radio"
+              name={`shipping-${idSuffix}`}
+              value="own-delivery"
+              checked={selectedShipping === "own-delivery"}
+              onChange={() => setSelectedShipping("own-delivery")}
               className="accent-green-700"
             />
           </div>

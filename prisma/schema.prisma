@@ -47,6 +47,12 @@ model User {
   // never has one of these — the Staff management feature is what creates
   // both the User row and this row together, in one transaction.
   staffProfile StaffProfile?
+
+  // Present only for Role.DELIVERY staff — every order this person has
+  // ever been assigned to ride out. A rider "logs in" with the exact same
+  // credentials login every other staff role uses; there is no separate
+  // rider auth system.
+  deliveries DeliveryTracking[] @relation("RiderDeliveries")
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"
@@ -235,6 +241,11 @@ model Order {
   items               OrderItem[]
   loyaltyTransactions LoyaltyTransaction[]
 
+  // One-to-one — only present once a rider has been assigned (see
+  // POST /api/admin/orders/[id]/assign-rider). Null for DINE_IN orders and
+  // for DELIVERY orders still using UBER_EATS/FOOD_PANDA.
+  deliveryTracking DeliveryTracking?
+
   // tableId: DINE_IN orders looked up by table (unchanged, pre-existing).
   //
   // userId + createdAt: GET /api/orders/mine does `WHERE userId = ?
@@ -273,6 +284,12 @@ enum OrderStatus {
 enum ShippingMethod {
   UBER_EATS
   FOOD_PANDA
+  // Restaurant's own delivery staff (Role.DELIVERY) — the rider is a real
+  // staff account, assigned to the order from /admin/orders/[id], and
+  // shares their live GPS position via the DeliveryTracking row below so
+  // the customer's /track/[orderId] page can show a live map, the same
+  // customer-facing pattern as Uber Eats / Food Panda's own apps.
+  OWN_DELIVERY
 }
 
 enum PaymentMethod {
@@ -284,6 +301,44 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+}
+
+// Live rider tracking for OWN_DELIVERY orders. One row per order, created
+// the moment an admin assigns a rider (POST
+// /api/admin/orders/[id]/assign-rider) and never re-created after that —
+// only ever updated (rider's phone posts new lat/lng every few seconds
+// while /admin/my-deliveries is open, see POST
+// /api/rider/deliveries/[orderId]/location).
+//
+// destLat/destLng are geocoded once at assignment time from the order's
+// existing address fields (see lib/geocode.ts) — re-geocoding on every
+// customer poll would be wasteful and Nominatim's free tier is rate
+// limited. riderLat/riderLng start out equal to the destination as a
+// harmless default until the rider's browser reports its first real
+// position.
+model DeliveryTracking {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  riderId String
+  rider   User   @relation("RiderDeliveries", fields: [riderId], references: [id])
+
+  riderLat Float
+  riderLng Float
+  // When riderLat/riderLng were last updated — the customer-facing map
+  // uses this to show "updated Xs ago" and to detect a rider who has gone
+  // quiet (tab closed / phone locked, since this is browser-based tracking
+  // rather than a native background-GPS app).
+  riderLocationUpdatedAt DateTime @default(now())
+
+  destLat Float
+  destLng Float
+
+  assignedAt  DateTime  @default(now())
+  deliveredAt DateTime?
+
+  @@index([riderId])
 }
 
 model OrderItem {
