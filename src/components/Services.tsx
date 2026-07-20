@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { motion as Motion } from "framer-motion";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
@@ -87,12 +88,12 @@ const Services = () => {
                 aria-label="Your Services and Benefits"
               >
                 <span className="bg-white rounded-full w-5 h-5 flex items-center justify-center mr-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src="/svg.png"
+                    width={17}
+                    height={17}
                     className="w-3 h-3"
                     alt="Service Badge Icon"
-                    loading="lazy"
                   />
                 </span>
                 <span className="text-xs">
@@ -136,12 +137,12 @@ const Services = () => {
                     role="listitem"
                   >
                     <div className="flex-shrink-0 sm:w-10 sm:h-10 bg-[#2C6252] flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={service.icon}
                         alt={`${service.title} Icon`}
+                        width={64}
+                        height={64}
                         className="sm:w-4 sm:h-4 object-contain"
-                        loading="lazy"
                       />
                     </div>
                     <div className="flex-1">
@@ -198,12 +199,12 @@ const Services = () => {
                     role="listitem"
                   >
                     <div className="flex-shrink-0 3xl:w-16 3xl:h-16 2xl:w-16 2xl:h-16 xl:w-14 xl:h-14 lg:w-14 md:w-14 sm:w-10 lg:h-14 md:h-14 sm:h-10 bg-[#2C6252] flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={service.icon}
                         alt={`${service.title} Icon`}
+                        width={64}
+                        height={64}
                         className="3xl:w-7 3xl:h-7 2xl:w-10 2xl:h-10 xl:w-6 xl:h-6 lg:w-4 lg:h-4 md:w-4 md:h-4 sm:w-4 sm:h-4 object-contain"
-                        loading="lazy"
                       />
                     </div>
                     <div className="flex-1">

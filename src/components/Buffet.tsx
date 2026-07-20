@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { motion as Motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
+
+const MotionImage = Motion(Image);
 
 const foodItems = [
   {
@@ -110,8 +113,7 @@ const Buffet = () => {
           >
             <span className="bg-[#FF4C15] text-white py-1 px-5 flex items-center justify-center transform -rotate-[5deg] w-fit mx-auto relative mt-[2rem] shadow-lg drop-shadow-md rounded-full">
               <div className="bg-white w-6 h-6 flex items-center justify-center mr-3 rounded-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/svg.png" className="w-4 h-4 rounded-full" alt="Category Icon" />
+                <Image src="/svg.png" width={17} height={17} className="w-4 h-4 rounded-full" alt="Category Icon" />
               </div>
               <span className="text-xs font-semibold tracking-wider uppercase rounded-full">
                 Delicious <span className="font-thin lowercase">(Food)</span>
@@ -141,15 +143,16 @@ const Buffet = () => {
                   whileHover={cardHover}
                   className="overflow-hidden relative cursor-pointer"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={img}
                     alt={alt}
+                    width={400}
+                    height={300}
+                    sizes="(min-width: 1024px) 25vw, 50vw"
                     className="w-full 3xl:h-52 2xl:h-52 xl:h-52 lg:h-52 md:h-52 sm:h-44 object-cover mb-3"
                   />
                   <span className="absolute top-2 right-2 bg-gradient-to-r from-[#FFCA46] to-[#FFD966] text-xs px-2 py-1 text-[#F6F6F6] font-semibold flex items-center backdrop-blur-sm bg-opacity-80">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/svg.svg" className="w-4 h-4 mr-1" alt="Available Food Icon" />
+                    <Image src="/svg.svg" width={12} height={11} className="w-4 h-4 mr-1" alt="Available Food Icon" />
                     Food Available
                   </span>
                   <div className="p-5">
@@ -247,10 +250,12 @@ const Buffet = () => {
             </Motion.div>
 
             <div className="relative w-full 3xl:h-96 2xl:h-64 xl:h-60 lg:h-60 md:h-60 sm:h-44">
-              <Motion.img
+              <MotionImage
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752051794/buffet5_zp25b9.webp"
                 alt="Deep Blue Delights Image"
-                className="w-full h-full object-cover 3xl:-ml-1 2xl:ml-4 xl:ml-0 lg:ml-2 md:ml-2 sm:-ml-1"
+                fill
+                sizes="(min-width: 1024px) 60vw, 90vw"
+                className="object-cover 3xl:-ml-1 2xl:ml-4 xl:ml-0 lg:ml-2 md:ml-2 sm:-ml-1"
                 initial={{ opacity: 0, scale: 1.1 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
@@ -268,10 +273,12 @@ const Buffet = () => {
                   Succulent, spice-rubbed lamb chops grilled to perfection and served with fresh greens.
                 </Motion.div>
 
-                <Motion.img
+                <MotionImage
                   className="absolute -bottom-16 left-96 w-full h-[32rem] z-20"
                   src="https://res.cloudinary.com/dxohwanal/image/upload/v1747034204/Buffet_qtw3le.png"
                   alt="Buffet Overlay Image"
+                  width={800}
+                  height={512}
                   initial={{ x: 0 }}
                   animate={{ x: [0, 15, 0] }}
                   transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}

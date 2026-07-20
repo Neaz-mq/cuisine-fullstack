@@ -2,6 +2,7 @@
 
 import { useState, useEffect, memo, useCallback } from "react";
 import { motion as Motion } from "framer-motion";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { toast } from "react-toastify";
@@ -30,13 +31,14 @@ const FoodCard = memo(({ item, index, onAddToCart, isKitchenOpen }: FoodCardProp
     whileHover={{ scale: 1.02 }}
     aria-label={`${item.title} - ${item.description}, $${item.price}`}
   >
-    <div className="w-full 3xl:h-60 2xl:h-60 xl:h-40 lg:h-36 md:h-36 sm:h-36 overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+    <div className="relative w-full 3xl:h-60 2xl:h-60 xl:h-40 lg:h-36 md:h-36 sm:h-36 overflow-hidden">
+      <Image
         src={item.imageUrl || "https://placehold.co/400x240/CCCCCC/FFFFFF?text=Cuisine"}
         alt={item.title}
-        className="w-full h-full object-cover"
-        loading="lazy"
+        fill
+        unoptimized
+        sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw"
+        className="object-cover"
         onError={(e) => {
           e.currentTarget.onerror = null;
           e.currentTarget.src = "https://placehold.co/400x240/CCCCCC/FFFFFF?text=Image+Not+Found";
@@ -66,8 +68,7 @@ const FoodCard = memo(({ item, index, onAddToCart, isKitchenOpen }: FoodCardProp
             type="button"
           >
             {isKitchenOpen ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/Path 2764.svg" alt="Add to cart icon" className="w-5 h-5" />
+              <Image src="/Path 2764.svg" alt="Add to cart icon" width={14} height={14} className="w-5 h-5" />
             ) : (
               <BsCartX size={20} className="animate-pulse" />
             )}

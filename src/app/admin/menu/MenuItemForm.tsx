@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useState, useTransition } from "react";
 
 type Category = { id: string; name: string };
@@ -175,10 +176,12 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
         />
         {isUploading && <p className="text-xs text-gray-400 mt-1">Uploading...</p>}
         {imageUrl && !isUploading && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={imageUrl}
             alt="Preview"
+            width={96}
+            height={96}
+            unoptimized
             className="mt-2 h-24 w-24 object-cover rounded-md border border-gray-200"
           />
         )}

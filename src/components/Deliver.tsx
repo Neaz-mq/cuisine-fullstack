@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { motion as Motion, type Variants } from "framer-motion";
 import { useState, useEffect } from "react";
@@ -89,12 +90,12 @@ const Deliver = () => {
                     type="button"
                   >
                     {isKitchenOpen && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src="/order.svg"
                         alt="Order Icon"
+                        width={29}
+                        height={29}
                         className="w-4 h-4 mr-2"
-                        loading="lazy"
                       />
                     )}
                     {isKitchenOpen ? "Order Now" : "Unavailable"}
@@ -115,8 +116,7 @@ const Deliver = () => {
                   type="button"
                   aria-label="Download Apps"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/download.svg" alt="Download Icon" className="w-4 h-4 mr-2" loading="lazy" />
+                  <Image src="/download.svg" alt="Download Icon" width={29} height={29} className="w-4 h-4 mr-2" />
                   Download Apps
                 </Motion.button>
               </div>
@@ -140,12 +140,13 @@ const Deliver = () => {
               animate={{ y: [0, -10, 0] }}
               transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752053930/deliver1_a5xpyd.webp"
                 alt="Delivery Guy"
-                className="object-contain w-full 3xl:-ml-32 3xl:-mt-16 2xl:-ml-32 2xl:-mt-16 xl:-ml-32 xl:-mt-16 lg:-ml-32 lg:-mt-16 sm:-ml-10 sm:-mt-6"
-                loading="lazy"
+                width={600}
+                height={600}
+                sizes="(min-width: 1024px) 30rem, 90vw"
+                className="object-contain w-full h-auto 3xl:-ml-32 3xl:-mt-16 2xl:-ml-32 2xl:-mt-16 xl:-ml-32 xl:-mt-16 lg:-ml-32 lg:-mt-16 sm:-ml-10 sm:-mt-6"
               />
             </Motion.div>
           </div>

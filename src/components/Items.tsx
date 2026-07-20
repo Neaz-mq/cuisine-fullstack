@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion as Motion } from "framer-motion";
+import Image from "next/image";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { toast } from "react-toastify";
+
+const MotionImage = Motion(Image);
 
 // ---------------------------------------------------------------------------
 // Real menu data, fetched from GET /api/menu (DB-backed) — replaces the
@@ -231,9 +234,12 @@ const Items = () => {
                 transition={{ type: "spring", stiffness: 300 }}
                 type="button"
               >
-                <Motion.img
+                <MotionImage
                   src={category.items[0]?.imageUrl ?? FALLBACK_CATEGORY_ICON}
                   alt={`${category.label} category icon`}
+                  width={56}
+                  height={56}
+                  unoptimized
                   className="3xl:w-14 3xl:h-14 2xl:w-14 2xl:h-14 xl:w-14 xl:h-14 lg:w-12 lg:h-12 md:w-10 md:h-10 sm:w-6 sm:h-6 object-cover rounded-full"
                   initial={{ rotate: 0 }}
                   whileHover={{ rotate: 10 }}
@@ -266,9 +272,12 @@ const Items = () => {
                 transition={{ type: "spring", stiffness: 300 }}
                 type="button"
               >
-                <Motion.img
+                <MotionImage
                   src={category.items[0]?.imageUrl ?? FALLBACK_CATEGORY_ICON}
                   alt={`${category.label} category icon`}
+                  width={40}
+                  height={40}
+                  unoptimized
                   className="md:w-10 md:h-10 sm:w-6 sm:h-6 object-cover rounded-full"
                   initial={{ rotate: 0 }}
                   whileHover={{ rotate: 10 }}
@@ -331,9 +340,12 @@ const Items = () => {
               </p>
               <div className="flex sm:flex-col md:flex-row items-center md:justify-between w-full mt-auto">
                 {item.imageUrl && (
-                  <Motion.img
+                  <MotionImage
                     src={item.imageUrl}
                     alt={`${item.title} image`}
+                    width={200}
+                    height={200}
+                    unoptimized
                     className="w-40 h-auto object-contain -ml-4"
                     animate={selected?.toUpperCase() === "PIZZA" ? { rotate: 360 } : {}}
                     transition={

@@ -7,6 +7,7 @@ import {
 import { MdEmail } from "react-icons/md";
 import { FaPhone, FaLocationDot } from "react-icons/fa6";
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/components/Container";
 
 const Footer = () => {
@@ -23,12 +24,12 @@ const Footer = () => {
           <div className="flex justify-center 3xl:justify-center items-start w-full 2xl:justify-start xl:justify-start lg:justify-start relative">
             <Link href="/" aria-label="Navigate to homepage">
               <div className="bg-[#3A7563] 3xl:px-4 3xl:py-4 2xl:px-4 2xl:py-4 xl:px-4 xl:py-4 lg:px-3 lg:py-3 md:px-4 md:py-3 sm:px-4 sm:py-3 flex items-center space-x-2 w-fit 3xl:mt-1 2xl:mt-1 xl:mt-0 lg:mt-0 mx-auto lg:mx-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="/logo.svg"
                   alt="Cuisine Logo"
+                  width={25}
+                  height={25}
                   className="3xl:w-6 3xl:h-6 2xl:w-6 2xl:h-6 xl:w-4 xl:h-4 lg:w-3 lg:h-3 md:w-4 md:h-4 sm:w-4 sm:h-4"
-                  loading="lazy"
                 />
                 <span className="font-bold 3xl:text-lg 2xl:text-lg xl:text-base lg:text-[11px] md:text-[12px] sm:text-[12px]">
                   Cuisine

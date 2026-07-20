@@ -1,6 +1,7 @@
 "use client";
 
 import { motion as Motion } from "framer-motion";
+import Image from "next/image";
 import Container from "@/components/Container";
 
 const Explore = () => {
@@ -22,11 +23,12 @@ const Explore = () => {
               transition={{ duration: 1 }}
               viewport={{ once: true }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 className="absolute left-[-20px] right-10 -top-10 opacity-60 blur-sm"
                 src="/Ellipse 9.svg"
                 alt=""
+                width={111}
+                height={111}
                 role="presentation"
                 aria-hidden="true"
               />
@@ -102,11 +104,13 @@ const Explore = () => {
               transition={{ duration: 1 }}
               viewport={{ once: true }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="https://res.cloudinary.com/dxohwanal/image/upload/v1752054404/menu1_nkbnfg.webp"
                 alt="Delicious full menu dishes display banner"
-                className="w-full max-w-[380px] sm:max-w-[500px] md:max-w-[400px] 3xl:max-w-[800px] 2xl:max-w-[800px] xl:max-w-[800px] lg:max-w-[800px] object-contain mt-4 sm:mt-5 sm:ml-10"
+                width={800}
+                height={600}
+                sizes="(min-width: 1024px) 40vw, 90vw"
+                className="w-full max-w-[380px] sm:max-w-[500px] md:max-w-[400px] 3xl:max-w-[800px] 2xl:max-w-[800px] xl:max-w-[800px] lg:max-w-[800px] h-auto object-contain mt-4 sm:mt-5 sm:ml-10"
               />
               <figcaption className="sr-only">
                 Image showcasing a variety of signature dishes available on our menu.

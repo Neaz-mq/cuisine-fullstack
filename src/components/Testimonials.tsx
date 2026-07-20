@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion as Motion } from "framer-motion";
+import Image from "next/image";
 import Container from "@/components/Container";
+
+const MotionImage = Motion(Image);
 
 interface TestimonialCard {
   name: string;
@@ -90,11 +93,11 @@ const Testimonials = () => {
                 className="3xl:-mt-14 2xl:-mt-[2.4rem] xl:-mt-[2.4rem] lg:-mt-[3.5em] md:-mt-[2.1em] sm:-mt-[3.5em] 3xl:ml-6 2xl:ml-6 xl:ml-2 md:ml-2 sm:hidden md:block lg:block xl:block 2xl:block 3xl:block"
                 aria-hidden="true"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="https://res.cloudinary.com/dxohwanal/image/upload/v1747212688/asset1_rbxyxt.png"
                   alt="Decorative testimonial icon"
-                  loading="lazy"
+                  width={100}
+                  height={100}
                 />
               </Motion.div>
             </div>
@@ -106,12 +109,14 @@ const Testimonials = () => {
             aria-label="Testimonial image carousel"
           >
             <AnimatePresence initial={false} custom={direction}>
-              <Motion.img
+              <MotionImage
                 key={currentIndex}
                 src={images[currentIndex]}
                 alt={`Testimonial visual ${currentIndex + 1}`}
+                fill
+                sizes="(min-width: 1024px) 40vw, 90vw"
                 custom={direction}
-                className="absolute w-full h-full object-cover"
+                className="absolute object-cover"
                 initial={{ x: direction > 0 ? -300 : 300, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: direction > 0 ? 300 : -300, opacity: 0 }}
@@ -125,7 +130,6 @@ const Testimonials = () => {
                   else if (swipe > swipeConfidenceThreshold) paginate(1);
                 }}
                 tabIndex={-1}
-                loading="lazy"
               />
             </AnimatePresence>
 
@@ -174,12 +178,12 @@ const Testimonials = () => {
                 {card.img ? (
                   <>
                     <span className="w-6 h-6 bg-[#2C6252] rounded-full" aria-hidden="true" />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={card.img}
                       alt={`Avatar of ${card.name}`}
+                      width={24}
+                      height={24}
                       className="w-6 h-6 border-2 border-[#FF4C15] rounded-full object-cover"
-                      loading="lazy"
                     />
                   </>
                 ) : (

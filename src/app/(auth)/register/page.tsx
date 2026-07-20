@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -69,12 +70,12 @@ export default function RegisterPage() {
             className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl mb-8 transition-colors"
             aria-label="Back to home"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/logo.svg"
               alt="Cuisine Logo"
+              width={25}
+              height={25}
               className="w-6 h-6 brightness-0 invert"
-              loading="lazy"
             />
             <span className="font-bold text-lg text-white">Cuisine</span>
           </Link>
@@ -108,12 +109,12 @@ export default function RegisterPage() {
               className="flex items-center gap-2"
               aria-label="Back to home"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/logo.svg"
                 alt="Cuisine Logo"
+                width={25}
+                height={25}
                 className="w-6 h-6"
-                loading="lazy"
               />
               <span className="font-bold text-lg text-[#2C6252]">
                 Cuisine

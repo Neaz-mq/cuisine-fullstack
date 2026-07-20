@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { memo, useState, useCallback } from "react";
 import { HiMenuAlt3 } from "react-icons/hi";
 import { motion as Motion, AnimatePresence } from "framer-motion";
@@ -41,11 +42,11 @@ const Navbar = () => {
       {/* Cuisine Logo */}
       <Link href="/" aria-label="Cuisine Home">
         <div className="absolute left-0 top-0 w-10 md:w-20 lg:w-20 xl:w-24 2xl:w-28 3xl:w-32 bg-[#2C6252] flex flex-col items-center py-3 xl:py-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/logo.svg"
             alt="Cuisine Logo"
-            loading="lazy"
+            width={25}
+            height={25}
             className="h-4 sm:h-4 lg:h-3 xl:h-4 2xl:h-5 3xl:h-6 w-auto md:ml-8 lg:ml-10 xl:ml-10 2xl:ml-16 3xl:ml-20"
             onError={handleImgError}
           />
@@ -144,11 +145,11 @@ const Navbar = () => {
           >
             Book a Table
           </span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/table.svg"
             alt="Table Icon"
-            loading="lazy"
+            width={20}
+            height={15}
             className="3xl:h-5 2xl:h-4 xl:h-4 lg:h-3 w-auto 3xl:mt-4 2xl:mt-3 xl:mt-2 lg:mt-2"
             onError={handleTableImgError}
           />

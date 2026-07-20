@@ -6,6 +6,9 @@ import Container from "@/components/Container";
 import { toast } from "react-toastify";
 import { useCart } from "@/context/CartContext";
 import { motion as Motion } from "framer-motion";
+import Image from "next/image";
+
+const MotionImage = Motion(Image);
 
 const foodItems = [
   {
@@ -115,8 +118,7 @@ const Signature = () => {
               aria-hidden="true"
             >
               <div className="bg-white rounded-full w-6 h-6 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/Group 811.svg" className="w-3.5 h-3.5" alt="Flag Icon" aria-hidden="true" loading="lazy" />
+                <Image src="/Group 811.svg" width={8} height={15} className="w-3.5 h-3.5" alt="Flag Icon" aria-hidden="true" />
               </div>
               Foreign customer for (food menu)
             </div>
@@ -156,21 +158,22 @@ const Signature = () => {
                   aria-label={`${item.title} food item`}
                 >
                   <div className="relative">
-                    <Motion.img
+                    <MotionImage
                       src={item.image}
                       alt={`${item.title} Image`}
+                      width={400}
+                      height={300}
+                      sizes="(min-width: 1024px) 20rem, 15rem"
                       className="w-full 3xl:h-48 2xl:h-48 xl:h-48 lg:h-48 md:h-48 sm:h-32 object-cover"
                       whileHover={{ scale: 1.05 }}
                       transition={{ duration: 0.5, ease: "easeInOut" }}
-                      loading="lazy"
                     />
                     {item.available && (
                       <span
                         className="absolute top-2 right-2 bg-[#FFCA46] text-xs px-2 py-1 text-[#F6F6F6] font-medium flex items-center"
                         aria-label="Food Available"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/svg.svg" className="w-3 h-3 mr-1" alt="Available Icon" aria-hidden="true" loading="lazy" />
+                        <Image src="/svg.svg" width={12} height={11} className="w-3 h-3 mr-1" alt="Available Icon" aria-hidden="true" />
                         Food Available
                       </span>
                     )}

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, memo } from "react";
 import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import Container from "@/components/Container";
 import AccountMenu from "@/components/AccountMenu";
@@ -216,16 +217,17 @@ const TopBar = memo(() => {
     <div className="flex items-center justify-center relative z-30">
       <Container>
         <div className="flex flex-col sm:flex-row items-center bg-white px-4 sm:px-6 text-gray-700 text-sm relative z-30 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 lg:-ml-10 md:-ml-0 -ml-28 overflow-visible">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png"
             alt="Group 22"
-            loading="lazy"
+            width={500}
+            height={400}
+            sizes="(min-width: 1536px) 25rem, 20rem"
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = "https://placehold.co/600x400?text=Image";
             }}
-            className="w-full sm:w-auto h-auto sm:h-[10.5rem] md:h-[18rem] lg:h-[20rem] xl:h-[23rem] 2xl:h-[24rem] 3xl:h-[25rem] sm:-mt-[5.4rem] 3xl:-mt-[13rem] 2xl:-mt-[13rem] xl:-mt-[13rem] lg:-mt-[11rem] md:-mt-[11rem] sm:-ml-2 3xl:ml-16 lg:-ml-8 md:-ml-16"
+            className="w-full sm:w-auto h-auto sm:h-[10.5rem] md:h-[18rem] lg:h-[20rem] xl:h-[23rem] 2xl:h-[24rem] 3xl:h-[25rem] sm:-mt-[5.4rem] 3xl:-mt-[13rem] 2xl:-mt-[13rem] xl:-mt-[13rem] lg:-mt-[11rem] md:-mt-[11rem] sm:-ml-2 3xl:ml-16 lg:-ml-8 md:-ml-16 object-contain"
           />
           <div className="flex flex-col sm:flex-row items-start sm:items-center w-full sm:-ml-9 3xl:-ml-12 2xl:-ml-14 xl:-ml-14 lg:-ml-14 md:-ml-16 md:-mt-8 sm:-mt-10 relative">
             <span className="text-[#E4E4E4] 3xl:mr-4 2xl:mr-4 xl:mr-4 lg:mr-4 md:mr-4 sm:mr-2 text-base sm:text-sm md:text-sm 3xl:text-[20px] 2xl:text-[18px] xl:text-[17px] lg:text-[14px] md:text-[0.8rem] sm:text-[0.7rem] mb-2 sm:mb-0 whitespace-nowrap sm:hidden 3xl:block 2xl:block xl:block lg:block md:block">
@@ -264,20 +266,20 @@ const TopBar = memo(() => {
 
             <div className="flex flex-col md:flex-col lg:flex-row 3xl:space-x-4 2xl:space-x-4 xl:space-x-4 lg:space-x-4 md:space-y-2 sm:space-y-0 space-y-1 lg:space-y-0 mr-0 sm:mr-2 md:mr-4 mb-2 sm:mb-0 ml-2 sm:mt-5 3xl:mt-0 2xl:mt-0 xl:mt-0 lg:mt-0 md:mt-6">
               <div className="flex items-center 3xl:space-x-3 2xl:space-x-3 xl:space-x-3 lg:space-x-3 md:space-x-4 space-x-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={
                     isKitchenOpen ? "/kitchen.svg" : "/kitchen-unavailable.svg"
                   }
                   alt={
                     isKitchenOpen ? "Kitchen available" : "Kitchen unavailable"
                   }
-                  loading="lazy"
+                  width={30}
+                  height={26}
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = "https://placehold.co/20x20?text=X";
                   }}
-                  className="h-3 w-3 md:h-5 md:w-5"
+                  className="h-3 w-3 md:h-5 md:w-5 object-contain"
                 />
                 <span
                   className={`3xl:text-[16px] 2xl:text-[15px] xl:text-[15px] lg:text-[13px] md:text-[0.8rem] text-[0.6rem] font-semibold whitespace-nowrap ${

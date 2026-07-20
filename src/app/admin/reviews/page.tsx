@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import Image from "next/image";
 import ReviewActions from "./ReviewActions";
 import Pagination from "../orders/Pagination"; // ⚠️ adjust this path if your Pagination component lives elsewhere
 
@@ -110,10 +111,12 @@ export default async function AdminReviewsPage({
             <div key={review.id} className="flex items-start justify-between gap-4 px-4 py-4">
               <div className="flex items-start gap-3 min-w-0">
                 {review.menuItem.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={review.menuItem.imageUrl}
                     alt={review.menuItem.title}
+                    width={48}
+                    height={48}
+                    unoptimized
                     className="w-12 h-12 rounded-md object-cover shrink-0"
                   />
                 )}
