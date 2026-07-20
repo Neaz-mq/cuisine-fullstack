@@ -4,6 +4,7 @@ import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
 import { assignRiderSchema } from "@/lib/validations/delivery";
 import { geocodeAddress } from "@/lib/geocode";
+import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
 
 /**
  * POST /api/admin/orders/[id]/assign-rider
@@ -19,7 +20,7 @@ import { geocodeAddress } from "@/lib/geocode";
  * riderId) is intentionally allowed — e.g. the original rider called in
  * sick — and simply overwrites the existing DeliveryTracking row rather
  * than erroring, resetting the rider's last-known position to the
- * destination until the new rider's phone reports a real one.
+ * restaurant until the new rider's phone reports a real one.
  */
 export async function POST(
   req: NextRequest,
@@ -88,18 +89,20 @@ export async function POST(
       create: {
         orderId: id,
         riderId,
-        riderLat: geocoded.lat,
-        riderLng: geocoded.lng,
+        riderLat: RESTAURANT_LOCATION.lat,
+        riderLng: RESTAURANT_LOCATION.lng,
         destLat: geocoded.lat,
         destLng: geocoded.lng,
       },
       update: {
         riderId,
-        // Reset rider position to the destination on reassignment — the
+        // Reset rider position to the restaurant on reassignment — the
         // new rider hasn't reported a real position yet, and leaving the
-        // PREVIOUS rider's last coordinates would be actively misleading.
-        riderLat: geocoded.lat,
-        riderLng: geocoded.lng,
+        // PREVIOUS rider's last coordinates (or the customer's own
+        // address) would be actively misleading. A delivery always
+        // starts from the restaurant, never from the destination.
+        riderLat: RESTAURANT_LOCATION.lat,
+        riderLng: RESTAURANT_LOCATION.lng,
         riderLocationUpdatedAt: new Date(),
         destLat: geocoded.lat,
         destLng: geocoded.lng,

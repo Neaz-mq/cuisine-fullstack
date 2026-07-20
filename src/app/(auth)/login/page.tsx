@@ -34,7 +34,12 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    // Go through /admin rather than straight to "/" — the /admin page
+    // does the role-based redirect (firstAllowedPath), sending staff like
+    // DELIVERY riders to their own dashboard automatically. A regular
+    // customer session gets bounced back to "/" by that same page's
+    // requireAdmin() check, so this is a no-op extra hop for them.
+    router.push("/admin");
   };
 
   return (
