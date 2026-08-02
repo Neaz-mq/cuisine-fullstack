@@ -40,8 +40,17 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * free-text street line (which Nominatim's index frequently doesn't have
  * verbatim — informal area names, "Road"/"House" numbering conventions
  * common in Bangladeshi addresses, etc.) doesn't sink the whole geocode.
- * Each fallback drops one more of the noisiest fields, ending at
- * city+state+country, which Nominatim can essentially always resolve.
+ *
+ * Each fallback drops one more field, ending at just city+country, which
+ * Nominatim can essentially always resolve for any real city. Critically,
+ * `state` is dropped on its own step (not just alongside apartment/zip) —
+ * checkout has a free-text state field, and a customer typing a locality
+ * name into it (rather than an actual division/state) produces a value
+ * Nominatim doesn't recognize. Keeping that bad value in EVERY fallback
+ * would poison the whole chain even though "city, country" alone (e.g.
+ * "Bogura, Bangladesh") would resolve fine — this is what happened before
+ * this fix: every candidate still included state, so none of them worked.
+ *
  * A city-level pin for the destination marker is a much better outcome
  * than blocking rider assignment entirely.
  */
@@ -54,8 +63,12 @@ function buildQueryCandidates(parts: AddressParts): string[] {
     join([address, apartment, city, state, zip, country]), // full address
     join([address, city, state, zip, country]), // drop apartment
     join([address, city, state, country]), // drop zip too
-    join([city, state, zip, country]), // drop street line entirely
-    join([city, state, country]), // city-level only
+    join([address, city, zip, country]), // drop state (bad/garbage state value)
+    join([address, city, country]), // drop state and zip
+    join([city, state, zip, country]), // drop street line, keep state
+    join([city, zip, country]), // drop street line and state
+    join([city, state, country]), // city + state, no street
+    join([city, country]), // last resort — city-level only
   ];
 
   // Dedupe (shorter fallbacks can collide with each other when several

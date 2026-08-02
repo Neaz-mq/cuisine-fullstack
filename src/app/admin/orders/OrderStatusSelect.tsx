@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 const STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -24,6 +24,17 @@ export default function OrderStatusSelect({
 }) {
   const [status, setStatus] = useState(currentStatus);
   const [isPending, startTransition] = useTransition();
+
+  // currentStatus only matters as the INITIAL value to useState above —
+  // React doesn't re-run that initializer on a prop change, so without
+  // this effect, a status change made elsewhere (e.g. assign-rider
+  // flipping the order to OUT_FOR_DELIVERY, followed by
+  // AssignRiderPanel's router.refresh()) would silently NOT show up here:
+  // the server-rendered prop updates, but this dropdown keeps rendering
+  // its stale first-mount value until the user manually changes it.
+  useEffect(() => {
+    setStatus(currentStatus);
+  }, [currentStatus]);
 
   async function handleChange(newStatus: string) {
     const previous = status;

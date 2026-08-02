@@ -246,6 +246,10 @@ model Order {
   // for DELIVERY orders still using UBER_EATS/FOOD_PANDA.
   deliveryTracking DeliveryTracking?
 
+  // Rider <-> customer live chat, active only while OUT_FOR_DELIVERY (see
+  // ChatMessage below for the full design note).
+  chatMessages ChatMessage[]
+
   // tableId: DINE_IN orders looked up by table (unchanged, pre-existing).
   //
   // userId + createdAt: GET /api/orders/mine does `WHERE userId = ?
@@ -339,6 +343,56 @@ model DeliveryTracking {
   deliveredAt DateTime?
 
   @@index([riderId])
+}
+
+// Rider <-> customer live chat for an OWN_DELIVERY order, same
+// customer-facing idea as Uber Eats/Food Panda's in-app chat once a rider
+// is on the way.
+//
+// No FK to User for the customer side — guest checkout (the common case
+// for delivery orders, see Order.userId) has no User row to point at, so
+// senderName is stored as plain text (order.firstName at send time)
+// instead. The rider side doesn't need a User FK either: DeliveryTracking
+// already records which rider owns this order, so senderRole = RIDER is
+// enough to know who sent it without a second join.
+//
+// Trust model matches GET /api/orders/[id] (the /track/[orderId] page):
+// possession of the unguessable order id is the access token. There's no
+// separate customer login, so anyone with the tracking link can read/post
+// chat for that order — acceptable because that's already true of the
+// live map and order details on the same page.
+//
+// Delivered via Supabase Realtime (see lib/supabase-client.ts), not the
+// 15s polling pattern used elsewhere in this app — a chat feels laggy at
+// 15s, and Realtime pushes new rows the moment they're inserted instead.
+// Requires ChatMessage to be added to the `supabase_realtime` publication
+// (see prisma/migrations — the enable-chat-realtime.sql note) since Prisma
+// migrations don't touch Supabase's replication config.
+model ChatMessage {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  senderRole ChatSenderRole
+  // Denormalized display name at send time (rider's staff name, or the
+  // customer's order.firstName) — avoids a join back to User/Order just to
+  // render "Kalam: on my way" in the chat log, and survives a reassignment
+  // (an old message still shows who actually sent it).
+  senderName String
+
+  message String
+
+  createdAt DateTime @default(now())
+
+  // GET /api/orders/[id]/chat and GET /api/rider/deliveries/[orderId]/chat
+  // both do `WHERE orderId = ? ORDER BY createdAt ASC` for the initial
+  // history load (Realtime handles everything after that).
+  @@index([orderId, createdAt])
+}
+
+enum ChatSenderRole {
+  RIDER
+  CUSTOMER
 }
 
 model OrderItem {

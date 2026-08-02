@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { CheckCircle2, ChefHat, Truck, PackageCheck, Circle, XCircle } from "lucide-react";
 import { formatOrderId } from "@/lib/format-order-id";
+import ChatPanel from "@/components/ChatPanel";
 
 // Leaflet touches `window` at import time, which breaks SSR — loaded
 // client-side only, same pattern as any other browser-only widget in a
@@ -181,6 +182,26 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
             destination={{ lat: order.deliveryTracking.destLat, lng: order.deliveryTracking.destLng }}
             lastUpdatedAt={order.deliveryTracking.riderLocationUpdatedAt}
           />
+        )}
+
+      {order.orderType === "DELIVERY" &&
+        order.shippingMethod === "OWN_DELIVERY" &&
+        order.deliveryTracking && (
+          <div className="mb-8">
+            <ChatPanel
+              orderId={order.id}
+              viewerRole="CUSTOMER"
+              fetchUrl={`/api/orders/${order.id}/chat`}
+              sendUrl={`/api/orders/${order.id}/chat`}
+              otherPartyLabel="your rider"
+              active={order.status === "OUT_FOR_DELIVERY" && !order.deliveryTracking.deliveredAt}
+              inactiveMessage={
+                order.deliveryTracking.deliveredAt
+                  ? "This delivery is complete — chat is now closed."
+                  : "Chat opens once your rider is on the way."
+              }
+            />
+          </div>
         )}
 
       {/* Order summary */}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Navigation, PackageCheck, Phone, MapPin, AlertCircle } from "lucide-react";
+import { Navigation, PackageCheck, Phone, MapPin, AlertCircle, MessageCircle } from "lucide-react";
 import { formatOrderId } from "@/lib/format-order-id";
+import ChatPanel from "@/components/ChatPanel";
 
 const POLL_INTERVAL_MS = 15000; // same cadence as KitchenBoard / OrderTrackingTimeline
 
@@ -31,6 +32,10 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
     "idle"
   );
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
+  // Which delivery card's chat panel is expanded — collapsed by default so
+  // a rider with multiple assigned orders isn't shown several open chat
+  // logs at once.
+  const [openChatId, setOpenChatId] = useState<string | null>(null);
   const activeOrderIdsRef = useRef<string[]>(initialDeliveries.map((d) => d.orderId));
 
   const loadDeliveries = useCallback(async () => {
@@ -187,6 +192,13 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
                   Navigate
                 </a>
                 <button
+                  onClick={() => setOpenChatId((prev) => (prev === d.orderId ? null : d.orderId))}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold border border-gray-300 text-gray-700 rounded-md py-2 hover:bg-gray-50 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {openChatId === d.orderId ? "Hide Chat" : "Chat"}
+                </button>
+                <button
                   onClick={() => handleDeliver(d.orderId)}
                   disabled={deliveringId === d.orderId}
                   className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#FF4C15] text-white rounded-md py-2 hover:bg-[#e6430f] transition-colors disabled:opacity-50"
@@ -195,6 +207,19 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
                   {deliveringId === d.orderId ? "Marking…" : "Mark Delivered"}
                 </button>
               </div>
+
+              {openChatId === d.orderId && (
+                <div className="mt-4">
+                  <ChatPanel
+                    orderId={d.orderId}
+                    viewerRole="RIDER"
+                    fetchUrl={`/api/rider/deliveries/${d.orderId}/chat`}
+                    sendUrl={`/api/rider/deliveries/${d.orderId}/chat`}
+                    otherPartyLabel={d.customerName}
+                    active
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
