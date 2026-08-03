@@ -90,17 +90,30 @@ export default function ChatPanel({
   }, [fetchUrl]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`chat:${orderId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
-        (payload) => addMessage(payload.new as ChatMessage)
-      )
-      .subscribe();
+    // Realtime is a nice-to-have layered on top of the fetch-on-mount
+    // above, which already loads full history — if channel setup throws
+    // (seen in practice: a Turbopack dev-mode WebSocket-detection bug,
+    // see supabase-client.ts's comment) or the subscription silently
+    // never connects, the chat should just fall back to "history only,
+    // no live push" instead of taking the entire page down with it. A
+    // customer's live-tracking page crashing because of a chat glitch
+    // would be a far worse outcome than a chat that doesn't push live.
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    try {
+      channel = supabase
+        .channel(`chat:${orderId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
+          (payload) => addMessage(payload.new as ChatMessage)
+        )
+        .subscribe();
+    } catch (err) {
+      console.error("Chat realtime subscription failed — falling back to no live push:", err);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [orderId]);
 
