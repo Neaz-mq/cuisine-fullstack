@@ -1,0 +1,1 @@
+grant select on "ChatMessage" to anon, authenticated;

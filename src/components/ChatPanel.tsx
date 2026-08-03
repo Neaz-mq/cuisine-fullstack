@@ -4,6 +4,28 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase-client";
 
+/**
+ * src/components/ChatPanel.tsx
+ *
+ * Rider <-> customer live chat, shared by both sides of the conversation:
+ *   - RiderDashboard.tsx renders one per assigned delivery
+ *     (fetchUrl/sendUrl -> /api/rider/deliveries/[orderId]/chat)
+ *   - OrderTrackingTimeline.tsx renders one for the customer
+ *     (fetchUrl/sendUrl -> /api/orders/[id]/chat)
+ *
+ * New messages arrive via Supabase Realtime (a Postgres change feed),
+ * not the 15s polling pattern used elsewhere in this app.
+ *
+ * Realtime requires two things on the Supabase side, or the sender's
+ * message will only show up for the OTHER party after a manual refresh:
+ *   1. ChatMessage must be in the `supabase_realtime` publication
+ *      (see prisma/migrations/*_enable_chat_realtime/migration.sql)
+ *   2. anon/authenticated roles need SELECT grant on ChatMessage — this
+ *      is automatic for tables created via Supabase Studio, but NOT for
+ *      tables created via Prisma migrations, so it has to be granted
+ *      explicitly (see prisma/migrations/*_grant_chatmessage_select/migration.sql)
+ */
+
 type ChatMessage = {
   id: string;
   senderRole: "RIDER" | "CUSTOMER";
@@ -25,8 +47,13 @@ export default function ChatPanel({
   viewerRole: "RIDER" | "CUSTOMER";
   fetchUrl: string;
   sendUrl: string;
+  /** e.g. "Jahin khan" (rider's view) or "your rider" (customer's view) —
+   * used only for the panel header. */
   otherPartyLabel: string;
+  /** Whether sending is currently allowed (order is OUT_FOR_DELIVERY and
+   * not yet delivered). History always stays visible even when false. */
   active: boolean;
+  /** Shown in place of the input when `active` is false. */
   inactiveMessage?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -35,6 +62,8 @@ export default function ChatPanel({
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Dedupe helper — both the optimistic append after a successful POST
+  // and the Realtime push for that same row can arrive, in either order.
   function addMessage(incoming: ChatMessage) {
     setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
   }
@@ -48,7 +77,8 @@ export default function ChatPanel({
         const data: ChatMessage[] = await res.json();
         if (!cancelled) setMessages(data);
       } catch {
-        // network error on initial load
+        // network error on initial load — the Realtime subscription below
+        // will still populate anything sent after this point.
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -59,6 +89,18 @@ export default function ChatPanel({
   }, [fetchUrl]);
 
   useEffect(() => {
+    // Realtime is a nice-to-have layered on top of the fetch-on-mount
+    // above, which already loads full history — if channel setup throws
+    // or the subscription never connects, the chat should just fall back
+    // to "history only, no live push" instead of taking the entire page
+    // down with it.
+    //
+    // Auto-reconnect matters: a rider is on a phone, on the move, on
+    // mobile data — the connection WILL drop mid-delivery in normal use.
+    // Without retrying, one dropped connection would silently degrade the
+    // chat to history-only (next fetch on remount/refresh) for the rest
+    // of the delivery. Backoff caps at 10s so a genuinely offline device
+    // isn't hammering reconnect attempts.
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -66,7 +108,6 @@ export default function ChatPanel({
 
     function connect() {
       if (cancelled) return;
-      console.log(`[chat-debug] connect() called for order ${orderId}, cancelled=${cancelled}`);
       try {
         channel = supabase
           .channel(`chat:${orderId}`)
@@ -79,10 +120,9 @@ export default function ChatPanel({
             }
           )
           .subscribe((status, err) => {
-            console.log(`[chat-debug] subscribe callback fired, status=${status}`, err);
             if (cancelled) return;
             if (status === "SUBSCRIBED") {
-              attempt = 0;
+              attempt = 0; // connection is healthy again — reset backoff
               console.log(`Chat realtime channel for order ${orderId}: SUBSCRIBED`);
               return;
             }
@@ -133,7 +173,8 @@ export default function ChatPanel({
         setDraft("");
       }
     } catch {
-      // best-effort
+      // best-effort — the message simply doesn't send; draft text stays
+      // in the input so the user can retry instead of losing what they typed
     } finally {
       setSending(false);
     }
