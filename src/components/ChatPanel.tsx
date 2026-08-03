@@ -120,7 +120,16 @@ export default function ChatPanel({
           .on(
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
-            (payload) => addMessage(payload.new as ChatMessage)
+            (payload) => {
+              // Diagnostic — confirms whether the browser's WebSocket is
+              // actually receiving the INSERT event at all. If this never
+              // logs when the other party sends a message, the problem is
+              // upstream (the filter isn't matching, or the event isn't
+              // reaching this client) rather than in how the payload gets
+              // rendered.
+              console.log(`Chat realtime INSERT received for order ${orderId}:`, payload.new);
+              addMessage(payload.new as ChatMessage);
+            }
           )
           .subscribe((status, err) => {
             if (cancelled) return;
