@@ -382,7 +382,7 @@ model ChatMessage {
 
   message String
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   // GET /api/orders/[id]/chat and GET /api/rider/deliveries/[orderId]/chat
   // both do `WHERE orderId = ? ORDER BY createdAt ASC` for the initial

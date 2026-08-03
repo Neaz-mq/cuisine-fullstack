@@ -34,6 +34,16 @@ type ChatMessage = {
   createdAt: string;
 };
 
+// Supabase Realtime sends raw Postgres rows. Until the `createdAt` column is
+// migrated to timestamptz, those raw values arrive WITHOUT a timezone
+// marker (e.g. "2026-08-03T09:00:22.021" instead of "...021Z"), so
+// `new Date(...)` parses them as local time instead of UTC and the
+// receiving party sees a shifted timestamp. Force UTC when no marker
+// is present. Safe to keep even after the DB migration lands.
+function parseTimestamp(raw: string) {
+  return new Date(/[Zz]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`);
+}
+
 export default function ChatPanel({
   orderId,
   viewerRole,
@@ -206,7 +216,7 @@ export default function ChatPanel({
               >
                 <p>{m.message}</p>
                 <p className={`text-[10px] mt-0.5 ${isOwn ? "text-white/70" : "text-gray-400"}`}>
-                  {new Date(m.createdAt).toLocaleTimeString([], {
+                  {parseTimestamp(m.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
