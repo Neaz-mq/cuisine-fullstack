@@ -21,6 +21,15 @@ import type { NextConfig } from "next";
  * reasonable follow-up but is a bigger, separate change.
  */
 const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+// Supabase Realtime (used by ChatPanel.tsx for the live chat feature)
+// connects over a WebSocket, i.e. wss://<project>.supabase.co — a
+// DIFFERENT scheme from the https:// origin above as far as CSP's
+// connect-src matching is concerned. Listing only the https:// origin
+// let normal fetch()/storage calls through but silently blocked every
+// Realtime WebSocket connection attempt; supabase-js then surfaced that
+// as a confusing "WebSocket not available" error instead of a CSP
+// violation, which is what actually made this hard to diagnose.
+const supabaseWsOrigin = supabaseOrigin.replace(/^https:/, "wss:");
 
 const csp = [
   "default-src 'self'",
@@ -39,9 +48,10 @@ const csp = [
   // subdomains (a,b,c load-balanced), so all three need to be allowed.
   `img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org ${supabaseOrigin}`,
   `font-src 'self' data:`,
-  // Supabase origin for storage uploads/reads, self for the app's own API
-  // routes.
-  `connect-src 'self' ${supabaseOrigin}`,
+  // Supabase origin for storage uploads/reads and API calls (https), PLUS
+  // the wss:// variant for Realtime's WebSocket connection (chat) — see
+  // the supabaseWsOrigin comment above for why both are needed.
+  `connect-src 'self' ${supabaseOrigin} ${supabaseWsOrigin}`,
   // No site should ever be able to iframe this app (clickjacking).
   "frame-ancestors 'none'",
   "form-action 'self'",

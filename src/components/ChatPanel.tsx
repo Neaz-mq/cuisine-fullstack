@@ -98,21 +98,58 @@ export default function ChatPanel({
     // no live push" instead of taking the entire page down with it. A
     // customer's live-tracking page crashing because of a chat glitch
     // would be a far worse outcome than a chat that doesn't push live.
+    //
+    // Auto-reconnect matters beyond dev-mode HMR closures (which is what
+    // surfaced this originally, close code 1001 "going away" from a hot
+    // reload): a rider is on a phone, on the move, on mobile data — the
+    // connection WILL drop mid-delivery in normal use. Without retrying,
+    // one dropped connection would silently degrade the chat to
+    // history-only (next fetch on remount/refresh) for the rest of the
+    // delivery. Backoff caps at 10s so a genuinely offline device isn't
+    // hammering reconnect attempts.
+    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | undefined;
-    try {
-      channel = supabase
-        .channel(`chat:${orderId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
-          (payload) => addMessage(payload.new as ChatMessage)
-        )
-        .subscribe();
-    } catch (err) {
-      console.error("Chat realtime subscription failed — falling back to no live push:", err);
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+
+    function connect() {
+      if (cancelled) return;
+      try {
+        channel = supabase
+          .channel(`chat:${orderId}`)
+          .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
+            (payload) => addMessage(payload.new as ChatMessage)
+          )
+          .subscribe((status, err) => {
+            if (cancelled) return;
+            if (status === "SUBSCRIBED") {
+              attempt = 0; // connection is healthy again — reset backoff
+              console.log(`Chat realtime channel for order ${orderId}: SUBSCRIBED`);
+              return;
+            }
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              console.error(`Chat realtime channel for order ${orderId}: ${status} — reconnecting`, err);
+              if (channel) supabase.removeChannel(channel);
+              const delay = Math.min(1000 * 2 ** attempt, 10000);
+              attempt += 1;
+              retryTimer = setTimeout(connect, delay);
+            }
+          });
+      } catch (err) {
+        console.error("Chat realtime subscription failed — retrying:", err);
+        const delay = Math.min(1000 * 2 ** attempt, 10000);
+        attempt += 1;
+        retryTimer = setTimeout(connect, delay);
+      }
     }
 
+    connect();
+
     return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       if (channel) supabase.removeChannel(channel);
     };
   }, [orderId]);
