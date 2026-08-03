@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
-import { getScopesForRole, type Scope } from "@/lib/permissions";
+import { getScopesForRole, panelLabel, type Scope } from "@/lib/permissions";
 import NotificationBell from "./NotificationBell";
 
 const NAV_ITEMS: { label: string; href: string; scope: Scope | null }[] = [
@@ -44,13 +44,40 @@ export default async function AdminLayout({
       <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col">
         <div className="px-5 py-5 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-800">Admin Panel</p>
+            <p className="text-sm font-semibold text-gray-800">{panelLabel(role)}</p>
             <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
             <p className="text-[10px] font-semibold text-[#2C6252] uppercase tracking-wide mt-0.5">
               {role}
             </p>
           </div>
-          <NotificationBell />
+          {/* Which bell (if any) makes sense depends on the role, not just
+              "is staff" — a bell that navigates somewhere the viewer can't
+              open is worse than no bell. DELIVERY riders get their own
+              "new delivery assigned to you" bell (never the restaurant-wide
+              new-orders one — they can't open /admin/orders at all, see
+              that section's own scope guard). Order-taking roles
+              (OWNER/MANAGER/WAITER/CASHIER, i.e. anyone with "orders")
+              get the original new-orders bell. KITCHEN gets neither —
+              no notification-worthy event of their own yet. */}
+          {role === "DELIVERY" ? (
+            <NotificationBell
+              fetchUrl="/api/rider/notifications"
+              countKey="newAssignmentsCount"
+              latestKey="latestAssignedAt"
+              navigateTo="/admin/my-deliveries"
+              ariaLabel="New delivery assignment notifications"
+            />
+          ) : (
+            scopes.includes("orders") && (
+              <NotificationBell
+                fetchUrl="/api/admin/notifications"
+                countKey="newOrdersCount"
+                latestKey="latestOrderAt"
+                navigateTo="/admin/orders?status=PLACED"
+                ariaLabel="New order notifications"
+              />
+            )
+          )}
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">

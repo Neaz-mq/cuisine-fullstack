@@ -172,6 +172,25 @@ export function staffMenuLabel(role?: string | null): string {
   return isStaffRole(role) ? STAFF_MENU_LABEL[role] : "Admin Dashboard";
 }
 
+/** Sidebar header title in /admin/layout.tsx — same "don't call it Admin
+ * Panel for someone who isn't one" reasoning as staffMenuLabel above, just
+ * for the panel's own name instead of the storefront dropdown link. A
+ * DELIVERY rider staring at "Admin Panel" while they're just trying to
+ * mark an order delivered is the kind of small mislabel that makes staff
+ * doubt they're even looking at the right screen. */
+const PANEL_LABEL: Record<StaffRole, string> = {
+  OWNER: "Admin Panel",
+  MANAGER: "Admin Panel",
+  WAITER: "Staff Panel",
+  CASHIER: "Staff Panel",
+  DELIVERY: "Rider Panel",
+  KITCHEN: "Kitchen Panel",
+};
+
+export function panelLabel(role?: string | null): string {
+  return isStaffRole(role) ? PANEL_LABEL[role] : "Admin Panel";
+}
+
 /** Can this role create/edit/deactivate a target user with `targetRole`?
  * OWNER can manage anyone. MANAGER can manage anyone except another OWNER
  * (and can't promote someone TO OWNER either — same rule, both directions). */

@@ -35,35 +35,74 @@ function playBeep() {
   }
 }
 
-export default function NotificationBell() {
+/**
+ * src/app/admin/NotificationBell.tsx
+ *
+ * Generic polling notification bell — NOT hardcoded to "new orders"
+ * anymore. Originally it was, and it lived in the shared admin sidebar
+ * layout, so it also rendered (and mis-navigated) for DELIVERY/KITCHEN
+ * staff who don't have the "orders" scope /admin/orders needs. Rather
+ * than duplicate this whole polling/beep/badge component for the rider's
+ * "new delivery assigned to you" notification, it's parameterized here —
+ * same pattern as ChatPanel.tsx being shared between the rider and
+ * customer sides of chat instead of two near-identical components.
+ *
+ * Each specific bell is just a call site with different props:
+ *   admin/layout.tsx (orders scope)   -> fetchUrl /api/admin/notifications
+ *   admin/layout.tsx (DELIVERY role)  -> fetchUrl /api/rider/notifications
+ *
+ * The backing API response only needs the two field names below — no
+ * other shape assumptions are made, so a third bell (e.g. a future
+ * "reservation confirmed" notification) is just another call site with
+ * its own fetchUrl/countKey/latestKey/navigateTo, not a new component.
+ */
+export default function NotificationBell({
+  fetchUrl,
+  countKey,
+  latestKey,
+  navigateTo,
+  ariaLabel,
+}: {
+  /** Endpoint returning `{ [countKey]: number, [latestKey]: string | null }`. */
+  fetchUrl: string;
+  /** Field name in the response holding "how many new items since `since`". */
+  countKey: string;
+  /** Field name in the response holding the most recent item's timestamp —
+   * fed back as `?since=` on the next poll. */
+  latestKey: string;
+  /** Where clicking the bell navigates. */
+  navigateTo: string;
+  ariaLabel: string;
+}) {
   const router = useRouter();
   const [count, setCount] = useState(0);
   const lastSeenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // প্রথমবার শুধু বর্তমান latest order timestamp রেকর্ড করে রাখে,
-    // পুরনো সব order-এর জন্য notification দেখায় না — শুধু এরপর থেকে যা নতুন আসবে
-    fetch("/api/admin/notifications")
+    // প্রথমবার শুধু বর্তমান latest timestamp রেকর্ড করে রাখে, পুরনো সব
+    // item-এর জন্য notification দেখায় না — শুধু এরপর থেকে যা নতুন আসবে
+    fetch(fetchUrl)
       .then((res) => res.json())
       .then((data) => {
-        lastSeenRef.current = data.latestOrderAt;
+        lastSeenRef.current = data[latestKey] ?? null;
       })
       .catch(() => {});
 
     const interval = setInterval(async () => {
       try {
         const url = lastSeenRef.current
-          ? `/api/admin/notifications?since=${encodeURIComponent(lastSeenRef.current)}`
-          : "/api/admin/notifications";
+          ? `${fetchUrl}?since=${encodeURIComponent(lastSeenRef.current)}`
+          : fetchUrl;
         const res = await fetch(url);
         const data = await res.json();
 
-        if (data.newOrdersCount > 0) {
-          setCount((prev) => prev + data.newOrdersCount);
+        const newCount = data[countKey] ?? 0;
+        if (newCount > 0) {
+          setCount((prev) => prev + newCount);
           playBeep();
         }
-        if (data.latestOrderAt) {
-          lastSeenRef.current = data.latestOrderAt;
+        if (data[latestKey]) {
+          lastSeenRef.current = data[latestKey];
         }
       } catch {
         // network error হলে চুপচাপ পরের poll-এ আবার চেষ্টা করবে
@@ -71,18 +110,19 @@ export default function NotificationBell() {
     }, POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchUrl/countKey/latestKey are stable per call site, not expected to change on re-render
   }, []);
 
   function handleClick() {
     setCount(0);
-    router.push("/admin/orders?status=PLACED");
+    router.push(navigateTo);
   }
 
   return (
     <button
       onClick={handleClick}
       className="relative p-2 rounded-md hover:bg-gray-100 transition-colors"
-      aria-label="New order notifications"
+      aria-label={ariaLabel}
     >
       <Bell className="w-5 h-5 text-gray-600" />
       {count > 0 && (
