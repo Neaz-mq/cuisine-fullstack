@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 const STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -24,6 +25,7 @@ export default function OrderStatusSelect({
 }) {
   const [status, setStatus] = useState(currentStatus);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   // currentStatus only matters as the INITIAL value to useState above —
   // React doesn't re-run that initializer on a prop change, so without
@@ -57,7 +59,17 @@ export default function OrderStatusSelect({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) setStatus(previous); // revert on failure
+      if (!res.ok) {
+        setStatus(previous); // revert on failure
+      } else {
+        // Re-fetch the server-rendered parts of this page (order count in
+        // the header, and — when a status filter is active — whether this
+        // order still belongs in the filtered list at all) so they don't
+        // stay stale until a manual browser refresh. This dropdown's own
+        // `status` state is already correct from the optimistic update
+        // above, so no flicker here.
+        router.refresh();
+      }
     });
   }
 
