@@ -171,4 +171,4 @@ prisma/
 
 ## License
 
-Not currently licensed for reuse — all rights reserved.
+See [LICENSE](./LICENSE) for terms. Contributions: see [CONTRIBUTING.md](./CONTRIBUTING.md).
