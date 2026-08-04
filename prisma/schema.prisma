@@ -58,6 +58,10 @@ model User {
   // entry, wastage, physical-count adjustment). Null on the StockMovement
   // side for automatic ORDER_DEDUCTION rows — see StockMovement.createdBy.
   stockMovementsRecorded StockMovement[]
+
+  // Phase 2 — every PurchaseOrder this person has created, regardless of
+  // its current status (DRAFT/ORDERED/RECEIVED/CANCELLED).
+  purchaseOrdersCreated PurchaseOrder[]
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"
@@ -840,6 +844,11 @@ model InventoryItem {
   usedInRecipes  MenuItemIngredient[]
   stockMovements StockMovement[]
 
+  // Phase 2 — every PurchaseOrder line item that has ever ordered this
+  // ingredient, across every supplier. Powers "who do we usually buy
+  // this from, and at what price" on the item's detail view.
+  purchaseOrderLines PurchaseOrderItem[]
+
   // Powers the "low stock" dashboard query: active items where
   // currentStock <= reorderThreshold. Filtering isActive first is the
   // selective predicate; the comparison itself can't be indexed directly
@@ -942,4 +951,151 @@ model StockMovement {
   // Reverse lookup: "what did this order actually consume" — used when
   // reversing deductions on cancellation.
   @@index([orderId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INVENTORY MANAGEMENT — Phase 2 (Supplier + Purchase Order restocking)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Closes the loop Phase 1 left open: PURCHASE was already a valid
+// StockMovementType, but nothing in the schema produced one — it had to
+// be recorded by hand with no paper trail of which supplier, what was
+// ordered vs. actually delivered, or at what cost. A PurchaseOrder is
+// that paper trail; RECEIVING one is the only thing that actually moves
+// stock (see the status/receiving note on PurchaseOrder below) — a
+// PurchaseOrder sitting in DRAFT or ORDERED status has zero effect on
+// InventoryItem.currentStock, same as a Coupon existing has zero effect
+// on anyone's order until it's actually redeemed.
+//
+// Deliberately NOT modeling split/partial shipments (a PO arriving across
+// several separate deliveries) — PurchaseOrderItem.quantityReceived can
+// differ from quantityOrdered (a short delivery is common and needs to be
+// recorded accurately), but receiving happens as ONE event per PO, not a
+// running tally across multiple receiving sessions. Most small-to-mid
+// restaurant purchasing is single-delivery; multi-delivery PO splitting
+// is a real feature some larger operations need, but it's a meaningfully
+// bigger workflow (a PurchaseOrder would need its own sub-ledger of
+// receiving events) — left as a future Phase 3 rather than guessed at
+// here.
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id   String @id @default(cuid())
+  name String
+
+  phone   String?
+  email   String?
+  address String?
+
+  // Soft-disable instead of deleting — a supplier with PurchaseOrder
+  // history shouldn't disappear from past records if the restaurant
+  // stops ordering from them. Same pattern as InventoryItem.isActive.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+}
+
+enum PurchaseOrderStatus {
+  // Being assembled — line items can still be freely added/edited/removed.
+  DRAFT
+  // Sent to the supplier, awaiting delivery. Line items are locked at
+  // this point (quantityOrdered/costPerUnit shouldn't silently change
+  // after the supplier has already been told what was ordered).
+  ORDERED
+  // Delivery has arrived and been receivedAt — this is the ONLY status
+  // transition that touches InventoryItem.currentStock (see the
+  // receiving-logic note on PurchaseOrderItem below). Terminal state.
+  RECEIVED
+  // Called off before receiving — e.g. the supplier couldn't fulfill it.
+  // Terminal state; never touches stock, regardless of which prior
+  // status it was cancelled from.
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id     String              @id @default(cuid())
+  status PurchaseOrderStatus @default(DRAFT)
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId String
+
+  // Denormalized sum of items[].quantityOrdered * items[].costPerUnit —
+  // same "denormalized for display" tradeoff as Order.totalAmount,
+  // avoids re-summing PurchaseOrderItem on every list-view row. Kept in
+  // sync whenever line items are added/edited/removed (while status =
+  // DRAFT) — not touched by the receiving step itself, since a short
+  // delivery doesn't retroactively change what was ordered/agreed, only
+  // what arrived.
+  totalCost Float @default(0)
+
+  // Free-text — supplier invoice/reference number, delivery notes, why a
+  // PO was cancelled, etc.
+  note String?
+
+  orderedAt  DateTime? // set when DRAFT -> ORDERED
+  receivedAt DateTime? // set when ORDERED -> RECEIVED; drives the stock-crediting transaction
+
+  // Staff member who created this PO. Nullable for the same reason as
+  // StockMovement.createdBy — defensive against the user account being
+  // removed later, not because a PO is ever created without a staff
+  // member behind it.
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+
+  items PurchaseOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The admin Inventory > Purchase Orders list filters by supplier and by
+  // status ("show me all ORDERED POs awaiting delivery, from Supplier X").
+  @@index([supplierId, status])
+  // The "Purchase Orders" tab's default view — open/pending POs across
+  // all suppliers, so a plain status filter needs its own index (the
+  // composite above can't serve a query with no supplierId predicate).
+  @@index([status])
+}
+
+// One line item per InventoryItem on a PurchaseOrder — how much was
+// ordered, at what agreed cost, and (once received) how much actually
+// arrived.
+model PurchaseOrderItem {
+  id String @id @default(cuid())
+
+  quantityOrdered Float
+
+  // Defaults to 0 rather than mirroring quantityOrdered, so a PO that's
+  // still ORDERED (not yet received) reads unambiguously as "nothing
+  // received yet" rather than looking like a full delivery already
+  // happened. Set to the actual delivered amount in the same transaction
+  // that moves the parent PurchaseOrder to RECEIVED — see the schema-file
+  // note above on why receiving is one event per PO, not an incremental
+  // tally.
+  quantityReceived Float @default(0)
+
+  // Cost per InventoryItem.unit, locked in at order time — deliberately
+  // NOT read from InventoryItem.costPerUnit at receiving time, since a
+  // supplier's price on the day an order was placed is what this PO
+  // actually cost regardless of what the catalog "current cost" drifts
+  // to later. Receiving a PO writes ITS costPerUnit forward onto
+  // InventoryItem.costPerUnit (most-recent-purchase-price wins) — see
+  // the receiving-logic note below.
+  costPerUnit Float
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrderId String
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  inventoryItemId String
+
+  // A PO shouldn't list the same ingredient twice — if the ordered
+  // amount changes, it's an update to the existing line, not a new one.
+  // Same reasoning as MenuItemIngredient's uniqueness constraint.
+  @@unique([purchaseOrderId, inventoryItemId])
+  @@index([inventoryItemId])
 }
