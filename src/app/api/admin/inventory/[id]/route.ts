@@ -1,0 +1,85 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireApiScope } from "@/lib/require-admin";
+import { cuidSchema } from "@/lib/validations/common";
+import { updateInventoryItemSchema } from "@/lib/validations/inventory";
+import { parseBody } from "@/lib/validations/parse";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireApiScope("inventory");
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+
+  const item = await prisma.inventoryItem.findUnique({
+    where: { id },
+    // usedInRecipes tells the item's detail page which menu items would
+    // be affected by editing/deactivating it — e.g. "used in 4 recipes"
+    // before letting staff deactivate an item that's still load-bearing.
+    include: {
+      usedInRecipes: {
+        select: { quantityRequired: true, menuItem: { select: { id: true, title: true } } },
+      },
+    },
+  });
+
+  if (!item) {
+    return NextResponse.json({ error: "Inventory item not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(item);
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireApiScope("inventory");
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+  const idCheck = cuidSchema.safeParse(id);
+  if (!idCheck.success) {
+    return NextResponse.json({ error: "Invalid item id" }, { status: 400 });
+  }
+
+  const parsed = await parseBody(req, updateInventoryItemSchema);
+  if (parsed instanceof NextResponse) return parsed;
+
+  try {
+    const updated = await prisma.inventoryItem.update({ where: { id }, data: parsed });
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json(
+      { error: "An inventory item with this name already exists." },
+      { status: 409 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireApiScope("inventory");
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+
+  // Soft-disable, never a hard delete — an item with StockMovement/recipe
+  // history has to stay queryable (see InventoryItem.isActive's schema
+  // note). Same "deactivate, don't delete" pattern already used for
+  // staff (StaffProfile.isActive).
+  try {
+    const updated = await prisma.inventoryItem.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json({ error: "Inventory item not found" }, { status: 404 });
+  }
+}
