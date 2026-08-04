@@ -53,6 +53,11 @@ model User {
   // credentials login every other staff role uses; there is no separate
   // rider auth system.
   deliveries DeliveryTracking[] @relation("RiderDeliveries")
+
+  // Staff member who recorded a given inventory change (manual purchase
+  // entry, wastage, physical-count adjustment). Null on the StockMovement
+  // side for automatic ORDER_DEDUCTION rows — see StockMovement.createdBy.
+  stockMovementsRecorded StockMovement[]
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"
@@ -134,6 +139,12 @@ model MenuItem {
   // Coupons restricted to "only this item" — see the restriction note on
   // Coupon below.
   restrictedByCoupons Coupon[] @relation("CouponItems")
+
+  // The recipe / Bill-of-Materials for this item — see MenuItemIngredient
+  // below. Empty (the default) means no inventory deduction happens when
+  // this item is ordered, which keeps every existing menu item working
+  // unchanged until a recipe is deliberately configured for it.
+  ingredients MenuItemIngredient[]
 }
 
 model Order {
@@ -249,6 +260,11 @@ model Order {
   // Rider <-> customer live chat, active only while OUT_FOR_DELIVERY (see
   // ChatMessage below for the full design note).
   chatMessages ChatMessage[]
+
+  // Inventory deductions (and any RETURN reversals) tied to this order —
+  // see StockMovement below. Empty for orders made entirely of menu items
+  // with no configured recipe.
+  stockMovements StockMovement[]
 
   // tableId: DINE_IN orders looked up by table (unchanged, pre-existing).
   //
@@ -764,4 +780,166 @@ model GiftCardTransaction {
   createdAt DateTime @default(now())
 
   @@index([giftCardId, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INVENTORY MANAGEMENT — Phase 1 (core stock tracking + recipe deduction)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Design mirrors the existing LoyaltyTransaction / GiftCardTransaction
+// pattern already in this schema: a denormalized running balance on the
+// "parent" (here, InventoryItem.currentStock) for fast reads, kept in
+// sync with an append-only ledger (StockMovement) inside the same DB
+// transaction whenever it changes. The ledger is the source of truth for
+// "why did this number change" — currentStock alone can't answer that.
+//
+// Scope of this phase: track raw-ingredient stock, define what each menu
+// item consumes (the recipe), and auto-deduct on order. Supplier /
+// PurchaseOrder (the restocking side) is a deliberately separate Phase 2
+// — this phase is usable on its own for stock visibility and low-stock
+// alerts even before a purchasing workflow exists.
+
+enum InventoryUnit {
+  GRAM
+  KILOGRAM
+  MILLILITER
+  LITER
+  PIECE
+}
+
+model InventoryItem {
+  id   String @id @default(cuid())
+  name String @unique
+
+  unit InventoryUnit
+
+  // Denormalized running balance — see the file-level note above. Always
+  // changed together with a StockMovement row in the same transaction,
+  // never updated on its own.
+  currentStock Float @default(0)
+
+  // Below this level, the admin dashboard surfaces a low-stock warning
+  // for this item. 0 (the default) means "no alert configured yet" —
+  // deliberately not defaulted to something like 10, since a sensible
+  // threshold depends entirely on the ingredient (10 units of salt vs 10
+  // units of saffron mean very different things).
+  reorderThreshold Float @default(0)
+
+  // Latest known cost per unit — used to value currentStock and to
+  // compute a menu item's food cost via its recipe. Updated whenever a
+  // new purchase is recorded (Phase 2); until then, set manually.
+  costPerUnit Float @default(0)
+
+  // Soft-disable instead of deleting — an item with StockMovement/recipe
+  // history shouldn't disappear from past records if discontinued.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usedInRecipes  MenuItemIngredient[]
+  stockMovements StockMovement[]
+
+  // Powers the "low stock" dashboard query: active items where
+  // currentStock <= reorderThreshold. Filtering isActive first is the
+  // selective predicate; the comparison itself can't be indexed directly
+  // in Postgres (it's a column-to-column comparison, not a fixed value),
+  // so this index gets the query to a small isActive=true set fast and
+  // leaves a cheap in-memory filter for the threshold comparison itself.
+  @@index([isActive])
+}
+
+// The recipe / Bill-of-Materials: how much of each InventoryItem one unit
+// of a MenuItem consumes. E.g. one "Chicken Biryani" might consume 250g
+// rice + 200g chicken + 15g mixed spices — three MenuItemIngredient rows.
+model MenuItemIngredient {
+  id String @id @default(cuid())
+
+  // Quantity of InventoryItem.unit consumed per ONE unit of the menu
+  // item sold. Multiplied by OrderItem.quantity at deduction time.
+  quantityRequired Float
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId String
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  inventoryItemId String
+
+  // A menu item shouldn't list the same raw ingredient twice — if the
+  // amount changes, it's an update to the existing row, not a new one.
+  @@unique([menuItemId, inventoryItemId])
+  @@index([inventoryItemId])
+}
+
+enum StockMovementType {
+  // Stock received from a supplier (Phase 2 will link this to a
+  // PurchaseOrder; for now it's recordable manually).
+  PURCHASE
+  // Automatic deduction when an order is placed/confirmed — see the
+  // deduction-logic note further down for exactly when this fires.
+  ORDER_DEDUCTION
+  // Spoilage, kitchen error, spillage — recorded manually by staff.
+  WASTAGE
+  // Manual correction after a physical stock count doesn't match
+  // currentStock (the eventual reality of any perpetual-inventory system).
+  ADJUSTMENT
+  // Stock returned to inventory — e.g. an order was cancelled AFTER
+  // deduction already happened, and the ingredients weren't actually used.
+  RETURN
+}
+
+model StockMovement {
+  id   String            @id @default(cuid())
+  type StockMovementType
+
+  // Positive = stock added (PURCHASE, RETURN, upward ADJUSTMENT),
+  // negative = stock removed (ORDER_DEDUCTION, WASTAGE, downward
+  // ADJUSTMENT). Signed rather than split into separate in/out columns —
+  // simpler to sum for any "net change over a period" report.
+  quantityChange Float
+
+  // Snapshot of InventoryItem.currentStock immediately AFTER this
+  // movement was applied. Not strictly non-derivable (it's redundant with
+  // summing prior movements), but storing it means an audit view never
+  // needs to replay the whole ledger just to show "stock was X after this
+  // event" — the same tradeoff GiftCardTransaction already makes by
+  // storing balances alongside its ledger rows.
+  resultingStock Float
+
+  // Free-text context — e.g. "spilled during prep", "physical count
+  // correction", supplier invoice number for a PURCHASE. Required in
+  // practice at the application layer for WASTAGE/ADJUSTMENT (an
+  // unexplained manual stock change is exactly what this table exists to
+  // prevent), optional at the DB level for the same reason other
+  // optional-in-practice fields in this schema are (ORDER_DEDUCTION
+  // movements are self-explanatory via `order` below and don't need one).
+  note String?
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  inventoryItemId String
+
+  // Set only for ORDER_DEDUCTION (and a RETURN that reverses one) —
+  // links back to the order that triggered it, so "why did chicken stock
+  // drop by 2kg at 7:45pm" traces directly to an order. onDelete: SetNull
+  // (not Cascade) so deleting an Order — which nothing in this app
+  // actually does; orders are cancelled, not deleted — would never
+  // silently erase inventory history either way.
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId String?
+
+  // Staff member who recorded this movement. Null for automatic
+  // ORDER_DEDUCTION movements (the system did it, not a person) and for
+  // PURCHASE rows created by an automated Phase-2 PurchaseOrder receipt.
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  // The admin Inventory > [item] history view does
+  // `WHERE inventoryItemId = ? ORDER BY createdAt DESC` — one item's full
+  // movement history, newest first.
+  @@index([inventoryItemId, createdAt])
+  // Reverse lookup: "what did this order actually consume" — used when
+  // reversing deductions on cancellation.
+  @@index([orderId])
 }
