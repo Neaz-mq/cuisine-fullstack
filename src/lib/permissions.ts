@@ -157,8 +157,15 @@ export function getScopesForRole(role?: string | null): Scope[] {
 
 /** Where to send a staff member if they land somewhere they don't have
  * access to (e.g. the financial dashboard, for a WAITER). Falls back to
- * "/admin" itself only if a role somehow has zero scopes. */
+ * "/admin" itself only if a role somehow has zero scopes.
+ *
+ * OWNER/MANAGER are special-cased to "/admin" itself (the real dashboard)
+ * rather than walking SCOPE_PRIORITY — since they hold ALL_SCOPES, the
+ * priority walk would otherwise match "orders" (first in the list) and
+ * send them to /admin/orders, contradicting staffMenuLabel's "Admin
+ * Dashboard" text for these two roles. */
 export function firstAllowedPath(role?: string | null): string {
+  if (role === "OWNER" || role === "MANAGER") return "/admin";
   const scopes = getScopesForRole(role);
   const first = SCOPE_PRIORITY.find((scope) => scopes.includes(scope));
   return first ? SCOPE_PATH[first] : "/admin";
