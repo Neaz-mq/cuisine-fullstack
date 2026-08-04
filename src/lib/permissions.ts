@@ -22,6 +22,7 @@ export type StaffRole = (typeof STAFF_ROLES)[number];
 export type Scope =
   | "menu"
   | "categories"
+  | "inventory"
   | "orders"
   | "kitchen"
   | "tables"
@@ -39,6 +40,7 @@ export type Scope =
 const ALL_SCOPES: Scope[] = [
   "menu",
   "categories",
+  "inventory",
   "orders",
   "kitchen",
   "tables",
@@ -74,6 +76,14 @@ const ALL_SCOPES: Scope[] = [
  * "marketing" (sending offer broadcasts to the whole customer audience)
  * is deliberately NOT given to WAITER/CASHIER/DELIVERY/KITCHEN — only
  * OWNER/MANAGER get it via ALL_SCOPES, same as "staff" and "settings".
+ *
+ * "inventory" (stock levels, recipes, purchase/wastage/adjustment
+ * entries, cost-per-unit) is the same OWNER/MANAGER-only shape — a
+ * KITCHEN staffer preps food using their existing "kitchen" scope, but
+ * doesn't get to record purchases or edit costPerUnit. If KITCHEN ever
+ * needs a read-only low-stock glance, that's a narrower addition to make
+ * later (e.g. surfacing it inside the kitchen board itself), not full
+ * "inventory" scope access.
  */
 const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
   OWNER: ALL_SCOPES,
@@ -89,6 +99,7 @@ const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
 const SCOPE_PATH: Record<Scope, string> = {
   menu: "/admin/menu",
   categories: "/admin/categories",
+  inventory: "/admin/inventory",
   orders: "/admin/orders",
   kitchen: "/admin/kitchen",
   tables: "/admin/tables",
@@ -114,6 +125,7 @@ const SCOPE_PRIORITY: Scope[] = [
   "reservations",
   "menu",
   "categories",
+  "inventory",
   "coupons",
   "giftCards",
   "reviews",
