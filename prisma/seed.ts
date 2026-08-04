@@ -1,20 +1,9 @@
-/**
- * prisma/seed.ts
- *
- * পুরনো `cuisine` (frontend-only) প্রজেক্টের 7টা component ফাইল থেকে
- * সব menu item একসাথে করে এই seed script বানানো হয়েছে:
- * Items.jsx, Category.jsx, Popular.jsx, Signature.jsx, Weekly.jsx, Feast.jsx, Limited.jsx
- *
- * রান করার আগে: prisma/seed.ts ফাইলে এই কন্টেন্ট সেভ করুন,
- * তারপর নিচের কমান্ড চালান (নিচে ব্যাখ্যা করা আছে)।
- */
-
 import { PrismaClient } from "../src/generated/prisma/client";
 
 const prisma = new PrismaClient();
 
 // ---------------------------------------------------------------------------
-// Category list (Items.jsx + Category.jsx থেকে, ডুপ্লিকেট merge করা হয়েছে)
+// Category list 
 // ---------------------------------------------------------------------------
 const categories = [
   "Burgers",
@@ -33,8 +22,8 @@ const categories = [
 ];
 
 // ---------------------------------------------------------------------------
-// Menu items — সব ফাইল থেকে একসাথে, প্রতিটাতে category ট্যাগ করা আছে
-// price সব জায়গায় Float-এ normalize করা ($ চিহ্ন বাদ দিয়ে)
+// Menu items 
+// price
 // ---------------------------------------------------------------------------
 const menuItems = [
   // ---- Items.jsx: BURGERS ----
@@ -460,7 +449,7 @@ const menuItems = [
     category: "Coffee",
   },
 
-  // ---- Category.jsx: Pizza (merge হবে উপরের Pizza category-র সাথে) ----
+  // ---- Category.jsx: Pizza 
   {
     title: "Pepperoni Pizza",
     description:
@@ -563,7 +552,7 @@ const menuItems = [
     category: "Popular",
   },
 
-  // ---- Signature.jsx (component নাম একই, কিন্তু আলাদা data — "Set Meals") ----
+  // ---- Signature.jsx 
   {
     title: "Classic Combo",
     description:
