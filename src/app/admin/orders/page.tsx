@@ -68,7 +68,13 @@ export default async function AdminOrdersPage({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">All Orders</h1>
+      <div className="flex items-baseline gap-2 mb-6">
+        <h1 className="text-2xl font-semibold text-gray-800">All Orders</h1>
+        <span className="text-sm text-gray-400">
+          {totalCount} {totalCount === 1 ? "order" : "orders"}
+          {status && status !== "ALL" ? ` · ${status}` : ""}
+        </span>
+      </div>
 
       <OrdersToolbar />
 
