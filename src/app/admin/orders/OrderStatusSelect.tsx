@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 const STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -27,14 +27,26 @@ export default function OrderStatusSelect({
 
   // currentStatus only matters as the INITIAL value to useState above —
   // React doesn't re-run that initializer on a prop change, so without
-  // this effect, a status change made elsewhere (e.g. assign-rider
-  // flipping the order to OUT_FOR_DELIVERY, followed by
-  // AssignRiderPanel's router.refresh()) would silently NOT show up here:
-  // the server-rendered prop updates, but this dropdown keeps rendering
-  // its stale first-mount value until the user manually changes it.
-  useEffect(() => {
+  // resyncing, a status change made elsewhere (e.g. assign-rider flipping
+  // the order to OUT_FOR_DELIVERY, followed by AssignRiderPanel's
+  // router.refresh()) would silently NOT show up here: the server-rendered
+  // prop updates, but this dropdown keeps rendering its stale first-mount
+  // value until the user manually changes it.
+  //
+  // This used to be a useEffect that called setStatus(currentStatus).
+  // React's own docs (and eslint's react-hooks/set-state-in-effect rule)
+  // flag that pattern: an effect-based sync renders the STALE value once,
+  // then the effect fires, then a second render shows the correct value —
+  // a visible flicker plus a wasted render. Calling setState directly
+  // during render instead (comparing against the last-seen prop) corrects
+  // it within the same render pass, before anything is painted. React
+  // explicitly supports this pattern; see
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevCurrentStatus, setPrevCurrentStatus] = useState(currentStatus);
+  if (currentStatus !== prevCurrentStatus) {
+    setPrevCurrentStatus(currentStatus);
     setStatus(currentStatus);
-  }, [currentStatus]);
+  }
 
   async function handleChange(newStatus: string) {
     const previous = status;
