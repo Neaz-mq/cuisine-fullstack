@@ -29,10 +29,16 @@ export async function GET(req: NextRequest) {
   const { since } = parsedQuery;
 
   const newAssignmentsCount = await prisma.deliveryTracking.count({
-    where: {
-      riderId,
-      ...(since ? { assignedAt: { gt: new Date(since) } } : {}),
-    },
+    where: since
+      ? // Incremental poll: how many assignments landed after the last
+        // check, regardless of whether they've since been delivered.
+        { riderId, assignedAt: { gt: new Date(since) } }
+      : // Initial mount: not "every assignment this rider has ever had"
+        // (that's not a notification, it's their whole history) but
+        // "assignments still needing attention right now" — i.e. not yet
+        // delivered. Mirrors /api/admin/notifications filtering to
+        // status: "PLACED" for the same reason.
+        { riderId, deliveredAt: null },
   });
 
   const latestAssignment = await prisma.deliveryTracking.findFirst({

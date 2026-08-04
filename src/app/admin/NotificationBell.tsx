@@ -79,12 +79,20 @@ export default function NotificationBell({
   const lastSeenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // প্রথমবার শুধু বর্তমান latest timestamp রেকর্ড করে রাখে, পুরনো সব
-    // item-এর জন্য notification দেখায় না — শুধু এরপর থেকে যা নতুন আসবে
+    // প্রথমবার fetch করার সময় বর্তমান latest timestamp রেকর্ড করে রাখে
+    // (পরের poll-এর baseline হিসেবে), এবং সেই মুহূর্তে যতগুলো item এখনো
+    // unaddressed অবস্থায় আছে (since ছাড়া কল করায় API সবগুলো গোনে) সেটাও
+    // সাথে সাথে badge-এ দেখিয়ে দেয়। আগে এই initial count ফেলে দেওয়া হতো,
+    // ফলে admin যদি panel বন্ধ রেখে/home page-এ থেকে কিছুক্ষণ পর dashboard-এ
+    // ঢুকতেন, ততক্ষণে জমে থাকা order গুলো bell miss করে যেত — সেগুলো তো
+    // "mount-এর পরে আসা" না, কিন্তু ঠিক ততটাই unaddressed। beep অবশ্য
+    // বাজানো হয় না এই initial load-এ, শুধু পরের poll-এ সত্যিকারের নতুন
+    // item এলে বাজবে — নাহলে প্রতিটা page refresh-এই শব্দ হতো।
     fetch(fetchUrl)
       .then((res) => res.json())
       .then((data) => {
         lastSeenRef.current = data[latestKey] ?? null;
+        setCount(data[countKey] ?? 0);
       })
       .catch(() => {});
 
