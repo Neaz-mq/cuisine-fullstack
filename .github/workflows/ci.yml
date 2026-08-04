@@ -1,0 +1,60 @@
+name: CI
+
+# Runs on every push and pull request targeting main, so a broken lint,
+# test, or build is caught before merge rather than discovered later.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cuisine's own env vars — never real secrets. `next build` and
+# `prisma generate` need these to be *present* (so top-level clients like
+# supabase-admin.ts don't throw "url is required"), but never need them to
+# be *valid*, since this workflow never runs the app or hits a real
+# database, Stripe account, or Supabase project.
+env:
+  DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+  DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
+  AUTH_SECRET: "ci-placeholder-secret-not-for-real-use"
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+  STRIPE_SECRET_KEY: "sk_test_ci_placeholder"
+  STRIPE_WEBHOOK_SECRET: "whsec_ci_placeholder"
+  NEXT_PUBLIC_SUPABASE_URL: "https://ci-placeholder.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ci_placeholder"
+  SUPABASE_SECRET_KEY: "sb_secret_ci_placeholder"
+  RESEND_API_KEY: "re_ci_placeholder"
+  EMAIL_FROM: "Cuisine <ci@example.com>"
+
+jobs:
+  ci:
+    name: Lint, test, and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Generates src/generated/prisma from schema.prisma. Doesn't connect
+      # to a database, so the placeholder DATABASE_URL/DIRECT_URL above is
+      # fine — it just needs the shape of a valid connection string.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
