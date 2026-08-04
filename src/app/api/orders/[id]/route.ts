@@ -4,6 +4,7 @@ import { requireApiScopeAny } from "@/lib/require-admin";
 import { orderStatusUpdateSchema } from "@/lib/validations/order";
 import { parseBody } from "@/lib/validations/parse";
 import { markOrderDelivered } from "@/lib/mark-order-delivered";
+import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 
 // Public, unauthenticated lookup for the /track/[orderId] page. Guest
 // checkout customers have no account to log into, so tracking has to work
@@ -82,6 +83,19 @@ export async function PATCH(
   // button uses, see POST /api/rider/deliveries/[orderId]/deliver.
   if (status === "DELIVERED") {
     const result = await markOrderDelivered(id);
+    if (!result.ok) {
+      const statusCode = result.error === "Order not found" ? 404 : 400;
+      return NextResponse.json({ error: result.error }, { status: statusCode });
+    }
+    return NextResponse.json(result.order);
+  }
+
+  // PREPARING goes through its own shared helper — deducts recipe
+  // ingredients (MenuItemIngredient) from InventoryItem.currentStock in
+  // the same transaction as the status change. Orders with no
+  // recipe-configured menu items just advance with nothing to deduct.
+  if (status === "PREPARING") {
+    const result = await advanceOrderToPreparing(id);
     if (!result.ok) {
       const statusCode = result.error === "Order not found" ? 404 : 400;
       return NextResponse.json({ error: result.error }, { status: statusCode });
