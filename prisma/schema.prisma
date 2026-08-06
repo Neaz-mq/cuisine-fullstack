@@ -90,9 +90,9 @@ enum EmploymentType {
 // One row per staff User (role != CUSTOMER), created together with the User
 // row when an OWNER/MANAGER adds a new staff member via /admin/staff.
 model StaffProfile {
-  id             String         @id @default(cuid())
-  userId         String         @unique
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Human-facing sequential ID shown in the Staff UI (e.g. "EMP-0007") —
   // friendlier to read/say out loud than the cuid in `userId`.
@@ -104,15 +104,26 @@ model StaffProfile {
 
   // Deactivating a staff member (instead of deleting) keeps their name on
   // historical orders/audit trails intact, while blocking further login.
-  isActive       Boolean        @default(true)
+  // Re-checked against the DB on every admin request (see
+  // lib/require-admin.ts) rather than trusted from the session JWT, since
+  // a JWT issued before deactivation would otherwise stay valid.
+  isActive Boolean @default(true)
 
-  // Sensitive fields — only ever read or written by OWNER-role requests.
-  // MANAGER can see/edit everything else on this model but not these two.
-  nid            String?
-  salary         Float?
+  // ⚠️ SENSITIVE — only ever read or written by OWNER-role requests
+  // (see canViewSensitiveStaffFields in lib/permissions.ts). MANAGER can
+  // see/edit everything else on this model but not these two.
+  //
+  // KNOWN LIMITATION: Prisma has no field-level access control, so this
+  // rule lives entirely in application code. A single forgotten `select`
+  // — or an `include: { staffProfile: true }` on a user lookup — leaks
+  // both. Moving these two into their own StaffSensitive model would
+  // make leaking them require a deliberate second include rather than a
+  // forgotten omission. Tracked, not yet done.
+  nid    String?
+  salary Float?
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
@@ -149,6 +160,12 @@ model MenuItem {
   // this item is ordered, which keeps every existing menu item working
   // unchanged until a recipe is deliberately configured for it.
   ingredients MenuItemIngredient[]
+
+  // The /menu page and the homepage category sections both do
+  // `WHERE categoryId = ? AND isAvailable = true`. Postgres does NOT
+  // auto-index foreign keys (unlike MySQL), and Prisma doesn't add one
+  // either — without this, every category browse is a sequential scan.
+  @@index([categoryId])
 }
 
 model Order {
@@ -172,7 +189,9 @@ model Order {
   // simply never collected/set for orderType = DINE_IN. They remain
   // required in practice (application-layer validation) for
   // orderType = DELIVERY — this is intentionally not enforced at the DB
-  // level, since Prisma/Postgres can't express "required if X" directly.
+  // level, since Prisma can't express "required if X" directly. (A raw
+  // Postgres CHECK constraint added via migration COULD express it —
+  // a reasonable future hardening step, not done yet.)
   email     String?
   firstName String
   lastName  String
@@ -210,6 +229,10 @@ model Order {
   // Coupon. The authoritative "was this coupon redeemed, on which order, by
   // which customer" record lives on CouponRedemption below (see the
   // Coupon/CouponRedemption models for the full v2 design rationale).
+  //
+  // These two fields are ALSO what makes cancellation reversal possible
+  // without re-deriving anything — see lib/cancel-order.ts, which reads
+  // couponCode here to release the redemption.
   couponCode       String?
   discountAmount   Float             @default(0)
   couponRedemption CouponRedemption? // back-relation only — FK lives on CouponRedemption.orderId
@@ -224,13 +247,42 @@ model Order {
   // join back to GiftCard. A single order can only ever redeem ONE gift
   // card (matches the checkout UI, one code field at a time), same
   // simplification as couponCode being a single nullable field.
+  //
+  // As with couponCode above, these are also what lib/cancel-order.ts
+  // reads to refund a redemption when an order is cancelled.
   giftCardCode         String?
   giftCardAmount       Float                 @default(0)
   giftCardTransactions GiftCardTransaction[]
 
   // Guards against re-crediting loyalty points if an order is moved to
-  // DELIVERED, reverted, and marked DELIVERED again by mistake.
+  // DELIVERED, reverted, and marked DELIVERED again by mistake. Claimed
+  // atomically via updateMany (see lib/mark-order-delivered.ts) rather
+  // than read-then-written, since two call sites can mark the same order
+  // delivered concurrently — the admin status dropdown and the rider's
+  // own /admin/my-deliveries action.
   pointsAwarded Boolean @default(false)
+
+  // When this order's recipe ingredients were deducted from inventory, or
+  // null if that hasn't happened yet. Set exactly once, on the
+  // PLACED -> PREPARING transition (see lib/advance-order-to-preparing.ts).
+  //
+  // This column exists to be an atomic claim target: the deduction path
+  // does `updateMany WHERE id = ? AND stockDeductedAt IS NULL` and only
+  // proceeds when the affected-row count is 1, so two concurrent requests
+  // can never both deduct. Reading StockMovement to check "did this
+  // already happen" was the previous approach and is NOT safe — under
+  // Postgres' default READ COMMITTED isolation neither transaction sees
+  // the other's uncommitted rows, so both would deduct.
+  //
+  // A partial unique index on StockMovement couldn't serve this purpose
+  // either, since deduction writes ONE ledger row PER INGREDIENT — a
+  // three-ingredient dish legitimately produces three ORDER_DEDUCTION
+  // rows for the same orderId.
+  //
+  // Reset to null by lib/cancel-order.ts is deliberately NOT done — the
+  // RETURN movements are the reversal record, and leaving this set
+  // prevents a cancelled-then-reinstated order from double-deducting.
+  stockDeductedAt DateTime?
 
   // Tracks real payment confirmation for ONLINE orders via Stripe Checkout
   // + webhook — separate from `status` (fulfillment stage) because an order
@@ -250,7 +302,7 @@ model Order {
   updatedAt DateTime @updatedAt
 
   // Guest checkout is allowed, matching /carts which isn't behind auth
-  user   User?  @relation(fields: [userId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
   userId String?
 
   items               OrderItem[]
@@ -297,6 +349,15 @@ enum OrderType {
   DINE_IN
 }
 
+// Legal transitions between these values are defined in ONE place:
+// lib/order-state-machine.ts. Every route that changes Order.status goes
+// through it, so a PLACED order can't skip PREPARING and silently miss
+// its inventory deduction (which is what assign-rider used to do).
+//
+// DELIVERED and CANCELLED are terminal. Reverting out of them is not
+// supported, because loyalty points, stock deduction, and gift card
+// debits have already happened by then and don't un-happen just because
+// a status is changed back.
 enum OrderStatus {
   PLACED
   PREPARING
@@ -337,9 +398,14 @@ enum PaymentStatus {
 // destLat/destLng are geocoded once at assignment time from the order's
 // existing address fields (see lib/geocode.ts) — re-geocoding on every
 // customer poll would be wasteful and Nominatim's free tier is rate
-// limited. riderLat/riderLng start out equal to the destination as a
-// harmless default until the rider's browser reports its first real
-// position.
+// limited.
+//
+// riderLat/riderLng start at the RESTAURANT's coordinates (see
+// lib/restaurant-location.ts), not the destination — a delivery always
+// begins at the restaurant, and seeding them with the customer's own
+// address would render the rider marker sitting on the customer's
+// doorstep before the rider has even set off. Reassignment resets them
+// to the restaurant again for the same reason.
 model DeliveryTracking {
   id      String @id @default(cuid())
   orderId String @unique
@@ -382,12 +448,27 @@ model DeliveryTracking {
 // chat for that order — acceptable because that's already true of the
 // live map and order details on the same page.
 //
-// Delivered via Supabase Realtime (see lib/supabase-client.ts), not the
-// 15s polling pattern used elsewhere in this app — a chat feels laggy at
-// 15s, and Realtime pushes new rows the moment they're inserted instead.
-// Requires ChatMessage to be added to the `supabase_realtime` publication
-// (see prisma/migrations — the enable-chat-realtime.sql note) since Prisma
-// migrations don't touch Supabase's replication config.
+// ⚠️ SECURITY — READ BEFORE DEPLOYING TO PRODUCTION
+// Delivery uses Supabase Realtime (see lib/supabase-client.ts) rather
+// than the 15s polling used elsewhere, because chat feels laggy at 15s.
+// Making that work required TWO manual steps that Prisma migrations
+// don't cover:
+//   1. adding this table to the `supabase_realtime` publication
+//      (done by hand in the Supabase dashboard — NOT in any migration,
+//      so a fresh project silently has no working chat), and
+//   2. migration 20260803120000_grant_chatmessage_select, which runs
+//      `grant select on "ChatMessage" to anon, authenticated`.
+//
+// Step 2 is dangerous on its own. Prisma does not enable Row Level
+// Security on the tables it creates, and `anon` is the role behind the
+// publishable key that ships in the browser bundle. With RLS off, that
+// grant makes EVERY chat message publicly readable — including the
+// orderId in each row, which is the access token for /track/[orderId]
+// and therefore for every customer's name, phone, and address.
+//
+// Before production: either enable RLS with a policy scoped to the
+// order, or drop Realtime for chat and use SSE/polling through the
+// existing API (which already checks the orderId).
 model ChatMessage {
   id      String @id @default(cuid())
   orderId String
@@ -416,14 +497,33 @@ enum ChatSenderRole {
 }
 
 model OrderItem {
-  id         String   @id @default(cuid())
-  quantity   Int
-  price      Float
+  id       String @id @default(cuid())
+  quantity Int
+
+  // Price snapshot at order time — deliberately copied rather than read
+  // from menuItem.price, so changing a menu price never rewrites the
+  // totals on historical orders.
+  //
+  // NOTE: the item's TITLE is not snapshotted, so renaming a MenuItem
+  // does retroactively change what past receipts and confirmation emails
+  // display. Adding a `titleSnapshot` column here would close that gap.
+  price Float
 
   order      Order    @relation(fields: [orderId], references: [id])
   orderId    String
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   menuItemId String
+
+  // orderId: the hottest join in the app — every order detail view, every
+  // confirmation email, the kitchen board, and the admin orders list all
+  // do `WHERE orderId = ?`. Postgres does not auto-index foreign keys and
+  // Prisma doesn't add one, so without this every one of those is a
+  // sequential scan over the whole OrderItem table.
+  //
+  // menuItemId: reverse lookup for "how many times has this dish been
+  // ordered" (insights) and for the recommendations query.
+  @@index([orderId])
+  @@index([menuItemId])
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +582,10 @@ model Coupon {
   // Optional global usage cap across ALL customers combined (e.g. "first
   // 100 redemptions"). Null = unlimited. usageCount is the atomically
   // incremented counter checked against this cap at redemption time.
+  //
+  // Decremented again by lib/cancel-order.ts when an order that consumed
+  // a redemption is cancelled, so a cancelled order doesn't permanently
+  // burn a slot on a limited campaign.
   usageLimit Int?
   usageCount Int  @default(0)
 
@@ -526,6 +630,12 @@ enum CouponDiscountType {
 // per-customer limit enforcement (findValidCoupon/consumeCoupon count a
 // customer's rows here, scoped to one coupon, rather than trusting a
 // boolean).
+//
+// Unlike the ledger models in this schema (StockMovement,
+// GiftCardTransaction, LoyaltyTransaction), a row here IS deleted when
+// its order is cancelled — see lib/cancel-order.ts. This is not a ledger
+// of "what happened to a balance"; it answers "may this customer use
+// this code", and a cancelled order shouldn't keep them locked out.
 model CouponRedemption {
   id       String @id @default(cuid())
   coupon   Coupon @relation(fields: [couponId], references: [id])
@@ -541,6 +651,11 @@ model CouponRedemption {
   // logged-in User.id when available, otherwise the normalized phone
   // number from billing (guest checkout is allowed — see Order.userId).
   // Not a foreign key on purpose, since a guest has no User row at all.
+  //
+  // KNOWN LIMITATION: a guest's phone number is self-asserted and never
+  // verified, so changing one digit produces a "different customer" and
+  // bypasses perCustomerLimit. Coupons that genuinely need a hard
+  // per-person cap should require login.
   customerKey String
 
   // The actual discount amount granted on this specific order — kept here
@@ -576,7 +691,7 @@ model RestaurantTable {
   // Order.tableId above). A table with isActive = false should have its QR
   // code treated as invalid by the ordering flow, not just hidden from the
   // reservation picker.
-  orders       Order[]
+  orders Order[]
 }
 
 enum ReservationStatus {
@@ -588,6 +703,21 @@ enum ReservationStatus {
   NO_SHOW
 }
 
+// KNOWN GAPS (both worth closing before real bookings run through this):
+//
+// 1. No duration. reservedAt is a single instant, so "overlapping
+//    reservations" isn't actually expressible in the data — the slot
+//    length has to be a hardcoded constant in application code, which
+//    means a 2-hour dinner and a 45-minute lunch can't coexist. Adding
+//    `endsAt DateTime` fixes this.
+//
+// 2. No overlap constraint. Availability is checked at query time, so two
+//    concurrent requests can both see a slot free and both insert. With
+//    endsAt present, Postgres can enforce it properly via a raw-migration
+//    exclusion constraint:
+//      EXCLUDE USING gist (
+//        "tableId" WITH =, tsrange("reservedAt", "endsAt") WITH &&
+//      ) WHERE (status NOT IN ('CANCELLED','NO_SHOW'))
 model Reservation {
   id           String            @id @default(cuid())
   customerName String
@@ -607,12 +737,16 @@ model Reservation {
   userId String?
 
   @@index([tableId, reservedAt])
+  // "My bookings" on the customer account page does `WHERE userId = ?`.
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
 // Restaurant settings
 //
-// Single-row table pattern 
+// Single-row table pattern. NOTE: `@default("singleton")` sets the id but
+// does not PREVENT a second row — a raw-migration
+// `CHECK (id = 'singleton')` would actually enforce the invariant.
 // ---------------------------------------------------------------------------
 model RestaurantSettings {
   id               String   @id @default("singleton")
@@ -638,6 +772,9 @@ model RestaurantSettings {
 // avgRating/reviewCount are intentionally NOT cached on MenuItem; they are
 // computed on read via aggregate query. Can be denormalized later purely as
 // a perf optimization if needed — not a correctness requirement now.
+//
+// NOTE: userId is required, so guest orders — the majority of delivery
+// orders, since checkout doesn't require login — can never leave a review.
 // ---------------------------------------------------------------------------
 model Review {
   id        String       @id @default(cuid())
@@ -654,6 +791,11 @@ model Review {
 
   @@unique([userId, menuItemId])
   @@index([menuItemId, status])
+  // "My reviews" on the customer account page does `WHERE userId = ?`.
+  // The [userId, menuItemId] unique above can serve this as a leftmost
+  // prefix, but an explicit index keeps the intent obvious and survives
+  // any future change to that constraint.
+  @@index([userId])
 }
 
 enum ReviewStatus {
@@ -675,11 +817,11 @@ enum ReviewStatus {
 // admin adjustments aren't tied to any specific order.
 // ---------------------------------------------------------------------------
 model LoyaltyTransaction {
-  id        String              @id @default(cuid())
+  id        String        @id @default(cuid())
   points    Int
   reason    LoyaltyReason
   note      String?
-  createdAt DateTime            @default(now())
+  createdAt DateTime      @default(now())
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
@@ -688,6 +830,9 @@ model LoyaltyTransaction {
   orderId String?
 
   @@index([userId, createdAt])
+  // Reverse lookup used by lib/cancel-order.ts: "was a credit already
+  // awarded for this order, and how many points was it".
+  @@index([orderId])
 }
 
 enum LoyaltyReason {
@@ -715,14 +860,22 @@ enum LoyaltyReason {
 // isActive is an admin kill-switch (pull a card immediately, e.g. fraud
 // or a support request), independent of balance reaching zero naturally
 // through redemption.
+//
+// ⚠️ `balance` being Float (Postgres double precision) is a real problem
+// for this model specifically, because a card is spent down
+// incrementally: 50 - 19.99 - 12.35 - 17.66 lands at ~1.8e-15 rather than
+// 0, so the card reads as "still has balance" forever. Decimal(10,2) is
+// the correct type here — see the note at the top of the money-column
+// discussion in the project review.
 // ---------------------------------------------------------------------------
 model GiftCard {
-  id      String @id @default(cuid())
-  code    String @unique
+  id   String @id @default(cuid())
+  code String @unique
 
   // The balance still available to redeem. Starts at initialAmount and
   // only ever decreases (via REDEEM transactions) or increases (via a
-  // manual admin ADJUSTMENT, e.g. a goodwill top-up) — never reset.
+  // manual admin ADJUSTMENT, e.g. a goodwill top-up, or a cancellation
+  // refund written by lib/cancel-order.ts) — never reset.
   initialAmount Float
   balance       Float
 
@@ -730,7 +883,8 @@ model GiftCard {
   // (see checkout.session.completed handling in
   // src/app/api/webhooks/stripe/route.ts) — null for cards an admin
   // issues manually (comp/refund case), which are credited immediately
-  // with no associated payment.
+  // with no associated payment. The @unique is what makes the webhook
+  // idempotent against Stripe's at-least-once delivery.
   stripeSessionId String? @unique
 
   // Who bought/received it — captured for the delivery email and admin
@@ -753,17 +907,21 @@ model GiftCard {
 }
 
 enum GiftCardTransactionType {
-  PURCHASE   // initial credit when a customer buys the card via Stripe
-  ISSUE      // initial credit when an admin manually issues the card (no payment)
-  REDEEM     // debit when applied against an order — orderId is set
-  ADJUSTMENT // manual admin balance correction (top-up or deduction), no orderId
+  PURCHASE // initial credit when a customer buys the card via Stripe
+  ISSUE // initial credit when an admin manually issues the card (no payment)
+  REDEEM // debit when applied against an order — orderId is set
+  ADJUSTMENT // manual admin balance correction, or a cancellation refund
 }
 
 // One row per balance-changing event — the audit trail a bare
 // GiftCard.balance column alone could never provide, mirroring
 // LoyaltyTransaction's ledger design. `amount` is signed: positive =
-// credit (PURCHASE/ISSUE/a top-up ADJUSTMENT), negative = debit
-// (REDEEM/a deduction ADJUSTMENT).
+// credit (PURCHASE/ISSUE/a top-up ADJUSTMENT/a cancellation refund),
+// negative = debit (REDEEM/a deduction ADJUSTMENT).
+//
+// Append-only: cancelling an order does NOT delete its REDEEM row, it
+// writes a compensating positive ADJUSTMENT. The history of what
+// happened stays intact.
 model GiftCardTransaction {
   id     String                  @id @default(cuid())
   amount Float
@@ -773,14 +931,18 @@ model GiftCardTransaction {
   giftCard   GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
   giftCardId String
 
-  // Set only for REDEEM — which order this redemption paid down. Optional
-  // because PURCHASE/ISSUE/ADJUSTMENT aren't tied to any order.
+  // Set only for REDEEM (and the ADJUSTMENT that reverses one) — which
+  // order this redemption paid down. Optional because
+  // PURCHASE/ISSUE/manual ADJUSTMENT aren't tied to any order.
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId String?
 
   createdAt DateTime @default(now())
 
   @@index([giftCardId, createdAt])
+  // Reverse lookup used by lib/cancel-order.ts: "has this order's
+  // redemption already been refunded".
+  @@index([orderId])
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -828,7 +990,8 @@ model InventoryItem {
 
   // Latest known cost per unit — used to value currentStock and to
   // compute a menu item's food cost via its recipe. Updated whenever a
-  // new purchase is recorded (Phase 2); until then, set manually.
+  // PurchaseOrder is received (Phase 2, most-recent-price-wins); can also
+  // be set manually.
   costPerUnit Float @default(0)
 
   // Soft-disable instead of deleting — an item with StockMovement/recipe
@@ -878,19 +1041,24 @@ model MenuItemIngredient {
 }
 
 enum StockMovementType {
-  // Stock received from a supplier (Phase 2 will link this to a
-  // PurchaseOrder; for now it's recordable manually).
+  // Stock received from a supplier — written automatically when a Phase 2
+  // PurchaseOrder is received (see lib/receive-purchase-order.ts), or
+  // recorded manually.
   PURCHASE
-  // Automatic deduction when an order is placed/confirmed — see the
-  // deduction-logic note further down for exactly when this fires.
+  // Automatic deduction on the PLACED -> PREPARING transition (see
+  // lib/advance-order-to-preparing.ts). One row PER INGREDIENT, so a
+  // three-ingredient dish produces three rows for the same orderId — the
+  // "did this order already deduct" guard therefore lives on
+  // Order.stockDeductedAt, not on a unique index here.
   ORDER_DEDUCTION
   // Spoilage, kitchen error, spillage — recorded manually by staff.
   WASTAGE
   // Manual correction after a physical stock count doesn't match
   // currentStock (the eventual reality of any perpetual-inventory system).
   ADJUSTMENT
-  // Stock returned to inventory — e.g. an order was cancelled AFTER
-  // deduction already happened, and the ingredients weren't actually used.
+  // Stock returned to inventory — written by lib/cancel-order.ts when an
+  // order is cancelled AFTER deduction already happened, reversing each
+  // ORDER_DEDUCTION row one-for-one.
   RETURN
 }
 
@@ -924,7 +1092,7 @@ model StockMovement {
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
   inventoryItemId String
 
-  // Set only for ORDER_DEDUCTION (and a RETURN that reverses one) —
+  // Set only for ORDER_DEDUCTION (and the RETURN that reverses one) —
   // links back to the order that triggered it, so "why did chicken stock
   // drop by 2kg at 7:45pm" traces directly to an order. onDelete: SetNull
   // (not Cascade) so deleting an Order — which nothing in this app
@@ -934,8 +1102,9 @@ model StockMovement {
   orderId String?
 
   // Staff member who recorded this movement. Null for automatic
-  // ORDER_DEDUCTION movements (the system did it, not a person) and for
-  // PURCHASE rows created by an automated Phase-2 PurchaseOrder receipt.
+  // ORDER_DEDUCTION/RETURN movements (the system did it, not a person)
+  // and for PURCHASE rows created by an automated Phase-2 PurchaseOrder
+  // receipt.
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById String?
 
@@ -948,6 +1117,8 @@ model StockMovement {
   // Reverse lookup: "what did this order actually consume" — used when
   // reversing deductions on cancellation.
   @@index([orderId])
+  // "What did this staff member record" — the manual-entry audit view.
+  @@index([createdById])
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1056,6 +1227,8 @@ model PurchaseOrder {
   // all suppliers, so a plain status filter needs its own index (the
   // composite above can't serve a query with no supplierId predicate).
   @@index([status])
+  // "POs raised by this staff member" — the purchasing audit view.
+  @@index([createdById])
 }
 
 // One line item per InventoryItem on a PurchaseOrder — how much was
