@@ -125,7 +125,6 @@ export default function ChatPanel({
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
             (payload) => {
-              console.log(`Chat realtime INSERT received for order ${orderId}:`, payload.new);
               addMessage(payload.new as ChatMessage);
             }
           )
@@ -133,7 +132,6 @@ export default function ChatPanel({
             if (cancelled) return;
             if (status === "SUBSCRIBED") {
               attempt = 0; // connection is healthy again — reset backoff
-              console.log(`Chat realtime channel for order ${orderId}: SUBSCRIBED`);
               return;
             }
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
