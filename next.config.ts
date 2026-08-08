@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 /**
  * next.config.ts
@@ -31,6 +32,16 @@ const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 // violation, which is what actually made this hard to diagnose.
 const supabaseWsOrigin = supabaseOrigin.replace(/^https:/, "wss:");
 
+// Sentry's browser SDK reports events to this project's ingest endpoint —
+// same CSP gotcha as the Supabase Realtime WSS origin above: without this
+// in connect-src, the browser silently drops every event and Sentry just
+// looks "empty" instead of erroring, which is much harder to debug than a
+// clear CSP violation in devtools. Derived from the DSN so it stays correct
+// if the DSN's region/host ever changes, and is simply omitted (matches
+// nothing extra) when no DSN is configured yet.
+const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
+const sentryIngestOrigin = sentryDsn ? `https://${new URL(sentryDsn).hostname}` : "";
+
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'`,
@@ -50,8 +61,10 @@ const csp = [
   `font-src 'self' data:`,
   // Supabase origin for storage uploads/reads and API calls (https), PLUS
   // the wss:// variant for Realtime's WebSocket connection (chat) — see
-  // the supabaseWsOrigin comment above for why both are needed.
-  `connect-src 'self' ${supabaseOrigin} ${supabaseWsOrigin}`,
+  // the supabaseWsOrigin comment above for why both are needed. Sentry's
+  // ingest origin is included so browser-side error/crash reports aren't
+  // silently dropped — see the sentryIngestOrigin comment above.
+  `connect-src 'self' ${supabaseOrigin} ${supabaseWsOrigin} ${sentryIngestOrigin}`,
   // No site should ever be able to iframe this app (clickjacking).
   "frame-ancestors 'none'",
   "form-action 'self'",
@@ -139,4 +152,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  // Source map upload needs SENTRY_AUTH_TOKEN, which only exists once a
+  // Sentry project is created — omit it locally/pre-launch and this step
+  // just no-ops instead of failing the build.
+  silent: !process.env.CI,
+  disableLogger: true,
+});

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * src/app/error.tsx
@@ -16,7 +17,9 @@ import Link from "next/link";
  * Must be a Client Component (App Router requirement for error.tsx).
  * digest is Next's stripped-of-detail crash reference, safe to show a
  * customer as a support ID — the actual error message/stack is not, so it
- * stays out of what's rendered here.
+ * stays out of what's rendered here. It's attached as a Sentry tag so the
+ * two can be cross-referenced: a customer reports "reference XYZ" and
+ * that's searchable directly in Sentry.
  */
 export default function Error({
   error,
@@ -26,10 +29,9 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // TODO: wire up to real error monitoring (e.g. Sentry) before launch —
-    // console.error alone means the team only finds out about production
-    // crashes if a customer happens to report one.
-    console.error("Unhandled application error:", error);
+    Sentry.captureException(error, {
+      tags: { digest: error.digest },
+    });
   }, [error]);
 
   return (
