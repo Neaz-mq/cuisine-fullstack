@@ -53,6 +53,26 @@ export interface GiftCardInfo {
 }
 
 /**
+ * Pulls the violated field names out of a Prisma unique-constraint error.
+ * Returns an empty array for anything that isn't a P2002.
+ *
+ * GiftCard has TWO unique columns — `code` and `stripeSessionId` — and a
+ * P2002 on each means something completely different, so "was this a
+ * P2002" is not a useful question on its own. Prisma reports which
+ * constraint was hit in `meta.target`, as either an array of column names
+ * or (depending on the connector) a single string, so both shapes are
+ * normalised here.
+ */
+function uniqueViolationFields(error: unknown): string[] {
+  if (typeof error !== "object" || error === null) return [];
+  const e = error as { code?: string; meta?: { target?: string[] | string } };
+  if (e.code !== "P2002") return [];
+  const target = e.meta?.target;
+  if (Array.isArray(target)) return target;
+  return target ? [target] : [];
+}
+
+/**
  * Looks up a gift card and checks everything that CAN be checked outside
  * a transaction — exists, active, has a positive balance. Used both for
  * the public "preview before checkout" endpoint AND as the first check
@@ -113,6 +133,11 @@ export function calcGiftCardAmountToApply(
  * only an optimistic pre-check for a fast error message, never
  * sufficient alone to prevent two simultaneous orders from both trying
  * to spend the same last few dollars on a card.
+ *
+ * The reverse of this — crediting the balance back when an order is
+ * cancelled — lives in lib/cancel-order.ts, which writes a compensating
+ * positive ADJUSTMENT rather than deleting the REDEEM row below. The
+ * ledger is append-only; what happened stays on record.
  */
 export async function redeemGiftCard(
   tx: Prisma.TransactionClient,
@@ -152,6 +177,18 @@ export async function redeemGiftCard(
  * used both by the Stripe webhook (after payment confirmed) and the
  * admin manual-issue endpoint (credited immediately, no payment
  * involved).
+ *
+ * Retries only on a `code` collision. This distinction matters: the
+ * previous version treated ANY P2002 as a code collision and retried, so
+ * a duplicate Stripe webhook delivery — which collides on the UNIQUE
+ * `stripeSessionId`, not on `code` — burned all five attempts generating
+ * fresh codes that could never help, then threw. The webhook saw that as
+ * a 500, and Stripe kept redelivering the same event indefinitely.
+ *
+ * Now a stripeSessionId collision propagates immediately, which is
+ * exactly what the caller wants: it means "this session was already
+ * processed", and the webhook treats it as success rather than an error
+ * (see isSessionAlreadyProcessed in the webhook route).
  */
 export async function createGiftCard(params: {
   amount: number;
@@ -164,9 +201,9 @@ export async function createGiftCard(params: {
   message?: string | null;
   note?: string | null;
 }) {
-  // Retry on the rare code collision (@unique) rather than pre-checking
-  // existence — collisions are astronomically unlikely given the
-  // alphabet/length above, but a retry loop is cheap insurance.
+  // Collisions on the generated code are astronomically unlikely given
+  // the alphabet/length above, but a retry loop is cheap insurance and
+  // avoids a pre-check SELECT on every single card creation.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateGiftCardCode();
     try {
@@ -197,12 +234,15 @@ export async function createGiftCard(params: {
         return giftCard;
       });
     } catch (error) {
-      const isUniqueCodeCollision =
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        (error as { code?: string }).code === "P2002";
-      if (isUniqueCodeCollision && attempt < 4) continue;
+      const violatedFields = uniqueViolationFields(error);
+
+      // Only a `code` collision is worth another attempt — a new random
+      // code might succeed. Every other unique violation (in practice,
+      // stripeSessionId) will fail identically on every retry, so it goes
+      // straight back to the caller.
+      const isCodeCollision = violatedFields.some((field) => field.includes("code"));
+      if (isCodeCollision && attempt < 4) continue;
+
       throw error;
     }
   }

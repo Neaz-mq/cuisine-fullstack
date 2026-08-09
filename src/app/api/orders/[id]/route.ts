@@ -5,6 +5,8 @@ import { orderStatusUpdateSchema } from "@/lib/validations/order";
 import { parseBody } from "@/lib/validations/parse";
 import { markOrderDelivered } from "@/lib/mark-order-delivered";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
+import { cancelOrder } from "@/lib/cancel-order";
+import { transitionError } from "@/lib/order-state-machine";
 
 // Public, unauthenticated lookup for the /track/[orderId] page. Guest
 // checkout customers have no account to log into, so tracking has to work
@@ -65,6 +67,26 @@ export async function GET(
   return NextResponse.json(order);
 }
 
+/**
+ * PATCH — admin/kitchen status dropdown.
+ *
+ * প্রতিটা status-এর নিজস্ব helper আছে, কারণ status বদলানো মানে শুধু একটা
+ * column লেখা নয় — সাথে stock, loyalty point, gift card balance-এর
+ * হিসাবও বদলায়, আর সেগুলো একই transaction-এ হতে হবে:
+ *
+ *   PREPARING  -> advanceOrderToPreparing  (recipe ingredient deduct)
+ *   DELIVERED  -> markOrderDelivered       (loyalty point + tracking বন্ধ)
+ *   CANCELLED  -> cancelOrder              (stock/coupon/gift card ফেরত)
+ *
+ * আগে CANCELLED-এর কোনো helper ছিল না — নিচের সাধারণ update-এ গিয়ে
+ * স্রেফ status লেখা হতো। ফলে admin dropdown থেকে cancel করলে deduct হওয়া
+ * ingredient ফেরত আসতো না, coupon-এর slot নষ্ট হতো, আর সবচেয়ে গুরুতর,
+ * customer-এর gift card balance চিরতরে হারিয়ে যেতো।
+ *
+ * OUT_FOR_DELIVERY একমাত্র status যেটার কোনো side effect নেই, তাই সেটাই
+ * শুধু নিচের সাধারণ update path ব্যবহার করে — এবং তার আগেও state machine
+ * দিয়ে transition বৈধতা যাচাই হয়।
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -84,8 +106,7 @@ export async function PATCH(
   if (status === "DELIVERED") {
     const result = await markOrderDelivered(id);
     if (!result.ok) {
-      const statusCode = result.error === "Order not found" ? 404 : 400;
-      return NextResponse.json({ error: result.error }, { status: statusCode });
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
     }
     return NextResponse.json(result.order);
   }
@@ -97,18 +118,36 @@ export async function PATCH(
   if (status === "PREPARING") {
     const result = await advanceOrderToPreparing(id);
     if (!result.ok) {
-      const statusCode = result.error === "Order not found" ? 404 : 400;
-      return NextResponse.json({ error: result.error }, { status: statusCode });
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
     }
     return NextResponse.json(result.order);
   }
 
+  // CANCELLED reverses everything the order had already claimed. Note this
+  // is deliberately NOT a plain status write — see the doc comment above.
+  if (status === "CANCELLED") {
+    const result = await cancelOrder(id, "Cancelled by staff");
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
+    }
+    return NextResponse.json(result.order);
+  }
+
+  // যা বাকি থাকে তা কেবল OUT_FOR_DELIVERY — কোনো ledger বা balance
+  // এতে বদলায় না, তাই সাধারণ update-ই যথেষ্ট। তবু transition বৈধ কিনা
+  // দেখা হয়, নাহলে একটা DELIVERED order আবার OUT_FOR_DELIVERY-তে
+  // ফিরিয়ে আনা যেতো।
   const existingOrder = await prisma.order.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!existingOrder) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  const invalid = transitionError(existingOrder.status, status);
+  if (invalid) {
+    return NextResponse.json({ error: invalid }, { status: 409 });
   }
 
   const updated = await prisma.order.update({
@@ -117,4 +156,15 @@ export async function PATCH(
   });
 
   return NextResponse.json(updated);
+}
+
+/**
+ * Helper-দের error string থেকে HTTP status. "Order not found" ছাড়া বাকি
+ * সবগুলোই এখন transition-সংক্রান্ত — অর্থাৎ request নিজে ঠিক আছে, কিন্তু
+ * order-এর বর্তমান অবস্থার সাথে সংঘাত। সেটা 400 (malformed request) নয়,
+ * 409 Conflict — client যাতে "আমি ভুল পাঠিয়েছি" আর "এটা এখন করা যাবে না"
+ * আলাদা করতে পারে।
+ */
+function errorStatus(error: string): number {
+  return error === "Order not found" ? 404 : 409;
 }
