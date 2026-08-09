@@ -1,80 +1,132 @@
 /**
  * src/lib/mark-order-delivered.ts
  *
- * The "award loyalty points on first DELIVERED" logic used to live only
- * inside PATCH /api/orders/[id] (the admin order-status dropdown). Now
- * that riders can ALSO mark an order delivered from their own dashboard
- * (POST /api/rider/deliveries/[orderId]/deliver), that logic is pulled
- * out here so both call sites share one implementation — otherwise a
- * future change to the points formula only fixed in one place would
- * silently break the other.
+ * Order-কে DELIVERED করে এবং প্রথমবারের জন্য loyalty point দেয়।
+ *
+ * দুটো আলাদা জায়গা থেকে এটা ডাকা হয় — admin-এর status dropdown
+ * (PATCH /api/orders/[id]) আর rider-এর নিজের dashboard
+ * (POST /api/rider/deliveries/[orderId]/deliver)। এই file-টা তৈরিই
+ * হয়েছিল দুই জায়গায় points-এর সূত্র আলাদা হয়ে যাওয়া ঠেকাতে — কিন্তু
+ * ঠিক সেই দুই call site একসাথে চললে আরেকটা সমস্যা তৈরি হতো: আগে
+ * pointsAwarded আলাদা query-তে পড়া হতো, তারপর আলাদা transaction-এ
+ * লেখা হতো, তাই দুজনেই false দেখে দুবার point দিয়ে দিতে পারতো।
+ *
+ * এখন claim-টা updateMany-র affected-row count — যে call count 1 পায়
+ * সেটাই একমাত্র point দেয়। consumeCoupon / redeemGiftCard /
+ * advanceOrderToPreparing সবগুলোই এই একই pattern ব্যবহার করে।
  */
 import { prisma } from "@/lib/prisma";
+import { canTransition } from "@/lib/order-state-machine";
 
-// 1 loyalty point per $10 spent, rounded down. Kept in sync with the
-// same constant name/value that used to live inline in
-// PATCH /api/orders/[id] — do not change independently of that history.
+// $10 খরচে ১ point, নিচের দিকে rounded। আগে PATCH /api/orders/[id]-এর
+// ভেতরে inline ছিল — সেই history-র সাথে সঙ্গতি রেখে আলাদাভাবে বদলাবেন না।
 const POINTS_PER_CURRENCY_UNIT = 10;
 
-/**
- * Moves an order to DELIVERED, awarding loyalty points exactly once (only
- * for orders placed by a logged-in user, and only the first time they
- * reach DELIVERED — `pointsAwarded` guards against double-crediting if a
- * status is reverted and re-delivered by mistake).
- *
- * Also closes out DeliveryTracking.deliveredAt when the order has a rider
- * assigned, so the rider's dashboard and the customer's live map both
- * know the delivery is over and can stop polling for position updates.
- */
-export async function markOrderDelivered(orderId: string) {
+type DeliverResult =
+  | { ok: true; order: { id: string; status: string }; pointsAwarded: number }
+  | {
+      ok: false;
+      error:
+        | "Order not found"
+        | "Cannot deliver a cancelled order"
+        | "This order cannot be marked delivered from its current status";
+    };
+
+export async function markOrderDelivered(orderId: string): Promise<DeliverResult> {
   const existingOrder = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { userId: true, totalAmount: true, pointsAwarded: true, status: true },
+    select: { status: true },
   });
 
-  if (!existingOrder) {
-    return { ok: false as const, error: "Order not found" as const };
-  }
+  if (!existingOrder) return { ok: false, error: "Order not found" };
   if (existingOrder.status === "CANCELLED") {
-    return { ok: false as const, error: "Cannot deliver a cancelled order" as const };
+    return { ok: false, error: "Cannot deliver a cancelled order" };
   }
 
-  const shouldAwardPoints =
-    !existingOrder.pointsAwarded && !!existingOrder.userId;
+  // State machine-ই এখন একমাত্র জায়গা যেখানে লেখা আছে কোথা থেকে
+  // DELIVERED-এ যাওয়া যায়। আগে এখানে শুধু CANCELLED আটকানো হতো, ফলে
+  // একটা PLACED order সরাসরি DELIVERED হয়ে যেতে পারতো — মানে PREPARING
+  // কখনো হয়নি, মানে সেই order-এর ingredient কখনো deduct হয়নি।
+  if (!canTransition(existingOrder.status, "DELIVERED")) {
+    return {
+      ok: false,
+      error: "This order cannot be marked delivered from its current status",
+    };
+  }
 
-  const pointsEarned = shouldAwardPoints
-    ? Math.floor(existingOrder.totalAmount / POINTS_PER_CURRENCY_UNIT)
-    : 0;
-
-  const [updated] = await prisma.$transaction([
-    prisma.order.update({
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.update({
       where: { id: orderId },
-      data: { status: "DELIVERED", pointsAwarded: shouldAwardPoints ? true : undefined },
-    }),
-    ...(shouldAwardPoints && pointsEarned > 0
-      ? [
-          prisma.user.update({
-            where: { id: existingOrder.userId as string },
-            data: { loyaltyPoints: { increment: pointsEarned } },
-          }),
-          prisma.loyaltyTransaction.create({
-            data: {
-              points: pointsEarned,
-              reason: "ORDER_DELIVERED" as const,
-              userId: existingOrder.userId as string,
-              orderId,
-            },
-          }),
-        ]
-      : []),
-    // No-op if there's no DeliveryTracking row for this order (e.g.
-    // Uber Eats / Food Panda orders) — updateMany matches zero rows
-    // instead of throwing, unlike update().
-    prisma.deliveryTracking.updateMany({
+      data: { status: "DELIVERED" },
+      select: { id: true, status: true },
+    });
+
+    // Point দেওয়ার একমাত্র আসল guard। guest checkout (userId null) হলে
+    // where clause মেলে না, তাই count 0 আসে এবং point দেওয়া হয় না —
+    // আলাদা করে userId চেক করার দরকার নেই।
+    const claim = await tx.order.updateMany({
+      where: { id: orderId, pointsAwarded: false, userId: { not: null } },
+      data: { pointsAwarded: true },
+    });
+
+    if (claim.count !== 1) {
+      return { order, pointsAwarded: 0 };
+    }
+
+    // Claim জেতার পরেই totalAmount আর userId পড়া হচ্ছে — এই মুহূর্তে
+    // নিশ্চিত যে অন্য কোনো call একই order-এ point দিচ্ছে না।
+    const claimed = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { userId: true, totalAmount: true },
+    });
+
+    // totalAmount coupon আর gift card বাদ দেওয়ার পরের অঙ্ক — অর্থাৎ
+    // customer আসলে যত টাকা দিয়েছে। পুরো bill gift card-এ দিলে
+    // totalAmount 0, তাই point-ও 0। "যত টাকা দিয়েছে তত point" চাইলে
+    // এটাই সঠিক; "যত টাকার খাবার নিয়েছে তত point" চাইলে
+    // discountAmount + giftCardAmount + totalAmount যোগ করতে হবে —
+    // ব্যবসায়িক সিদ্ধান্ত, দুটোই যুক্তিসঙ্গত।
+    const pointsEarned = Math.floor(claimed.totalAmount / POINTS_PER_CURRENCY_UNIT);
+
+    if (pointsEarned > 0 && claimed.userId) {
+      await tx.user.update({
+        where: { id: claimed.userId },
+        data: { loyaltyPoints: { increment: pointsEarned } },
+      });
+
+      await tx.loyaltyTransaction.create({
+        data: {
+          points: pointsEarned,
+          reason: "ORDER_DELIVERED",
+          userId: claimed.userId,
+          orderId,
+        },
+      });
+    }
+    // pointsEarned 0 হলেও (যেমন $10-এর কম order) claim ধরে রাখা হচ্ছে
+    // ইচ্ছাকৃতভাবে: "এই order-এর point-হিসাব সম্পন্ন" বোঝাতে, যাতে পরে
+    // কেউ আবার চেষ্টা না করে।
+
+    return { order, pointsAwarded: pointsEarned };
+  });
+
+  // DeliveryTracking বন্ধ করা transaction-এর বাইরে, কারণ এটা নিছক
+  // housekeeping — rider dashboard আর customer-এর live map জানবে delivery
+  // শেষ, position polling থামাবে। এটা ব্যর্থ হলে order DELIVERED হওয়া বা
+  // point দেওয়া rollback হওয়ার কোনো কারণ নেই; টাকা-সংক্রান্ত কাজ শেষ
+  // হয়ে যাওয়ার পর কোনো side effect যেন পুরোটা ফিরিয়ে না দেয়।
+  //
+  // updateMany ব্যবহার করা হচ্ছে, update নয় — Uber Eats/Food Panda
+  // order-এ কোনো DeliveryTracking row থাকে না, সেখানে update() throw
+  // করতো, updateMany শূন্য row মিলিয়ে চুপচাপ ফিরে আসে।
+  try {
+    await prisma.deliveryTracking.updateMany({
       where: { orderId },
       data: { deliveredAt: new Date() },
-    }),
-  ]);
+    });
+  } catch (error) {
+    console.error("Failed to close delivery tracking for order", orderId, error);
+  }
 
-  return { ok: true as const, order: updated };
+  return { ok: true, order: result.order, pointsAwarded: result.pointsAwarded };
 }

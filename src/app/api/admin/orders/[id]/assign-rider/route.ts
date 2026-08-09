@@ -5,22 +5,38 @@ import { parseBody } from "@/lib/validations/parse";
 import { assignRiderSchema } from "@/lib/validations/delivery";
 import { geocodeAddress } from "@/lib/geocode";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
+import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
+import { canTransition, needsPreparingFirst } from "@/lib/order-state-machine";
 
 /**
  * POST /api/admin/orders/[id]/assign-rider
  *
- * Assigns (or reassigns) a Role.DELIVERY staff member to a DELIVERY order,
- * geocodes the order's address once, creates/updates the DeliveryTracking
- * row, and flips the order to OUT_FOR_DELIVERY. From that point on:
- *   - the rider sees this order on /admin/my-deliveries and starts
- *     broadcasting their live position (POST .../location)
- *   - the customer's /track/[orderId] page shows a live map
+ * Role.DELIVERY staff member-কে একটা DELIVERY order-এ assign (বা
+ * reassign) করে, order-এর address একবার geocode করে, DeliveryTracking
+ * row তৈরি/আপডেট করে, আর order-কে OUT_FOR_DELIVERY-তে নিয়ে যায়। এরপর:
+ *   - rider এই order-টা /admin/my-deliveries-এ দেখে এবং নিজের live
+ *     position পাঠাতে শুরু করে (POST .../location)
+ *   - customer-এর /track/[orderId] পেজে live map দেখা যায়
  *
- * Reassignment (calling this again for the same order with a different
- * riderId) is intentionally allowed — e.g. the original rider called in
- * sick — and simply overwrites the existing DeliveryTracking row rather
- * than erroring, resetting the rider's last-known position to the
- * restaurant until the new rider's phone reports a real one.
+ * Reassignment (একই order-এ ভিন্ন riderId দিয়ে আবার ডাকা) ইচ্ছাকৃতভাবে
+ * অনুমোদিত — যেমন আগের rider অসুস্থ হয়ে পড়লে — এবং error না দিয়ে
+ * বিদ্যমান DeliveryTracking row-টাই overwrite করে।
+ *
+ * দুটো জিনিস এখানে যোগ হয়েছে, দুটোই আসল bug ছিল:
+ *
+ * ১. PREPARING বাধ্যতামূলক — আগে PLACED থেকে সরাসরি OUT_FOR_DELIVERY
+ *    লেখা হতো, অর্থাৎ PREPARING কখনো হতো না। আর inventory deduction
+ *    ঘটে ঠিক সেই transition-এ। ফলে এভাবে পাঠানো প্রতিটা order-এর
+ *    ingredient বাস্তবে খরচ হতো কিন্তু StockMovement-এ কিছুই লেখা হতো
+ *    না — currentStock নীরবে বাস্তবতা থেকে সরে যেতো, low-stock alert
+ *    বন্ধ হয়ে যেতো, আর Phase 2-এর purchase suggestion ভুল data-র উপর
+ *    দাঁড়াতো। ব্যস্ত manager-এর জন্য orders list থেকে সরাসরি rider
+ *    assign করাই সবচেয়ে স্বাভাবিক পথ, তাই এটা বিরল edge case ছিল না।
+ *
+ * ২. Payment যাচাই — একটা ONLINE order যার paymentStatus এখনো PENDING
+ *    (customer Stripe পেজ খুলে টাকা দেয়নি), সেটাও assign করা যেত।
+ *    staff-এর কাছে সেটা paid order-এর মতোই দেখাতো, আর খাবার বেরিয়ে
+ *    যেত। Stripe session ~২৪ ঘণ্টা বাঁচে, তাই জানালাটা ছোট নয়।
  */
 export async function POST(
   req: NextRequest,
@@ -40,6 +56,8 @@ export async function POST(
     select: {
       orderType: true,
       status: true,
+      paymentMethod: true,
+      paymentStatus: true,
       address: true,
       apartment: true,
       city: true,
@@ -57,10 +75,33 @@ export async function POST(
       { status: 400 }
     );
   }
-  if (order.status === "DELIVERED" || order.status === "CANCELLED") {
+
+  // State machine-ই এখন একমাত্র জায়গা যেখানে লেখা আছে কোথা থেকে
+  // OUT_FOR_DELIVERY-তে যাওয়া যায়। আগে এখানে হাতে লেখা
+  // `status === "DELIVERED" || status === "CANCELLED"` চেক ছিল — সেটা
+  // terminal state আটকাতো ঠিকই, কিন্তু PLACED-এর লাফটা ধরতে পারতো না,
+  // কারণ সেটা "অবৈধ" বলে চিহ্নিতই ছিল না কোথাও।
+  if (!canTransition(order.status, "OUT_FOR_DELIVERY")) {
     return NextResponse.json(
-      { error: `Cannot assign a rider — order is already ${order.status.toLowerCase()}` },
-      { status: 400 }
+      {
+        error: `Cannot assign a rider — order is already ${order.status
+          .toLowerCase()
+          .replace(/_/g, " ")}`,
+      },
+      { status: 409 }
+    );
+  }
+
+  // ONLINE order-এ টাকা নিশ্চিত না হওয়া পর্যন্ত খাবার পাঠানো যাবে না।
+  // COD (এবং DINE_IN, যেটা সবসময় COD) এই চেকের বাইরে — সেখানে টাকা
+  // delivery-র সময়ই নেওয়া হয়, তাই PENDING থাকাটাই স্বাভাবিক অবস্থা।
+  if (order.paymentMethod === "ONLINE" && order.paymentStatus !== "PAID") {
+    return NextResponse.json(
+      {
+        error:
+          "This order hasn't been paid yet — payment is still pending with Stripe. Wait for confirmation before dispatching.",
+      },
+      { status: 409 }
     );
   }
 
@@ -83,6 +124,21 @@ export async function POST(
     );
   }
 
+  // PLACED হলে আগে PREPARING-এ নিয়ে যাওয়া, যাতে inventory deduct হয়।
+  // এটা নিজের transaction-এ চলে (advanceOrderToPreparing-এর ভেতরে),
+  // নিচের assignment transaction-এর আগে — deduction ব্যর্থ হলে rider
+  // assign-ই হবে না, বরং অর্ধেক-সম্পন্ন অবস্থা তৈরি হবে না।
+  //
+  // geocode-এর পরে রাখা হয়েছে ইচ্ছাকৃতভাবে: ঠিকানা geocode না হলে
+  // assignment এমনিতেই ব্যর্থ, তাই তার আগে stock deduct করে ফেলার কোনো
+  // মানে নেই।
+  if (needsPreparingFirst(order.status)) {
+    const prepared = await advanceOrderToPreparing(id);
+    if (!prepared.ok) {
+      return NextResponse.json({ error: prepared.error }, { status: 409 });
+    }
+  }
+
   const [, updatedOrder] = await prisma.$transaction([
     prisma.deliveryTracking.upsert({
       where: { orderId: id },
@@ -96,11 +152,11 @@ export async function POST(
       },
       update: {
         riderId,
-        // Reset rider position to the restaurant on reassignment — the
-        // new rider hasn't reported a real position yet, and leaving the
-        // PREVIOUS rider's last coordinates (or the customer's own
-        // address) would be actively misleading. A delivery always
-        // starts from the restaurant, never from the destination.
+        // Reassignment-এ rider position আবার restaurant-এ reset — নতুন
+        // rider এখনো কোনো real position পাঠায়নি, আর আগের rider-এর শেষ
+        // অবস্থান (বা customer-এর নিজের ঠিকানা) রেখে দিলে সেটা
+        // বিভ্রান্তিকর হতো। Delivery সবসময় restaurant থেকেই শুরু হয়,
+        // destination থেকে নয়।
         riderLat: RESTAURANT_LOCATION.lat,
         riderLng: RESTAURANT_LOCATION.lng,
         riderLocationUpdatedAt: new Date(),
