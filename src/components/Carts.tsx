@@ -1175,10 +1175,13 @@ const Carts = () => {
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-800 truncate">
+                          <p
+                            className="text-xs font-medium text-gray-800 leading-snug line-clamp-2"
+                            title={suggestion.title}
+                          >
                             {suggestion.title}
                           </p>
-                          <p className="text-xs text-gray-500">${suggestion.price.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">${suggestion.price.toFixed(2)}</p>
                         </div>
                         <button
                           onClick={() => handleAddPairSuggestion(suggestion)}
