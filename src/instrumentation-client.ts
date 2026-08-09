@@ -15,9 +15,20 @@ Sentry.init({
   // and a low rate still surfaces slow-page patterns without ballooning
   // event quota on the free/starter Sentry tier.
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-  // Session Replay is off by default here — it captures DOM content,
-  // which on a checkout/admin app means real customer and order data
-  // flowing to a third party. Turn on deliberately (with PII masking
-  // configured) if that trade-off is ever wanted, don't default to it.
+  // Session Replay is deliberately NOT enabled (no replayIntegration is
+  // registered above) — it captures DOM content, which on a checkout and
+  // admin app means real customer names, addresses, and order data
+  // flowing to a third party. Turn it on deliberately, with PII masking
+  // configured, if that trade-off is ever wanted — never by default.
   enabled: process.env.NODE_ENV === "production",
 });
+
+/**
+ * Next.js calls this on every client-side route change. Without it the
+ * SDK only ever sees the first page load, so an error thrown while
+ * navigating from /carts to /track/[orderId] arrives with no trace of
+ * which navigation caused it — which is exactly the case you most want
+ * context for. The build warns about this ("ACTION REQUIRED") rather
+ * than failing, so it's easy to ship without noticing.
+ */
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

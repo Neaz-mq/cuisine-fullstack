@@ -105,15 +105,26 @@ const Carts = () => {
   const [pairSuggestions, setPairSuggestions] = useState<PairSuggestion[]>([]);
   const [isLoadingPairs, setIsLoadingPairs] = useState(false);
 
+  // An empty cart has nothing to pair with, so that case is DERIVED here at
+  // render time rather than pushed into state by an effect calling
+  // setPairSuggestions([]).
+  //
+  // Doing it in the effect was what react-hooks/set-state-in-effect flagged:
+  // setState inside an effect body forces React into a second render pass it
+  // didn't need, and for one frame the stale suggestions from the previous
+  // cart were still on screen after the cart had already been emptied.
+  // Anything computable from props/state during render belongs in render.
+  const visiblePairSuggestions = cartItems.length === 0 ? [] : pairSuggestions;
+
   // As the cart's contents change, ask the server which items most often
   // co-occur (in past orders) with what's already in the cart — see
   // src/lib/recommendations.ts:getPairsWellWith — and surface them right
   // in the order summary, at the moment a customer is about to check out.
   useEffect(() => {
-    if (cartItems.length === 0) {
-      setPairSuggestions([]);
-      return;
-    }
+    // Nothing to fetch for an empty cart. The stale `pairSuggestions` state
+    // is simply not read in that case (see visiblePairSuggestions above), so
+    // there's no need to clear it here.
+    if (cartItems.length === 0) return;
 
     let isCancelled = false;
     const cartItemIds = cartItems.map((item) => item.id);
@@ -1155,14 +1166,14 @@ const Carts = () => {
             </div>
 
             {/* AI Upsell — "Pairs well with" */}
-            {cartItems.length > 0 && (isLoadingPairs || pairSuggestions.length > 0) && (
+            {cartItems.length > 0 && (isLoadingPairs || visiblePairSuggestions.length > 0) && (
               <div className="pt-6 border-t border-gray-200">
                 <h4 className="text-sm font-semibold text-gray-800 mb-3">Pairs well with</h4>
-                {isLoadingPairs && pairSuggestions.length === 0 ? (
+                {isLoadingPairs && visiblePairSuggestions.length === 0 ? (
                   <p className="text-xs text-gray-400">Finding good pairings…</p>
                 ) : (
                   <div className="space-y-3">
-                    {pairSuggestions.map((suggestion) => (
+                    {visiblePairSuggestions.map((suggestion) => (
                       <div key={suggestion.id} className="flex items-center gap-3">
                         {suggestion.imageUrl && (
                           <Image

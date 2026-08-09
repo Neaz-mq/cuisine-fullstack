@@ -42,10 +42,22 @@ const supabaseWsOrigin = supabaseOrigin.replace(/^https:/, "wss:");
 const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
 const sentryIngestOrigin = sentryDsn ? `https://${new URL(sentryDsn).hostname}` : "";
 
+/**
+ * Builds one CSP directive from a list of sources, dropping any that are
+ * empty. Several origins here are env-derived and legitimately absent in
+ * some environments (no Supabase URL locally, no Sentry DSN before a
+ * project exists) — joining those in blindly left stray double spaces and
+ * a dangling " ;" in the header. Browsers tolerate that, but it makes the
+ * emitted policy annoying to read in devtools when something IS blocked,
+ * which is exactly when you're looking at it.
+ */
+const directive = (name: string, ...sources: string[]) =>
+  [name, ...sources.filter(Boolean)].join(" ");
+
 const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'`,
-  `style-src 'self' 'unsafe-inline'`,
+  directive("default-src", "'self'"),
+  directive("script-src", "'self'", "'unsafe-inline'"),
+  directive("style-src", "'self'", "'unsafe-inline'"),
   // 'data:' covers the QR codes generated client-side by the `qrcode`
   // package (rendered as data:image/png;base64 <img> tags); the Supabase
   // origin covers menu-item photos uploaded via /api/admin/upload-image;
@@ -57,24 +69,28 @@ const csp = [
   // covers the live delivery map's map tiles (LiveDeliveryMap.tsx) — Leaflet
   // renders tiles as plain <img> tags against OSM's *.tile.openstreetmap.org
   // subdomains (a,b,c load-balanced), so all three need to be allowed.
-  `img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org ${supabaseOrigin}`,
-  `font-src 'self' data:`,
+  directive(
+    "img-src",
+    "'self'",
+    "data:",
+    "blob:",
+    "https://res.cloudinary.com",
+    "https://*.tile.openstreetmap.org",
+    supabaseOrigin
+  ),
+  directive("font-src", "'self'", "data:"),
   // Supabase origin for storage uploads/reads and API calls (https), PLUS
   // the wss:// variant for Realtime's WebSocket connection (chat) — see
   // the supabaseWsOrigin comment above for why both are needed. Sentry's
   // ingest origin is included so browser-side error/crash reports aren't
   // silently dropped — see the sentryIngestOrigin comment above.
-  `connect-src 'self' ${supabaseOrigin} ${supabaseWsOrigin} ${sentryIngestOrigin}`,
+  directive("connect-src", "'self'", supabaseOrigin, supabaseWsOrigin, sentryIngestOrigin),
   // No site should ever be able to iframe this app (clickjacking).
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-]
-  .join("; ")
-  // Collapse "img-src 'self' data: blob: " into clean output when
-  // supabaseOrigin is empty (e.g. not yet configured locally).
-  .replace(/\s+/g, " ");
+  directive("frame-ancestors", "'none'"),
+  directive("form-action", "'self'"),
+  directive("base-uri", "'self'"),
+  directive("object-src", "'none'"),
+].join("; ");
 
 const securityHeaders = [
   // Blocks this app from being embedded in an <iframe> on another site —
@@ -159,5 +175,11 @@ export default withSentryConfig(nextConfig, {
   // Sentry project is created — omit it locally/pre-launch and this step
   // just no-ops instead of failing the build.
   silent: !process.env.CI,
-  disableLogger: true,
+  // NOTE: `disableLogger` used to be set here. It's deprecated in the
+  // current SDK and, more to the point, is a no-op under Turbopack (which
+  // this project builds with) — it only ever worked via the webpack
+  // plugin. Its replacement is webpack.treeshake.removeDebugLogging,
+  // which is likewise webpack-only, so there's nothing to migrate TO
+  // here: the option is simply dropped. Sentry's debug logging is
+  // stripped in production builds anyway.
 });
