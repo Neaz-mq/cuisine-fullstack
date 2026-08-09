@@ -146,6 +146,61 @@ export async function getYouMightAlsoLike(
   return sortByRank(items, rankedIds);
 }
 
+/**
+ * "Pairs well with" — AI cart upsell. Given the menu item ids currently in
+ * a customer's cart, suggest complementary items to add before checkout.
+ *
+ * Same item-item co-occurrence approach as getYouMightAlsoLike, but scoped
+ * to *this cart* instead of a user's lifetime order history: look at every
+ * past order that contains at least one of the cart items, then rank
+ * whatever else showed up in those orders by how often it co-occurred.
+ * Works for guests (no userId needed) and updates live as the cart changes.
+ */
+export async function getPairsWellWith(
+  cartItemIds: string[],
+  limit = 4
+): Promise<RecommendedMenuItem[]> {
+  const uniqueCartIds = [...new Set(cartItemIds)];
+  if (uniqueCartIds.length === 0) return [];
+
+  // Orders that included at least one of the cart's items — these are our
+  // "neighbors" for co-occurrence, same cap as getYouMightAlsoLike so this
+  // stays cheap enough to run on every cart change, not just page load.
+  const coOrders = await prisma.order.findMany({
+    where: {
+      status: { in: [...COUNTED_ORDER_STATUSES] },
+      items: { some: { menuItemId: { in: uniqueCartIds } } },
+    },
+    select: { items: { select: { menuItemId: true, quantity: true } } },
+    take: 200,
+  });
+
+  const scores = new Map<string, number>();
+  for (const order of coOrders) {
+    for (const item of order.items) {
+      if (uniqueCartIds.includes(item.menuItemId)) continue; // already in cart
+      scores.set(item.menuItemId, (scores.get(item.menuItemId) ?? 0) + item.quantity);
+    }
+  }
+
+  let rankedIds = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
+
+  // Cold start (brand-new items with no order history yet to co-occur
+  // from) — fall back to overall popularity, excluding the cart itself.
+  if (rankedIds.length === 0) {
+    return getPopularItems(limit, uniqueCartIds);
+  }
+
+  const items = await prisma.menuItem.findMany({
+    where: { id: { in: rankedIds }, isAvailable: true },
+    select: MENU_ITEM_SELECT,
+  });
+  return sortByRank(items, rankedIds);
+}
+
 export interface Recommendations {
   // false = "Popular Right Now" cold-start experience (guest, or a
   // customer with no qualifying order history yet). true = genuinely

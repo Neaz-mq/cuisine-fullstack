@@ -57,7 +57,7 @@ const Carts = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  const { cartItems, increaseQty, decreaseQty, removeFromCart, clearCart } = useCart();
+  const { cartItems, increaseQty, decreaseQty, removeFromCart, clearCart, addToCart } = useCart();
 
   // QR Table Ordering — when a customer arrived via a table's QR code
   // (/dine-in?table=<id>), isDineIn is true and tableId/tableLabel are set.
@@ -94,6 +94,73 @@ const Carts = () => {
       clearInterval(interval);
     };
   }, []);
+  // AI Upsell — "Pairs well with" suggestions for the current cart.
+  type PairSuggestion = {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    imageUrl: string | null;
+  };
+  const [pairSuggestions, setPairSuggestions] = useState<PairSuggestion[]>([]);
+  const [isLoadingPairs, setIsLoadingPairs] = useState(false);
+
+  // As the cart's contents change, ask the server which items most often
+  // co-occur (in past orders) with what's already in the cart — see
+  // src/lib/recommendations.ts:getPairsWellWith — and surface them right
+  // in the order summary, at the moment a customer is about to check out.
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      setPairSuggestions([]);
+      return;
+    }
+
+    let isCancelled = false;
+    const cartItemIds = cartItems.map((item) => item.id);
+
+    // Debounce — qty +/- clicks fire fast, no need for a request per click.
+    const timeout = setTimeout(async () => {
+      setIsLoadingPairs(true);
+      try {
+        const res = await fetch("/api/recommendations/pairs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cartItemIds }),
+        });
+        if (!res.ok) return;
+        const data: { items: PairSuggestion[] } = await res.json();
+        if (!isCancelled) {
+          // Belt-and-suspenders: never show something already in the
+          // cart, even if the cart changed again while in flight.
+          setPairSuggestions(data.items.filter((s) => !cartItemIds.includes(s.id)));
+        }
+      } catch {
+        // Upsell is a nice-to-have — fail silently, keep the cart usable.
+      } finally {
+        if (!isCancelled) setIsLoadingPairs(false);
+      }
+    }, 400);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+    // Only re-run when the *set* of item ids changes, not quantities.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartItems.map((item) => item.id).join(",")]);
+
+  const handleAddPairSuggestion = (suggestion: PairSuggestion) => {
+    addToCart({
+      id: suggestion.id,
+      title: suggestion.title,
+      price: suggestion.price,
+      quantity: 1,
+      imageUrl: suggestion.imageUrl ?? undefined,
+      description: suggestion.description,
+    });
+    toast.success(`${suggestion.title} added to cart`);
+  };
+
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
   const [selectedCountry, setSelectedCountry] = useState<CountryOption | null>(null);
   const [formData, setFormData] = useState<BillingFormData>({
@@ -1086,6 +1153,46 @@ const Carts = () => {
                 ))
               )}
             </div>
+
+            {/* AI Upsell — "Pairs well with" */}
+            {cartItems.length > 0 && (isLoadingPairs || pairSuggestions.length > 0) && (
+              <div className="pt-6 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Pairs well with</h4>
+                {isLoadingPairs && pairSuggestions.length === 0 ? (
+                  <p className="text-xs text-gray-400">Finding good pairings…</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pairSuggestions.map((suggestion) => (
+                      <div key={suggestion.id} className="flex items-center gap-3">
+                        {suggestion.imageUrl && (
+                          <Image
+                            src={suggestion.imageUrl}
+                            alt={suggestion.title}
+                            width={40}
+                            height={40}
+                            unoptimized
+                            className="w-10 h-10 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-800 truncate">
+                            {suggestion.title}
+                          </p>
+                          <p className="text-xs text-gray-500">${suggestion.price.toFixed(2)}</p>
+                        </div>
+                        <button
+                          onClick={() => handleAddPairSuggestion(suggestion)}
+                          className="text-xs font-semibold text-green-700 border border-green-600 px-3 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
+                          type="button"
+                        >
+                          + Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="pt-10 border-t border-gray-200">
               {appliedCoupon ? (
