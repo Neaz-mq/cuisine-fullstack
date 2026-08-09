@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
+import BusinessSummaryCard from "@/components/admin/BusinessSummaryCard";
 
 function formatOrderId(id: string) {
   return `#ORD-${id.slice(-6).toUpperCase()}`;
@@ -145,6 +146,8 @@ export default async function AdminDashboardPage() {
           </div>
         ))}
       </div>
+
+      <BusinessSummaryCard />
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Recent Orders</h2>
