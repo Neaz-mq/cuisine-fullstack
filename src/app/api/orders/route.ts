@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireApiScope } from "@/lib/require-admin";
+import { requireApiScopeAny } from "@/lib/require-admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import { syncCustomerToAudience } from "@/lib/resend";
 import {
@@ -15,15 +16,23 @@ import {
   getCustomerKey,
   CouponInfo,
 } from "@/lib/order-checkout-shared";
-import { findValidGiftCard, calcGiftCardAmountToApply, redeemGiftCard, GiftCardInfo } from "@/lib/gift-cards";
+import {
+  findValidGiftCard,
+  calcGiftCardAmountToApply,
+  redeemGiftCard,
+  GiftCardInfo,
+} from "@/lib/gift-cards";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
+import { paginationSchema } from "@/lib/validations/common";
 
 /**
  * src/app/api/orders/route.ts
  *
- * GET  /api/orders   -> all orders, for the admin dashboard (staff with the
- *                        "orders" or "kitchen" scope)
+ * GET  /api/orders   -> paginated order list for the admin dashboard
+ *                        (staff with the "orders" or "kitchen" scope).
+ *                        Accepts ?page= and ?limit= — see the note on the
+ *                        handler for why this is not optional.
  * POST /api/orders    -> create an order directly, no payment redirect.
  *                        Covers two order types:
  *                          - DELIVERY (default) + Cash on Delivery — same
@@ -41,28 +50,106 @@ import { createOrderSchema } from "@/lib/validations/checkout";
  * shared between this route and the Stripe checkout route.
  */
 
-export async function GET() {
+/**
+ * Paginated. This used to return EVERY order ever placed, each with every
+ * line item, each with the full MenuItem row — description, imageUrl and
+ * all. At 5,000 orders averaging three items that's 15,000 nested objects
+ * in one response: several megabytes to serialise inside a serverless
+ * function with a 10-second ceiling. And it fails badly — no partial
+ * result, just a request that never comes back.
+ *
+ * Note that /admin/orders/page.tsx does NOT call this endpoint; it's a
+ * server component that queries Prisma directly and already paginates at
+ * PAGE_SIZE = 10. So nothing was actually hitting the unbounded version
+ * yet — but the endpoint is live, and the first caller to appear (a
+ * mobile client, an integration, a future refactor of that page) would
+ * have inherited the problem silently.
+ *
+ * The scope check is requireApiScopeAny(["orders", "kitchen"]) because
+ * the doc comment above always claimed kitchen staff could read this,
+ * while the code only allowed "orders" and handed them a 403. The comment
+ * described the intent correctly; the code was the bug.
+ */
+export async function GET(request: Request) {
   try {
-    const authResult = await requireApiScope("orders");
+    const authResult = await requireApiScopeAny(["orders", "kitchen"]);
     if (authResult instanceof NextResponse) return authResult;
 
-    const orders = await prisma.order.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { items: { include: { menuItem: true } }, table: true },
+    // paginationSchema coerces the string query params into bounded
+    // numbers (page >= 1, limit <= 100) with defaults — so ?limit=99999
+    // can't quietly restore the old unbounded behaviour.
+    const { searchParams } = new URL(request.url);
+    const parsedPagination = paginationSchema.safeParse({
+      page: searchParams.get("page") ?? undefined,
+      limit: searchParams.get("limit") ?? undefined,
     });
+    if (!parsedPagination.success) {
+      return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });
+    }
+    const { page, limit } = parsedPagination.data;
 
-    return NextResponse.json(orders);
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          // Only the fields a list view actually renders. Pulling the
+          // whole MenuItem meant shipping a description and an image URL
+          // for every line of every order — the bulk of the payload, and
+          // none of it visible on screen.
+          items: { include: { menuItem: { select: { id: true, title: true } } } },
+          table: true,
+        },
+      }),
+      prisma.order.count(),
+    ]);
+
+    // ⚠️ Shape change: this used to be a bare array. Callers now read
+    // `data.orders`, and get the totals they need to render pagination.
+    return NextResponse.json({
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("GET /api/orders error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch order list" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch order list" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // This endpoint is unauthenticated — guest checkout is deliberately
+    // allowed (see Order.userId in schema.prisma) — and every successful
+    // call adds a row to the kitchen board. With no limit at all, a
+    // trivial script could fill that board in minutes, and for any menu
+    // item with a configured recipe it would drain InventoryItem stock
+    // along the way once those orders were advanced to PREPARING.
+    //
+    // 10 per 10 minutes per IP is far above anything a real customer
+    // does (place an order, maybe re-place after a mistake) and far
+    // below what makes automated abuse worthwhile.
+    //
+    // ⚠️ rate-limit.ts is process-local — see its own file comment. This
+    // deters casual scripted abuse; it is not a hard distributed
+    // guarantee, and shouldn't be relied on as one.
+    const rateLimitResult = checkRateLimit(request, "create-order", {
+      limit: 10,
+      windowMs: 10 * 60_000,
+    });
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many orders from this device. Please wait a moment and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) },
+        }
+      );
+    }
+
     const parsed = await parseBody(request, createOrderSchema);
     if (parsed instanceof NextResponse) return parsed;
     const { items, billing, shippingMethod, orderType, tableId, couponCode, giftCardCode } = parsed;
@@ -95,10 +182,7 @@ export async function POST(request: Request) {
       validatedTableId = table.id;
     } else {
       if (!SHIPPING_METHODS.includes(shippingMethod as ShippingMethod)) {
-        return NextResponse.json(
-          { error: "Invalid shipping method" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid shipping method" }, { status: 400 });
       }
     }
 
@@ -108,10 +192,7 @@ export async function POST(request: Request) {
     }
     const resolvedItems = resolution.items;
 
-    const subtotal = resolvedItems.reduce(
-      (sum, i) => sum + i.price * i.quantity,
-      0
-    );
+    const subtotal = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
@@ -163,10 +244,8 @@ export async function POST(request: Request) {
           discountAmount,
           giftCardCode: giftCardInfo?.code ?? null,
           giftCardAmount,
-          // ⚠️ Requires `marketingConsent?: boolean` added to the Billing
-          // type in order-checkout-shared.ts, and the checkout form to
-          // actually send it. Defaults to false (opt-in, never opt-out by
-          // default) if the client omits it entirely.
+          // Defaults to false (opt-in, never opt-out by default) if the
+          // client omits it entirely.
           marketingConsent: billing.marketingConsent ?? false,
           ...(orderType === "DELIVERY"
             ? {
@@ -194,7 +273,13 @@ export async function POST(request: Request) {
       });
 
       if (couponInfo) {
-        const claimed = await consumeCoupon(tx, couponInfo.id, created.id, customerKey, discountAmount);
+        const claimed = await consumeCoupon(
+          tx,
+          couponInfo.id,
+          created.id,
+          customerKey,
+          discountAmount
+        );
         if (!claimed) {
           // Someone else claimed this exact code in the moment between our
           // pre-check and now — abort the whole order, not just the
@@ -216,6 +301,15 @@ export async function POST(request: Request) {
       return created;
     });
 
+    // ⚠️ The transaction has COMMITTED by this point. The order exists,
+    // the coupon is claimed, the gift card is debited. Nothing below may
+    // be allowed to throw into the outer catch, because that returns a
+    // 500 and the customer sees "Failed to place order" for an order that
+    // fully succeeded — so they submit again, and now there's a duplicate
+    // in the kitchen queue, their gift card is debited twice, and the
+    // coupon comes back as "already used by someone else" when in fact
+    // they used it themselves seconds ago.
+    //
     // Dine-in orders never collect an email address, so there's nothing to
     // send a confirmation to — the customer just watches /track/[orderId]
     // (or the kitchen calls their name/table).
@@ -226,36 +320,48 @@ export async function POST(request: Request) {
     // string` casts here reflect that already-checked invariant, not an
     // unchecked assumption.
     if (orderType === "DELIVERY" && order.email) {
-      await sendOrderConfirmationEmail({
-        id: order.id,
-        email: order.email as string,
-        firstName: order.firstName,
-        address: order.address as string,
-        city: order.city as string,
-        state: order.state as string,
-        zip: order.zip as string,
-        totalAmount: order.totalAmount,
-        shippingMethod: order.shippingMethod as string,
-        paymentMethod: order.paymentMethod,
-        items: order.items,
-      });
+      try {
+        await sendOrderConfirmationEmail({
+          id: order.id,
+          email: order.email as string,
+          firstName: order.firstName,
+          address: order.address as string,
+          city: order.city as string,
+          state: order.state as string,
+          zip: order.zip as string,
+          totalAmount: order.totalAmount,
+          shippingMethod: order.shippingMethod as string,
+          paymentMethod: order.paymentMethod,
+          items: order.items,
+        });
+      } catch (error) {
+        // Same reasoning as the Stripe webhook's handleOrderPaid: log it
+        // (Sentry picks this up) and move on. A confirmation email is
+        // worth far less than a correctly recorded order.
+        console.error("Confirmation email failed for order", order.id, error);
+      }
 
       // Marketing sync rides the same conditional as the confirmation
       // email on purpose — both need order.email, and COD/DINE_IN orders
       // never have one. syncCustomerToAudience() swallows its own errors
-      // (see resend.ts), so this can never fail order creation.
+      // (see resend.ts); the try/catch here also covers the user update
+      // that follows it.
       if (order.marketingConsent) {
-        await syncCustomerToAudience({
-          email: order.email,
-          firstName: order.firstName,
-          lastName: order.lastName,
-        });
-
-        if (order.userId) {
-          await prisma.user.update({
-            where: { id: order.userId },
-            data: { marketingConsent: true, marketingConsentAt: new Date() },
+        try {
+          await syncCustomerToAudience({
+            email: order.email,
+            firstName: order.firstName,
+            lastName: order.lastName,
           });
+
+          if (order.userId) {
+            await prisma.user.update({
+              where: { id: order.userId },
+              data: { marketingConsent: true, marketingConsentAt: new Date() },
+            });
+          }
+        } catch (error) {
+          console.error("Marketing audience sync failed for order", order.id, error);
         }
       }
     }
@@ -275,9 +381,6 @@ export async function POST(request: Request) {
       );
     }
     console.error("POST /api/orders error:", error);
-    return NextResponse.json(
-      { error: "Failed to create order" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
   }
 }

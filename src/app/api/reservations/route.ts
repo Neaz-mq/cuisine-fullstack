@@ -3,40 +3,101 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isTableAvailable } from "@/lib/reservations";
 import { requireApiScope } from "@/lib/require-admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { parseBody } from "@/lib/validations/parse";
 import { createReservationSchema } from "@/lib/validations/reservation";
+import { paginationSchema } from "@/lib/validations/common";
 
 /**
  * src/app/api/reservations/route.ts
  *
- * GET  /api/reservations   -> all reservations, for the admin dashboard
- *                              (staff with the "reservations" scope)
+ * GET  /api/reservations   -> paginated reservation list, for the admin
+ *                              dashboard (staff with the "reservations"
+ *                              scope). Accepts ?page= and ?limit=.
  * POST /api/reservations   -> create a new reservation (public — works without
  *                              login too, matching the /table page which isn't
  *                              behind auth)
  */
-export async function GET() {
+
+/**
+ * Paginated for the same reason GET /api/orders is: this used to return
+ * every reservation ever made, including cancelled and completed ones,
+ * each with its full table row. Reservations accumulate faster than
+ * orders in a busy restaurant and are never pruned.
+ *
+ * Nothing calls this endpoint today — /admin/reservations/page.tsx is a
+ * server component that queries Prisma directly and paginates there —
+ * but the endpoint is live, and the first caller to appear would have
+ * inherited an unbounded query.
+ */
+export async function GET(request: Request) {
   try {
     const authResult = await requireApiScope("reservations");
     if (authResult instanceof NextResponse) return authResult;
 
-    const reservations = await prisma.reservation.findMany({
-      orderBy: { reservedAt: "asc" },
-      include: { table: true },
+    const { searchParams } = new URL(request.url);
+    const parsedPagination = paginationSchema.safeParse({
+      page: searchParams.get("page") ?? undefined,
+      limit: searchParams.get("limit") ?? undefined,
     });
+    if (!parsedPagination.success) {
+      return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });
+    }
+    const { page, limit } = parsedPagination.data;
 
-    return NextResponse.json(reservations);
+    const [reservations, total] = await Promise.all([
+      prisma.reservation.findMany({
+        orderBy: { reservedAt: "asc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { table: true },
+      }),
+      prisma.reservation.count(),
+    ]);
+
+    // ⚠️ Shape change: this used to be a bare array.
+    return NextResponse.json({
+      reservations,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("GET /api/reservations error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch reservation list" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch reservation list" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // Public, unauthenticated endpoint that reserves a physical resource.
+    // Unlike a spam order — which staff can cancel — a flood of fake
+    // bookings makes real tables show as unavailable to real customers,
+    // so the damage lands on revenue before anyone notices, and someone
+    // has to clear them out by hand afterwards.
+    //
+    // Lower than the order limit (5 vs 10) because a genuine customer
+    // books once. Retrying a couple of times after picking an
+    // already-taken slot is normal; five attempts in ten minutes is not.
+    //
+    // ⚠️ rate-limit.ts is process-local — see its own file comment. This
+    // deters casual scripted abuse; it is not a hard distributed
+    // guarantee.
+    const rateLimitResult = checkRateLimit(request, "create-reservation", {
+      limit: 5,
+      windowMs: 10 * 60_000,
+    });
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many reservation attempts. Please wait a moment and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) },
+        }
+      );
+    }
+
     const parsed = await parseBody(request, createReservationSchema);
     if (parsed instanceof NextResponse) return parsed;
     const { tableId, customerName, phone, guestCount, reservedAt } = parsed;
@@ -79,6 +140,14 @@ export async function POST(request: Request) {
     // there's a small window where both could pass the availability check.
     // So right when we assign the table, we check again inside a
     // transaction, so a genuine conflict rejects the second request.
+    //
+    // Serializable is what actually makes this work, not the re-check on
+    // its own. Under the default READ COMMITTED, both transactions would
+    // still see "no overlapping rows" — neither can see the other's
+    // uncommitted insert — and both would succeed. Postgres' SSI takes
+    // predicate locks on the range that isTableAvailable scans, spots the
+    // dependency cycle, and aborts one of them with a serialization
+    // failure, which surfaces as P2034 and is handled below.
     const session = await auth();
 
     const reservation = await prisma.$transaction(
@@ -132,9 +201,6 @@ export async function POST(request: Request) {
     }
 
     console.error("POST /api/reservations error:", error);
-    return NextResponse.json(
-      { error: "Failed to create reservation" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 });
   }
 }
