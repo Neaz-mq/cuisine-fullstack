@@ -554,6 +554,14 @@ const Carts = () => {
       return;
     }
 
+    // A coupon slot is already filled — this field can now only be adding
+    // a gift card, so skip straight to that lookup instead of re-trying
+    // (and failing) the coupon endpoint first.
+    if (appliedCoupon) {
+      await applyGiftCard();
+      return;
+    }
+
     setIsApplyingCoupon(true);
     setCouponError(null);
 
@@ -577,8 +585,14 @@ const Carts = () => {
         // The shared "Gift card or discount code" field could be either
         // kind — a coupon miss isn't necessarily wrong, it just might be
         // a gift card code instead, so fall back and try that lookup
-        // before showing an error.
-        await applyGiftCard();
+        // before showing an error. Only fall back if a gift card slot is
+        // still open — with one already applied, a coupon miss is just a
+        // coupon miss.
+        if (!appliedGiftCard) {
+          await applyGiftCard();
+          return;
+        }
+        setCouponError(data?.error ?? "Invalid coupon or gift card code");
         return;
       }
 
@@ -589,6 +603,7 @@ const Carts = () => {
         fixedOff: data.fixedOff,
         eligibleSubtotal: data.eligibleSubtotal,
       });
+      setDiscountCode("");
       const discountLabel =
         data.type === "FIXED" ? `$${Number(data.fixedOff).toFixed(2)} off` : `${data.percentOff}% off`;
       toast.success(`"${data.code}" applied — ${discountLabel}!`, {
@@ -608,6 +623,7 @@ const Carts = () => {
 
   const applyGiftCard = async () => {
     setIsApplyingGiftCard(true);
+    setCouponError(null);
 
     try {
       const res = await fetch("/api/gift-cards/validate", {
@@ -623,6 +639,7 @@ const Carts = () => {
       }
 
       setAppliedGiftCard({ code: data.code, balance: data.balance });
+      setDiscountCode("");
       toast.success(`Gift card "${data.code}" applied — $${Number(data.amountToApply).toFixed(2)} off!`, {
         position: "bottom-center",
         autoClose: 2000,
@@ -1209,8 +1226,8 @@ const Carts = () => {
             )}
 
             <div className="pt-10 border-t border-gray-200">
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between mb-10 bg-green-50 border border-green-200 px-4 py-2 rounded">
+              {appliedCoupon && (
+                <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
                     &quot;{appliedCoupon.code}&quot; applied —{" "}
                     {appliedCoupon.type === "FIXED"
@@ -1225,33 +1242,10 @@ const Carts = () => {
                     Remove
                   </button>
                 </div>
-              ) : (
-                <>
-                  <div className="flex mb-2">
-                    <input
-                      type="text"
-                      placeholder="Gift card or discount code"
-                      className="flex-1 border border-gray-300 3xl:px-4 2xl:px-4 xl:px-2 lg:px-2 py-2 md:px-2 sm:px-2 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] focus:outline-none focus:ring-1 focus:ring-gray-400"
-                      value={discountCode}
-                      onChange={handleDiscountCodeChange}
-                    />
-                    <button
-                      onClick={applyDiscount}
-                      disabled={isApplyingCoupon}
-                      className="bg-gray-400 text-white 3xl:px-6 2xl:px-6 xl:px-2 lg:px-2 md:px-2 sm:px-2 py-2 font-semibold 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] hover:bg-gray-500 transition-colors disabled:opacity-50"
-                    >
-                      {isApplyingCoupon ? "Checking…" : "Apply"}
-                    </button>
-                  </div>
-                  {couponError && (
-                    <p className="text-xs text-red-500 mb-8">{couponError}</p>
-                  )}
-                  {!couponError && <div className="mb-4" />}
-                </>
               )}
 
-              {appliedGiftCard ? (
-                <div className="flex items-center justify-between mb-10 bg-green-50 border border-green-200 px-4 py-2 rounded">
+              {appliedGiftCard && (
+                <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
                     Gift card &quot;{appliedGiftCard.code}&quot; applied — ${giftCardAmountApplied.toFixed(2)} off
                     {appliedGiftCard.balance > giftCardAmountApplied &&
@@ -1265,10 +1259,41 @@ const Carts = () => {
                     Remove
                   </button>
                 </div>
-              ) : (
-                isApplyingGiftCard && (
-                  <p className="text-xs text-gray-400 mb-8">Checking gift card…</p>
-                )
+              )}
+
+              {/* One code can only be applied once each — show the shared
+                  input as long as either slot (coupon or gift card) is
+                  still open, so a second code can be added after the
+                  first without needing to remove it first. */}
+              {(!appliedCoupon || !appliedGiftCard) && (
+                <>
+                  <div className="flex mb-2">
+                    <input
+                      type="text"
+                      placeholder={
+                        appliedCoupon
+                          ? "Gift card code"
+                          : appliedGiftCard
+                            ? "Discount code"
+                            : "Gift card or discount code"
+                      }
+                      className="flex-1 border border-gray-300 3xl:px-4 2xl:px-4 xl:px-2 lg:px-2 py-2 md:px-2 sm:px-2 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      value={discountCode}
+                      onChange={handleDiscountCodeChange}
+                    />
+                    <button
+                      onClick={applyDiscount}
+                      disabled={isApplyingCoupon || isApplyingGiftCard}
+                      className="bg-gray-400 text-white 3xl:px-6 2xl:px-6 xl:px-2 lg:px-2 md:px-2 sm:px-2 py-2 font-semibold 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] hover:bg-gray-500 transition-colors disabled:opacity-50"
+                    >
+                      {isApplyingCoupon || isApplyingGiftCard ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <p className="text-xs text-red-500 mb-8">{couponError}</p>
+                  )}
+                  {!couponError && <div className="mb-4" />}
+                </>
               )}
             </div>
             <div className="space-y-10 bg-white p-6">
