@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "react-toastify";
+import { getTierForPoints } from "@/lib/loyalty-tiers";
 
 export default function LoyaltyAdjustRow({
   userId,
@@ -16,6 +17,11 @@ export default function LoyaltyAdjustRow({
 }) {
   const [points, setPoints] = useState(initialPoints);
   const [isOpen, setIsOpen] = useState(false);
+
+  // Recomputed client-side after every optimistic points update, so an
+  // admin adjustment that crosses a threshold shows the new badge
+  // immediately instead of waiting for a page reload.
+  const tier = useMemo(() => getTierForPoints(points), [points]);
   const [delta, setDelta] = useState("");
   const [note, setNote] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -56,7 +62,14 @@ export default function LoyaltyAdjustRow({
     <div className="px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-gray-800">{name ?? email}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-gray-800">{name ?? email}</p>
+            <span
+              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tier.badgeClassName}`}
+            >
+              {tier.label}
+            </span>
+          </div>
           <p className="text-xs text-gray-400">{email}</p>
         </div>
 

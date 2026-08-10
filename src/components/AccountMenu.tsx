@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { User, LogOut, Package, ChevronDown, Truck, ChefHat, ClipboardList, LayoutDashboard } from "lucide-react";
+import { User, LogOut, Package, ChevronDown, Truck, ChefHat, ClipboardList, LayoutDashboard, Award } from "lucide-react";
 import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
 
 /** Icon to pair with staffMenuLabel's text — kept here (not in
@@ -117,6 +117,15 @@ const AccountMenu = () => {
           >
             <Package className="w-4 h-4" />
             My Orders
+          </Link>
+
+          <Link
+            href="/account/loyalty"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            <Award className="w-4 h-4" />
+            Loyalty Rewards
           </Link>
 
           {isStaffRole((session.user as { role?: string })?.role) && (

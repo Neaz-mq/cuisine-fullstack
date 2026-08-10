@@ -17,6 +17,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { canTransition } from "@/lib/order-state-machine";
+import { calculatePointsEarned } from "@/lib/loyalty-tiers";
 
 // $10 খরচে ১ point, নিচের দিকে rounded। আগে PATCH /api/orders/[id]-এর
 // ভেতরে inline ছিল — সেই history-র সাথে সঙ্গতি রেখে আলাদাভাবে বদলাবেন না।
@@ -74,10 +75,17 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
     }
 
     // Claim জেতার পরেই totalAmount আর userId পড়া হচ্ছে — এই মুহূর্তে
-    // নিশ্চিত যে অন্য কোনো call একই order-এ point দিচ্ছে না।
+    // নিশ্চিত যে অন্য কোনো call একই order-এ point দিচ্ছে না। user-এর
+    // বর্তমান loyaltyPoints-ও এখানেই পড়া হয় — এটাই সেই balance যেটা
+    // দিয়ে tier bonus multiplier ঠিক হবে (এই order যত point-ই দিক না
+    // কেন, তার আগের tier অনুযায়ী)।
     const claimed = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
-      select: { userId: true, totalAmount: true },
+      select: {
+        userId: true,
+        totalAmount: true,
+        user: { select: { loyaltyPoints: true } },
+      },
     });
 
     // totalAmount coupon আর gift card বাদ দেওয়ার পরের অঙ্ক — অর্থাৎ
@@ -86,7 +94,13 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
     // এটাই সঠিক; "যত টাকার খাবার নিয়েছে তত point" চাইলে
     // discountAmount + giftCardAmount + totalAmount যোগ করতে হবে —
     // ব্যবসায়িক সিদ্ধান্ত, দুটোই যুক্তিসঙ্গত।
-    const pointsEarned = Math.floor(claimed.totalAmount / POINTS_PER_CURRENCY_UNIT);
+    const basePoints = Math.floor(claimed.totalAmount / POINTS_PER_CURRENCY_UNIT);
+
+    // Loyalty tier bonus — Silver/Gold/Platinum customers earn a
+    // multiplier on top of the base rate. Tier is derived from the
+    // balance BEFORE this order's points land, so a big order can't
+    // "bootstrap" itself into a bonus it applies to itself.
+    const pointsEarned = calculatePointsEarned(basePoints, claimed.user?.loyaltyPoints ?? 0);
 
     if (pointsEarned > 0 && claimed.userId) {
       await tx.user.update({
