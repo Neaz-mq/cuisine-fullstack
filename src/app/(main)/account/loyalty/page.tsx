@@ -120,6 +120,16 @@ export default async function LoyaltyPage() {
           </ul>
         </div>
 
+        {/* Redeeming points for cash off */}
+        <div className="mb-10 border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-800 mb-1">Redeem points for $ off</h2>
+          <p className="text-sm text-gray-600">
+            20 points = $1 off. Redeem any amount at checkout — look for the &quot;Use your
+            points&quot; slider on the cart page. Automatic tier discounts (shown above) and
+            points redemption can both be used on the same order.
+          </p>
+        </div>
+
         {/* Full tier ladder */}
         <div className="mb-10">
           <h2 className="text-lg font-semibold text-gray-800 mb-3">All tiers</h2>

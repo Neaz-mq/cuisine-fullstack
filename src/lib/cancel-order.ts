@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { canTransition } from "@/lib/order-state-machine";
+import { reverseLoyaltyPointsRedemption } from "@/lib/loyalty-redemption";
 
 /**
  * src/lib/cancel-order.ts
@@ -35,6 +36,7 @@ export interface ReversalSummary {
   couponReleased: boolean;
   giftCardRefunded: number;
   loyaltyPointsReversed: number;
+  redeemedPointsRefunded: number;
 }
 
 type CancelResult =
@@ -57,6 +59,7 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
       giftCardCode: true,
       giftCardAmount: true,
       pointsAwarded: true,
+      pointsRedeemed: true,
     },
   });
 
@@ -76,6 +79,7 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
     couponReleased: false,
     giftCardRefunded: 0,
     loyaltyPointsReversed: 0,
+    redeemedPointsRefunded: 0,
   };
 
   const order = await prisma.$transaction(
@@ -99,6 +103,12 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
         orderId,
         existing.userId,
         existing.pointsAwarded
+      );
+      summary.redeemedPointsRefunded = await refundRedeemedPoints(
+        tx,
+        orderId,
+        existing.userId,
+        existing.pointsRedeemed
       );
 
       return updated;
@@ -282,4 +292,41 @@ async function reverseLoyaltyPoints(
   });
 
   return awarded.points;
+}
+
+/**
+ * Refunds points the customer spent at checkout (see
+ * lib/loyalty-redemption.ts) when the order carrying that redemption is
+ * cancelled — same idempotency pattern as refundGiftCard above: checks
+ * for an existing MANUAL_ADJUSTMENT refund row on this order first, so
+ * calling cancelOrder twice on the same order (which the state machine
+ * already blocks via the CANCELLED-status early-return, but belt and
+ * braces) never double-credits.
+ */
+async function refundRedeemedPoints(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  userId: string | null,
+  pointsRedeemed: number
+): Promise<number> {
+  if (pointsRedeemed <= 0 || !userId) return 0;
+
+  const alreadyRefunded = await tx.loyaltyTransaction.findFirst({
+    where: {
+      orderId,
+      reason: "MANUAL_ADJUSTMENT",
+      points: { gt: 0 },
+      // Matched on the exact note reverseLoyaltyPointsRedemption writes
+      // below — reverseLoyaltyPoints (the EARNED-points reversal, run
+      // just above this in the same transaction) ALSO writes a positive
+      // MANUAL_ADJUSTMENT row with a different note, so a bare
+      // reason+points match here would false-positive against that row
+      // and skip a refund that hasn't actually happened yet.
+      note: "Order cancelled — redeemed points refunded",
+    },
+    select: { id: true },
+  });
+  if (alreadyRefunded) return 0;
+
+  return reverseLoyaltyPointsRedemption(tx, orderId, userId, pointsRedeemed);
 }

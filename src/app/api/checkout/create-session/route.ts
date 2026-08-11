@@ -17,6 +17,8 @@ import {
   redeemGiftCard,
   GiftCardInfo,
 } from "@/lib/gift-cards";
+import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
+import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { parseBody } from "@/lib/validations/parse";
 import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
   try {
     const parsed = await parseBody(request, createCheckoutSessionSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { items, billing, shippingMethod, couponCode, giftCardCode } = parsed;
+    const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints } = parsed;
 
     const billingError = validateBilling(billing);
     if (billingError) {
@@ -75,6 +77,16 @@ export async function POST(request: Request) {
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
 
+    // Fetched once up front — both the tier discount and the points
+    // redemption below need the same balance, avoids two redundant round
+    // trips within this single request.
+    const currentUser = session?.user?.id
+      ? await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { loyaltyPoints: true },
+        })
+      : null;
+
     let couponInfo: CouponInfo | null = null;
     let discountAmount = 0;
     if (couponCode?.trim()) {
@@ -88,6 +100,14 @@ export async function POST(request: Request) {
 
     const totalAfterCoupon = subtotal - discountAmount;
 
+    // Automatic loyalty-tier discount — see the identical logic (and its
+    // full rationale) in /api/orders/route.ts.
+    const tierDiscountAmount = currentUser
+      ? calcTierDiscountAmount(totalAfterCoupon, getTierForPoints(currentUser.loyaltyPoints))
+      : 0;
+
+    const totalAfterTierDiscount = totalAfterCoupon - tierDiscountAmount;
+
     let giftCardInfo: GiftCardInfo | null = null;
     let giftCardAmount = 0;
     if (giftCardCode?.trim()) {
@@ -96,20 +116,33 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
       }
       giftCardInfo = giftCardResult.giftCard;
-      giftCardAmount = calcGiftCardAmountToApply(totalAfterCoupon, giftCardInfo.balance);
+      giftCardAmount = calcGiftCardAmountToApply(totalAfterTierDiscount, giftCardInfo.balance);
     }
 
-    const totalAmount = totalAfterCoupon - giftCardAmount;
+    const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmount;
 
-    // Stripe ৫০ সেন্টের নিচে charge নেয় না। একটা gift card পুরো bill ঢেকে
-    // ফেললে (যেমন $30-এর order-এ $50-এর card) totalAmount 0 হয়ে যায় —
-    // আগে তবুও Stripe session বানানোর চেষ্টা হতো, আর customer ঠিক সেই
-    // মুহূর্তে একটা কঠিন error পেতো যখন সবচেয়ে মসৃণ অভিজ্ঞতা আশা করছিল।
-    // অথচ ততক্ষণে তার balance debit হয়ে গেছে।
+    // Loyalty points redemption — see /api/orders/route.ts for the full
+    // rationale. Same silent-clamp behaviour: an invalid/stale request
+    // just redeems nothing rather than failing checkout.
+    let pointsToRedeem = 0;
+    let pointsRedeemedAmount = 0;
+    if (currentUser && redeemPoints && redeemPoints > 0) {
+      const clamped = clampPointsRedemption(redeemPoints, currentUser.loyaltyPoints, totalAfterGiftCard);
+      pointsToRedeem = clamped.points;
+      pointsRedeemedAmount = clamped.amount;
+    }
+
+    const totalAmount = totalAfterGiftCard - pointsRedeemedAmount;
+
+    // Stripe ৫০ সেন্টের নিচে charge নেয় না। coupon + tier discount + gift
+    // card + points redemption মিলিয়ে পুরো bill ঢেকে ফেললে totalAmount 0
+    // হয়ে যায় — আগে তবুও Stripe session বানানোর চেষ্টা হতো, আর customer
+    // ঠিক সেই মুহূর্তে একটা কঠিন error পেতো যখন সবচেয়ে মসৃণ অভিজ্ঞতা আশা
+    // করছিল। অথচ ততক্ষণে তার balance debit হয়ে গেছে।
     //
     // এখানে charge করার মতো কিছুই নেই, তাই Stripe সম্পূর্ণ এড়িয়ে যাওয়া
     // হয় — নিচে দেখুন।
-    const isFullyCoveredByGiftCard = totalAmount < 0.5;
+    const isFullyCoveredByDiscounts = totalAmount < 0.5;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -128,17 +161,20 @@ export async function POST(request: Request) {
           zip: billing.zip,
           shippingMethod,
           paymentMethod: "ONLINE",
-          // পুরো bill gift card-এ ঢাকা পড়লে কোনো Stripe charge হবেই না,
+          // পুরো bill discounts-এ ঢাকা পড়লে কোনো Stripe charge হবেই না,
           // তাই এই order-এর জন্য কোনো webhook-ও কখনো আসবে না — সেক্ষেত্রে
           // এখানেই PAID লিখতে হয়। নাহলে order চিরকাল PENDING থেকে যেতো
           // এবং assign-rider-এর নতুন payment check এটাকে dispatch হতে
           // দিত না, যদিও গ্রাহক পুরো টাকাই দিয়ে ফেলেছেন।
-          paymentStatus: isFullyCoveredByGiftCard ? "PAID" : "PENDING",
+          paymentStatus: isFullyCoveredByDiscounts ? "PAID" : "PENDING",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           discountAmount,
           giftCardCode: giftCardInfo?.code ?? null,
           giftCardAmount,
+          tierDiscountAmount,
+          pointsRedeemed: pointsToRedeem,
+          pointsRedeemedAmount,
           // এখনই সংরক্ষণ করা হচ্ছে যাতে webhook যখন payment নিশ্চিত করে
           // পড়ে তখন row-তে আগে থেকেই থাকে — উপরের doc comment দ্রষ্টব্য।
           marketingConsent: billing.marketingConsent ?? false,
@@ -169,14 +205,25 @@ export async function POST(request: Request) {
         if (!redeemed) throw new Error("GIFT_CARD_RACE");
       }
 
+      if (pointsToRedeem > 0 && session?.user?.id) {
+        const redeemed = await redeemLoyaltyPoints(
+          tx,
+          session.user.id,
+          created.id,
+          pointsToRedeem,
+          pointsRedeemedAmount
+        );
+        if (!redeemed) throw new Error("POINTS_REDEMPTION_RACE");
+      }
+
       return created;
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    // Gift card-এ পুরোটা ঢাকা: Stripe-এর কিছুই করার নেই। এই path-এ কোনো
+    // Discounts-এ পুরোটা ঢাকা: Stripe-এর কিছুই করার নেই। এই path-এ কোনো
     // webhook আসবে না, তাই confirmation email-ও এখানেই পাঠাতে হয়।
-    if (isFullyCoveredByGiftCard) {
+    if (isFullyCoveredByDiscounts) {
       try {
         await sendOrderConfirmationEmail(order);
       } catch (error) {
@@ -212,8 +259,13 @@ export async function POST(request: Request) {
     // coupon cap আর fixed-amount দুটোকেই উপেক্ষা করতো।
     //
     // Stripe amount_off-এ ধনাত্মক পূর্ণসংখ্যা চায়, তাই শূন্যে নেমে আসা
-    // combined discount পাঠানোই হয় না।
-    const combinedDiscountCents = Math.round((discountAmount + giftCardAmount) * 100);
+    // combined discount পাঠানোই হয় না। tierDiscountAmount আর
+    // pointsRedeemedAmount দুটোও এখানে যোগ হয় — আমাদের নিজের DB total এই
+    // চারটে বাদ দিয়েই হিসাব করা, তাই Stripe-এর charge ঠিক ততটাই কমতে
+    // হবে যতটা আমাদের total কমেছে।
+    const combinedDiscountCents = Math.round(
+      (discountAmount + tierDiscountAmount + giftCardAmount + pointsRedeemedAmount) * 100
+    );
     const stripeDiscounts =
       combinedDiscountCents > 0
         ? [
@@ -280,6 +332,12 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
       return NextResponse.json(
         { error: "This gift card's balance just changed. Please remove it and try again." },
+        { status: 409 }
+      );
+    }
+    if (error instanceof Error && error.message === "POINTS_REDEMPTION_RACE") {
+      return NextResponse.json(
+        { error: "Your points balance just changed. Please try again." },
         { status: 409 }
       );
     }

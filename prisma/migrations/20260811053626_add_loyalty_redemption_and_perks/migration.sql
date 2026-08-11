@@ -1,0 +1,7 @@
+-- AlterEnum
+ALTER TYPE "LoyaltyReason" ADD VALUE 'POINTS_REDEEMED';
+
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN     "pointsRedeemed" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "pointsRedeemedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "tierDiscountAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;

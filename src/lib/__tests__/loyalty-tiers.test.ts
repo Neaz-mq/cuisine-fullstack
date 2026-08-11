@@ -5,6 +5,7 @@ import {
   getNextTier,
   getTierProgress,
   calculatePointsEarned,
+  calcTierDiscountAmount,
 } from "@/lib/loyalty-tiers";
 
 describe("getTierForPoints", () => {
@@ -100,5 +101,34 @@ describe("calculatePointsEarned", () => {
 
   it("returns 0 for an order that earned no base points, regardless of tier", () => {
     expect(calculatePointsEarned(0, 5000)).toBe(0);
+  });
+});
+
+describe("calcTierDiscountAmount", () => {
+  it("gives no discount for Bronze (0%)", () => {
+    expect(calcTierDiscountAmount(100, LOYALTY_TIERS[0])).toBe(0);
+  });
+
+  it("applies Silver's 3% discount, rounded to cents", () => {
+    const silver = LOYALTY_TIERS.find((t) => t.id === "SILVER")!;
+    expect(calcTierDiscountAmount(100, silver)).toBe(3);
+    expect(calcTierDiscountAmount(33.33, silver)).toBe(1);
+  });
+
+  it("applies Platinum's 8% discount", () => {
+    const platinum = LOYALTY_TIERS.find((t) => t.id === "PLATINUM")!;
+    expect(calcTierDiscountAmount(50, platinum)).toBe(4);
+  });
+
+  it("never discounts more than the amount itself", () => {
+    const platinum = LOYALTY_TIERS.find((t) => t.id === "PLATINUM")!;
+    // 8% of $1 is $0.08 - sanity check it doesn't somehow exceed $1.
+    expect(calcTierDiscountAmount(1, platinum)).toBeLessThanOrEqual(1);
+  });
+
+  it("returns 0 for a zero or negative amount", () => {
+    const gold = LOYALTY_TIERS.find((t) => t.id === "GOLD")!;
+    expect(calcTierDiscountAmount(0, gold)).toBe(0);
+    expect(calcTierDiscountAmount(-10, gold)).toBe(0);
   });
 });

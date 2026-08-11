@@ -22,6 +22,8 @@ import {
   redeemGiftCard,
   GiftCardInfo,
 } from "@/lib/gift-cards";
+import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
+import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
 import { paginationSchema } from "@/lib/validations/common";
@@ -152,7 +154,8 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, createOrderSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { items, billing, shippingMethod, orderType, tableId, couponCode, giftCardCode } = parsed;
+    const { items, billing, shippingMethod, orderType, tableId, couponCode, giftCardCode, redeemPoints } =
+      parsed;
 
     const billingError = validateBilling(billing, orderType);
     if (billingError) {
@@ -197,6 +200,17 @@ export async function POST(request: Request) {
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
 
+    // Fetched once up front (not per-discount-step) since both the tier
+    // discount and the points redemption below need the same balance —
+    // avoids two redundant round trips for a value that can't have
+    // changed between them within this single request.
+    const currentUser = session?.user?.id
+      ? await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { loyaltyPoints: true },
+        })
+      : null;
+
     // Pre-check outside the transaction purely for a fast, friendly error
     // message — the actual claim (and the only real concurrency guard)
     // happens inside the transaction via consumeCoupon below.
@@ -213,6 +227,16 @@ export async function POST(request: Request) {
 
     const totalAfterCoupon = subtotal - discountAmount;
 
+    // Automatic loyalty-tier discount — no code needed, unlike the coupon
+    // above. Guests (no session) are always Bronze (0%), so this is a
+    // no-op for guest checkout. Applied against what's left after the
+    // coupon, so the two never double-discount the same dollar.
+    const tierDiscountAmount = currentUser
+      ? calcTierDiscountAmount(totalAfterCoupon, getTierForPoints(currentUser.loyaltyPoints))
+      : 0;
+
+    const totalAfterTierDiscount = totalAfterCoupon - tierDiscountAmount;
+
     // Pre-check outside the transaction purely for a fast, friendly error
     // message — the actual claim (and the only real concurrency guard)
     // happens inside the transaction via redeemGiftCard below.
@@ -224,10 +248,27 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
       }
       giftCardInfo = giftCardResult.giftCard;
-      giftCardAmount = calcGiftCardAmountToApply(totalAfterCoupon, giftCardInfo.balance);
+      giftCardAmount = calcGiftCardAmountToApply(totalAfterTierDiscount, giftCardInfo.balance);
     }
 
-    const totalAmount = totalAfterCoupon - giftCardAmount;
+    const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmount;
+
+    // Loyalty points redemption — spends down what's left after every
+    // other discount, same "last in line" position as a store-credit
+    // wallet at most retailers. Guests never redeem (no account to hold
+    // a balance on); clampPointsRedemption below silently returns
+    // {points: 0, amount: 0} for anything invalid rather than erroring,
+    // so a stale/racy client request just redeems nothing instead of
+    // failing the whole order.
+    let pointsToRedeem = 0;
+    let pointsRedeemedAmount = 0;
+    if (currentUser && redeemPoints && redeemPoints > 0) {
+      const clamped = clampPointsRedemption(redeemPoints, currentUser.loyaltyPoints, totalAfterGiftCard);
+      pointsToRedeem = clamped.points;
+      pointsRedeemedAmount = clamped.amount;
+    }
+
+    const totalAmount = totalAfterGiftCard - pointsRedeemedAmount;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -244,6 +285,9 @@ export async function POST(request: Request) {
           discountAmount,
           giftCardCode: giftCardInfo?.code ?? null,
           giftCardAmount,
+          tierDiscountAmount,
+          pointsRedeemed: pointsToRedeem,
+          pointsRedeemedAmount,
           // Defaults to false (opt-in, never opt-out by default) if the
           // client omits it entirely.
           marketingConsent: billing.marketingConsent ?? false,
@@ -295,6 +339,22 @@ export async function POST(request: Request) {
           // Same race as the coupon check above — someone else spent the
           // balance we were counting on between the pre-check and now.
           throw new Error("GIFT_CARD_RACE");
+        }
+      }
+
+      if (pointsToRedeem > 0 && session?.user?.id) {
+        const redeemed = await redeemLoyaltyPoints(
+          tx,
+          session.user.id,
+          created.id,
+          pointsToRedeem,
+          pointsRedeemedAmount
+        );
+        if (!redeemed) {
+          // Same race pattern — the balance changed (e.g. another tab
+          // redeeming, or an admin adjustment) between the pre-check and
+          // now.
+          throw new Error("POINTS_REDEMPTION_RACE");
         }
       }
 
@@ -377,6 +437,12 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
       return NextResponse.json(
         { error: "This gift card's balance just changed. Please remove it and try again." },
+        { status: 409 }
+      );
+    }
+    if (error instanceof Error && error.message === "POINTS_REDEMPTION_RACE") {
+      return NextResponse.json(
+        { error: "Your points balance just changed. Please try again." },
         { status: 409 }
       );
     }

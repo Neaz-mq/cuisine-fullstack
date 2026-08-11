@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
@@ -52,6 +53,7 @@ const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
 
 const Carts = () => {
   const router = useRouter();
+  const { data: session } = useSession();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -226,6 +228,39 @@ const Carts = () => {
   } | null>(null);
   const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
 
+  // Loyalty points redemption — fetched from the customer's OWN account
+  // (never trusted from anywhere client-writable), see
+  // /api/loyalty/me. null while loading or for a guest/logged-out
+  // customer, in which case the whole redemption UI below stays hidden —
+  // there's no account to hold a balance on. `redeemedPoints` is how
+  // many the customer has asked to apply; the dollar amount is always
+  // recomputed from it below (never stored separately), same "derive,
+  // don't duplicate" reasoning as discountAmount/giftCardAmountApplied.
+  const [loyaltyInfo, setLoyaltyInfo] = useState<{
+    points: number;
+    tier: { id: string; label: string; discountPercent: number };
+    redemption: { rate: number; minPoints: number; canRedeem: boolean };
+  } | null>(null);
+  const [redeemedPoints, setRedeemedPoints] = useState(0);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    let cancelled = false;
+    fetch("/api/loyalty/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setLoyaltyInfo(data);
+      })
+      .catch(() => {
+        // Silent — the redemption section just doesn't render if this
+        // fails, same as any other optional checkout enhancement. The
+        // order can still be placed without it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user]);
+
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -250,14 +285,37 @@ const Carts = () => {
     : 0;
   const total = subtotal - discountAmount;
 
+  // Automatic loyalty-tier discount — display-only mirror of
+  // calcTierDiscountAmount on the server (lib/loyalty-tiers.ts). No
+  // "Apply" button, it's automatic — this section just needs to show it.
+  const tierDiscountAmount = loyaltyInfo
+    ? Math.round(Math.max(total, 0) * (loyaltyInfo.tier.discountPercent / 100) * 100) / 100
+    : 0;
+  const totalAfterTierDiscount = total - tierDiscountAmount;
+
   // Same "min(what's owed, what's left on the card)" logic as
   // calcGiftCardAmountToApply on the server — purely for display, the
   // server independently recomputes the authoritative amount from its
   // own resolved total at order-creation time.
   const giftCardAmountApplied = appliedGiftCard
-    ? Math.min(Math.max(total, 0), appliedGiftCard.balance)
+    ? Math.min(Math.max(totalAfterTierDiscount, 0), appliedGiftCard.balance)
     : 0;
-  const finalTotal = total - giftCardAmountApplied;
+  const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmountApplied;
+
+  // Display-only mirror of clampPointsRedemption on the server (see
+  // lib/loyalty-redemption.ts) — never lets the redemption take the
+  // order below $0, never more than the account's balance.
+  const maxAffordablePoints = loyaltyInfo
+    ? Math.floor(Math.max(totalAfterGiftCard, 0) / loyaltyInfo.redemption.rate)
+    : 0;
+  const cappedRedeemedPoints = loyaltyInfo
+    ? Math.min(redeemedPoints, loyaltyInfo.points, maxAffordablePoints)
+    : 0;
+  const pointsRedeemedAmount = loyaltyInfo
+    ? Math.round(cappedRedeemedPoints * loyaltyInfo.redemption.rate * 100) / 100
+    : 0;
+
+  const finalTotal = totalAfterGiftCard - pointsRedeemedAmount;
 
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
@@ -341,6 +399,7 @@ const Carts = () => {
             tableId,
             couponCode: appliedCoupon?.code,
             giftCardCode: appliedGiftCard?.code,
+            redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
           }),
         });
 
@@ -382,6 +441,7 @@ const Carts = () => {
         setAppliedCoupon(null);
         setDiscountCode("");
         setAppliedGiftCard(null);
+        setRedeemedPoints(0);
 
         clearCart();
         // One scan → one order (v1 scope) — clear the table context so a
@@ -426,6 +486,7 @@ const Carts = () => {
             shippingMethod,
             couponCode: appliedCoupon?.code,
             giftCardCode: appliedGiftCard?.code,
+            redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
           }),
         });
 
@@ -459,6 +520,7 @@ const Carts = () => {
           shippingMethod,
           couponCode: appliedCoupon?.code,
           giftCardCode: appliedGiftCard?.code,
+          redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
         }),
       });
 
@@ -504,6 +566,7 @@ const Carts = () => {
       setAppliedCoupon(null);
       setDiscountCode("");
       setAppliedGiftCard(null);
+      setRedeemedPoints(0);
 
       clearCart();
       router.push(`/track/${data.id}`);
@@ -1261,6 +1324,42 @@ const Carts = () => {
                 </div>
               )}
 
+              {/* Loyalty points redemption — only shown to a logged-in
+                  customer with a fetched balance (see the /api/loyalty/me
+                  effect above). Automatic tier discount needs no UI here
+                  at all — it's applied without any action, see the
+                  totals block below. */}
+              {loyaltyInfo && loyaltyInfo.redemption.canRedeem && (
+                <div className="mb-4 border border-gray-200 rounded px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-800">
+                      Use your points ({loyaltyInfo.points} available)
+                    </span>
+                    {cappedRedeemedPoints > 0 && (
+                      <span className="text-xs font-semibold text-[#2C6252]">
+                        -${pointsRedeemedAmount.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.min(loyaltyInfo.points, maxAffordablePoints)}
+                    step={loyaltyInfo.redemption.minPoints}
+                    value={cappedRedeemedPoints}
+                    onChange={(e) => setRedeemedPoints(Number(e.target.value))}
+                    className="w-full accent-[#FF4C15]"
+                  />
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>0 pts</span>
+                    <span>
+                      {cappedRedeemedPoints} pts = ${pointsRedeemedAmount.toFixed(2)} off
+                    </span>
+                    <span>{Math.min(loyaltyInfo.points, maxAffordablePoints)} pts</span>
+                  </div>
+                </div>
+              )}
+
               {/* One code can only be applied once each — show the shared
                   input as long as either slot (coupon or gift card) is
                   still open, so a second code can be added after the
@@ -1312,6 +1411,18 @@ const Carts = () => {
                   <div className="flex justify-between">
                     <span>Gift card</span>
                     <span className="text-[#2C6252]">-${giftCardAmountApplied.toFixed(2)}</span>
+                  </div>
+                )}
+                {tierDiscountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>{loyaltyInfo?.tier.label} tier discount</span>
+                    <span className="text-[#2C6252]">-${tierDiscountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {pointsRedeemedAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Points redeemed ({cappedRedeemedPoints} pts)</span>
+                    <span className="text-[#2C6252]">-${pointsRedeemedAmount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

@@ -254,6 +254,23 @@ model Order {
   giftCardAmount       Float                 @default(0)
   giftCardTransactions GiftCardTransaction[]
 
+  // Automatic loyalty-tier discount (Silver/Gold/Platinum get a % off,
+  // see lib/loyalty-tiers.ts calcTierDiscountAmount) — already netted out
+  // of totalAmount, same denormalized-display pattern as discountAmount/
+  // giftCardAmount above. Unlike a coupon or gift card, there's no
+  // separate claimed resource to release on cancellation (it's not a
+  // code, not a balance — just a price rule evaluated at checkout), so
+  // lib/cancel-order.ts has nothing to reverse for this one.
+  tierDiscountAmount Float @default(0)
+
+  // Loyalty points redeemed by the customer at checkout for a dollar-for-
+  // dollar-equivalent discount (see lib/loyalty-redemption.ts). Debited
+  // from User.loyaltyPoints atomically at order-creation time — same
+  // "claim now, refund on cancel" pattern as giftCardAmount above.
+  // pointsRedeemedAmount is already netted out of totalAmount.
+  pointsRedeemed       Int   @default(0)
+  pointsRedeemedAmount Float @default(0)
+
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake. Claimed
   // atomically via updateMany (see lib/mark-order-delivered.ts) rather
@@ -838,6 +855,12 @@ model LoyaltyTransaction {
 enum LoyaltyReason {
   ORDER_DELIVERED
   MANUAL_ADJUSTMENT
+  // Customer spent points at checkout for a discount (see
+  // lib/loyalty-redemption.ts). Recorded as a negative `points` value on
+  // the transaction. A refund of redeemed points on cancellation reuses
+  // MANUAL_ADJUSTMENT (positive), matching how a reversed ORDER_DELIVERED
+  // credit already does — see reverseLoyaltyPoints in lib/cancel-order.ts.
+  POINTS_REDEEMED
 }
 
 // ---------------------------------------------------------------------------

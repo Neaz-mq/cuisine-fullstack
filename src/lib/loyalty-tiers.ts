@@ -33,6 +33,13 @@ export interface LoyaltyTierDef {
    * the base rate; higher tiers earn a bonus on top of it.
    */
   pointsMultiplier: number;
+  /**
+   * Automatic percentage discount applied at checkout while the customer
+   * is in this tier — no code needed, unlike a Coupon (see
+   * calcTierDiscountAmount below and its use in /api/orders and
+   * /api/checkout/create-session). 0 for Bronze (no perk yet earned).
+   */
+  discountPercent: number;
   /** Marketing-facing perks shown on the customer loyalty page. */
   perks: string[];
   /** Tailwind classes for the tier's badge chip. */
@@ -47,6 +54,7 @@ export const LOYALTY_TIERS: LoyaltyTierDef[] = [
     label: "Bronze",
     minPoints: 0,
     pointsMultiplier: 1,
+    discountPercent: 0,
     perks: ["Earn 1 point per $10 spent", "Birthday treat on your special day"],
     badgeClassName: "bg-orange-100 text-orange-800 border border-orange-200",
   },
@@ -55,8 +63,10 @@ export const LOYALTY_TIERS: LoyaltyTierDef[] = [
     label: "Silver",
     minPoints: 200,
     pointsMultiplier: 1.1,
+    discountPercent: 3,
     perks: [
       "10% bonus points on every order",
+      "Automatic 3% off every order",
       "Birthday treat on your special day",
       "Early access to new menu items",
     ],
@@ -67,8 +77,10 @@ export const LOYALTY_TIERS: LoyaltyTierDef[] = [
     label: "Gold",
     minPoints: 500,
     pointsMultiplier: 1.25,
+    discountPercent: 5,
     perks: [
       "25% bonus points on every order",
+      "Automatic 5% off every order",
       "Birthday treat on your special day",
       "Early access to new menu items",
       "Priority customer support",
@@ -80,8 +92,10 @@ export const LOYALTY_TIERS: LoyaltyTierDef[] = [
     label: "Platinum",
     minPoints: 1000,
     pointsMultiplier: 1.5,
+    discountPercent: 8,
     perks: [
       "50% bonus points on every order",
+      "Automatic 8% off every order",
       "Birthday treat on your special day",
       "Early access to new menu items",
       "Priority customer support",
@@ -148,4 +162,20 @@ export function calculatePointsEarned(basePoints: number, pointsBeforeOrder: num
   if (basePoints <= 0) return 0;
   const tier = getTierForPoints(pointsBeforeOrder);
   return Math.floor(basePoints * tier.pointsMultiplier);
+}
+
+/**
+ * Automatic tier discount for a given order amount — no code needed,
+ * unlike a Coupon. Applied by /api/orders and /api/checkout/create-session
+ * against the subtotal AFTER any coupon discount (so a coupon and a tier
+ * perk never double-discount the same dollar), and BEFORE gift card /
+ * points redemption (those spend down what's left, they don't get
+ * discounted further). Rounded to cents and never allowed to exceed the
+ * amount it's discounting, same guard as calcDiscountAmount in
+ * order-checkout-shared.ts.
+ */
+export function calcTierDiscountAmount(amountAfterCoupon: number, tier: LoyaltyTierDef): number {
+  if (amountAfterCoupon <= 0 || tier.discountPercent <= 0) return 0;
+  const raw = amountAfterCoupon * (tier.discountPercent / 100);
+  return Math.round(Math.min(raw, amountAfterCoupon) * 100) / 100;
 }

@@ -56,6 +56,12 @@ const baseOrderFields = {
   billing: billingSchema,
   couponCode: z.string().trim().optional(),
   giftCardCode: z.string().trim().optional(),
+  // Loyalty points the customer wants to redeem for a discount — only
+  // meaningful for a logged-in user (see lib/loyalty-redemption.ts); the
+  // route silently ignores this for guest checkout. Server-clamped to
+  // what the account actually has and what the order total can absorb,
+  // never trusted as an authoritative discount amount from the client.
+  redeemPoints: z.number().int().nonnegative().optional(),
 };
 
 /** POST /api/checkout/create-session — online/Stripe, DELIVERY-only, so
