@@ -19,6 +19,14 @@ type RecipeRow = {
   key: string;
   inventoryItemId: string;
   quantityRequired: string;
+  // Captured from the initial /ingredients response. Used as a fallback
+  // display (name + unit) when this row's ingredient is no longer in the
+  // `inventoryItems` prop — i.e. it was made Inactive after this recipe
+  // was saved. Without this, the <select> silently falls back to showing
+  // whatever the first option happens to be, which looks like the recipe
+  // uses a completely different ingredient than what's actually saved.
+  savedName?: string;
+  savedUnit?: string;
 };
 
 function newRow(inventoryItemId = ""): RecipeRow {
@@ -48,10 +56,15 @@ export default function RecipeEditor({
         if (Array.isArray(data) && data.length > 0) {
           setRows(
             data.map(
-              (line: { inventoryItem: { id: string }; quantityRequired: number }) => ({
+              (line: {
+                inventoryItem: { id: string; name: string; unit: string };
+                quantityRequired: number;
+              }) => ({
                 key: crypto.randomUUID(),
                 inventoryItemId: line.inventoryItem.id,
                 quantityRequired: String(line.quantityRequired),
+                savedName: line.inventoryItem.name,
+                savedUnit: line.inventoryItem.unit,
               })
             )
           );
@@ -66,7 +79,22 @@ export default function RecipeEditor({
   }, [menuItemId]);
 
   function updateRow(key: string, patch: Partial<RecipeRow>) {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    setRows((prev) =>
+      prev.map((r) =>
+        r.key === key
+          ? {
+              ...r,
+              ...patch,
+              // Once the user explicitly changes the ingredient, drop the
+              // stale saved-name/unit fallback so it doesn't linger and
+              // mislabel the newly picked ingredient.
+              ...(patch.inventoryItemId !== undefined
+                ? { savedName: undefined, savedUnit: undefined }
+                : {}),
+            }
+          : r
+      )
+    );
     setSavedMessage(false);
   }
 
@@ -160,42 +188,64 @@ export default function RecipeEditor({
         <div className="space-y-2">
           {rows.map((row) => {
             const selected = inventoryItems.find((i) => i.id === row.inventoryItemId);
+            // The ingredient this row points to isn't in the active list —
+            // either it was made Inactive, or (edge case) deleted outright.
+            const isOrphaned = !selected && row.inventoryItemId !== "";
+            const unitLabel = selected
+              ? UNIT_LABELS[selected.unit]
+              : row.savedUnit
+              ? UNIT_LABELS[row.savedUnit]
+              : "";
+
             return (
-              <div key={row.key} className="flex items-center gap-2">
-                <select
-                  value={row.inventoryItemId}
-                  onChange={(e) => updateRow(row.key, { inventoryItemId: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                >
-                  <option value="" disabled>
-                    Select ingredient…
-                  </option>
-                  {inventoryItems.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.name}
+              <div key={row.key}>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={row.inventoryItemId}
+                    onChange={(e) => updateRow(row.key, { inventoryItemId: e.target.value })}
+                    className={`flex-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 ${
+                      isOrphaned ? "border-amber-300 bg-amber-50" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="" disabled>
+                      Select ingredient…
                     </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={row.quantityRequired}
-                  onChange={(e) => updateRow(row.key, { quantityRequired: e.target.value })}
-                  placeholder="Qty"
-                  className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-                <span className="text-xs text-gray-400 w-8">
-                  {selected ? UNIT_LABELS[selected.unit] : ""}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.key)}
-                  className="text-xs text-gray-400 hover:text-red-500 px-2"
-                  aria-label="Remove ingredient"
-                >
-                  ✕
-                </button>
+                    {isOrphaned && (
+                      <option value={row.inventoryItemId} disabled>
+                        {row.savedName ?? "Unknown ingredient"} (inactive)
+                      </option>
+                    )}
+                    {inventoryItems.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={row.quantityRequired}
+                    onChange={(e) => updateRow(row.key, { quantityRequired: e.target.value })}
+                    placeholder="Qty"
+                    className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                  <span className="text-xs text-gray-400 w-8">{unitLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.key)}
+                    className="text-xs text-gray-400 hover:text-red-500 px-2"
+                    aria-label="Remove ingredient"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {isOrphaned && (
+                  <p className="text-xs text-amber-600 mt-1 ml-1">
+                    ⚠ {row.savedName ?? "This ingredient"} is inactive. The recipe keeps using it
+                    until you pick a different ingredient or reactivate it under Inventory.
+                  </p>
+                )}
               </div>
             );
           })}
