@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { calculateFoodCost, getFoodCostHealth, type FoodCostHealth } from "@/lib/menu-profitability";
 
 // Minimum approved reviews before we trust a menu item's average rating
 // enough to base an insight on it — a single 5-star review shouldn't label
@@ -16,6 +17,20 @@ type ItemStat = {
   revenue: number;
   avgRating: number | null;
   reviewCount: number;
+  // Profitability fields — derived from the item's recipe (see
+  // menu-profitability.ts). Independent of sales data above, so these
+  // stay populated even for items that have never sold.
+  price: number;
+  foodCost: number;
+  foodCostPercent: number | null;
+  grossMargin: number;
+  hasRecipe: boolean;
+  foodCostHealth: FoodCostHealth;
+  // Profit actually banked so far = grossMargin x units sold. Distinct
+  // from `revenue` above (revenue is gross sales dollars, this is what's
+  // left after ingredient cost) — the number an owner actually cares
+  // about when deciding what to push or pull from the menu.
+  totalProfitContribution: number;
 };
 
 export default async function AdminInsightsPage() {
@@ -24,8 +39,18 @@ export default async function AdminInsightsPage() {
       select: {
         id: true,
         title: true,
+        price: true,
         isAvailable: true,
         category: { select: { name: true } },
+        // Recipe / Bill-of-Materials — empty array means no recipe has
+        // been configured yet, handled as hasRecipe=false below rather
+        // than a misleading $0 food cost.
+        ingredients: {
+          select: {
+            quantityRequired: true,
+            inventoryItem: { select: { costPerUnit: true } },
+          },
+        },
       },
     }),
     // OrderItem.price is a UNIT price, not a line total (confirmed by every
@@ -57,6 +82,16 @@ export default async function AdminInsightsPage() {
   const stats: ItemStat[] = menuItems.map((item) => {
     const sales = salesMap.get(item.id);
     const reviews = reviewMap.get(item.id);
+
+    const recipe = item.ingredients.map((line) => ({
+      quantityRequired: line.quantityRequired,
+      costPerUnit: line.inventoryItem.costPerUnit,
+    }));
+    const { foodCost, foodCostPercent, grossMargin, hasRecipe } = calculateFoodCost(
+      recipe,
+      item.price
+    );
+
     return {
       id: item.id,
       title: item.title,
@@ -66,6 +101,13 @@ export default async function AdminInsightsPage() {
       revenue: sales?.revenue ?? 0,
       avgRating: reviews?._avg.rating ?? null,
       reviewCount: reviews?._count.rating ?? 0,
+      price: item.price,
+      foodCost,
+      foodCostPercent,
+      grossMargin,
+      hasRecipe,
+      foodCostHealth: getFoodCostHealth(foodCostPercent),
+      totalProfitContribution: grossMargin * (sales?.quantity ?? 0),
     };
   });
 
@@ -99,6 +141,24 @@ export default async function AdminInsightsPage() {
     )
     .sort((a, b) => (a.avgRating ?? 0) - (b.avgRating ?? 0))
     .slice(0, 5);
+
+  // Worst food-cost-% first, so the items bleeding the most margin are
+  // the first thing the owner sees — matches the "Slowest Movers" /
+  // "Quality Risk" pattern above of surfacing what needs attention, not
+  // what's already fine. Items without a computable percent (no recipe
+  // configured) are kept separate rather than sorted arbitrarily among
+  // items that DO have a real number.
+  const itemsWithRecipe = stats
+    .filter((s) => s.hasRecipe && s.foodCostPercent !== null)
+    .sort((a, b) => (b.foodCostPercent ?? 0) - (a.foodCostPercent ?? 0));
+  const itemsWithoutRecipe = stats.filter((s) => !s.hasRecipe);
+
+  const foodCostHealthStyles: Record<FoodCostHealth, string> = {
+    critical: "bg-red-50 text-red-600",
+    watch: "bg-amber-50 text-amber-600",
+    healthy: "bg-emerald-50 text-emerald-600",
+    unknown: "bg-gray-100 text-gray-500",
+  };
 
   const categoryRevenueMap = new Map<string, number>();
   stats.forEach((s) => {
@@ -246,6 +306,71 @@ export default async function AdminInsightsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Menu profitability */}
+      <div className="border border-gray-200 rounded-md p-5 bg-white mb-6">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
+          Menu Profitability
+        </h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Food cost as a % of price, per item — sorted worst first. Industry rule of thumb: aim for
+          28-35%; above 45% usually means the item is losing you money the more it sells.
+        </p>
+        {itemsWithRecipe.length === 0 ? (
+          <p className="text-sm text-gray-400">
+            No menu item has a recipe configured yet — add ingredients under Inventory to see food
+            cost and margin here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                  <th className="py-2 pr-3 font-medium">Item</th>
+                  <th className="py-2 px-3 font-medium text-right">Price</th>
+                  <th className="py-2 px-3 font-medium text-right">Food Cost</th>
+                  <th className="py-2 px-3 font-medium text-right">Food Cost %</th>
+                  <th className="py-2 px-3 font-medium text-right">Margin/Unit</th>
+                  <th className="py-2 px-3 font-medium text-right">Units Sold</th>
+                  <th className="py-2 pl-3 font-medium text-right">Profit Contribution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemsWithRecipe.map((item) => (
+                  <tr key={item.id} className="border-b border-gray-50 last:border-0">
+                    <td className="py-2 pr-3 text-gray-700 truncate max-w-[160px]">{item.title}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">${item.price.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">${item.foodCost.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right">
+                      <span
+                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${foodCostHealthStyles[item.foodCostHealth]}`}
+                      >
+                        {item.foodCostPercent?.toFixed(0)}%
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right text-gray-600">${item.grossMargin.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-gray-500">{item.quantity}</td>
+                    <td className="py-2 pl-3 text-right font-semibold text-[#2C6252]">
+                      ${item.totalProfitContribution.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {itemsWithoutRecipe.length > 0 && (
+          <p className="text-xs text-gray-400 mt-4">
+            {itemsWithoutRecipe.length} item{itemsWithoutRecipe.length === 1 ? "" : "s"} without a
+            recipe configured, so no food cost can be shown:{" "}
+            {itemsWithoutRecipe
+              .slice(0, 6)
+              .map((i) => i.title)
+              .join(", ")}
+            {itemsWithoutRecipe.length > 6 ? `, +${itemsWithoutRecipe.length - 6} more` : ""}.
+          </p>
+        )}
       </div>
 
       {/* Category revenue */}
