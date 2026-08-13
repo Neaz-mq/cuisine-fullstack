@@ -1,6 +1,7 @@
 import { getResendClient, EMAIL_FROM } from "@/lib/resend";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
+import { type Money, toMoney } from "@/lib/money";
 
 const SHIPPING_LABELS: Record<string, string> = {
   UBER_EATS: "Uber Eats",
@@ -27,10 +28,16 @@ interface OrderForEmail {
   city: string | null;
   state: string | null;
   zip: string | null;
-  totalAmount: number;
+  // Money | number দুটোই নেওয়া হয়: Prisma এখন Decimal দেয়, কিন্তু test
+  // আর পুরোনো call site সাধারণ number পাঠায়।
+  //
+  // ⚠️ অস্থায়ী। এই email-এ এখনো শুধু একটাই মোট অঙ্ক যায় — কর, service
+  // charge, delivery fee আর বকশিশের আলাদা লাইন নেই, যদিও Order row-তে
+  // চারটেই আছে। পূর্ণ চালান template Stage 3-এ।
+  totalAmount: Money | number;
   shippingMethod: string | null;
   paymentMethod: string;
-  items: { quantity: number; price: number; menuItem: { title: string } }[];
+  items: { quantity: number; price: Money | number; menuItem: { title: string } }[];
 }
 
 // Called right after an order is created. Never throws — a failed email
@@ -60,9 +67,11 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
         items: order.items.map((i) => ({
           title: i.menuItem.title,
           quantity: i.quantity,
-          price: i.price,
+          // React email template এখনো number নেয় — display-only, তাই
+          // এখানে রূপান্তর নিরাপদ। হিসাব কোনোটাই এই মান দিয়ে হয় না।
+          price: toMoney(i.price).toNumber(),
         })),
-        totalAmount: order.totalAmount,
+        totalAmount: toMoney(order.totalAmount).toNumber(),
         address: order.address ?? "",
         city: order.city ?? "",
         state: order.state ?? "",

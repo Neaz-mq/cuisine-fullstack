@@ -74,7 +74,9 @@ export default async function AdminInsightsPage() {
   orderItemAgg.forEach((line) => {
     const existing = salesMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
     existing.quantity += line.quantity;
-    existing.revenue += line.price * line.quantity;
+    // Decimal -> number, display/ranking-এর জন্য। এই সংখ্যা কেবল
+    // "কোন পদ কত আয় করল" সাজাতে ব্যবহার হয়, কোনো চালানে যায় না।
+    existing.revenue += line.price.toNumber() * line.quantity;
     salesMap.set(line.menuItemId, existing);
   });
   const reviewMap = new Map(reviewAgg.map((r) => [r.menuItemId, r]));
@@ -83,13 +85,16 @@ export default async function AdminInsightsPage() {
     const sales = salesMap.get(item.id);
     const reviews = reviewMap.get(item.id);
 
+    // Decimal -> number boundary. menu-profitability.ts ইচ্ছাকৃতভাবে
+    // Prisma-মুক্ত (তার header-এর নোট দ্রষ্টব্য), আর এই সংখ্যাগুলো
+    // ব্যবস্থাপনার রিপোর্ট — গ্রাহকের চালান নয়, তাই float নিরাপদ।
     const recipe = item.ingredients.map((line) => ({
       quantityRequired: line.quantityRequired,
-      costPerUnit: line.inventoryItem.costPerUnit,
+      costPerUnit: line.inventoryItem.costPerUnit.toNumber(),
     }));
     const { foodCost, foodCostPercent, grossMargin, hasRecipe } = calculateFoodCost(
       recipe,
-      item.price
+      item.price.toNumber()
     );
 
     return {
@@ -101,7 +106,7 @@ export default async function AdminInsightsPage() {
       revenue: sales?.revenue ?? 0,
       avgRating: reviews?._avg.rating ?? null,
       reviewCount: reviews?._count.rating ?? 0,
-      price: item.price,
+      price: item.price.toNumber(),
       foodCost,
       foodCostPercent,
       grossMargin,

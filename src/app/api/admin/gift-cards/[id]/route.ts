@@ -4,6 +4,7 @@ import { requireApiScope } from "@/lib/require-admin";
 import type { Prisma } from "@/generated/prisma/client";
 import { adjustGiftCardSchema } from "@/lib/validations/coupon";
 import { parseBody } from "@/lib/validations/parse";
+import { toMoney } from "@/lib/money";
 
 /**
  * PATCH /api/admin/gift-cards/[id]
@@ -38,7 +39,7 @@ export async function PATCH(
     data.isActive = body.isActive;
   }
 
-  const adjustment = body.adjustment !== undefined ? Math.round(body.adjustment * 100) / 100 : null;
+  const adjustment = body.adjustment !== undefined ? toMoney(body.adjustment) : null;
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
@@ -46,8 +47,12 @@ export async function PATCH(
         const giftCard = await tx.giftCard.findUnique({ where: { id } });
         if (!giftCard) throw new Error("NOT_FOUND");
 
-        const newBalance = giftCard.balance + adjustment;
-        if (newBalance < 0) throw new Error("BALANCE_NEGATIVE");
+        // Decimal যোগ, `+` নয়। পুরোনো কোডে balance আর adjustment দুটোই
+        // float ছিল, তাই একটা কার্ডকে ঠিক তার balance-এর সমান ঋণাত্মক
+        // adjustment দিয়ে শূন্য করলে ফল হতো -1.8e-15 — অর্থাৎ
+        // BALANCE_NEGATIVE, যদিও admin ঠিক কাজটাই করছিলেন।
+        const newBalance = giftCard.balance.plus(adjustment);
+        if (newBalance.isNegative()) throw new Error("BALANCE_NEGATIVE");
 
         await tx.giftCardTransaction.create({
           data: {

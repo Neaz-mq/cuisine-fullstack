@@ -43,11 +43,25 @@ export async function GET() {
 
     const nonEmptyCategories = categories.filter((c) => c.menuItems.length > 0);
 
+    // ⚠️ price-কে number-এ নামানো হচ্ছে, Decimal ছেড়ে দেওয়া হচ্ছে না।
+    //
+    // JSON.stringify একটা Prisma Decimal-কে string বানায় ("8.99"),
+    // object নয়। Items.tsx এই response fetch করে `item.price.toFixed(2)`
+    // ডাকে — string-এ toFixed নেই, তাই পুরো মেনু পাতা browser-এ ভেঙে
+    // পড়ত। tsc এটা ধরতে পারত না, কারণ সে DB-র ধরনটাই জানে, নেটওয়ার্ক
+    // পেরোনোর পরের রূপ নয়।
+    //
+    // এখানে float হওয়া নিরাপদ: এই দাম কেবল দেখানোর জন্য। গ্রাহক অর্ডার
+    // করলে server নিজেই MenuItem.price আবার পড়ে (resolveOrderItems),
+    // client-এর পাঠানো কোনো দাম কখনো বিশ্বাস করা হয় না।
     return NextResponse.json(
       nonEmptyCategories.map((c) => ({
         id: c.id,
         label: c.name,
-        items: c.menuItems,
+        items: c.menuItems.map((item) => ({
+          ...item,
+          price: item.price.toNumber(),
+        })),
       }))
     );
   } catch (error) {

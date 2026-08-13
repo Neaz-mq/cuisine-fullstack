@@ -20,6 +20,8 @@ import { useCart } from "@/context/CartContext";
 export type OrderAgainItem = {
   menuItemId: string;
   title: string;
+  /** number — এটা client component, আর cart-এর ভেতরে দাম দিয়ে যোগ-গুণ
+   *  হয়। server page boundary-তে .toNumber() করে পাঠানো হয়। */
   price: number;
   quantity: number;
   imageUrl?: string | null;

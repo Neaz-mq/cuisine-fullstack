@@ -13,10 +13,21 @@
  * lives in the admin insights page itself, mirroring how
  * checkout-validation.test.ts and loyalty-tiers.test.ts keep the
  * arithmetic testable in isolation from the DB.
+ *
+ * ⚠️ "Pure" here specifically excludes lib/money.ts, which reaches the
+ * generated Prisma client and therefore `node:module`. Any client
+ * component that imported this file would then break `next build` with
+ * "the chunking context does not support external modules" — the same
+ * trap documented at the top of loyalty-tiers.ts.
+ *
+ * Nothing here is a customer-facing invoice figure: it is management
+ * reporting, so plain numbers are fine. Callers convert their Decimal
+ * columns with .toNumber() at the boundary.
  */
 
 export interface RecipeLine {
-  /** Quantity of the ingredient consumed per ONE unit of the menu item sold. */
+  /** Quantity of the ingredient consumed per ONE unit of the menu item sold.
+   *  এখনো Float — পরিমাণ, টাকা নয়। migration-এর মন্তব্য দ্রষ্টব্য। */
   quantityRequired: number;
   /** InventoryItem.costPerUnit — latest known cost per unit of that ingredient. */
   costPerUnit: number;
@@ -52,17 +63,17 @@ export interface FoodCostResult {
 export function calculateFoodCost(recipe: RecipeLine[], price: number): FoodCostResult {
   const hasRecipe = recipe.length > 0;
 
-  const rawFoodCost = recipe.reduce(
-    (sum, line) => sum + line.quantityRequired * line.costPerUnit,
-    0
-  );
-  const foodCost = Math.round(rawFoodCost * 100) / 100;
+  // ইচ্ছাকৃতভাবে round করা হয় না। ৫০০টা পদের উপর যোগ করার আগে প্রতিটাকে
+  // দুই দশমিকে কেটে ফেললে মোট food cost বাস্তব থেকে সরে যেতো। UI
+  // যেখানে দেখাবে সেখানেই toFixed() দিয়ে round করবে।
+  const foodCost = recipe.reduce((total, line) => total + line.quantityRequired * line.costPerUnit, 0);
 
-  const foodCostPercent = price > 0 ? (foodCost / price) * 100 : null;
-
-  const grossMargin = Math.round((price - foodCost) * 100) / 100;
-
-  return { foodCost, foodCostPercent, grossMargin, hasRecipe };
+  return {
+    foodCost,
+    foodCostPercent: price > 0 ? (foodCost / price) * 100 : null,
+    grossMargin: price - foodCost,
+    hasRecipe,
+  };
 }
 
 /**

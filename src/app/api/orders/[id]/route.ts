@@ -64,7 +64,18 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  return NextResponse.json(order);
+  // ⚠️ money field গুলো number-এ নামিয়ে পাঠানো হয়, কাঁচা Decimal নয়।
+  //
+  // এই endpoint-টা /track/[orderId]-এর OrderTrackingTimeline প্রতি ১৫
+  // সেকেন্ডে poll করে, আর সেখানকার type বলে totalAmount একটা number।
+  // JSON.stringify Decimal-কে string বানায় ("1050"), ফলে প্রথম render
+  // ঠিক দেখাত (server থেকে সরাসরি এসেছে) কিন্তু প্রথম poll-এর পরেই
+  // totalAmount.toFixed(2) crash করত — খুঁজে বের করা কঠিন একটা বাগ।
+  return NextResponse.json({
+    ...order,
+    totalAmount: order.totalAmount.toNumber(),
+    items: order.items.map((item) => ({ ...item, price: item.price.toNumber() })),
+  });
 }
 
 /**

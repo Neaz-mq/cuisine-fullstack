@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { calculateFoodCost, getFoodCostHealth } from "@/lib/menu-profitability";
 
+
 describe("calculateFoodCost", () => {
   it("sums quantityRequired x costPerUnit across the recipe", () => {
     // 250g rice @ $0.002/g + 200g chicken @ $0.008/g + 15g spices @ $0.02/g
@@ -41,13 +42,26 @@ describe("calculateFoodCost", () => {
     expect(result.grossMargin).toBeCloseTo(-5, 2);
   });
 
-  it("rounds dollar figures to cents", () => {
+  /**
+   * ⚠️ আচরণ বদলেছে, তাই নামও বদলানো — আগে ছিল "rounds dollar figures
+   * to cents"।
+   *
+   * calculateFoodCost আর round করে না, ইচ্ছাকৃতভাবে। এটা রিপোর্টিং —
+   * বিক্রির চালান নয় — আর ৫০০টা পদের উপর যোগ করার আগে প্রতিটাকে দুই
+   * দশমিকে কেটে ফেললে মোট food cost বাস্তব থেকে সরে যেতো। যে UI
+   * দেখাবে সে formatMoney() দিয়ে round করবে।
+   */
+  it("keeps full precision — the UI rounds, not the calculation", () => {
     const result = calculateFoodCost(
       [{ quantityRequired: 3, costPerUnit: 0.10333 }],
       10
     );
-    // 3 x 0.10333 = 0.30999 -> rounds to 0.31
-    expect(result.foodCost).toBe(0.31);
+
+    // 3 x 0.10333 = 0.30999, অবিকৃত।
+    expect(result.foodCost).toBeCloseTo(0.30999, 10);
+
+    // দেখানোর সময় সেটা প্রত্যাশিত ০.৩১-এই দাঁড়ায়।
+    expect(result.foodCost.toFixed(2)).toBe("0.31");
   });
 });
 

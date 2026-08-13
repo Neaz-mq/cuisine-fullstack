@@ -77,8 +77,10 @@ export async function POST(request: Request) {
       type: result.coupon.type,
       percentOff: result.coupon.percentOff,
       fixedOff: result.coupon.fixedOff,
-      discountAmount,
-      eligibleSubtotal: result.eligibleSubtotal,
+      // number-এ রূপান্তর — কারণ /api/gift-cards/validate-এর একই
+      // মন্তব্যে ব্যাখ্যা করা: এটা preview, আসল হিসাব নয়।
+      discountAmount: discountAmount.toNumber(),
+      eligibleSubtotal: result.eligibleSubtotal.toNumber(),
     });
   } catch (error) {
     console.error("POST /api/coupons/validate error:", error);

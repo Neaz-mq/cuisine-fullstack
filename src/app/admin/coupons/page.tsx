@@ -3,11 +3,15 @@ import Link from "next/link";
 import ActiveToggle from "./ActiveToggle";
 import DeleteCouponButton from "./DeleteCouponButton";
 
+// Prisma-র Decimal-এ toFixed আছে, তাই ধরনটা কেবল চওড়া করা হলো —
+// রূপান্তরের দরকার নেই।
+type DecimalLike = { toFixed(dp: number): string };
+
 function formatDiscount(coupon: {
   type: string;
   percentOff: number | null;
-  fixedOff: number | null;
-  maxDiscountAmount: number | null;
+  fixedOff: DecimalLike | null;
+  maxDiscountAmount: DecimalLike | null;
 }) {
   if (coupon.type === "FIXED") {
     return `$${coupon.fixedOff?.toFixed(2)} off`;

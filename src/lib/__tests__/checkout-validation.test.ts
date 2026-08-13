@@ -106,24 +106,44 @@ describe("validateBilling — phone format", () => {
   });
 });
 
+/**
+ * calcGiftCardAmountToApply এখন Prisma Decimal ফেরত দেয়, number নয় —
+ * money model migration-এর অংশ। তাই প্রতিটা assertion amount() দিয়ে
+ * মোড়ানো।
+ *
+ * expect(decimal).toBe(300) কখনো পাশ করবে না: toBe reference সমতা দেখে,
+ * আর Decimal একটা object। মান ঠিকই ৩০০, কিন্তু সেটা একই object নয়।
+ */
+const amount = (d: { toNumber(): number }) => d.toNumber();
+
 describe("calcGiftCardAmountToApply", () => {
   it("applies the full order total when the gift card balance covers it", () => {
-    expect(calcGiftCardAmountToApply(300, 500)).toBe(300);
+    expect(amount(calcGiftCardAmountToApply(300, 500))).toBe(300);
   });
 
   it("caps the applied amount at the remaining gift card balance", () => {
-    expect(calcGiftCardAmountToApply(500, 300)).toBe(300);
+    expect(amount(calcGiftCardAmountToApply(500, 300))).toBe(300);
   });
 
   it("never returns a negative amount for an already-zeroed-out total", () => {
-    expect(calcGiftCardAmountToApply(-50, 300)).toBe(0);
+    expect(amount(calcGiftCardAmountToApply(-50, 300))).toBe(0);
   });
 
   it("returns 0 when the order total is already fully covered elsewhere", () => {
-    expect(calcGiftCardAmountToApply(0, 300)).toBe(0);
+    expect(amount(calcGiftCardAmountToApply(0, 300))).toBe(0);
   });
 
-  it("rounds to 2 decimal places", () => {
-    expect(calcGiftCardAmountToApply(10.005, 100)).toBeCloseTo(10.01, 2);
+  /**
+   * ⚠️ আচরণ বদলেছে — নাম বদলে দেওয়া হলো।
+   *
+   * আগে function-টা নিজেই ২ দশমিকে round করত। এখন করে না, ইচ্ছাকৃতভাবে:
+   * কোন currency-তে কয় দশমিক সেটা এই function জানে না (ইয়েনে ০,
+   * কুয়েতি দিনারে ৩)। round হয় ঠিক এক জায়গায় — lib/pricing.ts,
+   * যেখানে RestaurantSettings থেকে currency জানা যায়।
+   *
+   * তাই এখানে ১০.০০৫ অবিকৃতই ফেরত আসে, আর সেটাই সঠিক।
+   */
+  it("passes the amount through unrounded — rounding belongs to pricing.ts", () => {
+    expect(amount(calcGiftCardAmountToApply(10.005, 100))).toBe(10.005);
   });
 });

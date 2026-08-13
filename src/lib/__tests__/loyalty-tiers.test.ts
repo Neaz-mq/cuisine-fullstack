@@ -109,10 +109,21 @@ describe("calcTierDiscountAmount", () => {
     expect(calcTierDiscountAmount(100, LOYALTY_TIERS[0])).toBe(0);
   });
 
-  it("applies Silver's 3% discount, rounded to cents", () => {
+  /**
+   * ⚠️ আচরণ বদলেছে, তাই নামও বদলানো — আগে ছিল "rounded to cents"।
+   *
+   * এই function আর round করে না, আর কোনো টাকার সিদ্ধান্তও নেয় না —
+   * এটা কেবল checkout-এর আগে গ্রাহককে দেখানো আন্দাজ। আসল ছাড় কষে
+   * lib/pricing.ts, Decimal-এ, tier.discountPercent থেকে, currency
+   * অনুযায়ী round করে (ইয়েনে ০ দশমিক, দিনারে ৩)।
+   *
+   * তাই ৩৩.৩৩-এর ৩% এখানে ০.৯৯৯৯ থেকে যায়; ১.০০ হবে কি না তা
+   * currency-র উপর নির্ভর করে, আর সেই সিদ্ধান্ত এই file-এর নয়।
+   */
+  it("applies Silver's 3% discount, unrounded — pricing.ts rounds", () => {
     const silver = LOYALTY_TIERS.find((t) => t.id === "SILVER")!;
     expect(calcTierDiscountAmount(100, silver)).toBe(3);
-    expect(calcTierDiscountAmount(33.33, silver)).toBe(1);
+    expect(calcTierDiscountAmount(33.33, silver)).toBeCloseTo(0.9999, 10);
   });
 
   it("applies Platinum's 8% discount", () => {

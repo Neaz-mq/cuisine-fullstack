@@ -120,7 +120,7 @@ model StaffProfile {
   // make leaking them require a deliberate second include rather than a
   // forgotten omission. Tracked, not yet done.
   nid    String?
-  salary Float?
+  salary Decimal? @db.Decimal(12, 3)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -141,7 +141,7 @@ model MenuItem {
   id          String   @id @default(cuid())
   title       String
   description String
-  price       Float
+  price       Decimal  @db.Decimal(12, 3)
   imageUrl    String?
   isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -169,9 +169,94 @@ model MenuItem {
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  status      OrderStatus @default(PLACED)
-  totalAmount Float
+  id     String      @id @default(cuid())
+  status OrderStatus @default(PLACED)
+
+  // ---------------------------------------------------------------------
+  // Money — the full bill breakdown.
+  //
+  // Every line below is a SNAPSHOT taken at checkout, never recomputed on
+  // read. That is the whole point: an owner may change the VAT rate, the
+  // service charge, or even the currency next month, and last month's
+  // invoice must still reprint exactly as the customer received it. Same
+  // reasoning as the append-only ledgers elsewhere in this schema — the
+  // stored row is the record of what happened, not a cache of what the
+  // current settings would produce.
+  //
+  // The canonical order of operations lives in ONE place, lib/pricing.ts,
+  // and is reproduced here only so the columns read in the right order:
+  //
+  //     subtotal
+  //   − discountAmount        (coupon)
+  //   − tierDiscountAmount    (loyalty tier)
+  //   + serviceCharge         (% of the discounted subtotal)
+  //   + deliveryFee
+  //   + taxAmount             (EXCLUSIVE mode only — see taxMode)
+  //   = grandTotal            ← the bill, before anything prepaid
+  //   − giftCardAmount
+  //   − pointsRedeemedAmount
+  //   + tipAmount             ← deliberately AFTER the prepaid deductions
+  //   = totalAmount           ← what is actually charged / collected
+  // ---------------------------------------------------------------------
+
+  // Sum of every OrderItem line (price × quantity) at the prices that
+  // applied when the order was placed.
+  subtotal Decimal @default(0) @db.Decimal(12, 3)
+
+  // Percentage-based service charge, common in South/Southeast Asia and
+  // the Middle East and near-universal in UK restaurants (where it
+  // substitutes for tipping). 0 in most of Europe and the US.
+  serviceCharge Decimal @default(0) @db.Decimal(12, 3)
+
+  // Charged on DELIVERY orders only. Whether it is itself taxable varies
+  // by jurisdiction — RestaurantSettings.deliveryFeeTaxable decides, and
+  // the decision is baked into taxAmount below at checkout time.
+  deliveryFee Decimal @default(0) @db.Decimal(12, 3)
+
+  // The tax collected on this order, whatever it is locally called.
+  //
+  // In EXCLUSIVE mode this was ADDED on top of the prices the customer
+  // browsed. In INCLUSIVE mode it was already inside them — the column
+  // then records how much of grandTotal is tax, and grandTotal is NOT
+  // increased by it. Reading taxAmount without reading taxMode is
+  // therefore meaningless; both are snapshotted together below.
+  taxAmount Decimal @default(0) @db.Decimal(12, 3)
+
+  // Voluntary gratuity. Held apart from every other line for two reasons:
+  // it is never part of the tax base in any jurisdiction, and in most it
+  // is legally the staff's money rather than the restaurant's revenue —
+  // so any revenue report must be able to subtract it cleanly. It is also
+  // added AFTER giftCardAmount/pointsRedeemedAmount, so a prepaid
+  // instrument can never quietly pay someone's tip on their behalf.
+  tipAmount Decimal @default(0) @db.Decimal(12, 3)
+
+  // The bill as printed, before gift card / points / tip. This is the
+  // number a customer disputes, and the number tax reporting works from.
+  grandTotal Decimal @default(0) @db.Decimal(12, 3)
+
+  // What is actually charged to the card (or collected in cash for COD):
+  // grandTotal, minus everything prepaid, plus the tip.
+  totalAmount Decimal @db.Decimal(12, 3)
+
+  // --- Snapshotted tax configuration -----------------------------------
+  //
+  // ISO 4217. Stored per order because a restaurant that changes currency
+  // (or a future multi-branch deployment) must not retroactively relabel
+  // historical invoices. lib/money.ts maps this to the minor-unit
+  // exponent Stripe expects — 0 for JPY/KRW, 2 for most, 3 for KWD/BHD.
+  currency String @default("BDT")
+
+  // What the tax line was called on this invoice: "VAT", "GST",
+  // "Sales Tax", "Consumption Tax", "IVA". Snapshotted so a rebrand in
+  // settings doesn't rewrite history.
+  taxName String @default("VAT")
+
+  // The rate applied, as a FRACTION, not a percent: 0.05000 = 5%.
+  // 5 decimal places because US sales-tax rates genuinely go to three
+  // decimal places as a percentage (8.875% = 0.08875).
+  taxRate Decimal @default(0) @db.Decimal(8, 5)
+
+  taxMode TaxMode @default(EXCLUSIVE)
 
   // DELIVERY (default) = existing checkout flow, unchanged. DINE_IN = QR
   // Table Ordering — customer scans a QR code at a physical table, orders
@@ -234,7 +319,7 @@ model Order {
   // without re-deriving anything — see lib/cancel-order.ts, which reads
   // couponCode here to release the redemption.
   couponCode       String?
-  discountAmount   Float             @default(0)
+  discountAmount   Decimal           @default(0) @db.Decimal(12, 3)
   couponRedemption CouponRedemption? // back-relation only — FK lives on CouponRedemption.orderId
 
   // Gift card redemption — same denormalized-display pattern as the
@@ -251,7 +336,7 @@ model Order {
   // As with couponCode above, these are also what lib/cancel-order.ts
   // reads to refund a redemption when an order is cancelled.
   giftCardCode         String?
-  giftCardAmount       Float                 @default(0)
+  giftCardAmount       Decimal               @default(0) @db.Decimal(12, 3)
   giftCardTransactions GiftCardTransaction[]
 
   // Automatic loyalty-tier discount (Silver/Gold/Platinum get a % off,
@@ -261,7 +346,7 @@ model Order {
   // separate claimed resource to release on cancellation (it's not a
   // code, not a balance — just a price rule evaluated at checkout), so
   // lib/cancel-order.ts has nothing to reverse for this one.
-  tierDiscountAmount Float @default(0)
+  tierDiscountAmount Decimal @default(0) @db.Decimal(12, 3)
 
   // Loyalty points redeemed by the customer at checkout for a dollar-for-
   // dollar-equivalent discount (see lib/loyalty-redemption.ts). Debited
@@ -269,7 +354,7 @@ model Order {
   // "claim now, refund on cancel" pattern as giftCardAmount above.
   // pointsRedeemedAmount is already netted out of totalAmount.
   pointsRedeemed       Int   @default(0)
-  pointsRedeemedAmount Float @default(0)
+  pointsRedeemedAmount Decimal @default(0) @db.Decimal(12, 3)
 
   // Guards against re-crediting loyalty points if an order is moved to
   // DELIVERED, reverted, and marked DELIVERED again by mistake. Claimed
@@ -524,7 +609,7 @@ model OrderItem {
   // NOTE: the item's TITLE is not snapshotted, so renaming a MenuItem
   // does retroactively change what past receipts and confirmation emails
   // display. Adding a `titleSnapshot` column here would close that gap.
-  price Float
+  price Decimal @db.Decimal(12, 3)
 
   order      Order    @relation(fields: [orderId], references: [id])
   orderId    String
@@ -579,16 +664,16 @@ model Coupon {
   // not at the DB level, since Prisma can't express a conditional-required
   // column directly.
   percentOff Int? // 1-100, required when type = PERCENT
-  fixedOff   Float? // currency amount, required when type = FIXED
+  fixedOff   Decimal? @db.Decimal(12, 3) // currency amount, required when type = FIXED
 
   // Optional cap on the computed discount amount — mainly guards PERCENT
   // coupons from granting an unexpectedly large discount on a big order
   // (e.g. "20% off, capped at $15"). Ignored for FIXED coupons, since a
   // fixed amount is already its own cap.
-  maxDiscountAmount Float?
+  maxDiscountAmount Decimal? @db.Decimal(12, 3)
 
   // Optional minimum subtotal required to redeem (e.g. "min order $20").
-  minOrderValue Float?
+  minOrderValue Decimal? @db.Decimal(12, 3)
 
   // Optional redemption window. Both null = no time restriction. A coupon
   // with only startsAt set isn't redeemable before that instant; only
@@ -680,7 +765,7 @@ model CouponRedemption {
   // history/analytics survive independently of the Order row's own
   // display fields, and so "how much did this coupon cost us in total"
   // is a simple SUM(discountAmount) over one coupon's redemptions.
-  discountAmount Float
+  discountAmount Decimal @db.Decimal(12, 3)
 
   createdAt DateTime @default(now())
 
@@ -771,6 +856,108 @@ model RestaurantSettings {
   kitchenOpenHour  Int      @default(10)
   kitchenCloseHour Int      @default(22)
   updatedAt        DateTime @updatedAt
+
+  // -------------------------------------------------------------------------
+  // Money, tax, service charge and tipping
+  //
+  // Nothing below is hardcoded anywhere in the codebase, because none of it
+  // is a fact about restaurants — it is a fact about the country the
+  // restaurant happens to be in, and this system is meant to run in any of
+  // them. The owner picks these once during setup; lib/pricing.ts is the
+  // only consumer.
+  //
+  // The defaults describe a Bangladeshi non-AC restaurant (5% VAT added on
+  // top of menu prices, no service charge, tipping off) purely because a
+  // fresh install has to boot with SOMETHING. They carry no other meaning.
+  // -------------------------------------------------------------------------
+
+  // ISO 4217, e.g. "BDT", "USD", "EUR", "JPY", "KWD".
+  currency String @default("BDT")
+
+  // How many decimal places this currency subdivides into: 0 for JPY, KRW
+  // and VND (there are no sen), 2 for most, 3 for KWD, BHD and OMR.
+  //
+  // This is NOT cosmetic. Stripe wants amounts in minor units, and the
+  // multiplier is 10^currencyMinorUnits — so ¥1,200 must be sent as 1200,
+  // not 120000. The old code multiplied by 100 unconditionally, which
+  // silently overcharged every zero-decimal currency by 100×. See
+  // toStripeMinorUnits in lib/money.ts.
+  currencyMinorUnits Int @default(2)
+
+  // --- Tax -----------------------------------------------------------------
+
+  // Off for jurisdictions where a restaurant below the registration
+  // threshold charges no tax at all. Setting this false zeroes the tax line
+  // rather than hiding it, so invoices stay internally consistent.
+  taxEnabled Boolean @default(true)
+
+  // What it is called locally. Shown verbatim on the bill and copied onto
+  // every Order at checkout: "VAT" (BD, EU, UK), "GST" (IN, AU, NZ, CA),
+  // "Sales Tax" (US), "Consumption Tax" (JP), "IVA" (ES, IT).
+  taxName String @default("VAT")
+
+  // INCLUSIVE  — menu prices already contain the tax (EU, UK, JP, AU, IN).
+  //              The bill total does not change; the tax line just declares
+  //              how much of it was tax.
+  // EXCLUSIVE  — tax is added on top at checkout (US, CA, BD).
+  //
+  // Getting this backwards does not produce a small rounding difference: it
+  // over- or under-charges every single order by the full tax rate.
+  taxMode TaxMode @default(EXCLUSIVE)
+
+  // Rates as FRACTIONS (0.05000 = 5%), one per order type, because plenty
+  // of countries genuinely tax the same food differently depending on how
+  // it leaves the kitchen: Germany charges 19% dine-in but 7% takeaway, the
+  // UK zero-rates cold takeaway food, and Bangladesh sets VAT by whether
+  // the dining room is air-conditioned.
+  taxRateDineIn   Decimal @default(0.05) @db.Decimal(8, 5)
+  taxRateDelivery Decimal @default(0.05) @db.Decimal(8, 5)
+
+  // --- Service charge ------------------------------------------------------
+
+  // Fraction, applied to the subtotal AFTER discounts. Standard in India,
+  // Southeast Asia and the Gulf; in the UK it is how restaurants collect
+  // what Americans would tip. 0 disables the line entirely.
+  serviceChargeRate Decimal @default(0) @db.Decimal(8, 5)
+
+  // Whether the service charge is itself taxable. It is in most VAT
+  // systems (it is consideration for a supply of services); it usually is
+  // not under US sales tax when the charge is voluntary. Wrong either way
+  // is a compliance problem, not a rounding one, so it is an explicit
+  // switch rather than an assumption.
+  serviceChargeTaxable Boolean @default(true)
+
+  // --- Delivery ------------------------------------------------------------
+
+  // Flat fee added to DELIVERY orders. A distance-based fee would need the
+  // geocoding already present in lib/geocode.ts; deliberately out of scope
+  // for v1 so the money model can land without also shipping a pricing
+  // engine.
+  deliveryFeeFlat    Decimal @default(0) @db.Decimal(12, 3)
+  deliveryFeeTaxable Boolean @default(true)
+
+  // --- Tipping -------------------------------------------------------------
+
+  // Off by default, and it must stay possible to keep it off: in Japan,
+  // South Korea and China offering a tip is not merely unusual but rude,
+  // and a checkout that nags for one reads as broken rather than generous.
+  tipEnabled Boolean @default(false)
+
+  // Percentages offered as one-tap buttons at checkout, e.g. [10, 15, 20].
+  // The customer can always enter a custom amount instead, and can always
+  // decline. Percentages are of the discounted subtotal, NOT of the
+  // tax-inclusive total — tipping on top of tax is a US convention, not a
+  // universal one, and computing it from the subtotal is the interpretation
+  // no one objects to.
+  tipPresetPercents Int[] @default([10, 15, 20])
+}
+
+// How tax relates to the prices customers see on the menu. See
+// RestaurantSettings.taxMode above, and applyTax() in lib/pricing.ts for
+// the two formulas this selects between.
+enum TaxMode {
+  INCLUSIVE
+  EXCLUSIVE
 }
 
 // ---------------------------------------------------------------------------
@@ -884,12 +1071,13 @@ enum LoyaltyReason {
 // or a support request), independent of balance reaching zero naturally
 // through redemption.
 //
-// ⚠️ `balance` being Float (Postgres double precision) is a real problem
-// for this model specifically, because a card is spent down
-// incrementally: 50 - 19.99 - 12.35 - 17.66 lands at ~1.8e-15 rather than
-// 0, so the card reads as "still has balance" forever. Decimal(10,2) is
-// the correct type here — see the note at the top of the money-column
-// discussion in the project review.
+// `balance` was Float (Postgres double precision) until the money-model
+// migration, and it was a real problem for this model specifically,
+// because a card is spent down incrementally: 50 - 19.99 - 12.35 - 17.66
+// landed at ~1.8e-15 rather than 0, so the card read as "still has
+// balance" forever. It is now Decimal(12,3), like every other money
+// column in this schema — see lib/money.ts for why 3 decimal places and
+// not 2.
 // ---------------------------------------------------------------------------
 model GiftCard {
   id   String @id @default(cuid())
@@ -899,8 +1087,8 @@ model GiftCard {
   // only ever decreases (via REDEEM transactions) or increases (via a
   // manual admin ADJUSTMENT, e.g. a goodwill top-up, or a cancellation
   // refund written by lib/cancel-order.ts) — never reset.
-  initialAmount Float
-  balance       Float
+  initialAmount Decimal @db.Decimal(12, 3)
+  balance       Decimal @db.Decimal(12, 3)
 
   // Set once a Stripe Checkout Session for purchasing this card completes
   // (see checkout.session.completed handling in
@@ -947,7 +1135,7 @@ enum GiftCardTransactionType {
 // happened stays intact.
 model GiftCardTransaction {
   id     String                  @id @default(cuid())
-  amount Float
+  amount Decimal @db.Decimal(12, 3)
   type   GiftCardTransactionType
   note   String?
 
@@ -1015,7 +1203,7 @@ model InventoryItem {
   // compute a menu item's food cost via its recipe. Updated whenever a
   // PurchaseOrder is received (Phase 2, most-recent-price-wins); can also
   // be set manually.
-  costPerUnit Float @default(0)
+  costPerUnit Decimal @default(0) @db.Decimal(12, 3)
 
   // Soft-disable instead of deleting — an item with StockMovement/recipe
   // history shouldn't disappear from past records if discontinued.
@@ -1222,7 +1410,7 @@ model PurchaseOrder {
   // DRAFT) — not touched by the receiving step itself, since a short
   // delivery doesn't retroactively change what was ordered/agreed, only
   // what arrived.
-  totalCost Float @default(0)
+  totalCost Decimal @default(0) @db.Decimal(12, 3)
 
   // Free-text — supplier invoice/reference number, delivery notes, why a
   // PO was cancelled, etc.
@@ -1278,7 +1466,7 @@ model PurchaseOrderItem {
   // to later. Receiving a PO writes ITS costPerUnit forward onto
   // InventoryItem.costPerUnit (most-recent-purchase-price wins) — see
   // the receiving-logic note below.
-  costPerUnit Float
+  costPerUnit Decimal @db.Decimal(12, 3)
 
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   purchaseOrderId String

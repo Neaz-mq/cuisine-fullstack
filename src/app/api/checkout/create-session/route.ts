@@ -17,8 +17,11 @@ import {
   redeemGiftCard,
   GiftCardInfo,
 } from "@/lib/gift-cards";
-import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
+import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
+import { getPricingSettings } from "@/lib/get-settings";
+import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
+import { ZERO, sum, toMoney, toStripeMinorUnits, type Money } from "@/lib/money";
 import { parseBody } from "@/lib/validations/parse";
 import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
@@ -59,7 +62,8 @@ export async function POST(request: Request) {
   try {
     const parsed = await parseBody(request, createCheckoutSessionSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints } = parsed;
+    const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent } =
+      parsed;
 
     const billingError = validateBilling(billing);
     if (billingError) {
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
     }
     const resolvedItems = resolution.items;
 
-    const subtotal = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const pricingSettings = await getPricingSettings();
 
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
@@ -88,7 +92,7 @@ export async function POST(request: Request) {
       : null;
 
     let couponInfo: CouponInfo | null = null;
-    let discountAmount = 0;
+    let discountAmount: Money = ZERO;
     if (couponCode?.trim()) {
       const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
       if (!couponResult.ok) {
@@ -98,57 +102,102 @@ export async function POST(request: Request) {
       discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
     }
 
-    const totalAfterCoupon = subtotal - discountAmount;
+    // দুই ধাপে দাম হিসাব — কেন, তার পূর্ণ ব্যাখ্যা /api/orders/route.ts-এ।
 
     // Automatic loyalty-tier discount — see the identical logic (and its
     // full rationale) in /api/orders/route.ts.
-    const tierDiscountAmount = currentUser
-      ? calcTierDiscountAmount(totalAfterCoupon, getTierForPoints(currentUser.loyaltyPoints))
+    const tierDiscountPercent = currentUser
+      ? getTierForPoints(currentUser.loyaltyPoints).discountPercent
       : 0;
 
-    const totalAfterTierDiscount = totalAfterCoupon - tierDiscountAmount;
+    // এই route সবসময় DELIVERY — dine-in কখনো Stripe-এ যায় না (উপরের doc
+    // comment দ্রষ্টব্য), তাই delivery fee আর delivery-র কর হার প্রযোজ্য।
+    const beforePrepaid = calculateOrderPricing(
+      {
+        orderType: "DELIVERY",
+        items: resolvedItems,
+        couponDiscount: discountAmount,
+        tierDiscountPercent,
+      },
+      pricingSettings
+    );
 
     let giftCardInfo: GiftCardInfo | null = null;
-    let giftCardAmount = 0;
+    let giftCardAmount: Money = ZERO;
     if (giftCardCode?.trim()) {
       const giftCardResult = await findValidGiftCard(giftCardCode);
       if (!giftCardResult.ok) {
         return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
       }
       giftCardInfo = giftCardResult.giftCard;
-      giftCardAmount = calcGiftCardAmountToApply(totalAfterTierDiscount, giftCardInfo.balance);
+      giftCardAmount = calcGiftCardAmountToApply(beforePrepaid.grandTotal, giftCardInfo.balance);
     }
-
-    const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmount;
 
     // Loyalty points redemption — see /api/orders/route.ts for the full
     // rationale. Same silent-clamp behaviour: an invalid/stale request
     // just redeems nothing rather than failing checkout.
     let pointsToRedeem = 0;
-    let pointsRedeemedAmount = 0;
+    let pointsRedeemedAmount: Money = ZERO;
     if (currentUser && redeemPoints && redeemPoints > 0) {
-      const clamped = clampPointsRedemption(redeemPoints, currentUser.loyaltyPoints, totalAfterGiftCard);
+      const clamped = clampPointsRedemption(
+        redeemPoints,
+        currentUser.loyaltyPoints,
+        beforePrepaid.grandTotal.minus(giftCardAmount)
+      );
       pointsToRedeem = clamped.points;
       pointsRedeemedAmount = clamped.amount;
     }
 
-    const totalAmount = totalAfterGiftCard - pointsRedeemedAmount;
+    const priced = calculateOrderPricing(
+      {
+        orderType: "DELIVERY",
+        items: resolvedItems,
+        couponDiscount: discountAmount,
+        tierDiscountPercent,
+        giftCardRequested: giftCardAmount,
+        pointsRedeemedRequested: pointsRedeemedAmount,
+        tipAmount,
+        tipPercent,
+      },
+      pricingSettings
+    );
 
-    // Stripe ৫০ সেন্টের নিচে charge নেয় না। coupon + tier discount + gift
-    // card + points redemption মিলিয়ে পুরো bill ঢেকে ফেললে totalAmount 0
-    // হয়ে যায় — আগে তবুও Stripe session বানানোর চেষ্টা হতো, আর customer
-    // ঠিক সেই মুহূর্তে একটা কঠিন error পেতো যখন সবচেয়ে মসৃণ অভিজ্ঞতা আশা
-    // করছিল। অথচ ততক্ষণে তার balance debit হয়ে গেছে।
+    giftCardAmount = priced.giftCardAmount;
+    pointsRedeemedAmount = priced.pointsRedeemedAmount;
+
+    // Stripe খুব ছোট অঙ্ক charge করে না। coupon + tier discount + gift
+    // card + points redemption মিলিয়ে পুরো bill ঢেকে ফেললে চার্জ করার
+    // মতো কিছুই থাকে না — আগে তবুও Stripe session বানানোর চেষ্টা হতো, আর
+    // customer ঠিক সেই মুহূর্তে একটা কঠিন error পেতো যখন সবচেয়ে মসৃণ
+    // অভিজ্ঞতা আশা করছিল। অথচ ততক্ষণে তার balance debit হয়ে গেছে।
     //
-    // এখানে charge করার মতো কিছুই নেই, তাই Stripe সম্পূর্ণ এড়িয়ে যাওয়া
-    // হয় — নিচে দেখুন।
-    const isFullyCoveredByDiscounts = totalAmount < 0.5;
+    // ⚠️ সীমাটা এখন minor unit-এ, "0.5" নয়। ৫০ সেন্ট মানে ৫০ ইয়েন নয়,
+    // আর ০.৫ ইয়েন বলে কিছু নেই — পুরোনো hardcoded 0.5 জাপানে কার্যত
+    // প্রতিটা order-কেই "fully covered" ধরে নিতো না, বরং উল্টো: ¥০.৪৯-এর
+    // মতো অসম্ভব অঙ্ক ছাড়া কিছুই ধরা পড়তো না।
+    //
+    // ৫০ minor unit Stripe-এর প্রকাশিত সর্বনিম্নের কাছাকাছি অনুমান
+    // (USD ৫০¢, JPY ¥৫০, GBP ৩০p)। মুদ্রাভেদে হুবহু মিলবে না — নিচের
+    // সীমার ঠিক উপরে কিন্তু Stripe-এর সীমার নিচে পড়া কোনো অঙ্ক এখনো
+    // Stripe থেকে error পাবে। বিরল, কিন্তু জানা সীমাবদ্ধতা।
+    const STRIPE_MINIMUM_MINOR_UNITS = 50;
+
+    const chargeableMinorUnits = toStripeMinorUnits(
+      priced.totalAmount,
+      pricingSettings.currencyMinorUnits
+    );
+
+    // ⚠️ tip এখানে গুরুত্বপূর্ণ: বিল পুরোটা gift card-এ মিটে গেলেও গ্রাহক
+    // যদি বকশিশ দেন তবে totalAmount > 0, তাই Stripe লাগবেই। তাই শর্তটা
+    // grandTotal-এর নয়, totalAmount-এর উপর — যাতে বকশিশের টাকা চুপচাপ
+    // হারিয়ে না যায়।
+    const isFullyCoveredByDiscounts = chargeableMinorUnits < STRIPE_MINIMUM_MINOR_UNITS;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
           status: "PLACED",
-          totalAmount,
+          ...pricingToOrderFields(priced),
           email: billing.email,
           firstName: billing.firstName,
           lastName: billing.lastName,
@@ -169,12 +218,8 @@ export async function POST(request: Request) {
           paymentStatus: isFullyCoveredByDiscounts ? "PAID" : "PENDING",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
-          discountAmount,
           giftCardCode: giftCardInfo?.code ?? null,
-          giftCardAmount,
-          tierDiscountAmount,
           pointsRedeemed: pointsToRedeem,
-          pointsRedeemedAmount,
           // এখনই সংরক্ষণ করা হচ্ছে যাতে webhook যখন payment নিশ্চিত করে
           // পড়ে তখন row-তে আগে থেকেই থাকে — উপরের doc comment দ্রষ্টব্য।
           marketingConsent: billing.marketingConsent ?? false,
@@ -195,12 +240,12 @@ export async function POST(request: Request) {
           couponInfo.id,
           created.id,
           customerKey,
-          discountAmount
+          priced.discountAmount
         );
         if (!claimed) throw new Error("COUPON_ALREADY_USED");
       }
 
-      if (giftCardInfo && giftCardAmount > 0) {
+      if (giftCardInfo && giftCardAmount.greaterThan(0)) {
         const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
         if (!redeemed) throw new Error("GIFT_CARD_RACE");
       }
@@ -263,17 +308,82 @@ export async function POST(request: Request) {
     // pointsRedeemedAmount দুটোও এখানে যোগ হয় — আমাদের নিজের DB total এই
     // চারটে বাদ দিয়েই হিসাব করা, তাই Stripe-এর charge ঠিক ততটাই কমতে
     // হবে যতটা আমাদের total কমেছে।
-    const combinedDiscountCents = Math.round(
-      (discountAmount + tierDiscountAmount + giftCardAmount + pointsRedeemedAmount) * 100
+    const stripeCurrency = pricingSettings.currency.toLowerCase();
+    const minorUnits = pricingSettings.currencyMinorUnits;
+    const toMinor = (amount: Money) => toStripeMinorUnits(amount, minorUnits);
+
+    // ── Stripe-এ পাঠানো line item ────────────────────────────────────────
+    //
+    // খাবারের লাইনগুলোর পর কর, service charge, delivery fee আর বকশিশ
+    // আলাদা line item হিসেবে যায়। আগে শুধু খাবারই যেতো, তাই Stripe-এর
+    // হিসাব করা মোট আর আমাদের totalAmount আলাদা হতো — এখন কর/fee/tip
+    // যুক্ত হওয়ায় পার্থক্যটা আর "শূন্য" থাকতো না, গ্রাহক কম টাকা দিয়ে
+    // চলে যেতেন।
+    //
+    // ⚠️ INCLUSIVE mode-এ করের কোনো আলাদা লাইন যায় না, ইচ্ছাকৃতভাবে:
+    // সেখানে কর ইতিমধ্যে প্রতিটা খাবারের দামের ভেতরে। আলাদা লাইন দিলে
+    // ইউরোপ/জাপানে প্রতিটা গ্রাহকের কাছ থেকে কর দুবার আদায় হতো।
+    const extraLine = (label: string, amount: Money) =>
+      amount.greaterThan(0)
+        ? [
+            {
+              quantity: 1,
+              price_data: {
+                currency: stripeCurrency,
+                unit_amount: toMinor(amount),
+                product_data: { name: label },
+              },
+            },
+          ]
+        : [];
+
+    const lineItems = [
+      ...resolvedItems.map((i) => ({
+        quantity: i.quantity,
+        price_data: {
+          currency: stripeCurrency,
+          // Stripe সবচেয়ে ছোট একক চায়। গুণকটা settings থেকে আসে, কোডে
+          // লেখা 100 নয় — ¥1,200 এখন 1200 হয়ে যায়, 120000 নয়।
+          unit_amount: toMinor(toMoney(i.price)),
+          product_data: { name: i.title },
+        },
+      })),
+      ...extraLine("Service charge", priced.serviceCharge),
+      ...extraLine("Delivery", priced.deliveryFee),
+      ...(priced.taxMode === "EXCLUSIVE" ? extraLine(priced.taxName, priced.taxAmount) : []),
+      ...extraLine("Tip", priced.tipAmount),
+    ];
+
+    // Discount Stripe-এর দিকেও প্রয়োগ করা হয়, এই একটা session-এর জন্য
+    // তৈরি এককালীন Stripe-native coupon দিয়ে (duration: "once") — প্রতিটা
+    // line item-এর unit_amount হাতে সমন্বয় করার বদলে, যেটার জন্য নিজস্ব
+    // rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
+    //
+    // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
+    // তাই coupon, tier discount, gift card আর point — চারটেই মিলিয়ে
+    // একটাই Stripe coupon বানানো হয়। আমাদের নিজের totalAmount-ও ঠিক এই
+    // চারটে বাদ দিয়েই হিসাব করা, তাই দুই দিক মিলে থাকে।
+    //
+    // সবসময় amount_off দিয়ে বানানো হয়, percent_off দিয়ে নয় — এতেই
+    // maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted পেজেও
+    // সঠিকভাবে বসে, শুধু আমাদের DB total-এ নয়।
+    const combinedDiscountMinor = toMinor(
+      sum(
+        priced.discountAmount,
+        priced.tierDiscountAmount,
+        priced.giftCardAmount,
+        priced.pointsRedeemedAmount
+      )
     );
+
     const stripeDiscounts =
-      combinedDiscountCents > 0
+      combinedDiscountMinor > 0
         ? [
             {
               coupon: (
                 await stripe.coupons.create({
-                  amount_off: combinedDiscountCents,
-                  currency: "usd",
+                  amount_off: combinedDiscountMinor,
+                  currency: stripeCurrency,
                   duration: "once",
                   // এই coupon একটামাত্র session-এর জন্য। এটা ছাড়া প্রতিটা
                   // discounted order Stripe account-এ একটা করে চিরস্থায়ী,
@@ -297,14 +407,7 @@ export async function POST(request: Request) {
         mode: "payment",
         payment_method_types: ["card"],
         customer_email: billing.email,
-        line_items: resolvedItems.map((i) => ({
-          quantity: i.quantity,
-          price_data: {
-            currency: "usd",
-            unit_amount: Math.round(i.price * 100), // Stripe সবচেয়ে ছোট একক (সেন্ট) চায়
-            product_data: { name: i.title },
-          },
-        })),
+        line_items: lineItems,
         discounts: stripeDiscounts,
         metadata: { orderId: order.id },
         success_url: `${appUrl}/track/${order.id}?payment=success`,

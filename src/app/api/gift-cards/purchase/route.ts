@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/stripe";
 import { parseBody } from "@/lib/validations/parse";
 import { purchaseGiftCardSchema } from "@/lib/validations/coupon";
+import { getPricingSettings } from "@/lib/get-settings";
+import { toMoney, toStripeMinorUnits } from "@/lib/money";
 
 /**
  * src/app/api/gift-cards/purchase/route.ts
@@ -35,7 +37,15 @@ export async function POST(request: Request) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const stripe = getStripeClient();
-    const amountCents = Math.round(amount * 100);
+
+    // Gift card-এর অঙ্ক রেস্তোরাঁর নিজের currency-তেই, তাই settings
+    // থেকেই currency আর গুণক — hardcoded "usd" / ×100 নয়। ¥5,000-এর
+    // একটা কার্ড আগে Stripe-এ ৫,০০,০০০ হয়ে যেতো।
+    const pricingSettings = await getPricingSettings();
+    const amountMinor = toStripeMinorUnits(
+      toMoney(amount),
+      pricingSettings.currencyMinorUnits
+    );
 
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -45,10 +55,13 @@ export async function POST(request: Request) {
         {
           quantity: 1,
           price_data: {
-            currency: "usd",
-            unit_amount: amountCents,
+            currency: pricingSettings.currency.toLowerCase(),
+            unit_amount: amountMinor,
             product_data: {
-              name: `Cuisine Gift Card — $${amount.toFixed(2)}`,
+              // মুদ্রা চিহ্ন ছাড়া নাম — Stripe নিজেই hosted পেজে
+              // currency অনুযায়ী অঙ্কটা সাজিয়ে দেখায়, তাই এখানে "$"
+              // লিখলে ইউরোর পাশে ডলার চিহ্ন বসতো।
+              name: `Cuisine Gift Card (${pricingSettings.currency})`,
             },
           },
         },

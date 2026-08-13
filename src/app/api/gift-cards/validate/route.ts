@@ -47,10 +47,21 @@ export async function POST(request: Request) {
 
     const amountToApply = calcGiftCardAmountToApply(orderTotal, result.giftCard.balance);
 
+    // ⚠️ এখানে ইচ্ছাকৃতভাবে number-এ রূপান্তর, Decimal নয়।
+    //
+    // JSON.stringify একটা Decimal-কে string বানায় ("12.50"), আর বর্তমান
+    // client (Carts.tsx) এই মান দিয়ে যোগ-বিয়োগ করে — string পেলে
+    // "12.5010" ধরনের ফল আসতো, কারণ `+` তখন জোড়া লাগায়।
+    //
+    // এটা কেবল preview: গ্রাহক checkout-এ যাওয়ার আগে আন্দাজ দেখেন।
+    // আসল হিসাব order তৈরির সময় server-এ Decimal-এ হয়, আর সেটাই Order
+    // row-তে যায়। তাই এখানে float-এ সামান্য গরমিলের ঝুঁকি নেই বললেই চলে।
+    // Stage 3-এ client-এর নিজে হিসাব করা বন্ধ করে server-computed quote
+    // এলে এই রূপান্তরটাও চলে যাবে।
     return NextResponse.json({
       code: result.giftCard.code,
-      balance: result.giftCard.balance,
-      amountToApply,
+      balance: result.giftCard.balance.toNumber(),
+      amountToApply: amountToApply.toNumber(),
     });
   } catch (error) {
     console.error("POST /api/gift-cards/validate error:", error);
