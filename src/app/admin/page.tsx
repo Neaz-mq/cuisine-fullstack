@@ -97,7 +97,9 @@ export default async function AdminDashboardPage() {
       (order.createdAt.setHours(0, 0, 0, 0) - sevenDaysAgo.getTime()) / (1000 * 60 * 60 * 24)
     );
     if (dayIndex >= 0 && dayIndex < 7) {
-      dayBuckets[dayIndex].revenue += order.totalAmount;
+      // Decimal -> number, কারণ এটা কেবল bar chart-এর উচ্চতা। টাকার
+      // হিসাব নয়, তাই এখানে float সম্পূর্ণ নিরাপদ।
+      dayBuckets[dayIndex].revenue += order.totalAmount.toNumber();
     }
   });
   const maxRevenue = Math.max(...dayBuckets.map((d) => d.revenue), 1);
@@ -114,7 +116,9 @@ export default async function AdminDashboardPage() {
   topItemsRaw.forEach((line) => {
     const existing = itemStatsMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
     existing.quantity += line.quantity;
-    existing.revenue += line.price * line.quantity;
+    // Decimal -> number: এটা কেবল "কোন পদ কত আয় করল" সাজানোর জন্য,
+    // কোনো চালানে যায় না।
+    existing.revenue += line.price.toNumber() * line.quantity;
     itemStatsMap.set(line.menuItemId, existing);
   });
 

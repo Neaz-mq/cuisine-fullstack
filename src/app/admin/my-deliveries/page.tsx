@@ -42,7 +42,7 @@ export default async function MyDeliveriesPage() {
       address: [d.order.address, d.order.apartment, d.order.city, d.order.state, d.order.zip]
         .filter(Boolean)
         .join(", "),
-      totalAmount: d.order.totalAmount,
+      totalAmount: d.order.totalAmount.toNumber(),
       paymentMethod: d.order.paymentMethod,
       destLat: d.destLat,
       destLng: d.destLng,

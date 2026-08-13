@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { canTransition } from "@/lib/order-state-machine";
 import { reverseLoyaltyPointsRedemption } from "@/lib/loyalty-redemption";
+import { type Money, ZERO } from "@/lib/money";
 
 /**
  * src/lib/cancel-order.ts
@@ -34,7 +35,8 @@ import { reverseLoyaltyPointsRedemption } from "@/lib/loyalty-redemption";
 export interface ReversalSummary {
   stockReturned: boolean;
   couponReleased: boolean;
-  giftCardRefunded: number;
+  /** Decimal — ফেরত দেওয়া টাকার অঙ্ক, তাই number নয়। */
+  giftCardRefunded: Money;
   loyaltyPointsReversed: number;
   redeemedPointsRefunded: number;
 }
@@ -77,7 +79,7 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
   const summary: ReversalSummary = {
     stockReturned: false,
     couponReleased: false,
-    giftCardRefunded: 0,
+    giftCardRefunded: ZERO,
     loyaltyPointsReversed: 0,
     redeemedPointsRefunded: 0,
   };
@@ -217,21 +219,21 @@ async function refundGiftCard(
   tx: Prisma.TransactionClient,
   orderId: string,
   giftCardCode: string | null,
-  giftCardAmount: number
-): Promise<number> {
-  if (!giftCardCode || giftCardAmount <= 0) return 0;
+  giftCardAmount: Money
+): Promise<Money> {
+  if (!giftCardCode || giftCardAmount.lessThanOrEqualTo(ZERO)) return ZERO;
 
   const alreadyRefunded = await tx.giftCardTransaction.findFirst({
     where: { orderId, type: "ADJUSTMENT", amount: { gt: 0 } },
     select: { id: true },
   });
-  if (alreadyRefunded) return 0;
+  if (alreadyRefunded) return ZERO;
 
   const card = await tx.giftCard.findUnique({
     where: { code: giftCardCode },
     select: { id: true },
   });
-  if (!card) return 0;
+  if (!card) return ZERO;
 
   await tx.giftCard.update({
     where: { id: card.id },
@@ -316,12 +318,15 @@ async function refundRedeemedPoints(
       orderId,
       reason: "MANUAL_ADJUSTMENT",
       points: { gt: 0 },
-      // Matched on the exact note reverseLoyaltyPointsRedemption writes
-      // below — reverseLoyaltyPoints (the EARNED-points reversal, run
-      // just above this in the same transaction) ALSO writes a positive
-      // MANUAL_ADJUSTMENT row with a different note, so a bare
-      // reason+points match here would false-positive against that row
-      // and skip a refund that hasn't actually happened yet.
+      // Matched on the exact note reverseLoyaltyPointsRedemption writes.
+      //
+      // (Earlier revisions of this comment claimed reverseLoyaltyPoints —
+      // the EARNED-points reversal that runs just above, in the same
+      // transaction — also writes a POSITIVE MANUAL_ADJUSTMENT row. It
+      // does not; it writes a negative one, so `points: { gt: 0 }` alone
+      // would already exclude it. The note match is kept anyway: it costs
+      // nothing, and it keeps this guard correct if that sign ever
+      // changes.)
       note: "Order cancelled — redeemed points refunded",
     },
     select: { id: true },

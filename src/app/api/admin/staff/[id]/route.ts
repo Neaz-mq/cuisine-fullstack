@@ -11,6 +11,7 @@ import {
 import type { EmploymentType } from "@/generated/prisma/client";
 import { updateStaffSchema } from "@/lib/validations/staff";
 import { parseBody } from "@/lib/validations/parse";
+import { type MoneyInput, toMoney } from "@/lib/money";
 
 function serialize(
   user: {
@@ -27,7 +28,9 @@ function serialize(
       hireDate: Date;
       isActive: boolean;
       nid: string | null;
-      salary: number | null;
+      // ⚠️ Decimal, number নয় — Prisma এখন এটাই দেয়। JSON-এ যাওয়ার
+      // সময় নিচে .toNumber() হয়ে যায়।
+      salary: MoneyInput | null;
     } | null;
   },
   includeSensitive: boolean
@@ -44,7 +47,15 @@ function serialize(
           hireDate: staffProfile.hireDate,
           isActive: staffProfile.isActive,
           ...(includeSensitive
-            ? { nid: staffProfile.nid, salary: staffProfile.salary }
+            ? {
+                nid: staffProfile.nid,
+                // JSON.stringify একটা Decimal-কে string বানায় ("45000"),
+                // আর StaffForm সেটাকে number ধরে নেয়। তাই boundary-তেই
+                // রূপান্তর। বেতন কোনো order-এর হিসাবে ঢোকে না, শুধু
+                // দেখানো ও সম্পাদনা — তাই float এখানে নিরাপদ।
+                salary:
+                  staffProfile.salary != null ? toMoney(staffProfile.salary).toNumber() : null,
+              }
             : {}),
         }
       : null,

@@ -5,6 +5,7 @@ import { createGiftCard } from "@/lib/gift-cards";
 import { sendGiftCardEmail } from "@/lib/send-gift-card-email";
 import { issueGiftCardSchema } from "@/lib/validations/coupon";
 import { parseBody } from "@/lib/validations/parse";
+import { toMoney } from "@/lib/money";
 
 export async function GET(req: NextRequest) {
   const authResult = await requireApiScope("giftCards");
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   // — there's no Stripe payment involved, unlike a customer purchase via
   // /api/gift-cards/purchase.
   const giftCard = await createGiftCard({
-    amount: Math.round(amount * 100) / 100,
+    amount: toMoney(amount),
     type: "ISSUE",
     recipientEmail: recipientEmail.trim(),
     recipientName: recipientName?.trim() || null,
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   await sendGiftCardEmail({
     code: giftCard.code,
-    amount: giftCard.initialAmount,
+    amount: giftCard.initialAmount, // Decimal — sendGiftCardEmail নিজেই রূপান্তর করে
     recipientEmail: giftCard.recipientEmail!,
     recipientName: giftCard.recipientName || "there",
     purchaserName: giftCard.purchaserName,

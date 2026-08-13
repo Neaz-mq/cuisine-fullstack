@@ -94,15 +94,69 @@ export const loyaltyAdjustSchema = z.object({
 // ---------------------------------------------------------------------------
 // Restaurant settings (singleton row)
 // ---------------------------------------------------------------------------
+/**
+ * হার শতাংশ হিসেবে আসে ("5" = ৫%), কারণ owner সেটাই টাইপ করে। ভগ্নাংশে
+ * রূপান্তর হয় route-এ, ঠিক DB-তে লেখার আগে — form-এ 0.05 লিখতে বলা মানে
+ * একদিন কেউ 5 লিখে ফেলবে আর ৫০০% VAT আদায় হবে।
+ *
+ * ৩ দশমিক পর্যন্ত অনুমোদিত: মার্কিন sales tax সত্যিই 8.875%-এর মতো হয়।
+ * উপরের সীমা ১০০% — অযৌক্তিক শোনালেও কিছু জায়গায় তামাক/মদে করের হার
+ * ৫০% ছাড়ায়, তাই ২০-৩০%-এ আটকানো ভুল হতো।
+ */
+const percentRate = z
+  .number()
+  .min(0, "Rate can't be negative")
+  .max(100, "Rate can't exceed 100%")
+  .refine((n) => Number.isFinite(n) && Math.round(n * 1000) === n * 1000, {
+    message: "Rate can have at most 3 decimal places",
+  });
+
 export const updateSettingsSchema = z
   .object({
     timezone: nonEmptyString("Timezone"),
     kitchenOpenHour: z.number().int().min(0).max(23),
     kitchenCloseHour: z.number().int().min(0).max(23),
+
+    // ISO 4217 — তিন অক্ষর, বড় হাতের। Intl.NumberFormat এর বাইরে কিছু
+    // পেলে throw করে, তাই এখানেই আটকানো ভালো।
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/, "Use a 3-letter ISO currency code, e.g. USD"),
+
+    // ০ (JPY, KRW), ২ (বেশিরভাগ), ৩ (KWD, BHD, OMR)। ১ ব্যবহার করে এমন
+    // কোনো প্রচলিত currency নেই, কিন্তু নিষেধ করার কারণও নেই।
+    currencyMinorUnits: z.number().int().min(0).max(3),
+
+    taxEnabled: z.boolean(),
+    taxName: nonEmptyString("Tax name").pipe(z.string().max(30)),
+    taxMode: z.enum(["INCLUSIVE", "EXCLUSIVE"]),
+    taxRateDineIn: percentRate,
+    taxRateDelivery: percentRate,
+
+    serviceChargeRate: percentRate,
+    serviceChargeTaxable: z.boolean(),
+
+    deliveryFeeFlat: z.number().min(0, "Delivery fee can't be negative"),
+    deliveryFeeTaxable: z.boolean(),
+
+    tipEnabled: z.boolean(),
+    // সর্বোচ্চ ৪টা button — এর বেশি হলে checkout-এ বেছে নেওয়া কঠিন হয়ে
+    // যায়, বিশেষত মোবাইলে। ০% preset অর্থহীন, তাই min 1.
+    tipPresetPercents: z.array(z.number().int().min(1).max(100)).max(4),
   })
   .refine((data) => data.kitchenOpenHour !== data.kitchenCloseHour, {
     message: "Kitchen open and close hour can't be the same",
     path: ["kitchenCloseHour"],
+  })
+  .refine((data) => !data.taxEnabled || data.taxName.trim().length > 0, {
+    message: "Give the tax a name — it's printed on every invoice",
+    path: ["taxName"],
+  })
+  .refine((data) => !data.tipEnabled || data.tipPresetPercents.length > 0, {
+    message: "Add at least one tip percentage, or turn tipping off",
+    path: ["tipPresetPercents"],
   });
 
 // ---------------------------------------------------------------------------

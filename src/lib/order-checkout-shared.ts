@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { type Money, toMoney, ZERO, sum, minMoney, applyRate } from "@/lib/money";
 
 export const SHIPPING_METHODS = ["UBER_EATS", "FOOD_PANDA", "OWN_DELIVERY"] as const;
 export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
@@ -80,7 +81,8 @@ export interface IncomingItem {
 export interface ResolvedItem {
   menuItemId: string;
   categoryId: string;
-  price: number;
+  /** MenuItem.price থেকে সরাসরি — Decimal, তাই কোনো float রূপান্তর নেই। */
+  price: Money;
   quantity: number;
   title: string;
 }
@@ -176,9 +178,9 @@ export interface CouponInfo {
   code: string;
   type: "PERCENT" | "FIXED";
   percentOff: number | null;
-  fixedOff: number | null;
-  maxDiscountAmount: number | null;
-  minOrderValue: number | null;
+  fixedOff: Money | null;
+  maxDiscountAmount: Money | null;
+  minOrderValue: Money | null;
   // Empty arrays = unrestricted (applies to the whole cart) — see the
   // scoping note on the Coupon model in schema.prisma.
   restrictedCategoryIds: string[];
@@ -217,17 +219,21 @@ function isUnrestricted(coupon: Pick<CouponInfo, "restrictedCategoryIds" | "rest
 export function computeEligibleSubtotal(
   items: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity">[],
   coupon: Pick<CouponInfo, "restrictedCategoryIds" | "restrictedItemIds">
-): number {
+): Money {
+  const lineTotal = (i: { price: Money; quantity: number }) => toMoney(i.price).times(i.quantity);
+
   if (isUnrestricted(coupon)) {
-    return items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    return sum(...items.map(lineTotal));
   }
 
   const itemIds = new Set(coupon.restrictedItemIds);
   const categoryIds = new Set(coupon.restrictedCategoryIds);
 
-  return items
-    .filter((i) => itemIds.has(i.menuItemId) || categoryIds.has(i.categoryId))
-    .reduce((sum, i) => sum + i.price * i.quantity, 0);
+  return sum(
+    ...items
+      .filter((i) => itemIds.has(i.menuItemId) || categoryIds.has(i.categoryId))
+      .map(lineTotal)
+  );
 }
 
 /**
@@ -252,7 +258,9 @@ export async function findValidCoupon(
   code: string,
   items: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity">[],
   customerKey: string | null
-): Promise<{ ok: true; coupon: CouponInfo; subtotal: number; eligibleSubtotal: number } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; coupon: CouponInfo; subtotal: Money; eligibleSubtotal: Money } | { ok: false; error: string }
+> {
   const trimmed = code?.trim().toUpperCase();
   if (!trimmed) return { ok: false, error: "Enter a coupon code" };
 
@@ -274,16 +282,20 @@ export async function findValidCoupon(
     return { ok: false, error: "This coupon has expired" };
   }
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const subtotal = sum(...items.map((i) => toMoney(i.price).times(i.quantity)));
 
   // minOrderValue is checked against the FULL cart subtotal regardless of
   // item/category scoping — see the design note on Coupon.restrictedItems
   // in schema.prisma for why "$15 total, $5 off the pizzas in that order"
   // was chosen over "$15 of pizzas specifically".
-  if (coupon.minOrderValue != null && subtotal < coupon.minOrderValue) {
+  if (coupon.minOrderValue != null && subtotal.lessThan(coupon.minOrderValue)) {
+    // ⚠️ মুদ্রা চিহ্ন ছাড়া, ইচ্ছাকৃতভাবে। এই বার্তাটা গ্রাহক দেখে, আর
+    // restaurant-এর currency settings-এ যা-ই থাকুক এখানে "$" hardcode
+    // করা মানে ইউরোপ/জাপানে ভুল চিহ্ন দেখানো। সংখ্যাটাই যথেষ্ট, কারণ
+    // গ্রাহক ইতিমধ্যে ওই দোকানের দামেই cart ভরেছে।
     return {
       ok: false,
-      error: `This coupon requires a minimum order of $${coupon.minOrderValue.toFixed(2)}`,
+      error: `This coupon requires a minimum order of ${coupon.minOrderValue.toFixed(2)}`,
     };
   }
 
@@ -301,7 +313,7 @@ export async function findValidCoupon(
 
   const eligibleSubtotal = computeEligibleSubtotal(items, couponInfo);
 
-  if (!isUnrestricted(couponInfo) && eligibleSubtotal <= 0) {
+  if (!isUnrestricted(couponInfo) && eligibleSubtotal.lessThanOrEqualTo(ZERO)) {
     return {
       ok: false,
       error: "This coupon only applies to specific items that aren't in your cart",
@@ -333,20 +345,28 @@ export async function findValidCoupon(
 // discount exceed eligibleSubtotal itself, so a coupon can never make an
 // order's total negative or discount more than the eligible lines are
 // even worth.
-export function calcDiscountAmount(eligibleSubtotal: number, coupon: CouponInfo): number {
-  let raw: number;
+export function calcDiscountAmount(
+  eligibleSubtotal: Money | number | string,
+  coupon: CouponInfo
+): Money {
+  const base = toMoney(eligibleSubtotal);
+
+  let raw: Money;
   if (coupon.type === "FIXED") {
-    raw = coupon.fixedOff ?? 0;
+    raw = toMoney(coupon.fixedOff);
   } else {
-    raw = eligibleSubtotal * ((coupon.percentOff ?? 0) / 100);
+    raw = applyRate(base, toMoney(coupon.percentOff ?? 0).dividedBy(100));
   }
 
   if (coupon.maxDiscountAmount != null) {
-    raw = Math.min(raw, coupon.maxDiscountAmount);
+    raw = minMoney(raw, toMoney(coupon.maxDiscountAmount));
   }
-  raw = Math.min(raw, eligibleSubtotal);
 
-  return Math.round(raw * 100) / 100;
+  // ⚠️ এখানে আর round করা হয় না। কোন currency-তে কয় দশমিক সেটা
+  // lib/pricing.ts জানে (settings থেকে), এই file জানে না — আগের
+  // hardcoded `* 100 / 100` জাপানে ভগ্নাংশ ইয়েন আর কুয়েতে হারানো fils
+  // তৈরি করতো। round হয় ঠিক এক জায়গায়, calculateOrderPricing-এ।
+  return minMoney(raw, base);
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +558,7 @@ export async function consumeCoupon(
   couponId: string,
   orderId: string,
   customerKey: string | null,
-  discountAmount: number
+  discountAmount: Money
 ): Promise<boolean> {
   const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
   if (!coupon || !coupon.isActive) return false;

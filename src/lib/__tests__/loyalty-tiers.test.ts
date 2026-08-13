@@ -104,31 +104,50 @@ describe("calculatePointsEarned", () => {
   });
 });
 
+/**
+ * calcTierDiscountAmount এখন Prisma Decimal ফেরত দেয়, number নয়।
+ * expect(decimal).toBe(3) কখনো পাশ করে না — toBe reference সমতা দেখে,
+ * আর Decimal একটা object।
+ */
+const amount = (d: { toNumber(): number }) => d.toNumber();
+
 describe("calcTierDiscountAmount", () => {
   it("gives no discount for Bronze (0%)", () => {
-    expect(calcTierDiscountAmount(100, LOYALTY_TIERS[0])).toBe(0);
+    expect(amount(calcTierDiscountAmount(100, LOYALTY_TIERS[0]))).toBe(0);
   });
 
-  it("applies Silver's 3% discount, rounded to cents", () => {
+  /**
+   * ⚠️ আচরণ বদলেছে, তাই নামও বদলানো — আগে ছিল "rounded to cents"।
+   *
+   * এই function আর round করে না, ইচ্ছাকৃতভাবে: কোন currency-তে কয়
+   * দশমিক সেটা সে জানে না (ইয়েনে ০, কুয়েতি দিনারে ৩)। ২ দশমিকে
+   * round করলে জাপানে প্রতিটা tier discount-এ ভগ্নাংশ ইয়েন তৈরি হতো,
+   * যার অস্তিত্বই নেই।
+   *
+   * round হয় ঠিক এক জায়গায় — lib/pricing.ts, যেখানে settings থেকে
+   * currency জানা যায়। তাই ৩৩.৩৩-এর ৩% এখানে ০.৯৯৯৯ থেকে যায়; সেটা
+   * ১.০০ হয় কি না, তা currency-র উপর নির্ভর করে।
+   */
+  it("applies Silver's 3% discount, unrounded — pricing.ts rounds", () => {
     const silver = LOYALTY_TIERS.find((t) => t.id === "SILVER")!;
-    expect(calcTierDiscountAmount(100, silver)).toBe(3);
-    expect(calcTierDiscountAmount(33.33, silver)).toBe(1);
+    expect(amount(calcTierDiscountAmount(100, silver))).toBe(3);
+    expect(amount(calcTierDiscountAmount(33.33, silver))).toBe(0.9999);
   });
 
   it("applies Platinum's 8% discount", () => {
     const platinum = LOYALTY_TIERS.find((t) => t.id === "PLATINUM")!;
-    expect(calcTierDiscountAmount(50, platinum)).toBe(4);
+    expect(amount(calcTierDiscountAmount(50, platinum))).toBe(4);
   });
 
   it("never discounts more than the amount itself", () => {
     const platinum = LOYALTY_TIERS.find((t) => t.id === "PLATINUM")!;
     // 8% of $1 is $0.08 - sanity check it doesn't somehow exceed $1.
-    expect(calcTierDiscountAmount(1, platinum)).toBeLessThanOrEqual(1);
+    expect(amount(calcTierDiscountAmount(1, platinum))).toBeLessThanOrEqual(1);
   });
 
   it("returns 0 for a zero or negative amount", () => {
     const gold = LOYALTY_TIERS.find((t) => t.id === "GOLD")!;
-    expect(calcTierDiscountAmount(0, gold)).toBe(0);
-    expect(calcTierDiscountAmount(-10, gold)).toBe(0);
+    expect(amount(calcTierDiscountAmount(0, gold))).toBe(0);
+    expect(amount(calcTierDiscountAmount(-10, gold))).toBe(0);
   });
 });

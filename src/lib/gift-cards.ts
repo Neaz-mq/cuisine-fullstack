@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { type Money, toMoney, ZERO, minMoney, clampToZero } from "@/lib/money";
 import crypto from "crypto";
 
 /**
@@ -49,7 +50,9 @@ export function normalizeGiftCardCode(code: string): string {
 export interface GiftCardInfo {
   id: string;
   code: string;
-  balance: number;
+  /** Decimal, number নয় — একটা কার্ড ধাপে ধাপে খরচ হয় বলে এখানেই float
+   *  drift সবচেয়ে বেশি ক্ষতি করতো। lib/money.ts-এর ব্যাখ্যা দ্রষ্টব্য। */
+  balance: Money;
 }
 
 /**
@@ -93,7 +96,9 @@ export async function findValidGiftCard(
 
   if (!giftCard) return { ok: false, error: "Invalid gift card code" };
   if (!giftCard.isActive) return { ok: false, error: "This gift card is no longer active" };
-  if (giftCard.balance <= 0) return { ok: false, error: "This gift card has no remaining balance" };
+  if (giftCard.balance.lessThanOrEqualTo(0)) {
+    return { ok: false, error: "This gift card has no remaining balance" };
+  }
 
   return {
     ok: true,
@@ -112,11 +117,10 @@ export async function findValidGiftCard(
  * same dollar of the cart.
  */
 export function calcGiftCardAmountToApply(
-  orderTotalAfterOtherDiscounts: number,
-  giftCardBalance: number
-): number {
-  const amount = Math.min(Math.max(orderTotalAfterOtherDiscounts, 0), giftCardBalance);
-  return Math.round(amount * 100) / 100;
+  orderTotalAfterOtherDiscounts: Money | number | string,
+  giftCardBalance: Money | number | string
+): Money {
+  return minMoney(clampToZero(toMoney(orderTotalAfterOtherDiscounts)), toMoney(giftCardBalance));
 }
 
 /**
@@ -143,9 +147,9 @@ export async function redeemGiftCard(
   tx: Prisma.TransactionClient,
   giftCardId: string,
   orderId: string,
-  amount: number
+  amount: Money
 ): Promise<boolean> {
-  if (amount <= 0) return false;
+  if (amount.lessThanOrEqualTo(ZERO)) return false;
 
   const claim = await tx.giftCard.updateMany({
     where: {
@@ -153,6 +157,10 @@ export async function redeemGiftCard(
       isActive: true,
       balance: { gte: amount },
     },
+      // Decimal সরাসরি Prisma-তে পাঠানো যায়। `gte: amount`-এর তুলনাও এখন
+    // numeric বনাম numeric — আগে double precision-এ 12.35 আসলে
+    // 12.349999999999998 হয়ে থাকায় ঠিক balance-সমান redemption মাঝেমধ্যে
+    // count 0 ফেরত দিত, অর্থাৎ কার্ডে টাকা থাকা সত্ত্বেও GIFT_CARD_RACE.
     data: { balance: { decrement: amount } },
   });
   if (claim.count !== 1) return false;
@@ -161,7 +169,7 @@ export async function redeemGiftCard(
     data: {
       giftCardId,
       orderId,
-      amount: -amount,
+      amount: amount.negated(),
       type: "REDEEM",
     },
   });
@@ -191,7 +199,7 @@ export async function redeemGiftCard(
  * (see isSessionAlreadyProcessed in the webhook route).
  */
 export async function createGiftCard(params: {
-  amount: number;
+  amount: Money | number;
   type: "PURCHASE" | "ISSUE";
   stripeSessionId?: string | null;
   purchaserEmail?: string | null;

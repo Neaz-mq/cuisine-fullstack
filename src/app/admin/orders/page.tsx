@@ -129,7 +129,7 @@ export default async function AdminOrdersPage({
                       {item.menuItem.title}{" "}
                       <span className="text-gray-400">x{item.quantity}</span>
                     </span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                    <span>${item.price.times(item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>

@@ -29,7 +29,11 @@ export const priceSchema = z
   .finite()
   .nonnegative("Price cannot be negative")
   .max(100_000, "Price is too large")
-  .transform((n) => Math.round(n * 100) / 100); // avoid float noise like 12.9999999
+  // ৩ দশমিকে, ২-তে নয় — money column গুলোও numeric(12,3), আর কুয়েতি
+  // দিনার ১০০০ ভাগে বিভক্ত। ২-তে কাটলে ওখানে প্রতিটা দামের শেষ অঙ্কটা
+  // নীরবে হারিয়ে যেতো। এটা কেবল float noise (12.9999999) সরানোর জন্য,
+  // currency অনুযায়ী প্রকৃত rounding হয় lib/pricing.ts-এ।
+  .transform((n) => Math.round(n * 1000) / 1000);
 
 /**
  * Positive integer quantity — used for cart items and stock adjustments.

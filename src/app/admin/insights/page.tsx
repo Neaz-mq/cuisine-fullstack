@@ -74,7 +74,9 @@ export default async function AdminInsightsPage() {
   orderItemAgg.forEach((line) => {
     const existing = salesMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
     existing.quantity += line.quantity;
-    existing.revenue += line.price * line.quantity;
+    // Decimal -> number, display/ranking-এর জন্য। এই সংখ্যা কেবল
+    // "কোন পদ কত আয় করল" সাজাতে ব্যবহার হয়, কোনো চালানে যায় না।
+    existing.revenue += line.price.toNumber() * line.quantity;
     salesMap.set(line.menuItemId, existing);
   });
   const reviewMap = new Map(reviewAgg.map((r) => [r.menuItemId, r]));
@@ -101,13 +103,13 @@ export default async function AdminInsightsPage() {
       revenue: sales?.revenue ?? 0,
       avgRating: reviews?._avg.rating ?? null,
       reviewCount: reviews?._count.rating ?? 0,
-      price: item.price,
-      foodCost,
+      price: item.price.toNumber(),
+      foodCost: foodCost.toNumber(),
       foodCostPercent,
-      grossMargin,
+      grossMargin: grossMargin.toNumber(),
       hasRecipe,
       foodCostHealth: getFoodCostHealth(foodCostPercent),
-      totalProfitContribution: grossMargin * (sales?.quantity ?? 0),
+      totalProfitContribution: grossMargin.toNumber() * (sales?.quantity ?? 0),
     };
   });
 

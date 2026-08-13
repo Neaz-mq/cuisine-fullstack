@@ -24,6 +24,9 @@ import {
 } from "@/lib/gift-cards";
 import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
+import { getPricingSettings } from "@/lib/get-settings";
+import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
+import { ZERO, sum, toMoney, type Money } from "@/lib/money";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
 import { paginationSchema } from "@/lib/validations/common";
@@ -154,8 +157,18 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, createOrderSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { items, billing, shippingMethod, orderType, tableId, couponCode, giftCardCode, redeemPoints } =
-      parsed;
+    const {
+      items,
+      billing,
+      shippingMethod,
+      orderType,
+      tableId,
+      couponCode,
+      giftCardCode,
+      redeemPoints,
+      tipAmount,
+      tipPercent,
+    } = parsed;
 
     const billingError = validateBilling(billing, orderType);
     if (billingError) {
@@ -195,7 +208,10 @@ export async function POST(request: Request) {
     }
     const resolvedItems = resolution.items;
 
-    const subtotal = resolvedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    // কর, service charge, delivery fee, currency, tip — সব এখান থেকে।
+    // কোনোটাই কোডে hardcode করা নেই, কারণ কোনোটাই রেস্তোরাঁ সম্পর্কে
+    // সত্য নয়; সবগুলোই রেস্তোরাঁটা কোন দেশে সেই সম্পর্কে সত্য।
+    const pricingSettings = await getPricingSettings();
 
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
@@ -215,7 +231,7 @@ export async function POST(request: Request) {
     // message — the actual claim (and the only real concurrency guard)
     // happens inside the transaction via consumeCoupon below.
     let couponInfo: CouponInfo | null = null;
-    let discountAmount = 0;
+    let discountAmount: Money = ZERO;
     if (couponCode?.trim()) {
       const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
       if (!couponResult.ok) {
@@ -225,33 +241,60 @@ export async function POST(request: Request) {
       discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
     }
 
-    const totalAfterCoupon = subtotal - discountAmount;
-
     // Automatic loyalty-tier discount — no code needed, unlike the coupon
     // above. Guests (no session) are always Bronze (0%), so this is a
     // no-op for guest checkout. Applied against what's left after the
     // coupon, so the two never double-discount the same dollar.
-    const tierDiscountAmount = currentUser
-      ? calcTierDiscountAmount(totalAfterCoupon, getTierForPoints(currentUser.loyaltyPoints))
-      : 0;
+    // Tier discount coupon-এর পরে অবশিষ্ট subtotal-এর উপর, তাই এখানে
+    // subtotal-টা একবার হাতে যোগ করতে হচ্ছে। calculateOrderPricing
+    // নিজেও এটাই করে — কিন্তু সে দুই ছাড়ই ইনপুট হিসেবে চায়, আর tier
+    // ছাড়ের অঙ্কটা coupon-পরবর্তী অঙ্কের উপর নির্ভরশীল। round করা হয় না;
+    // pricing শেষে currency অনুযায়ী একবারেই round করবে।
+    const itemsSubtotal = sum(...resolvedItems.map((i) => toMoney(i.price).times(i.quantity)));
 
-    const totalAfterTierDiscount = totalAfterCoupon - tierDiscountAmount;
+    const tierDiscountAmount = currentUser
+      ? calcTierDiscountAmount(
+          itemsSubtotal.minus(discountAmount),
+          getTierForPoints(currentUser.loyaltyPoints)
+        )
+      : ZERO;
+
+    // ── দুই ধাপে দাম হিসাব ───────────────────────────────────────────────
+    //
+    // Gift card আর point বিলের বিপরীতে খরচ হয়, অথচ বিলটা নিজেই কর আর
+    // service charge যোগ হওয়ার পরে চূড়ান্ত হয় — তাই একবারে হিসাব করা
+    // যায় না।
+    //
+    //   ধাপ ১: prepaid কিছু ছাড়াই দাম কষে grandTotal বের করা
+    //   ধাপ ২: সেই grandTotal-এর বিপরীতে gift card ও point কতটা খাটবে
+    //          ঠিক করে আবার পুরো হিসাব চালানো
+    //
+    // ধাপ ১ কেবল হিসাব, কোনো DB call নেই — তাই দুবার চালানো সস্তা।
+    const beforePrepaid = calculateOrderPricing(
+      {
+        orderType,
+        items: resolvedItems,
+        couponDiscount: discountAmount,
+        tierDiscount: tierDiscountAmount,
+      },
+      pricingSettings
+    );
 
     // Pre-check outside the transaction purely for a fast, friendly error
     // message — the actual claim (and the only real concurrency guard)
     // happens inside the transaction via redeemGiftCard below.
     let giftCardInfo: GiftCardInfo | null = null;
-    let giftCardAmount = 0;
+    let giftCardAmount: Money = ZERO;
     if (giftCardCode?.trim()) {
       const giftCardResult = await findValidGiftCard(giftCardCode);
       if (!giftCardResult.ok) {
         return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
       }
       giftCardInfo = giftCardResult.giftCard;
-      giftCardAmount = calcGiftCardAmountToApply(totalAfterTierDiscount, giftCardInfo.balance);
+      // grandTotal-এর বিপরীতে, subtotal-এর নয় — কর আর service charge-ও
+      // gift card দিয়ে দেওয়া যায়, ওগুলোও বিলেরই অংশ।
+      giftCardAmount = calcGiftCardAmountToApply(beforePrepaid.grandTotal, giftCardInfo.balance);
     }
-
-    const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmount;
 
     // Loyalty points redemption — spends down what's left after every
     // other discount, same "last in line" position as a store-credit
@@ -261,20 +304,45 @@ export async function POST(request: Request) {
     // so a stale/racy client request just redeems nothing instead of
     // failing the whole order.
     let pointsToRedeem = 0;
-    let pointsRedeemedAmount = 0;
+    let pointsRedeemedAmount: Money = ZERO;
     if (currentUser && redeemPoints && redeemPoints > 0) {
-      const clamped = clampPointsRedemption(redeemPoints, currentUser.loyaltyPoints, totalAfterGiftCard);
+      const clamped = clampPointsRedemption(
+        redeemPoints,
+        currentUser.loyaltyPoints,
+        beforePrepaid.grandTotal.minus(giftCardAmount)
+      );
       pointsToRedeem = clamped.points;
       pointsRedeemedAmount = clamped.amount;
     }
 
-    const totalAmount = totalAfterGiftCard - pointsRedeemedAmount;
+    // ধাপ ২ — চূড়ান্ত হিসাব। এই একটা object-ই Order row-তে লেখা হবে,
+    // তাই গ্রাহক যা দেখে আর DB-তে যা জমা হয় দুটো আলাদা হওয়ার সুযোগ নেই।
+    const priced = calculateOrderPricing(
+      {
+        orderType,
+        items: resolvedItems,
+        couponDiscount: discountAmount,
+        tierDiscount: tierDiscountAmount,
+        giftCardRequested: giftCardAmount,
+        pointsRedeemedRequested: pointsRedeemedAmount,
+        tipAmount: tipAmount,
+        tipPercent: tipPercent,
+      },
+      pricingSettings
+    );
+
+    // pricing নিজেই বিলের চেয়ে বেশি হলে কেটে ছোট করে, আর সেই কাটা
+    // পরিমাণটাই ledger-এ লেখা হতে হবে — নইলে কার্ড থেকে বেশি কেটে নেওয়া
+    // হতো। তাই নিচের সব জায়গায় priced.* ব্যবহার হচ্ছে, উপরের চাওয়া
+    // পরিমাণ নয়।
+    giftCardAmount = priced.giftCardAmount;
+    pointsRedeemedAmount = priced.pointsRedeemedAmount;
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
           status: "PLACED",
-          totalAmount,
+          ...pricingToOrderFields(priced),
           orderType,
           firstName: billing.firstName,
           lastName: billing.lastName,
@@ -282,12 +350,8 @@ export async function POST(request: Request) {
           paymentMethod: "COD",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
-          discountAmount,
           giftCardCode: giftCardInfo?.code ?? null,
-          giftCardAmount,
-          tierDiscountAmount,
           pointsRedeemed: pointsToRedeem,
-          pointsRedeemedAmount,
           // Defaults to false (opt-in, never opt-out by default) if the
           // client omits it entirely.
           marketingConsent: billing.marketingConsent ?? false,
@@ -322,7 +386,7 @@ export async function POST(request: Request) {
           couponInfo.id,
           created.id,
           customerKey,
-          discountAmount
+          priced.discountAmount
         );
         if (!claimed) {
           // Someone else claimed this exact code in the moment between our
@@ -333,7 +397,7 @@ export async function POST(request: Request) {
         }
       }
 
-      if (giftCardInfo && giftCardAmount > 0) {
+      if (giftCardInfo && giftCardAmount.greaterThan(0)) {
         const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
         if (!redeemed) {
           // Same race as the coupon check above — someone else spent the

@@ -62,6 +62,16 @@ const baseOrderFields = {
   // what the account actually has and what the order total can absorb,
   // never trusted as an authoritative discount amount from the client.
   redeemPoints: z.number().int().nonnegative().optional(),
+
+  // বকশিশ। দুটোর যেকোনো একটা আসতে পারে — নির্দিষ্ট অঙ্ক, বা ছাড়-পরবর্তী
+  // subtotal-এর শতাংশ। দুটোই এলে pricing.ts শতাংশটাকে প্রাধান্য দেয়।
+  //
+  // এখানে কোনো "tipping allowed কিনা" যাচাই নেই, ইচ্ছাকৃতভাবে: সেটা
+  // RestaurantSettings.tipEnabled-এর সিদ্ধান্ত, আর calculateOrderPricing
+  // বন্ধ থাকলে জোর করে শূন্য করে দেয়। schema-য় দ্বিতীয়বার নিয়মটা লিখলে
+  // একদিন দুই জায়গায় দুই নিয়ম হয়ে যেতো।
+  tipAmount: z.number().nonnegative().optional(),
+  tipPercent: z.number().min(0).max(100).optional(),
 };
 
 /** POST /api/checkout/create-session — online/Stripe, DELIVERY-only, so

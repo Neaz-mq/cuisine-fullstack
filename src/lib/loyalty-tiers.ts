@@ -17,8 +17,10 @@
  *     to backfill existing users.
  *
  * Pure functions only — no Prisma import here — so this file (and its
- * tests) never need a database connection.
+ * tests) never need a database connection. lib/money.ts is the one
+ * exception, and it is itself pure (a Decimal wrapper, no DB).
  */
+import { type Money, toMoney, ZERO, minMoney, applyRate } from "@/lib/money";
 
 export type LoyaltyTierId = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
 
@@ -174,8 +176,17 @@ export function calculatePointsEarned(basePoints: number, pointsBeforeOrder: num
  * amount it's discounting, same guard as calcDiscountAmount in
  * order-checkout-shared.ts.
  */
-export function calcTierDiscountAmount(amountAfterCoupon: number, tier: LoyaltyTierDef): number {
-  if (amountAfterCoupon <= 0 || tier.discountPercent <= 0) return 0;
-  const raw = amountAfterCoupon * (tier.discountPercent / 100);
-  return Math.round(Math.min(raw, amountAfterCoupon) * 100) / 100;
+export function calcTierDiscountAmount(
+  amountAfterCoupon: Money | number | string,
+  tier: LoyaltyTierDef
+): Money {
+  const base = toMoney(amountAfterCoupon);
+  if (base.lessThanOrEqualTo(ZERO) || tier.discountPercent <= 0) return ZERO;
+
+  // ইচ্ছাকৃতভাবে এখানে round করা হয় না — currency-র দশমিক সংখ্যা
+  // lib/pricing.ts জানে, এই file জানে না (ইয়েনে ০, দিনারে ৩)। এখানে ২
+  // দশমিকে round করলে জাপানে প্রতিটা tier discount-এ ভগ্নাংশ ইয়েন তৈরি
+  // হতো, যার অস্তিত্বই নেই।
+  const raw = applyRate(base, toMoney(tier.discountPercent).dividedBy(100));
+  return minMoney(raw, base);
 }

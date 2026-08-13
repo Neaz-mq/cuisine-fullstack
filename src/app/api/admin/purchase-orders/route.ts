@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { createPurchaseOrderSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
+import { sum, toMoney } from "@/lib/money";
 
 export async function GET(req: NextRequest) {
   const authResult = await requireApiScope("inventory");
@@ -36,9 +37,11 @@ export async function POST(req: NextRequest) {
   const parsed = await parseBody(req, createPurchaseOrderSchema);
   if (parsed instanceof NextResponse) return parsed;
 
-  const totalCost = parsed.items.reduce(
-    (sum, line) => sum + line.quantityOrdered * line.costPerUnit,
-    0
+  // Money helper দিয়ে, `+`/`*` দিয়ে নয়। একটা PO-তে ৪০-৫০ লাইন থাকা
+  // স্বাভাবিক, আর float-এ প্রতিটা গুণফল যোগ করলে মোটে দৃশ্যমান পয়সার
+  // গরমিল জমে — supplier-এর চালানের সাথে মেলাতে গেলে ঠিক সেটাই ধরা পড়ে।
+  const totalCost = sum(
+    ...parsed.items.map((line) => toMoney(line.costPerUnit).times(line.quantityOrdered))
   );
 
   try {
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
       data: {
         supplierId: parsed.supplierId,
         note: parsed.note || null,
-        totalCost: Math.round(totalCost * 100) / 100,
+        totalCost,
         createdById: authResult.user.id,
         items: {
           create: parsed.items.map((line) => ({

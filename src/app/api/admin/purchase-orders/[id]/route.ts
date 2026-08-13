@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { updatePurchaseOrderSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
+import { sum, toMoney } from "@/lib/money";
 
 export async function GET(
   req: NextRequest,
@@ -63,7 +64,7 @@ export async function PATCH(
   }
 
   const totalCost = items
-    ? items.reduce((sum, line) => sum + line.quantityOrdered * line.costPerUnit, 0)
+    ? sum(...items.map((line) => toMoney(line.costPerUnit).times(line.quantityOrdered)))
     : undefined;
 
   try {
@@ -85,7 +86,7 @@ export async function PATCH(
         data: {
           ...(supplierId ? { supplierId } : {}),
           ...(note !== undefined ? { note: note || null } : {}),
-          ...(totalCost !== undefined ? { totalCost: Math.round(totalCost * 100) / 100 } : {}),
+          ...(totalCost !== undefined ? { totalCost } : {}),
           ...(markOrdered ? { status: "ORDERED", orderedAt: new Date() } : {}),
         },
         include: { items: true },

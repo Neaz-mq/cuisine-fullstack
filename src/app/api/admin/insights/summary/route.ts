@@ -4,6 +4,8 @@ import { requireApiScope } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { generateWeeklySummary } from "@/lib/business-summary";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sum, type Money } from "@/lib/money";
+import { getPricingSettings } from "@/lib/get-settings";
 
 /**
  * POST /api/admin/insights/summary
@@ -46,14 +48,14 @@ export async function POST(request: Request) {
     const [thisWeekOrders, lastWeekOrders, cancelledThisWeek, topItemLines] = await Promise.all([
       prisma.order.findMany({
         where: { createdAt: { gte: startOfThisWeek }, status: { not: "CANCELLED" } },
-        select: { totalAmount: true },
+        select: { grandTotal: true, taxAmount: true, taxMode: true },
       }),
       prisma.order.findMany({
         where: {
           createdAt: { gte: startOfLastWeek, lt: startOfThisWeek },
           status: { not: "CANCELLED" },
         },
-        select: { totalAmount: true },
+        select: { grandTotal: true, taxAmount: true, taxMode: true },
       }),
       prisma.order.count({
         where: { createdAt: { gte: startOfThisWeek }, status: "CANCELLED" },
@@ -68,12 +70,33 @@ export async function POST(request: Request) {
       }),
     ]);
 
+    // ── Revenue-এর ভিত্তি ────────────────────────────────────────────────
+    //
+    // ⚠️ ভিত্তি totalAmount নয়, ইচ্ছাকৃতভাবে। Money model আসার পর
+    // totalAmount-এ কর আর বকশিশও ঢুকেছে — অথচ করের টাকা সরকারের, আর
+    // বকশিশ কর্মীর। দুটোকেই "আয়" গুনলে মালিকের প্রতিটা রিপোর্ট ফুলে
+    // যেতো, আর VAT ১৫% এমন দেশে ঠিক ততটাই বেশি, নিছক ভূগোলের কারণে।
+    //
+    // grandTotal হলো ছাপা বিল (বকশিশ ছাড়া)। তা থেকে কর বাদ দিলে যা
+    // থাকে সেটাই রেস্তোরাঁর প্রকৃত বিক্রি — accountant একেই "net sales"
+    // বলে।
+    //
+    // দুই tax mode-এই সূত্রটা এক, কারণ taxAmount সবসময় "এই order-এ কত
+    // কর ছিল" বোঝায়: EXCLUSIVE-এ সেটা grandTotal-এ যোগ হয়েছিল,
+    // INCLUSIVE-এ সেটা grandTotal-এর ভেতরেই ছিল। দুই ক্ষেত্রেই বাদ দিলে
+    // কর-বহির্ভূত বিক্রি পাওয়া যায়।
+    //
+    // gift card বা point দিয়ে দেওয়া অংশ বাদ দেওয়া হয়নি — খাবার বিক্রি
+    // হয়েছে, কেবল পরিশোধ আগে হয়েছিল। ওগুলো ছাড় নয়, পরিশোধের মাধ্যম।
+    const netSales = (orders: { grandTotal: Money; taxAmount: Money }[]) =>
+      sum(...orders.map((o) => o.grandTotal.minus(o.taxAmount)));
+
     const currentWeek = {
-      revenue: thisWeekOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+      revenue: netSales(thisWeekOrders),
       orders: thisWeekOrders.length,
     };
     const previousWeek = {
-      revenue: lastWeekOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+      revenue: netSales(lastWeekOrders),
       orders: lastWeekOrders.length,
     };
 
@@ -96,6 +119,9 @@ export async function POST(request: Request) {
       previousWeek,
       topItem,
       cancelledThisWeek,
+      // মডেল যেন ডলার ধরে না নেয় — lib/business-summary.ts-এর
+      // system prompt দ্রষ্টব্য।
+      currency: (await getPricingSettings()).currency,
     });
 
     return NextResponse.json({ summary });

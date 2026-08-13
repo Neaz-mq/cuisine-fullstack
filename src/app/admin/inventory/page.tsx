@@ -71,7 +71,7 @@ export default async function AdminInventoryPage() {
               <div className="flex justify-end">
                 <InventoryItemActions
                   itemId={item.id}
-                  costPerUnit={item.costPerUnit}
+                  costPerUnit={item.costPerUnit.toNumber()}
                   isActive={item.isActive}
                 />
               </div>

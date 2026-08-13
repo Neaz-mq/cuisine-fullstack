@@ -1,9 +1,11 @@
 import { getResendClient, EMAIL_FROM } from "@/lib/resend";
 import GiftCardDeliveryEmail from "@/emails/GiftCardDeliveryEmail";
+import { type MoneyInput, toMoney } from "@/lib/money";
 
 interface GiftCardForEmail {
   code: string;
-  amount: number;
+  /** Decimal বা number — caller Prisma থেকে সরাসরি initialAmount পাঠায়। */
+  amount: MoneyInput;
   recipientEmail: string;
   recipientName: string;
   purchaserName?: string | null;
@@ -17,17 +19,25 @@ interface GiftCardForEmail {
 // visible in server logs without surfacing to the customer/admin.
 export async function sendGiftCardEmail(giftCard: GiftCardForEmail) {
   try {
+    // React email template এখনো number নেয় — display-only, তাই এখানে
+    // একবার রূপান্তর করে নিচে সেটাই ব্যবহার করা হয়।
+    //
+    // ⚠️ "$" এখনো hardcoded, দুই জায়গায়। Stage 3-এ formatMoney() আর
+    // settings-এর currency দিয়ে বদলাবে — তার আগে ইউরোপ/জাপানের
+    // গ্রাহক ভুল মুদ্রা চিহ্ন দেখবেন।
+    const amount = toMoney(giftCard.amount).toNumber();
+
     await getResendClient().emails.send({
       from: EMAIL_FROM,
       to: giftCard.recipientEmail,
-      subject: `You've received a $${giftCard.amount.toFixed(2)} Cuisine gift card!`,
+      subject: `You've received a $${amount.toFixed(2)} Cuisine gift card!`,
       react: GiftCardDeliveryEmail({
         recipientName: giftCard.recipientName,
         purchaserName: giftCard.purchaserName,
         message: giftCard.message,
         code: giftCard.code,
-        amount: giftCard.amount,
-        previewText: `You've received a $${giftCard.amount.toFixed(2)} Cuisine gift card!`,
+        amount,
+        previewText: `You've received a $${amount.toFixed(2)} Cuisine gift card!`,
       }),
     });
   } catch (error) {

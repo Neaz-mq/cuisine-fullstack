@@ -53,15 +53,19 @@ export default async function AdminGiftCardsPage({
       ) : (
         <div className="border border-gray-200 rounded-md divide-y divide-gray-100 bg-white">
           {giftCards.map((giftCard) => {
-            const spent = giftCard.initialAmount - giftCard.balance;
+            // Display-only রূপান্তর — "কত শতাংশ ব্যবহৃত" দেখানোর জন্য।
+            // প্রকৃত balance arithmetic server-এ Decimal-এ হয়।
+            const balance = giftCard.balance.toNumber();
+            const initialAmount = giftCard.initialAmount.toNumber();
+            const spent = initialAmount - balance;
 
             return (
               <div key={giftCard.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                 <div className="min-w-[200px]">
                   <p className="text-sm font-mono font-semibold text-gray-800">{giftCard.code}</p>
                   <p className="text-xs text-gray-400">
-                    ${giftCard.balance.toFixed(2)} remaining of ${giftCard.initialAmount.toFixed(2)}
-                    {spent > 0 && ` (${((spent / giftCard.initialAmount) * 100).toFixed(0)}% used)`}
+                    ${balance.toFixed(2)} remaining of ${initialAmount.toFixed(2)}
+                    {spent > 0 && ` (${((spent / initialAmount) * 100).toFixed(0)}% used)`}
                   </p>
 
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-gray-400">
@@ -75,7 +79,7 @@ export default async function AdminGiftCardsPage({
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
-                  {giftCard.balance <= 0 && (
+                  {balance <= 0 && (
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-600">
                       Fully redeemed
                     </span>
@@ -83,7 +87,7 @@ export default async function AdminGiftCardsPage({
                   <GiftCardActions
                     giftCardId={giftCard.id}
                     isActive={giftCard.isActive}
-                    balance={giftCard.balance}
+                    balance={balance}
                   />
                 </div>
               </div>

@@ -129,7 +129,14 @@ export default async function MyOrdersPage() {
                       items={order.items.map((item) => ({
                         menuItemId: item.menuItemId,
                         title: item.menuItem.title,
-                        price: item.menuItem.price,
+                        // OrderAgainButton একটা client component আর
+                        // cart-এ দাম দিয়ে গুণ-যোগ হয়, তাই boundary-তে
+                        // number-এ রূপান্তর।
+                        //
+                        // ⚠️ item.price (order-এর সময়ের দাম) নয়,
+                        // menuItem.price (আজকের দাম) — ইচ্ছাকৃত: আবার
+                        // অর্ডার করলে আজকের দামেই হবে।
+                        price: item.menuItem.price.toNumber(),
                         quantity: item.quantity,
                         imageUrl: item.menuItem.imageUrl,
                         isAvailable: item.menuItem.isAvailable,
@@ -148,7 +155,7 @@ export default async function MyOrdersPage() {
                         {item.menuItem.title}{" "}
                         <span className="text-gray-400">x{item.quantity}</span>
                       </span>
-                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      <span>${item.price.times(item.quantity).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

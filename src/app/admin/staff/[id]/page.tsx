@@ -48,7 +48,9 @@ export default async function EditStaffPage({
                 hireDate: member.staffProfile.hireDate.toISOString(),
                 isActive: member.staffProfile.isActive,
                 nid: member.staffProfile.nid,
-                salary: member.staffProfile.salary,
+                // Decimal -> number: form input string-এ কাজ করে, আর
+                // salary কোনো হিসাবের অংশ নয়, কেবল দেখানো ও সম্পাদনা।
+                salary: member.staffProfile.salary?.toNumber() ?? null,
               }
             : null,
         }}

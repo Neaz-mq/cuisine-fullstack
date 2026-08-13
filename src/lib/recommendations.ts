@@ -1,6 +1,20 @@
 // src/lib/recommendations.ts
 import { prisma } from "@/lib/prisma";
+import { type Money, toMoney } from "@/lib/money";
 
+/**
+ * ⚠️ `price` এখানে number, Decimal নয় — ইচ্ছাকৃতভাবে।
+ *
+ * এই type-টা /api/recommendations দিয়ে HTTP পেরিয়ে RecommendedForYou
+ * (client component) পর্যন্ত যায়। JSON.stringify একটা Prisma Decimal-কে
+ * string বানায় ("420"), object নয় — ফলে browser-এ `item.price.toFixed(2)`
+ * চলত না, কারণ string-এ toFixed নেই। tsc কিছুই ধরত না, কারণ সে DB-র
+ * ধরনটাই দেখত, তার নেটওয়ার্ক পেরোনোর পরের রূপ নয়।
+ *
+ * তাই রূপান্তরটা server-এ, sortByRank-এ — নিচের চারটে query-রই একমাত্র
+ * পথ ওটা, তাই একটাও ফাঁক থাকে না। দাম এখানে শুধু দেখানো হয়, কোনো
+ * হিসাব হয় না; আসল হিসাব order তৈরির সময় server-এ Decimal-এ।
+ */
 export interface RecommendedMenuItem {
   id: string;
   title: string;
@@ -8,6 +22,9 @@ export interface RecommendedMenuItem {
   price: number;
   imageUrl: string | null;
 }
+
+/** Prisma যা দেয় — price এখনো Decimal। sortByRank-এ number-এ নামে। */
+type MenuItemRow = Omit<RecommendedMenuItem, "price"> & { price: Money };
 
 const MENU_ITEM_SELECT = {
   id: true,
@@ -24,9 +41,14 @@ const COUNTED_ORDER_STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELI
 // Sorts a MenuItem[] to match the ranking implied by an ordered id list —
 // Prisma's `findMany({ where: { id: { in: [...] } } })` does NOT preserve
 // the order of the ids you passed in, so every function below needs this.
-function sortByRank(items: RecommendedMenuItem[], rankedIds: string[]): RecommendedMenuItem[] {
+//
+// এখানেই Decimal -> number রূপান্তর হয়, কারণ প্রতিটা query শেষমেশ এই
+// একটা function-এ এসে মেশে — উপরের interface-এর মন্তব্য দ্রষ্টব্য।
+function sortByRank(items: MenuItemRow[], rankedIds: string[]): RecommendedMenuItem[] {
   const rank = new Map(rankedIds.map((id, i) => [id, i]));
-  return [...items].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+  return [...items]
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+    .map((item) => ({ ...item, price: toMoney(item.price).toNumber() }));
 }
 
 /**

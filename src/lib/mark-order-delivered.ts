@@ -83,18 +83,25 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
       where: { id: orderId },
       select: {
         userId: true,
+        subtotal: true,
         totalAmount: true,
         user: { select: { loyaltyPoints: true } },
       },
     });
 
-    // totalAmount coupon আর gift card বাদ দেওয়ার পরের অঙ্ক — অর্থাৎ
-    // customer আসলে যত টাকা দিয়েছে। পুরো bill gift card-এ দিলে
-    // totalAmount 0, তাই point-ও 0। "যত টাকা দিয়েছে তত point" চাইলে
-    // এটাই সঠিক; "যত টাকার খাবার নিয়েছে তত point" চাইলে
-    // discountAmount + giftCardAmount + totalAmount যোগ করতে হবে —
-    // ব্যবসায়িক সিদ্ধান্ত, দুটোই যুক্তিসঙ্গত।
-    const basePoints = Math.floor(claimed.totalAmount / POINTS_PER_CURRENCY_UNIT);
+    // ⚠️ ভিত্তি এখন subtotal, আগের totalAmount নয়।
+    //
+    // Money model আসার পর totalAmount-এ কর, service charge, delivery fee
+    // আর বকশিশও ঢুকেছে। ওটার উপর point দিলে গ্রাহক সরকারের কর আর
+    // rider-এর বকশিশের উপরেও loyalty point পেতেন — অর্থাৎ VAT ১৫% এমন
+    // দেশে ঠিক ততটাই বেশি, নিছক ভূগোলের কারণে।
+    //
+    // subtotal হলো খাবারের দাম, ছাড়ের আগে। ফলে point দেওয়া হয় "কত
+    // টাকার খাবার নিলেন" অনুযায়ী, "শেষে কত টাকা হাতবদল হলো" অনুযায়ী নয়।
+    // পুরো bill gift card-এ মিটলেও গ্রাহক এখন point পাবেন — যা আগের
+    // আচরণ থেকে ইচ্ছাকৃত পরিবর্তন, এবং প্রায় সব loyalty program এভাবেই
+    // কাজ করে (gift card পরিশোধের মাধ্যম, ছাড় নয়)।
+    const basePoints = claimed.subtotal.dividedBy(POINTS_PER_CURRENCY_UNIT).floor().toNumber();
 
     // Loyalty tier bonus — Silver/Gold/Platinum customers earn a
     // multiplier on top of the base rate. Tier is derived from the

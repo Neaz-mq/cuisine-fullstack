@@ -25,6 +25,21 @@ import {
   type CouponInfo,
   type ResolvedItem,
 } from "@/lib/order-checkout-shared";
+import { toMoney } from "@/lib/money";
+
+/**
+ * Money model আসার পর দাম আর ছাড় সব Prisma Decimal। test-এ সংখ্যাগুলো
+ * পড়ার মতো রাখতে দুটো ছোট helper:
+ *
+ *   money(420)  — fixture-এ Decimal বসাতে
+ *   amount(d)   — assertion-এ Decimal থেকে number-এ নামাতে
+ *
+ * expect(decimal).toBe(80) কখনো পাশ করবে না — Decimal একটা object,
+ * primitive নয়, তাই toBe-এর reference সমতা কখনো মিলবে না। সেজন্য
+ * প্রতিটা money assertion amount() দিয়ে মোড়ানো।
+ */
+const money = (n: number) => toMoney(n);
+const amount = (d: { toNumber(): number }) => d.toNumber();
 
 // ---------------------------------------------------------------------------
 // Fixtures — mirrors the actual manual test session:
@@ -35,19 +50,19 @@ import {
 const pizza420: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity"> = {
   menuItemId: "item_veggie_supreme",
   categoryId: "cat_pizza",
-  price: 420,
+  price: money(420),
   quantity: 1,
 };
 const pizza400: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity"> = {
   menuItemId: "item_margherita",
   categoryId: "cat_pizza",
-  price: 400,
+  price: money(400),
   quantity: 1,
 };
 const milkshake90: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity"> = {
   menuItemId: "item_milkshake",
   categoryId: "cat_drinks",
-  price: 90,
+  price: money(90),
   quantity: 1,
 };
 
@@ -70,22 +85,22 @@ beforeEach(() => {
 describe("computeEligibleSubtotal", () => {
   it("unrestricted coupon: eligible subtotal = full cart subtotal", () => {
     const total = computeEligibleSubtotal([pizza400, milkshake90], unrestricted);
-    expect(total).toBe(490);
+    expect(amount(total)).toBe(490);
   });
 
   it("category-restricted, cart has NO matching item: eligible subtotal = 0 (Test 1)", () => {
     const total = computeEligibleSubtotal([milkshake90], pizza20Restricted);
-    expect(total).toBe(0);
+    expect(amount(total)).toBe(0);
   });
 
   it("category-restricted, mixed cart: only matching lines count (Test 2)", () => {
     const total = computeEligibleSubtotal([milkshake90, pizza400], pizza20Restricted);
-    expect(total).toBe(400); // milkshake excluded
+    expect(amount(total)).toBe(400); // milkshake excluded
   });
 
   it("category-restricted, cart is entirely eligible: same as unrestricted (Test 3)", () => {
     const total = computeEligibleSubtotal([pizza400], pizza20Restricted);
-    expect(total).toBe(400);
+    expect(amount(total)).toBe(400);
   });
 
   it("item-restricted matches by menuItemId even outside the restricted category list", () => {
@@ -93,12 +108,12 @@ describe("computeEligibleSubtotal", () => {
       restrictedCategoryIds: [],
       restrictedItemIds: ["item_milkshake"],
     });
-    expect(total).toBe(90);
+    expect(amount(total)).toBe(90);
   });
 
   it("quantity multiplies correctly for a matching line", () => {
     const total = computeEligibleSubtotal([{ ...pizza400, quantity: 3 }], pizza20Restricted);
-    expect(total).toBe(1200);
+    expect(amount(total)).toBe(1200);
   });
 });
 
@@ -119,36 +134,36 @@ describe("calcDiscountAmount", () => {
   };
 
   it("PERCENT: 20% of $400 eligible subtotal = $80.00 (Test 2/3, matches real screenshots)", () => {
-    expect(calcDiscountAmount(400, baseCoupon)).toBe(80);
+    expect(amount(calcDiscountAmount(400, baseCoupon))).toBe(80);
   });
 
   it("PERCENT: 20% of $420 eligible subtotal = $84.00 (real order #ORD-YBM9PX)", () => {
-    expect(calcDiscountAmount(420, baseCoupon)).toBe(84);
+    expect(amount(calcDiscountAmount(420, baseCoupon))).toBe(84);
   });
 
   it("FIXED: SAVE5-style coupon always deducts the flat amount", () => {
-    const save5: CouponInfo = { ...baseCoupon, type: "FIXED", percentOff: null, fixedOff: 5 };
-    expect(calcDiscountAmount(420, save5)).toBe(5);
+    const save5: CouponInfo = { ...baseCoupon, type: "FIXED", percentOff: null, fixedOff: money(5) };
+    expect(amount(calcDiscountAmount(420, save5))).toBe(5);
   });
 
   it("TEST10 regression: 10% of $420 = $42.00 (matches real screenshot)", () => {
     const test10: CouponInfo = { ...baseCoupon, percentOff: 10, restrictedCategoryIds: [], restrictedItemIds: [] };
-    expect(calcDiscountAmount(420, test10)).toBe(42);
+    expect(amount(calcDiscountAmount(420, test10))).toBe(42);
   });
 
   it("respects maxDiscountAmount cap even when the percentage would exceed it", () => {
-    const capped: CouponInfo = { ...baseCoupon, maxDiscountAmount: 50 };
-    expect(calcDiscountAmount(400, capped)).toBe(50); // 20% of 400 = 80, capped to 50
+    const capped: CouponInfo = { ...baseCoupon, maxDiscountAmount: money(50) };
+    expect(amount(calcDiscountAmount(400, capped))).toBe(50); // 20% of 400 = 80, capped to 50
   });
 
   it("never discounts more than the eligible subtotal itself", () => {
-    const oddFixed: CouponInfo = { ...baseCoupon, type: "FIXED", percentOff: null, fixedOff: 999 };
-    expect(calcDiscountAmount(30, oddFixed)).toBe(30); // can't exceed eligible lines' value
+    const oddFixed: CouponInfo = { ...baseCoupon, type: "FIXED", percentOff: null, fixedOff: money(999) };
+    expect(amount(calcDiscountAmount(30, oddFixed))).toBe(30); // can't exceed eligible lines' value
   });
 
   it("rounds to the nearest cent", () => {
     const coupon: CouponInfo = { ...baseCoupon, percentOff: 33 };
-    expect(calcDiscountAmount(10, coupon)).toBe(3.3);
+    expect(amount(calcDiscountAmount(10, coupon))).toBe(3.3);
   });
 });
 
@@ -209,9 +224,9 @@ describe("findValidCoupon (mocked prisma)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.subtotal).toBe(490);
-      expect(result.eligibleSubtotal).toBe(400);
-      expect(calcDiscountAmount(result.eligibleSubtotal, result.coupon)).toBe(80);
+      expect(amount(result.subtotal)).toBe(490);
+      expect(amount(result.eligibleSubtotal)).toBe(400);
+      expect(amount(calcDiscountAmount(result.eligibleSubtotal, result.coupon))).toBe(80);
     }
   });
 
@@ -222,8 +237,8 @@ describe("findValidCoupon (mocked prisma)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.subtotal).toBe(400);
-      expect(result.eligibleSubtotal).toBe(400);
+      expect(amount(result.subtotal)).toBe(400);
+      expect(amount(result.eligibleSubtotal)).toBe(400);
     }
   });
 
@@ -243,8 +258,8 @@ describe("findValidCoupon (mocked prisma)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.eligibleSubtotal).toBe(420);
-      expect(calcDiscountAmount(result.eligibleSubtotal, result.coupon)).toBe(42);
+      expect(amount(result.eligibleSubtotal)).toBe(420);
+      expect(amount(calcDiscountAmount(result.eligibleSubtotal, result.coupon))).toBe(42);
     }
   });
 
@@ -291,7 +306,7 @@ describe("findValidCoupon (mocked prisma)", () => {
     expect(acceptedWithMilkshakeAdded.ok).toBe(true);
     if (acceptedWithMilkshakeAdded.ok) {
       // Still only the pizza line counts toward the discount base.
-      expect(acceptedWithMilkshakeAdded.eligibleSubtotal).toBe(400);
+      expect(amount(acceptedWithMilkshakeAdded.eligibleSubtotal)).toBe(400);
     }
   });
 
@@ -335,7 +350,7 @@ describe("consumeCoupon (mocked transaction)", () => {
   it("Flow 6 — successful redemption creates a CouponRedemption row with the exact discount amount", async () => {
     const tx = fakeTx();
 
-    const ok = await consumeCoupon(tx, "coupon_pizza20", "order_123", "user:mdz", 80);
+    const ok = await consumeCoupon(tx, "coupon_pizza20", "order_123", "user:mdz", money(80));
 
     expect(ok).toBe(true);
     expect(tx.couponRedemption.create).toHaveBeenCalledWith({
@@ -343,14 +358,14 @@ describe("consumeCoupon (mocked transaction)", () => {
         couponId: "coupon_pizza20",
         orderId: "order_123",
         customerKey: "user:mdz",
-        discountAmount: 80,
+        discountAmount: money(80),
       },
     });
   });
 
   it("increments usageCount via the atomic updateMany guard", async () => {
     const tx = fakeTx();
-    await consumeCoupon(tx, "coupon_pizza20", "order_123", "user:mdz", 80);
+    await consumeCoupon(tx, "coupon_pizza20", "order_123", "user:mdz", money(80));
 
     expect(tx.coupon.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -366,7 +381,7 @@ describe("consumeCoupon (mocked transaction)", () => {
       redemptionsByCustomer: 1, // already at the cap
     });
 
-    const ok = await consumeCoupon(tx, "coupon_save5", "order_999", "user:mdz", 5);
+    const ok = await consumeCoupon(tx, "coupon_save5", "order_999", "user:mdz", money(5));
 
     expect(ok).toBe(false);
     expect(tx.couponRedemption.create).not.toHaveBeenCalled();
@@ -374,13 +389,13 @@ describe("consumeCoupon (mocked transaction)", () => {
 
   it("refuses to redeem an inactive coupon", async () => {
     const tx = fakeTx({ coupon: { id: "coupon_x", isActive: false, perCustomerLimit: null, usageLimit: null } });
-    const ok = await consumeCoupon(tx, "coupon_x", "order_1", "user:mdz", 10);
+    const ok = await consumeCoupon(tx, "coupon_x", "order_1", "user:mdz", money(10));
     expect(ok).toBe(false);
   });
 
   it("refuses when the atomic usage-cap update loses the race (updateMany affects 0 rows)", async () => {
     const tx = fakeTx({ updateManyCount: 0 });
-    const ok = await consumeCoupon(tx, "coupon_pizza20", "order_1", "user:mdz", 80);
+    const ok = await consumeCoupon(tx, "coupon_pizza20", "order_1", "user:mdz", money(80));
     expect(ok).toBe(false);
     expect(tx.couponRedemption.create).not.toHaveBeenCalled();
   });
