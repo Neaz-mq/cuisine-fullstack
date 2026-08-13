@@ -12,22 +12,30 @@
  * tests) never need a database connection. The Prisma-touching fetch
  * lives in the admin insights page itself, mirroring how
  * checkout-validation.test.ts and loyalty-tiers.test.ts keep the
- * arithmetic testable in isolation from the DB. lib/money.ts is the one
- * import, and it is itself pure.
+ * arithmetic testable in isolation from the DB.
+ *
+ * ⚠️ "Pure" here specifically excludes lib/money.ts, which reaches the
+ * generated Prisma client and therefore `node:module`. Any client
+ * component that imported this file would then break `next build` with
+ * "the chunking context does not support external modules" — the same
+ * trap documented at the top of loyalty-tiers.ts.
+ *
+ * Nothing here is a customer-facing invoice figure: it is management
+ * reporting, so plain numbers are fine. Callers convert their Decimal
+ * columns with .toNumber() at the boundary.
  */
-import { type Money, toMoney, ZERO, sum } from "@/lib/money";
 
 export interface RecipeLine {
   /** Quantity of the ingredient consumed per ONE unit of the menu item sold.
    *  এখনো Float — পরিমাণ, টাকা নয়। migration-এর মন্তব্য দ্রষ্টব্য। */
   quantityRequired: number;
   /** InventoryItem.costPerUnit — latest known cost per unit of that ingredient. */
-  costPerUnit: Money | number;
+  costPerUnit: number;
 }
 
 export interface FoodCostResult {
   /** Total ingredient cost to make ONE unit of the menu item. */
-  foodCost: Money;
+  foodCost: number;
   /**
    * Food cost as a percentage of the selling price. Null when the price
    * is 0 (division by zero has no meaningful percentage) — callers should
@@ -35,7 +43,7 @@ export interface FoodCostResult {
    */
   foodCostPercent: number | null;
   /** Selling price minus food cost — the gross profit on ONE unit sold. */
-  grossMargin: Money;
+  grossMargin: number;
   /**
    * True when the item has no recipe configured (ingredients array was
    * empty) — distinct from a recipe that legitimately costs $0, so the UI
@@ -52,27 +60,18 @@ export interface FoodCostResult {
  * that wants to sort/compare percentages isn't working off pre-rounded
  * values.
  */
-export function calculateFoodCost(
-  recipe: RecipeLine[],
-  price: Money | number
-): FoodCostResult {
+export function calculateFoodCost(recipe: RecipeLine[], price: number): FoodCostResult {
   const hasRecipe = recipe.length > 0;
-  const sellingPrice = toMoney(price);
 
-  // ইচ্ছাকৃতভাবে round করা হয় না। এটা রিপোর্টিং — বিক্রির চালান নয় —
-  // আর ৫০০টা পদের উপর যোগ করার আগে প্রতিটাকে দুই দশমিকে কেটে ফেললে
-  // মোট food cost বাস্তব থেকে সরে যেতো। UI যেখানে দেখাবে সেখানেই
-  // formatMoney() দিয়ে round করবে।
-  const foodCost = sum(...recipe.map((l) => toMoney(l.costPerUnit).times(l.quantityRequired)));
-
-  const foodCostPercent = sellingPrice.greaterThan(ZERO)
-    ? foodCost.dividedBy(sellingPrice).times(100).toNumber()
-    : null;
+  // ইচ্ছাকৃতভাবে round করা হয় না। ৫০০টা পদের উপর যোগ করার আগে প্রতিটাকে
+  // দুই দশমিকে কেটে ফেললে মোট food cost বাস্তব থেকে সরে যেতো। UI
+  // যেখানে দেখাবে সেখানেই toFixed() দিয়ে round করবে।
+  const foodCost = recipe.reduce((total, line) => total + line.quantityRequired * line.costPerUnit, 0);
 
   return {
     foodCost,
-    foodCostPercent,
-    grossMargin: sellingPrice.minus(foodCost),
+    foodCostPercent: price > 0 ? (foodCost / price) * 100 : null,
+    grossMargin: price - foodCost,
     hasRecipe,
   };
 }

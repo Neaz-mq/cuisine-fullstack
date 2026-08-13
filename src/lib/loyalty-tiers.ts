@@ -16,11 +16,21 @@
  *   - Thresholds can be tuned here in one place without a data migration
  *     to backfill existing users.
  *
- * Pure functions only — no Prisma import here — so this file (and its
- * tests) never need a database connection. lib/money.ts is the one
- * exception, and it is itself pure (a Decimal wrapper, no DB).
+ * ⚠️ Pure functions only — NO import that reaches Prisma, directly or
+ * transitively. This is not a style preference; it is a build
+ * requirement.
+ *
+ * LoyaltyAdjustRow.tsx is a client component and imports this file. The
+ * generated Prisma client pulls in `node:module`, which cannot exist in a
+ * browser bundle — so the moment this file imports anything that reaches
+ * Prisma (lib/money.ts does), `next build` dies with "the chunking
+ * context does not support external modules". tsc and vitest both stay
+ * green, so the only place it surfaces is the production build.
+ *
+ * That is exactly what happened during the money-model migration, and it
+ * is why calcTierDiscountAmount below returns a plain number rather than
+ * a Decimal.
  */
-import { type Money, toMoney, ZERO, minMoney, applyRate } from "@/lib/money";
 
 export type LoyaltyTierId = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
 
@@ -167,26 +177,25 @@ export function calculatePointsEarned(basePoints: number, pointsBeforeOrder: num
 }
 
 /**
- * Automatic tier discount for a given order amount — no code needed,
- * unlike a Coupon. Applied by /api/orders and /api/checkout/create-session
- * against the subtotal AFTER any coupon discount (so a coupon and a tier
- * perk never double-discount the same dollar), and BEFORE gift card /
- * points redemption (those spend down what's left, they don't get
- * discounted further). Rounded to cents and never allowed to exceed the
- * amount it's discounting, same guard as calcDiscountAmount in
- * order-checkout-shared.ts.
+ * Tier discount as a plain number — for PREVIEW and display only.
+ *
+ * ⚠️ This is NOT what the checkout routes use. They pass
+ * tier.discountPercent straight into calculateOrderPricing, which does
+ * the same arithmetic in Decimal and rounds it to the restaurant's
+ * currency. Two reasons that split exists:
+ *
+ *   1. This file cannot touch Decimal at all (see the header note) —
+ *      a client component imports it.
+ *   2. Only pricing.ts knows how many decimal places the currency has:
+ *      0 for yen, 3 for Kuwaiti dinar. Rounding here would invent
+ *      fractional yen.
+ *
+ * Float is acceptable for a preview figure the customer sees before
+ * checkout; the authoritative number is computed server-side in Decimal
+ * when the order is actually created. Never allowed to exceed the amount
+ * it's discounting, same guard as calcDiscountAmount.
  */
-export function calcTierDiscountAmount(
-  amountAfterCoupon: Money | number | string,
-  tier: LoyaltyTierDef
-): Money {
-  const base = toMoney(amountAfterCoupon);
-  if (base.lessThanOrEqualTo(ZERO) || tier.discountPercent <= 0) return ZERO;
-
-  // ইচ্ছাকৃতভাবে এখানে round করা হয় না — currency-র দশমিক সংখ্যা
-  // lib/pricing.ts জানে, এই file জানে না (ইয়েনে ০, দিনারে ৩)। এখানে ২
-  // দশমিকে round করলে জাপানে প্রতিটা tier discount-এ ভগ্নাংশ ইয়েন তৈরি
-  // হতো, যার অস্তিত্বই নেই।
-  const raw = applyRate(base, toMoney(tier.discountPercent).dividedBy(100));
-  return minMoney(raw, base);
+export function calcTierDiscountAmount(amountAfterCoupon: number, tier: LoyaltyTierDef): number {
+  if (amountAfterCoupon <= 0 || tier.discountPercent <= 0) return 0;
+  return Math.min(amountAfterCoupon * (tier.discountPercent / 100), amountAfterCoupon);
 }

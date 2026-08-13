@@ -17,7 +17,7 @@ import {
   redeemGiftCard,
   GiftCardInfo,
 } from "@/lib/gift-cards";
-import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
+import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { getPricingSettings } from "@/lib/get-settings";
 import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
@@ -103,16 +103,12 @@ export async function POST(request: Request) {
     }
 
     // দুই ধাপে দাম হিসাব — কেন, তার পূর্ণ ব্যাখ্যা /api/orders/route.ts-এ।
-    const itemsSubtotal = sum(...resolvedItems.map((i) => toMoney(i.price).times(i.quantity)));
 
     // Automatic loyalty-tier discount — see the identical logic (and its
     // full rationale) in /api/orders/route.ts.
-    const tierDiscountAmount = currentUser
-      ? calcTierDiscountAmount(
-          itemsSubtotal.minus(discountAmount),
-          getTierForPoints(currentUser.loyaltyPoints)
-        )
-      : ZERO;
+    const tierDiscountPercent = currentUser
+      ? getTierForPoints(currentUser.loyaltyPoints).discountPercent
+      : 0;
 
     // এই route সবসময় DELIVERY — dine-in কখনো Stripe-এ যায় না (উপরের doc
     // comment দ্রষ্টব্য), তাই delivery fee আর delivery-র কর হার প্রযোজ্য।
@@ -121,7 +117,7 @@ export async function POST(request: Request) {
         orderType: "DELIVERY",
         items: resolvedItems,
         couponDiscount: discountAmount,
-        tierDiscount: tierDiscountAmount,
+        tierDiscountPercent,
       },
       pricingSettings
     );
@@ -157,7 +153,7 @@ export async function POST(request: Request) {
         orderType: "DELIVERY",
         items: resolvedItems,
         couponDiscount: discountAmount,
-        tierDiscount: tierDiscountAmount,
+        tierDiscountPercent,
         giftCardRequested: giftCardAmount,
         pointsRedeemedRequested: pointsRedeemedAmount,
         tipAmount,

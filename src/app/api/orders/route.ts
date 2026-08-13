@@ -22,11 +22,11 @@ import {
   redeemGiftCard,
   GiftCardInfo,
 } from "@/lib/gift-cards";
-import { getTierForPoints, calcTierDiscountAmount } from "@/lib/loyalty-tiers";
+import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { getPricingSettings } from "@/lib/get-settings";
 import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
-import { ZERO, sum, toMoney, type Money } from "@/lib/money";
+import { ZERO, type Money } from "@/lib/money";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
 import { paginationSchema } from "@/lib/validations/common";
@@ -245,19 +245,15 @@ export async function POST(request: Request) {
     // above. Guests (no session) are always Bronze (0%), so this is a
     // no-op for guest checkout. Applied against what's left after the
     // coupon, so the two never double-discount the same dollar.
-    // Tier discount coupon-এর পরে অবশিষ্ট subtotal-এর উপর, তাই এখানে
-    // subtotal-টা একবার হাতে যোগ করতে হচ্ছে। calculateOrderPricing
-    // নিজেও এটাই করে — কিন্তু সে দুই ছাড়ই ইনপুট হিসেবে চায়, আর tier
-    // ছাড়ের অঙ্কটা coupon-পরবর্তী অঙ্কের উপর নির্ভরশীল। round করা হয় না;
-    // pricing শেষে currency অনুযায়ী একবারেই round করবে।
-    const itemsSubtotal = sum(...resolvedItems.map((i) => toMoney(i.price).times(i.quantity)));
-
-    const tierDiscountAmount = currentUser
-      ? calcTierDiscountAmount(
-          itemsSubtotal.minus(discountAmount),
-          getTierForPoints(currentUser.loyaltyPoints)
-        )
-      : ZERO;
+    // Automatic loyalty-tier discount — no code needed, unlike the coupon
+    // above. Guests (no session) are always Bronze (0%), so this is a
+    // no-op for guest checkout.
+    //
+    // অঙ্ক নয়, শতাংশটাই pricing-এ পাঠানো হয় — টাকার হিসাব একমাত্র
+    // calculateOrderPricing করে, Decimal-এ, currency জেনে।
+    const tierDiscountPercent = currentUser
+      ? getTierForPoints(currentUser.loyaltyPoints).discountPercent
+      : 0;
 
     // ── দুই ধাপে দাম হিসাব ───────────────────────────────────────────────
     //
@@ -275,7 +271,7 @@ export async function POST(request: Request) {
         orderType,
         items: resolvedItems,
         couponDiscount: discountAmount,
-        tierDiscount: tierDiscountAmount,
+        tierDiscountPercent,
       },
       pricingSettings
     );
@@ -322,7 +318,7 @@ export async function POST(request: Request) {
         orderType,
         items: resolvedItems,
         couponDiscount: discountAmount,
-        tierDiscount: tierDiscountAmount,
+        tierDiscountPercent,
         giftCardRequested: giftCardAmount,
         pointsRedeemedRequested: pointsRedeemedAmount,
         tipAmount: tipAmount,

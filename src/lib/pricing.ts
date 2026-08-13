@@ -29,7 +29,7 @@ import {
  *
  *     subtotal                    line item-এর যোগফল
  *   − couponDiscount
- *   − tierDiscount
+ *   − tierDiscount              (tierDiscountPercent × উপরের অবশিষ্ট)
  *   = discountedSubtotal          (কখনো ঋণাত্মক নয়)
  *   + serviceCharge               discountedSubtotal-এর %
  *   + deliveryFee
@@ -90,8 +90,18 @@ export interface PricingInput {
   /** যাচাই-করা coupon discount (lib/order-checkout-shared.ts থেকে)। */
   couponDiscount?: Money | number | string;
 
-  /** Loyalty tier discount (lib/loyalty-tiers.ts থেকে)। */
-  tierDiscount?: Money | number | string;
+  /**
+   * Loyalty tier-এর স্বয়ংক্রিয় ছাড়, শতাংশ হিসেবে (৩ = ৩%)।
+   *
+   * অঙ্ক নয়, শতাংশ নেওয়া হয় ইচ্ছাকৃতভাবে: lib/loyalty-tiers.ts একটা
+   * client component-ও import করে, তাই সে Decimal ছুঁতে পারে না (ওই
+   * file-এর header-এ কারণটা বিস্তারিত)। শতাংশটা নীতি, আর নীতি ওখানেই
+   * থাকে; টাকার হিসাব এখানে হয়, যেখানে currency জানা আছে।
+   *
+   * coupon বাদ দেওয়ার পরের subtotal-এর উপর প্রয়োগ হয়, যাতে coupon আর
+   * tier perk একই টাকার উপর দুবার ছাড় না দেয়।
+   */
+  tierDiscountPercent?: number;
 
   /**
    * customer যত gift card / point ভাঙাতে চেয়েছে। নিচে বিলের চেয়ে বেশি
@@ -168,9 +178,14 @@ export function calculateOrderPricing(
   // পুরোটা পায়, tier discount বাকিটুকু — নইলে দুটোর যোগফল বিলের চেয়ে
   // বড় হয়ে discountedSubtotal ঋণাত্মক করে দিতো।
   const couponDiscount = minMoney(round(toMoney(input.couponDiscount)), subtotal);
+
+  const afterCoupon = clampToZero(subtotal.minus(couponDiscount));
+
+  // শতাংশ থেকে অঙ্কটা এখানেই কষা হয়, Decimal-এ। loyalty-tiers.ts-এর
+  // number সংস্করণটা কেবল checkout-এর আগে গ্রাহককে আন্দাজ দেখানোর জন্য।
   const tierDiscount = minMoney(
-    round(toMoney(input.tierDiscount)),
-    subtotal.minus(couponDiscount)
+    round(applyRate(afterCoupon, toMoney(input.tierDiscountPercent ?? 0).dividedBy(100))),
+    afterCoupon
   );
 
   const discountedSubtotal = clampToZero(subtotal.minus(couponDiscount).minus(tierDiscount));

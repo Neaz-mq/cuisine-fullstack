@@ -307,15 +307,46 @@ describe("Gift card ও loyalty point", () => {
   });
 });
 
-describe("ছাড়ের সীমা", () => {
-  it("coupon আর tier ছাড় একসাথে subtotal ছাড়াতে পারে না", () => {
+describe("Tier discount", () => {
+  it("শতাংশটা coupon-পরবর্তী অবশিষ্টের উপর বসে, মূল subtotal-এর উপর নয়", () => {
     const r = calculateOrderPricing(
-      { orderType: "DINE_IN", items: [item(100)], couponDiscount: 80, tierDiscount: 50 },
+      // ১০০ টাকার order, ২০ টাকা coupon ছাড়, তারপর Gold-এর ৫%।
+      { orderType: "DINE_IN", items: [item(100)], couponDiscount: 20, tierDiscountPercent: 5 },
       BD
     );
 
-    expect(r.discountAmount.toFixed(2)).toBe("80.00");
-    expect(r.tierDiscountAmount.toFixed(2)).toBe("20.00"); // ৫০ নয়
+    // ৮০-এর ৫% = ৪, ১০০-এর ৫% = ৫ নয়। নইলে coupon আর tier perk একই
+    // টাকার উপর দুবার ছাড় দিত।
+    expect(r.tierDiscountAmount.toFixed(2)).toBe("4.00");
+    expect(r.taxAmount.toFixed(2)).toBe("3.80"); // (100 − 20 − 4) × 5%
+  });
+
+  it("currency অনুযায়ী round হয় — ইয়েনে ভগ্নাংশ তৈরি হয় না", () => {
+    // ৩৩৩৩ ইয়েনের ৩% = ৯৯.৯৯, যার অস্তিত্ব নেই। ১০০-তে round হওয়া চাই।
+    const r = calculateOrderPricing(
+      { orderType: "DINE_IN", items: [item(3333)], tierDiscountPercent: 3 },
+      JP
+    );
+
+    expect(r.tierDiscountAmount.toFixed(0)).toBe("100");
+    expect(r.tierDiscountAmount.decimalPlaces()).toBe(0);
+  });
+
+  it("শতাংশ না দিলে কোনো ছাড় নেই — guest checkout-এর স্বাভাবিক অবস্থা", () => {
+    const r = calculateOrderPricing({ orderType: "DINE_IN", items: [item(100)] }, BD);
+    expect(r.tierDiscountAmount.toFixed(2)).toBe("0.00");
+  });
+});
+
+describe("ছাড়ের সীমা", () => {
+  it("coupon পুরো subtotal খেয়ে ফেললে tier-এর জন্য কিছু বাকি থাকে না", () => {
+    const r = calculateOrderPricing(
+      { orderType: "DINE_IN", items: [item(100)], couponDiscount: 100, tierDiscountPercent: 8 },
+      BD
+    );
+
+    expect(r.discountAmount.toFixed(2)).toBe("100.00");
+    expect(r.tierDiscountAmount.toFixed(2)).toBe("0.00");
     expect(r.grandTotal.toFixed(2)).toBe("0.00");
   });
 

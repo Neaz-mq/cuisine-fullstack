@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calculateFoodCost, getFoodCostHealth } from "@/lib/menu-profitability";
 
-/**
- * foodCost আর grossMargin এখন Prisma Decimal, number নয় — money model
- * migration-এর অংশ। toBeCloseTo/toBe দুটোই number চায়, তাই assertion-এ
- * amount() দিয়ে নামানো হয়।
- */
-const amount = (d: { toNumber(): number }) => d.toNumber();
 
 describe("calculateFoodCost", () => {
   it("sums quantityRequired x costPerUnit across the recipe", () => {
@@ -20,7 +14,7 @@ describe("calculateFoodCost", () => {
       ],
       12.99
     );
-    expect(amount(result.foodCost)).toBeCloseTo(2.4, 2);
+    expect(result.foodCost).toBeCloseTo(2.4, 2);
     expect(result.hasRecipe).toBe(true);
   });
 
@@ -28,24 +22,24 @@ describe("calculateFoodCost", () => {
     // $4 food cost on a $10 item = 40%
     const result = calculateFoodCost([{ quantityRequired: 1, costPerUnit: 4 }], 10);
     expect(result.foodCostPercent).toBeCloseTo(40, 5);
-    expect(amount(result.grossMargin)).toBeCloseTo(6, 2);
+    expect(result.grossMargin).toBeCloseTo(6, 2);
   });
 
   it("marks hasRecipe false for an empty recipe, distinct from a $0 recipe", () => {
     const noRecipe = calculateFoodCost([], 10);
     expect(noRecipe.hasRecipe).toBe(false);
-    expect(amount(noRecipe.foodCost)).toBe(0);
+    expect(noRecipe.foodCost).toBe(0);
 
     const zeroCostRecipe = calculateFoodCost([{ quantityRequired: 1, costPerUnit: 0 }], 10);
     expect(zeroCostRecipe.hasRecipe).toBe(true);
-    expect(amount(zeroCostRecipe.foodCost)).toBe(0);
+    expect(zeroCostRecipe.foodCost).toBe(0);
   });
 
   it("returns null foodCostPercent when price is 0, never divides by zero", () => {
     const result = calculateFoodCost([{ quantityRequired: 1, costPerUnit: 5 }], 0);
     expect(result.foodCostPercent).toBeNull();
     // Margin is still computable (price - foodCost), just the percent isn't.
-    expect(amount(result.grossMargin)).toBeCloseTo(-5, 2);
+    expect(result.grossMargin).toBeCloseTo(-5, 2);
   });
 
   /**
@@ -64,7 +58,7 @@ describe("calculateFoodCost", () => {
     );
 
     // 3 x 0.10333 = 0.30999, অবিকৃত।
-    expect(amount(result.foodCost)).toBe(0.30999);
+    expect(result.foodCost).toBeCloseTo(0.30999, 10);
 
     // দেখানোর সময় সেটা প্রত্যাশিত ০.৩১-এই দাঁড়ায়।
     expect(result.foodCost.toFixed(2)).toBe("0.31");
