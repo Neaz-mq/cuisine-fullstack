@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, ChefHat, Truck, PackageCheck, Circle, XCircle } from "lucide-react";
 import { formatOrderId } from "@/lib/format-order-id";
 import ChatPanel from "@/components/ChatPanel";
+import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
 
 // Leaflet touches `window` at import time, which breaks SSR — loaded
 // client-side only, same pattern as any other browser-only widget in a
@@ -20,7 +21,9 @@ const POLL_INTERVAL_MS = 15000; // same cadence as the admin Kitchen board
 type OrderItem = {
   id: string;
   quantity: number;
-  price: number;
+  /** Already formatted to this order's currency by the server — a string,
+   *  never a number, so the client can't accidentally re-round it. */
+  price: string;
   menuItem: { title: string };
 };
 
@@ -38,7 +41,34 @@ type TrackedOrder = {
   status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
   createdAt: string;
   updatedAt: string;
-  totalAmount: number;
+
+  // ── The invoice ─────────────────────────────────────────────────────
+  //
+  // Every figure is a SNAPSHOT taken when the order was placed, not a
+  // recomputation against today's settings. If the restaurant changes its
+  // VAT rate next month, this bill still shows what the customer actually
+  // paid — which is the whole reason an Order carries its own taxRate,
+  // taxName and currency.
+  //
+  // All strings, formatted server-side to this order's currency: 0 decimal
+  // places for yen, 3 for Kuwaiti dinar. Parsing them back into numbers
+  // would undo exactly that.
+  subtotal: string;
+  discountAmount: string;
+  tierDiscountAmount: string;
+  serviceCharge: string;
+  deliveryFee: string;
+  taxAmount: string;
+  taxName: string;
+  taxMode: "INCLUSIVE" | "EXCLUSIVE";
+  tipAmount: string;
+  grandTotal: string;
+  totalAmount: string;
+  currency: string;
+  giftCardAmount: string;
+  pointsRedeemed: number;
+  pointsRedeemedAmount: string;
+
   firstName: string;
   city: string | null;
   orderType: "DELIVERY" | "DINE_IN";
@@ -86,6 +116,10 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
 
   const isDineIn = order.orderType === "DINE_IN";
   const STEPS = stepsFor(order.orderType);
+
+  // Formatted against THIS order's currency, not the restaurant's current
+  // one — see the invoice note on TrackedOrder above.
+  const money = (value: string) => formatAmount(value, order.currency);
 
   if (order.status === "CANCELLED") {
     return (
@@ -215,11 +249,91 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
               <span>
                 {item.menuItem.title} <span className="text-gray-400">x{item.quantity}</span>
               </span>
-              <span>${(item.price * item.quantity).toFixed(2)}</span>
+              {/* Unit price × quantity was computed server-side; this is the
+                  line total, already in this order's currency. */}
+              <span>{money(item.price)}</span>
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between pt-3 border-t border-dashed border-gray-200">
+
+        {/* ── The bill ──────────────────────────────────────────────────
+            Zero lines are hidden rather than shown as "0.00", so a plain
+            order stays a short receipt. Tax is the exception worth being
+            loud about: in the EU showing it separately is a legal
+            requirement, not a nicety. */}
+        <div className="space-y-1.5 pt-3 border-t border-dashed border-gray-200 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>Subtotal</span>
+            <span>{money(order.subtotal)}</span>
+          </div>
+
+          {isPositiveAmount(order.discountAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Discount</span>
+              <span className="text-[#2C6252]">-{money(order.discountAmount)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.tierDiscountAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Tier discount</span>
+              <span className="text-[#2C6252]">-{money(order.tierDiscountAmount)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.serviceCharge) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Service charge</span>
+              <span>{money(order.serviceCharge)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.deliveryFee) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Delivery</span>
+              <span>{money(order.deliveryFee)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.taxAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>
+                {order.taxName}
+                {/* INCLUSIVE: the tax sits inside the prices above, so the
+                    total does NOT go up. Saying so is the difference
+                    between an EU-style bill and a customer who thinks
+                    they've been charged twice. */}
+                {order.taxMode === "INCLUSIVE" && (
+                  <span className="text-gray-400"> (included)</span>
+                )}
+              </span>
+              <span>{money(order.taxAmount)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.giftCardAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Gift card</span>
+              <span className="text-[#2C6252]">-{money(order.giftCardAmount)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.pointsRedeemedAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Points redeemed ({order.pointsRedeemed} pts)</span>
+              <span className="text-[#2C6252]">-{money(order.pointsRedeemedAmount)}</span>
+            </div>
+          )}
+
+          {isPositiveAmount(order.tipAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Tip</span>
+              <span>{money(order.tipAmount)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between pt-3 mt-3 border-t border-dashed border-gray-200">
           <span className="text-sm text-gray-500">
             {isDineIn
               ? `Table ${order.table?.label ?? "—"}`
@@ -231,7 +345,7 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
                     : "Food Panda"
                 } \u00b7 ${order.city ?? ""}`}
           </span>
-          <span className="font-bold text-[#2C6252]">USD ${order.totalAmount.toFixed(2)}</span>
+          <span className="font-bold text-[#2C6252]">{money(order.totalAmount)}</span>
         </div>
       </div>
 

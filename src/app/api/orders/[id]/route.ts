@@ -7,6 +7,7 @@ import { markOrderDelivered } from "@/lib/mark-order-delivered";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { cancelOrder } from "@/lib/cancel-order";
 import { transitionError } from "@/lib/order-state-machine";
+import { minorUnitsFor } from "@/lib/currency-format";
 
 // Public, unauthenticated lookup for the /track/[orderId] page. Guest
 // checkout customers have no account to log into, so tracking has to work
@@ -38,6 +39,25 @@ export async function GET(
       city: true,
       orderType: true,
       shippingMethod: true,
+
+      // পূর্ণ চালান — /track পাতা প্রতি ১৫ সেকেন্ডে এটা poll করে, তাই
+      // এখানকার আকৃতি server-render করা প্রথম আকৃতির সাথে হুবহু মিলতে
+      // হবে; নইলে প্রথম poll-এর পরেই বিলের লাইনগুলো উধাও হয়ে যেতো।
+      subtotal: true,
+      discountAmount: true,
+      tierDiscountAmount: true,
+      serviceCharge: true,
+      deliveryFee: true,
+      taxAmount: true,
+      taxName: true,
+      taxMode: true,
+      tipAmount: true,
+      grandTotal: true,
+      currency: true,
+      giftCardAmount: true,
+      pointsRedeemed: true,
+      pointsRedeemedAmount: true,
+
       table: { select: { label: true } },
       items: {
         select: {
@@ -71,10 +91,29 @@ export async function GET(
   // JSON.stringify Decimal-কে string বানায় ("1050"), ফলে প্রথম render
   // ঠিক দেখাত (server থেকে সরাসরি এসেছে) কিন্তু প্রথম poll-এর পরেই
   // totalAmount.toFixed(2) crash করত — খুঁজে বের করা কঠিন একটা বাগ।
+  // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয়।
+  const units = minorUnitsFor(order.currency);
+  const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
+
   return NextResponse.json({
     ...order,
-    totalAmount: order.totalAmount.toNumber(),
-    items: order.items.map((item) => ({ ...item, price: item.price.toNumber() })),
+    subtotal: money(order.subtotal),
+    discountAmount: money(order.discountAmount),
+    tierDiscountAmount: money(order.tierDiscountAmount),
+    serviceCharge: money(order.serviceCharge),
+    deliveryFee: money(order.deliveryFee),
+    taxAmount: money(order.taxAmount),
+    tipAmount: money(order.tipAmount),
+    grandTotal: money(order.grandTotal),
+    totalAmount: money(order.totalAmount),
+    giftCardAmount: money(order.giftCardAmount),
+    pointsRedeemedAmount: money(order.pointsRedeemedAmount),
+    // লাইন-মোট, একক দাম নয় — /track পাতার server-render করা আকৃতির সাথে
+    // হুবহু মিলতে হবে, নইলে প্রথম poll-এর পরেই অঙ্কগুলো বদলে যেতো।
+    items: order.items.map((item) => ({
+      ...item,
+      price: money(item.price.times(item.quantity)),
+    })),
   });
 }
 

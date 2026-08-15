@@ -449,7 +449,22 @@ export async function POST(request: Request) {
           city: order.city as string,
           state: order.state as string,
           zip: order.zip as string,
+
+          // পুরো চালান — order row থেকে সরাসরি, কিছুই পুনর্গণনা নয়।
+          subtotal: order.subtotal,
+          discountAmount: order.discountAmount,
+          tierDiscountAmount: order.tierDiscountAmount,
+          serviceCharge: order.serviceCharge,
+          deliveryFee: order.deliveryFee,
+          taxAmount: order.taxAmount,
+          taxName: order.taxName,
+          taxMode: order.taxMode,
+          giftCardAmount: order.giftCardAmount,
+          pointsRedeemedAmount: order.pointsRedeemedAmount,
+          tipAmount: order.tipAmount,
           totalAmount: order.totalAmount,
+          currency: order.currency,
+
           shippingMethod: order.shippingMethod as string,
           paymentMethod: order.paymentMethod,
           items: order.items,

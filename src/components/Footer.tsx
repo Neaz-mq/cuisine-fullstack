@@ -154,9 +154,15 @@ const Footer = () => {
               </span>
             </div>
             <div className="flex items-center gap-4" aria-label="Language and social media links">
+              {/* ⚠️ A hardcoded "USD" used to sit here, which became wrong
+                  the moment the restaurant's currency was made configurable —
+                  it said USD while every price on the page said BDT.
+
+                  Removed rather than wired up: the currency already appears
+                  on every amount, and reading it here would mean a settings
+                  lookup on every page render, turning the statically
+                  prerendered marketing pages dynamic for no real gain. */}
               <span>English</span>
-              <span aria-hidden="true">|</span>
-              <span>USD</span>
               <a href="#" aria-label="Facebook" className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white">
                 <FaFacebookF />
               </a>
