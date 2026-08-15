@@ -127,12 +127,19 @@ export async function redeemLoyaltyPoints(
     data: {
       points: -points,
       reason: "POINTS_REDEEMED",
-      // ⚠️ মুদ্রা চিহ্ন ইচ্ছাকৃতভাবে বাদ। এই note ledger-এ চিরকাল থেকে
-      // যায়, অথচ restaurant-এর currency settings-এ বদলাতে পারে — "$"
-      // hardcode করলে ইউরোপের রেস্তোরাঁর ledger-এ ডলার লেখা থাকতো।
-      // পরিমাণটা Order row-তে pointsRedeemedAmount হিসেবে currency-সহ
-      // সংরক্ষিত; এটা কেবল মানুষের পড়ার জন্য।
-      note: `Redeemed ${points} points off order`,
+      // ⚠️ মুদ্রা চিহ্ন ইচ্ছাকৃতভাবে বাদ, কিন্তু অঙ্কটা রাখা হয়েছে।
+      //
+      // "$" hardcode করলে ইউরোপ বা জাপানের রেস্তোরাঁর ledger-এ চিরকাল
+      // ডলার লেখা থেকে যেতো — মুদ্রা কোনটা, সেটা Order row-তে currency
+      // হিসেবে আছে, এখানে নয়।
+      //
+      // অঙ্কটা বাদ না দেওয়ার কারণ: POINTS_TO_DOLLAR_RATE ভবিষ্যতে
+      // বদলাতে পারে, আর তখন "Redeemed 100 points" থেকে ওই দিন ১০০
+      // point-এর দাম কত ছিল তা আর বের করা যেতো না। ledger append-only,
+      // তাই প্রতিটা সারি নিজেই সম্পূর্ণ হওয়া উচিত।
+      //
+      // toString(), toFixed(2) নয় — ইয়েনে দশমিক নেই, দিনারে তিনটে।
+      note: `Redeemed ${points} points (${amount.toString()} off)`,
       userId,
       orderId,
     },
