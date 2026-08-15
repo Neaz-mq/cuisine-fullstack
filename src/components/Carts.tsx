@@ -324,10 +324,17 @@ const Carts = () => {
   // decision is ever made from it.
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-  const currency = quote?.currency ?? settings?.currency ?? "";
+  // An empty cart has nothing to price, so that case is DERIVED here at
+  // render time rather than pushed into state by an effect calling
+  // setQuote(null) — exactly the same reasoning (and the same lint rule,
+  // react-hooks/set-state-in-effect) as visiblePairSuggestions above.
+  // The stale quote simply isn't read once the cart is empty.
+  const bill = cartItems.length === 0 ? null : quote;
+
+  const currency = bill?.currency ?? settings?.currency ?? "";
   const money = (value: string) => `${currency} ${value}`;
 
-  const cappedRedeemedPoints = quote?.pointsRedeemed ?? 0;
+  const cappedRedeemedPoints = bill?.pointsRedeemed ?? 0;
   const maxAffordablePoints = loyaltyInfo
     ? Math.floor(Math.max(subtotal, 0) / loyaltyInfo.redemption.rate)
     : 0;
@@ -355,10 +362,9 @@ const Carts = () => {
    * drift apart, because they are the same code.
    */
   useEffect(() => {
-    if (cartItems.length === 0) {
-      setQuote(null);
-      return;
-    }
+    // Nothing to price for an empty cart, and deliberately no setQuote(null)
+    // here — see the `bill` derivation above for why.
+    if (cartItems.length === 0) return;
 
     let cancelled = false;
 
@@ -1427,8 +1433,8 @@ const Carts = () => {
                 <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
                     Gift card &quot;{appliedGiftCard.code}&quot; applied
-                    {quote && isPositive(quote.giftCardAmount) &&
-                      ` — ${money(quote.giftCardAmount)} off`}
+                    {bill && isPositive(bill.giftCardAmount) &&
+                      ` — ${money(bill.giftCardAmount)} off`}
                   </span>
                   <button
                     onClick={removeGiftCard}
@@ -1451,9 +1457,9 @@ const Carts = () => {
                     <span className="text-sm font-medium text-gray-800">
                       Use your points ({loyaltyInfo.points} available)
                     </span>
-                    {quote && isPositive(quote.pointsRedeemedAmount) && (
+                    {bill && isPositive(bill.pointsRedeemedAmount) && (
                       <span className="text-xs font-semibold text-[#2C6252]">
-                        -{money(quote.pointsRedeemedAmount)}
+                        -{money(bill.pointsRedeemedAmount)}
                       </span>
                     )}
                   </div>
@@ -1470,8 +1476,8 @@ const Carts = () => {
                     <span>0 pts</span>
                     <span>
                       {cappedRedeemedPoints} pts
-                      {quote && isPositive(quote.pointsRedeemedAmount)
-                        ? ` = ${money(quote.pointsRedeemedAmount)} off`
+                      {bill && isPositive(bill.pointsRedeemedAmount)
+                        ? ` = ${money(bill.pointsRedeemedAmount)} off`
                         : ""}
                     </span>
                     <span>{Math.min(loyaltyInfo.points, maxAffordablePoints)} pts</span>
@@ -1522,9 +1528,9 @@ const Carts = () => {
                 <div className="mb-4 border border-gray-200 rounded px-4 py-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-800">Add a tip</span>
-                    {quote && isPositive(quote.tipAmount) && (
+                    {bill && isPositive(bill.tipAmount) && (
                       <span className="text-xs font-semibold text-[#2C6252]">
-                        {money(quote.tipAmount)}
+                        {money(bill.tipAmount)}
                       </span>
                     )}
                   </div>
@@ -1588,7 +1594,7 @@ const Carts = () => {
             </div>
             <div className="space-y-10 bg-white p-6">
               {/*
-                Every figure below comes from /api/checkout/quote — the same
+                Every figure below comes from /api/checkout/bill — the same
                 code that prices the order when it is actually created.
                 Nothing here is computed in the browser, so what the customer
                 reads is what the card is charged.
@@ -1596,73 +1602,73 @@ const Carts = () => {
               <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-gray-700 space-y-5">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>{quote ? money(quote.subtotal) : `${currency} ${subtotal.toFixed(2)}`}</span>
+                  <span>{bill ? money(bill.subtotal) : `${currency} ${subtotal.toFixed(2)}`}</span>
                 </div>
 
-                {quote && isPositive(quote.discountAmount) && (
+                {bill && isPositive(bill.discountAmount) && (
                   <div className="flex justify-between">
                     <span>Discount</span>
-                    <span className="text-[#2C6252]">-{money(quote.discountAmount)}</span>
+                    <span className="text-[#2C6252]">-{money(bill.discountAmount)}</span>
                   </div>
                 )}
 
-                {quote && isPositive(quote.tierDiscountAmount) && (
+                {bill && isPositive(bill.tierDiscountAmount) && (
                   <div className="flex justify-between">
                     <span>{loyaltyInfo?.tier.label} tier discount</span>
-                    <span className="text-[#2C6252]">-{money(quote.tierDiscountAmount)}</span>
+                    <span className="text-[#2C6252]">-{money(bill.tierDiscountAmount)}</span>
                   </div>
                 )}
 
-                {quote && isPositive(quote.serviceCharge) && (
+                {bill && isPositive(bill.serviceCharge) && (
                   <div className="flex justify-between">
                     <span>Service charge</span>
-                    <span>{money(quote.serviceCharge)}</span>
+                    <span>{money(bill.serviceCharge)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between">
                   <span>{isDineIn ? "Table service" : "Delivery charges"}</span>
-                  {quote && isPositive(quote.deliveryFee) ? (
-                    <span>{money(quote.deliveryFee)}</span>
+                  {bill && isPositive(bill.deliveryFee) ? (
+                    <span>{money(bill.deliveryFee)}</span>
                   ) : (
                     <span className="text-[#2C6252]">Free</span>
                   )}
                 </div>
 
-                {quote && isPositive(quote.taxAmount) && (
+                {bill && isPositive(bill.taxAmount) && (
                   <div className="flex justify-between">
                     <span>
-                      {quote.taxName}
+                      {bill.taxName}
                       {/* INCLUSIVE mode: the tax is already inside the prices
                           above, so the total does NOT go up. Saying so out
                           loud is the difference between an EU-style bill and
                           a customer thinking they have been charged twice. */}
-                      {quote.taxMode === "INCLUSIVE" && (
+                      {bill.taxMode === "INCLUSIVE" && (
                         <span className="text-gray-400"> (included)</span>
                       )}
                     </span>
-                    <span>{money(quote.taxAmount)}</span>
+                    <span>{money(bill.taxAmount)}</span>
                   </div>
                 )}
 
-                {quote && isPositive(quote.giftCardAmount) && (
+                {bill && isPositive(bill.giftCardAmount) && (
                   <div className="flex justify-between">
                     <span>Gift card</span>
-                    <span className="text-[#2C6252]">-{money(quote.giftCardAmount)}</span>
+                    <span className="text-[#2C6252]">-{money(bill.giftCardAmount)}</span>
                   </div>
                 )}
 
-                {quote && isPositive(quote.pointsRedeemedAmount) && (
+                {bill && isPositive(bill.pointsRedeemedAmount) && (
                   <div className="flex justify-between">
-                    <span>Points redeemed ({quote.pointsRedeemed} pts)</span>
-                    <span className="text-[#2C6252]">-{money(quote.pointsRedeemedAmount)}</span>
+                    <span>Points redeemed ({bill.pointsRedeemed} pts)</span>
+                    <span className="text-[#2C6252]">-{money(bill.pointsRedeemedAmount)}</span>
                   </div>
                 )}
 
-                {quote && isPositive(quote.tipAmount) && (
+                {bill && isPositive(bill.tipAmount) && (
                   <div className="flex justify-between">
                     <span>Tip</span>
-                    <span>{money(quote.tipAmount)}</span>
+                    <span>{money(bill.tipAmount)}</span>
                   </div>
                 )}
               </div>
@@ -1671,7 +1677,7 @@ const Carts = () => {
               <div className="flex justify-between 3xl:text-md 2xl:text-md xl:text-md lg:text-md md:text-md sm:text-xs font-bold pt-2">
                 <span>Total</span>
                 <span className="text-[#2C6252]">
-                  {quote ? money(quote.totalAmount) : `${currency} ${subtotal.toFixed(2)}`}
+                  {bill ? money(bill.totalAmount) : `${currency} ${subtotal.toFixed(2)}`}
                 </span>
               </div>
             </div>
