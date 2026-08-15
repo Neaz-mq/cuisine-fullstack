@@ -5,6 +5,7 @@ import Container from "@/components/Container";
 import { redirect } from "next/navigation";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderAgainButton from "./OrderAgainButton";
+import { formatAmount, minorUnitsFor, isPositiveAmount } from "@/lib/currency-format";
 
 /**
  * src/app/(main)/account/orders/page.tsx
@@ -89,7 +90,15 @@ export default async function MyOrdersPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {orders.map((order) => (
+            {orders.map((order) => {
+              // Each order carries its own currency, so a list can legitimately
+              // mix them — an old order placed in another currency must not be
+              // relabelled with today's.
+              const units = minorUnitsFor(order.currency);
+              const money = (value: { toFixed(dp: number): string }) =>
+                formatAmount(value.toFixed(units), order.currency);
+
+              return (
               <div
                 key={order.id}
                 className="border border-gray-200 rounded-md p-5"
@@ -155,7 +164,7 @@ export default async function MyOrdersPage() {
                         {item.menuItem.title}{" "}
                         <span className="text-gray-400">x{item.quantity}</span>
                       </span>
-                      <span>${item.price.times(item.quantity).toFixed(2)}</span>
+                      <span>{money(item.price.times(item.quantity))}</span>
                     </div>
                   ))}
                 </div>
@@ -170,12 +179,24 @@ export default async function MyOrdersPage() {
                         : "Cash on Delivery"
                       : "Online Payment"}
                   </span>
-                  <span className="font-bold text-[#2C6252]">
-                    USD ${order.totalAmount.toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span className="font-bold text-[#2C6252]">
+                      {money(order.totalAmount)}
+                    </span>
+                    {/* One quiet line rather than the full breakdown — this is
+                        a list, and the tracking page already itemises it. Tax
+                        is called out because an EU customer needs to see it
+                        somewhere on the record. */}
+                    {isPositiveAmount(order.taxAmount.toFixed(units)) && (
+                      <p className="text-xs text-gray-400">
+                        incl. {money(order.taxAmount)} {order.taxName}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

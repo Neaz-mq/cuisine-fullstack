@@ -2,6 +2,7 @@ import { getResendClient, EMAIL_FROM } from "@/lib/resend";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { type Money, toMoney } from "@/lib/money";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 const SHIPPING_LABELS: Record<string, string> = {
   UBER_EATS: "Uber Eats",
@@ -28,13 +29,23 @@ interface OrderForEmail {
   city: string | null;
   state: string | null;
   zip: string | null;
-  // Money | number দুটোই নেওয়া হয়: Prisma এখন Decimal দেয়, কিন্তু test
-  // আর পুরোনো call site সাধারণ number পাঠায়।
-  //
-  // ⚠️ অস্থায়ী। এই email-এ এখনো শুধু একটাই মোট অঙ্ক যায় — কর, service
-  // charge, delivery fee আর বকশিশের আলাদা লাইন নেই, যদিও Order row-তে
-  // চারটেই আছে। পূর্ণ চালান template Stage 3-এ।
+  // পূর্ণ চালান — Order row-তে যা snapshot করা আছে, হুবহু তাই। আজকের
+  // settings থেকে কিছু পুনর্গণনা করা হয় না: email একবার পাঠানো হলে আর
+  // সংশোধন করা যায় না, আর গ্রাহক এটাই হিসাবরক্ষককে ফরোয়ার্ড করেন।
+  subtotal: Money | number;
+  discountAmount: Money | number;
+  tierDiscountAmount: Money | number;
+  serviceCharge: Money | number;
+  deliveryFee: Money | number;
+  taxAmount: Money | number;
+  taxName: string;
+  taxMode: string;
+  giftCardAmount: Money | number;
+  pointsRedeemedAmount: Money | number;
+  tipAmount: Money | number;
   totalAmount: Money | number;
+  currency: string;
+
   shippingMethod: string | null;
   paymentMethod: string;
   items: { quantity: number; price: Money | number; menuItem: { title: string } }[];
@@ -57,6 +68,12 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    // এই order-এর নিজের currency অনুযায়ী, আজকের settings অনুযায়ী নয় —
+    // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে পাঠানো ভুল হতো।
+    const units = minorUnitsFor(order.currency);
+    const money = (value: Money) => formatAmount(value.toFixed(units), order.currency);
+    const optionalMoney = (value: Money) => (value.greaterThan(0) ? money(value) : null);
+
     await getResendClient().emails.send({
       from: EMAIL_FROM,
       to: order.email,
@@ -67,11 +84,27 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
         items: order.items.map((i) => ({
           title: i.menuItem.title,
           quantity: i.quantity,
-          // React email template এখনো number নেয় — display-only, তাই
-          // এখানে রূপান্তর নিরাপদ। হিসাব কোনোটাই এই মান দিয়ে হয় না।
-          price: toMoney(i.price).toNumber(),
+          lineTotal: money(toMoney(i.price).times(i.quantity)),
         })),
-        totalAmount: toMoney(order.totalAmount).toNumber(),
+
+        subtotal: money(toMoney(order.subtotal)),
+
+        // ছাড়/gift card/point/tip শূন্য হলে null — template তখন লাইনটাই
+        // আঁকে না, ফলে সাধারণ একটা অর্ডারের রসিদ ছোটই থাকে।
+        discountAmount: optionalMoney(
+          toMoney(order.discountAmount).plus(toMoney(order.tierDiscountAmount))
+        ),
+        serviceCharge: optionalMoney(toMoney(order.serviceCharge)),
+        deliveryFee: optionalMoney(toMoney(order.deliveryFee)),
+        taxAmount: optionalMoney(toMoney(order.taxAmount)),
+        taxName: order.taxName,
+        taxIncluded: order.taxMode === "INCLUSIVE",
+        giftCardAmount: optionalMoney(toMoney(order.giftCardAmount)),
+        pointsRedeemedAmount: optionalMoney(toMoney(order.pointsRedeemedAmount)),
+        tipAmount: optionalMoney(toMoney(order.tipAmount)),
+
+        totalAmount: money(toMoney(order.totalAmount)),
+
         address: order.address ?? "",
         city: order.city ?? "",
         state: order.state ?? "",
