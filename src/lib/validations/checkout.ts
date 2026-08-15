@@ -74,6 +74,25 @@ const baseOrderFields = {
   tipPercent: z.number().min(0).max(100).optional(),
 };
 
+/**
+ * POST /api/checkout/quote — read-only, prices the live cart.
+ *
+ * billing নেই, ইচ্ছাকৃতভাবে: গ্রাহক এখনো ঠিকানা টাইপ করছেন, অথচ বিলটা
+ * তার আগেই দেখাতে হবে। শুধু phone নেওয়া হয় (ঐচ্ছিক), কারণ per-customer
+ * coupon limit ওটার উপর নির্ভর করে — নইলে quote-এ ছাড় দেখিয়ে order-এ
+ * গিয়ে "already used" বলা হতো।
+ */
+export const quoteSchema = z.object({
+  items: z.array(incomingItemSchema).min(1, "Cart is empty"),
+  orderType: z.enum(ORDER_TYPES).default("DELIVERY"),
+  phone: z.string().trim().optional(),
+  couponCode: z.string().trim().optional(),
+  giftCardCode: z.string().trim().optional(),
+  redeemPoints: z.number().int().nonnegative().optional(),
+  tipAmount: z.number().nonnegative().optional(),
+  tipPercent: z.number().min(0).max(100).optional(),
+});
+
 /** POST /api/checkout/create-session — online/Stripe, DELIVERY-only, so
  * shippingMethod is always required here (unlike the shared order schema
  * below, where it's only required when orderType ends up DELIVERY). */

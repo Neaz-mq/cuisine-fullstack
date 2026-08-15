@@ -24,6 +24,52 @@ type KitchenEtaResponse = {
   };
 };
 
+/**
+ * The bill, as computed by /api/checkout/quote.
+ *
+ * ⚠️ Every money field is a STRING, not a number, and that is deliberate.
+ * The server holds these as Prisma Decimal and serialises them with the
+ * right number of decimal places for the restaurant's currency — 0 for
+ * yen, 3 for Kuwaiti dinar. Parsing them back into JS numbers here would
+ * throw that away and reintroduce exactly the float drift the money model
+ * migration removed. These are display values: render them, never compute
+ * with them.
+ *
+ * ⚠️ And do NOT import @/lib/pricing or @/lib/money here to "just do the
+ * maths locally". Both reach the generated Prisma client, which pulls in
+ * `node:module`, which cannot exist in a browser bundle — the production
+ * build dies with "the chunking context does not support external
+ * modules". This project has already hit that once.
+ */
+type Quote = {
+  currency: string;
+  currencyMinorUnits: number;
+  taxName: string;
+  taxMode: "INCLUSIVE" | "EXCLUSIVE";
+  tipEnabled: boolean;
+  subtotal: string;
+  discountAmount: string;
+  tierDiscountAmount: string;
+  serviceCharge: string;
+  deliveryFee: string;
+  taxAmount: string;
+  grandTotal: string;
+  giftCardAmount: string;
+  pointsRedeemedAmount: string;
+  pointsRedeemed: number;
+  tipAmount: string;
+  totalAmount: string;
+  appliedCouponCode: string | null;
+  appliedGiftCardCode: string | null;
+  giftCardBalance: string | null;
+};
+
+type PublicSettings = {
+  currency: string;
+  tipEnabled: boolean;
+  tipPresetPercents: number[];
+};
+
 interface BillingFormData {
   email: string;
   firstName: string;
@@ -50,6 +96,9 @@ const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA" | "OWN_DELI
 // src/lib/order-checkout-shared.ts (validateBilling) so a direct API call
 // can't bypass this by skipping the UI.
 const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
+
+/** A money string is "nothing" if it parses to zero — "0", "0.00", "0.000". */
+const isPositive = (value: string | null | undefined) => !!value && parseFloat(value) > 0;
 
 const Carts = () => {
   const router = useRouter();
@@ -201,31 +250,19 @@ const Carts = () => {
     type: "PERCENT" | "FIXED";
     percentOff: number | null;
     fixedOff: number | null;
-    // Snapshot of the eligible-lines subtotal at the moment "Apply" was
-    // clicked — for an item/category-restricted coupon this may be less
-    // than the full cart subtotal. Frozen at apply-time rather than
-    // recomputed live (the cart here doesn't carry each item's
-    // categoryId, so the client can't re-derive eligibility on its own);
-    // the server re-validates and recomputes authoritatively at order
-    // creation regardless, same as the pre-existing display-only caveat
-    // below.
-    eligibleSubtotal: number;
+    // ⚠️ No eligibleSubtotal snapshot any more. What a coupon is worth
+    // against this bill is decided server-side and arrives in the quote —
+    // the client can't work it out, because it doesn't know the tax,
+    // service charge or delivery fee sitting around it.
   } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
 
   // Gift card — separate from the coupon above (both can be applied to
-  // the same order, coupon discount first then gift card against what's
-  // left, see the total calculation below). amountToApply is a snapshot
-  // of what the server said it would deduct at the moment "Apply" was
-  // clicked — recomputed against the live subtotal/discount below rather
-  // than trusted verbatim as the cart changes, same reasoning as the
-  // coupon's eligibleSubtotal snapshot above. The server re-validates and
-  // re-debits authoritatively at order creation regardless.
-  const [appliedGiftCard, setAppliedGiftCard] = useState<{
-    code: string;
-    balance: number;
-  } | null>(null);
+  // the same order). Only the CODE lives here; how much of it comes off
+  // this bill is decided server-side and arrives in the quote, because it
+  // depends on a grand total this component no longer computes.
+  const [appliedGiftCard, setAppliedGiftCard] = useState<{ code: string } | null>(null);
   const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
 
   // Loyalty points redemption — fetched from the customer's OWN account
@@ -233,9 +270,8 @@ const Carts = () => {
   // /api/loyalty/me. null while loading or for a guest/logged-out
   // customer, in which case the whole redemption UI below stays hidden —
   // there's no account to hold a balance on. `redeemedPoints` is how
-  // many the customer has asked to apply; the dollar amount is always
-  // recomputed from it below (never stored separately), same "derive,
-  // don't duplicate" reasoning as discountAmount/giftCardAmountApplied.
+  // many the customer has asked to apply; how many are actually accepted,
+  // and what they are worth, comes back in the quote.
   const [loyaltyInfo, setLoyaltyInfo] = useState<{
     points: number;
     tier: { id: string; label: string; discountPercent: number };
@@ -261,61 +297,131 @@ const Carts = () => {
     };
   }, [session?.user]);
 
+  // Tipping — a preset percentage OR a custom amount, never both. Picking
+  // one clears the other, so there is never an ambiguous state where the
+  // customer can't tell what they are actually tipping.
+  const [tipPercent, setTipPercent] = useState<number | null>(null);
+  const [customTip, setCustomTip] = useState("");
+
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setSettings(data))
+      .catch(() => {
+        // Nothing breaks — the tip buttons just don't render.
+      });
+  }, []);
+
   const [errors, setErrors] = useState<BillingErrors>({});
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Only used before the first quote lands, and to give
+  // /api/gift-cards/validate a rough figure for its toast. No money
+  // decision is ever made from it.
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  // Recomputed from the applied coupon's rule on every render — not frozen
-  // as a dollar amount at the moment "Apply" was clicked — so it stays
-  // correct if the customer changes quantities afterward (for an
-  // unrestricted coupon; a restricted coupon's eligibleSubtotal snapshot
-  // is what's frozen instead, see the note above). This mirrors (but
-  // doesn't need to exactly reproduce) the server's own cap/floor logic in
-  // calcDiscountAmount, since the server independently recomputes the
-  // authoritative amount from its own resolved subtotal at order-creation
-  // time — this is purely for display.
-  const discountAmount = appliedCoupon
-    ? Math.min(
-        appliedCoupon.type === "FIXED"
-          ? appliedCoupon.fixedOff ?? 0
-          : Math.round(appliedCoupon.eligibleSubtotal * ((appliedCoupon.percentOff ?? 0) / 100) * 100) / 100,
-        appliedCoupon.eligibleSubtotal
-      )
-    : 0;
-  const total = subtotal - discountAmount;
 
-  // Automatic loyalty-tier discount — display-only mirror of
-  // calcTierDiscountAmount on the server (lib/loyalty-tiers.ts). No
-  // "Apply" button, it's automatic — this section just needs to show it.
-  const tierDiscountAmount = loyaltyInfo
-    ? Math.round(Math.max(total, 0) * (loyaltyInfo.tier.discountPercent / 100) * 100) / 100
-    : 0;
-  const totalAfterTierDiscount = total - tierDiscountAmount;
+  // An empty cart has nothing to price, so that case is DERIVED here at
+  // render time rather than pushed into state by an effect calling
+  // setQuote(null) — exactly the same reasoning (and the same lint rule,
+  // react-hooks/set-state-in-effect) as visiblePairSuggestions above.
+  // The stale quote simply isn't read once the cart is empty.
+  const bill = cartItems.length === 0 ? null : quote;
 
-  // Same "min(what's owed, what's left on the card)" logic as
-  // calcGiftCardAmountToApply on the server — purely for display, the
-  // server independently recomputes the authoritative amount from its
-  // own resolved total at order-creation time.
-  const giftCardAmountApplied = appliedGiftCard
-    ? Math.min(Math.max(totalAfterTierDiscount, 0), appliedGiftCard.balance)
-    : 0;
-  const totalAfterGiftCard = totalAfterTierDiscount - giftCardAmountApplied;
+  const currency = bill?.currency ?? settings?.currency ?? "";
+  const money = (value: string) => `${currency} ${value}`;
 
-  // Display-only mirror of clampPointsRedemption on the server (see
-  // lib/loyalty-redemption.ts) — never lets the redemption take the
-  // order below $0, never more than the account's balance.
+  const cappedRedeemedPoints = bill?.pointsRedeemed ?? 0;
   const maxAffordablePoints = loyaltyInfo
-    ? Math.floor(Math.max(totalAfterGiftCard, 0) / loyaltyInfo.redemption.rate)
-    : 0;
-  const cappedRedeemedPoints = loyaltyInfo
-    ? Math.min(redeemedPoints, loyaltyInfo.points, maxAffordablePoints)
-    : 0;
-  const pointsRedeemedAmount = loyaltyInfo
-    ? Math.round(cappedRedeemedPoints * loyaltyInfo.redemption.rate * 100) / 100
+    ? Math.floor(Math.max(subtotal, 0) / loyaltyInfo.redemption.rate)
     : 0;
 
-  const finalTotal = totalAfterGiftCard - pointsRedeemedAmount;
+  const tipPresets = settings?.tipEnabled ? settings.tipPresetPercents : [];
+  const showTipping = tipPresets.length > 0 && cartItems.length > 0;
+
+  /**
+   * The bill is computed by the server, not here.
+   *
+   * This component used to carry six "display-only mirrors" — one
+   * reimplementation each of the coupon, tier, gift-card and points rules,
+   * plus the running totals. That was fine for as long as both sides
+   * applied the same rules.
+   *
+   * The money model ended that. Tax, service charge, delivery fee and
+   * tipping all come from RestaurantSettings, which this component knows
+   * nothing about — so the customer was shown 100 while Stripe charged
+   * 105. That is the worst kind of mismatch, because it only surfaces
+   * after the card has been charged.
+   *
+   * So the arithmetic moved to /api/checkout/quote, which runs the very
+   * same resolveOrderItems → findValidCoupon → calculateOrderPricing chain
+   * that /api/orders runs when the order is really created. The two cannot
+   * drift apart, because they are the same code.
+   */
+  useEffect(() => {
+    // Nothing to price for an empty cart, and deliberately no setQuote(null)
+    // here — see the `bill` derivation above for why.
+    if (cartItems.length === 0) return;
+
+    let cancelled = false;
+
+    // Debounced — quantity +/- and typing in the custom tip box both fire
+    // fast, and there is no point pricing an intermediate state.
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/checkout/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              id: item.id,
+              title: item.title,
+              quantity: item.quantity,
+            })),
+            orderType: isDineIn ? "DINE_IN" : "DELIVERY",
+            // Optional, but it decides per-customer coupon limits — without
+            // it the quote could promise a discount the order then refuses.
+            phone: formData.phoneNumber || undefined,
+            couponCode: appliedCoupon?.code,
+            giftCardCode: appliedGiftCard?.code,
+            redeemPoints: redeemedPoints > 0 ? redeemedPoints : undefined,
+            tipPercent: tipPercent ?? undefined,
+            tipAmount:
+              tipPercent === null && customTip ? Number(customTip) || undefined : undefined,
+          }),
+        });
+        if (!res.ok) return;
+        const data: Quote = await res.json();
+        if (!cancelled) setQuote(data);
+      } catch {
+        // Keep showing the last known bill; the next change retries.
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    cartItems,
+    isDineIn,
+    formData.phoneNumber,
+    appliedCoupon?.code,
+    appliedGiftCard?.code,
+    redeemedPoints,
+    tipPercent,
+    customTip,
+  ]);
+
+  // Sent with the order. Mirrors the quote request exactly, so the customer
+  // is charged the tip they were shown.
+  const tipPayload = {
+    tipPercent: tipPercent ?? undefined,
+    tipAmount: tipPercent === null && customTip ? Number(customTip) || undefined : undefined,
+  };
 
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
@@ -400,6 +506,7 @@ const Carts = () => {
             couponCode: appliedCoupon?.code,
             giftCardCode: appliedGiftCard?.code,
             redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
+            ...tipPayload,
           }),
         });
 
@@ -442,6 +549,8 @@ const Carts = () => {
         setDiscountCode("");
         setAppliedGiftCard(null);
         setRedeemedPoints(0);
+        setTipPercent(null);
+        setCustomTip("");
 
         clearCart();
         // One scan → one order (v1 scope) — clear the table context so a
@@ -487,6 +596,7 @@ const Carts = () => {
             couponCode: appliedCoupon?.code,
             giftCardCode: appliedGiftCard?.code,
             redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
+            ...tipPayload,
           }),
         });
 
@@ -521,6 +631,7 @@ const Carts = () => {
           couponCode: appliedCoupon?.code,
           giftCardCode: appliedGiftCard?.code,
           redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
+          ...tipPayload,
         }),
       });
 
@@ -567,6 +678,8 @@ const Carts = () => {
       setDiscountCode("");
       setAppliedGiftCard(null);
       setRedeemedPoints(0);
+      setTipPercent(null);
+      setCustomTip("");
 
       clearCart();
       router.push(`/track/${data.id}`);
@@ -664,11 +777,12 @@ const Carts = () => {
         type: data.type,
         percentOff: data.percentOff,
         fixedOff: data.fixedOff,
-        eligibleSubtotal: data.eligibleSubtotal,
       });
       setDiscountCode("");
       const discountLabel =
-        data.type === "FIXED" ? `$${Number(data.fixedOff).toFixed(2)} off` : `${data.percentOff}% off`;
+        data.type === "FIXED"
+          ? `${currency} ${Number(data.fixedOff).toFixed(2)} off`
+          : `${data.percentOff}% off`;
       toast.success(`"${data.code}" applied — ${discountLabel}!`, {
         position: "bottom-center",
         autoClose: 2000,
@@ -692,7 +806,10 @@ const Carts = () => {
       const res = await fetch("/api/gift-cards/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: discountCode, orderTotal: total }),
+        // A rough figure, purely so the endpoint can preview a sensible
+        // "X off" in the toast below. The authoritative deduction is
+        // recomputed in the quote, and again at order creation.
+        body: JSON.stringify({ code: discountCode, orderTotal: subtotal }),
       });
       const data = await res.json();
 
@@ -701,16 +818,19 @@ const Carts = () => {
         return;
       }
 
-      setAppliedGiftCard({ code: data.code, balance: data.balance });
+      setAppliedGiftCard({ code: data.code });
       setDiscountCode("");
-      toast.success(`Gift card "${data.code}" applied — $${Number(data.amountToApply).toFixed(2)} off!`, {
-        position: "bottom-center",
-        autoClose: 2000,
-        hideProgressBar: true,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      toast.success(
+        `Gift card "${data.code}" applied — ${currency} ${Number(data.amountToApply).toFixed(2)} off!`,
+        {
+          position: "bottom-center",
+          autoClose: 2000,
+          hideProgressBar: true,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        }
+      );
     } catch {
       setCouponError("Something went wrong. Please try again.");
     } finally {
@@ -1230,7 +1350,7 @@ const Carts = () => {
                     </div>
                     <div className="sm:flex sm:flex-col sm:items-end 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row items-center">
                       <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs font-semibold text-gray-800 whitespace-nowrap">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        {currency} {(item.price * item.quantity).toFixed(2)}
                       </div>
                       <button
                         onClick={() => removeFromCart(item.id)}
@@ -1272,7 +1392,9 @@ const Carts = () => {
                           >
                             {suggestion.title}
                           </p>
-                          <p className="text-xs text-gray-500 mt-0.5">${suggestion.price.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {currency} {suggestion.price.toFixed(2)}
+                          </p>
                         </div>
                         <button
                           onClick={() => handleAddPairSuggestion(suggestion)}
@@ -1294,7 +1416,7 @@ const Carts = () => {
                   <span className="text-sm text-green-800 font-medium">
                     &quot;{appliedCoupon.code}&quot; applied —{" "}
                     {appliedCoupon.type === "FIXED"
-                      ? `$${(appliedCoupon.fixedOff ?? 0).toFixed(2)} off`
+                      ? `${currency} ${(appliedCoupon.fixedOff ?? 0).toFixed(2)} off`
                       : `${appliedCoupon.percentOff}% off`}
                   </span>
                   <button
@@ -1310,9 +1432,9 @@ const Carts = () => {
               {appliedGiftCard && (
                 <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
-                    Gift card &quot;{appliedGiftCard.code}&quot; applied — ${giftCardAmountApplied.toFixed(2)} off
-                    {appliedGiftCard.balance > giftCardAmountApplied &&
-                      ` (${(appliedGiftCard.balance - giftCardAmountApplied).toFixed(2)} left on card)`}
+                    Gift card &quot;{appliedGiftCard.code}&quot; applied
+                    {bill && isPositive(bill.giftCardAmount) &&
+                      ` — ${money(bill.giftCardAmount)} off`}
                   </span>
                   <button
                     onClick={removeGiftCard}
@@ -1335,9 +1457,9 @@ const Carts = () => {
                     <span className="text-sm font-medium text-gray-800">
                       Use your points ({loyaltyInfo.points} available)
                     </span>
-                    {cappedRedeemedPoints > 0 && (
+                    {bill && isPositive(bill.pointsRedeemedAmount) && (
                       <span className="text-xs font-semibold text-[#2C6252]">
-                        -${pointsRedeemedAmount.toFixed(2)}
+                        -{money(bill.pointsRedeemedAmount)}
                       </span>
                     )}
                   </div>
@@ -1346,14 +1468,17 @@ const Carts = () => {
                     min={0}
                     max={Math.min(loyaltyInfo.points, maxAffordablePoints)}
                     step={loyaltyInfo.redemption.minPoints}
-                    value={cappedRedeemedPoints}
+                    value={redeemedPoints}
                     onChange={(e) => setRedeemedPoints(Number(e.target.value))}
                     className="w-full accent-[#FF4C15]"
                   />
                   <div className="flex items-center justify-between text-xs text-gray-400">
                     <span>0 pts</span>
                     <span>
-                      {cappedRedeemedPoints} pts = ${pointsRedeemedAmount.toFixed(2)} off
+                      {cappedRedeemedPoints} pts
+                      {bill && isPositive(bill.pointsRedeemedAmount)
+                        ? ` = ${money(bill.pointsRedeemedAmount)} off`
+                        : ""}
                     </span>
                     <span>{Math.min(loyaltyInfo.points, maxAffordablePoints)} pts</span>
                   </div>
@@ -1394,47 +1519,166 @@ const Carts = () => {
                   {!couponError && <div className="mb-4" />}
                 </>
               )}
+
+              {/* Tipping — only rendered when the restaurant has it switched
+                  on (see /api/settings). Off by default, and stays off for
+                  Japan, South Korea and China, where offering a tip reads as
+                  rude rather than generous. */}
+              {showTipping && (
+                <div className="mb-4 border border-gray-200 rounded px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-800">Add a tip</span>
+                    {bill && isPositive(bill.tipAmount) && (
+                      <span className="text-xs font-semibold text-[#2C6252]">
+                        {money(bill.tipAmount)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTipPercent(null);
+                        setCustomTip("");
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                        tipPercent === null && !customTip
+                          ? "bg-[#2C6252] text-white border-[#2C6252]"
+                          : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      No tip
+                    </button>
+
+                    {tipPresets.map((percent) => (
+                      <button
+                        key={percent}
+                        type="button"
+                        onClick={() => {
+                          setTipPercent(percent);
+                          // A preset and a custom amount are mutually
+                          // exclusive — otherwise the customer can't tell
+                          // which one they are actually being charged.
+                          setCustomTip("");
+                        }}
+                        className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                          tipPercent === percent
+                            ? "bg-[#2C6252] text-white border-[#2C6252]"
+                            : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {percent}%
+                      </button>
+                    ))}
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Other"
+                      value={customTip}
+                      onChange={(e) => {
+                        setCustomTip(e.target.value);
+                        setTipPercent(null);
+                      }}
+                      className="w-20 text-xs px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-gray-400 mt-2">
+                    Percentages are of the food subtotal, before tax. Goes to the staff, never taxed.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-10 bg-white p-6">
+              {/*
+                Every figure below comes from /api/checkout/bill — the same
+                code that prices the order when it is actually created.
+                Nothing here is computed in the browser, so what the customer
+                reads is what the card is charged.
+              */}
               <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-gray-700 space-y-5">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>{bill ? money(bill.subtotal) : `${currency} ${subtotal.toFixed(2)}`}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Discount</span>
-                  <span className={discountAmount > 0 ? "text-[#2C6252]" : ""}>
-                    {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "$0"}
-                  </span>
-                </div>
-                {giftCardAmountApplied > 0 && (
+
+                {bill && isPositive(bill.discountAmount) && (
                   <div className="flex justify-between">
-                    <span>Gift card</span>
-                    <span className="text-[#2C6252]">-${giftCardAmountApplied.toFixed(2)}</span>
+                    <span>Discount</span>
+                    <span className="text-[#2C6252]">-{money(bill.discountAmount)}</span>
                   </div>
                 )}
-                {tierDiscountAmount > 0 && (
+
+                {bill && isPositive(bill.tierDiscountAmount) && (
                   <div className="flex justify-between">
                     <span>{loyaltyInfo?.tier.label} tier discount</span>
-                    <span className="text-[#2C6252]">-${tierDiscountAmount.toFixed(2)}</span>
+                    <span className="text-[#2C6252]">-{money(bill.tierDiscountAmount)}</span>
                   </div>
                 )}
-                {pointsRedeemedAmount > 0 && (
+
+                {bill && isPositive(bill.serviceCharge) && (
                   <div className="flex justify-between">
-                    <span>Points redeemed ({cappedRedeemedPoints} pts)</span>
-                    <span className="text-[#2C6252]">-${pointsRedeemedAmount.toFixed(2)}</span>
+                    <span>Service charge</span>
+                    <span>{money(bill.serviceCharge)}</span>
                   </div>
                 )}
+
                 <div className="flex justify-between">
                   <span>{isDineIn ? "Table service" : "Delivery charges"}</span>
-                  <span className="text-[#2C6252]">Free</span>
+                  {bill && isPositive(bill.deliveryFee) ? (
+                    <span>{money(bill.deliveryFee)}</span>
+                  ) : (
+                    <span className="text-[#2C6252]">Free</span>
+                  )}
                 </div>
+
+                {bill && isPositive(bill.taxAmount) && (
+                  <div className="flex justify-between">
+                    <span>
+                      {bill.taxName}
+                      {/* INCLUSIVE mode: the tax is already inside the prices
+                          above, so the total does NOT go up. Saying so out
+                          loud is the difference between an EU-style bill and
+                          a customer thinking they have been charged twice. */}
+                      {bill.taxMode === "INCLUSIVE" && (
+                        <span className="text-gray-400"> (included)</span>
+                      )}
+                    </span>
+                    <span>{money(bill.taxAmount)}</span>
+                  </div>
+                )}
+
+                {bill && isPositive(bill.giftCardAmount) && (
+                  <div className="flex justify-between">
+                    <span>Gift card</span>
+                    <span className="text-[#2C6252]">-{money(bill.giftCardAmount)}</span>
+                  </div>
+                )}
+
+                {bill && isPositive(bill.pointsRedeemedAmount) && (
+                  <div className="flex justify-between">
+                    <span>Points redeemed ({bill.pointsRedeemed} pts)</span>
+                    <span className="text-[#2C6252]">-{money(bill.pointsRedeemedAmount)}</span>
+                  </div>
+                )}
+
+                {bill && isPositive(bill.tipAmount) && (
+                  <div className="flex justify-between">
+                    <span>Tip</span>
+                    <span>{money(bill.tipAmount)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-dashed border-gray-300 my-4"></div>
               <div className="flex justify-between 3xl:text-md 2xl:text-md xl:text-md lg:text-md md:text-md sm:text-xs font-bold pt-2">
                 <span>Total</span>
-                <span className="text-[#2C6252]">USD ${finalTotal.toFixed(2)}</span>
+                <span className="text-[#2C6252]">
+                  {bill ? money(bill.totalAmount) : `${currency} ${subtotal.toFixed(2)}`}
+                </span>
               </div>
             </div>
           </div>
