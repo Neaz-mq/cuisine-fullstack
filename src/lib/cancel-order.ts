@@ -150,7 +150,19 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
   //
   // refundOrder() নিজেই যাচাই করে টাকা আদৌ কাটা হয়েছিল কিনা, তাই
   // abandoned checkout (PENDING) বা COD-এ এটা নিরীহভাবে ফিরে আসে।
-  if (existing.paymentMethod === "ONLINE" && existing.paymentStatus === "PAID") {
+  //
+  // ⚠️ PARTIALLY_REFUNDED-ও এখানে ধরা দরকার, শুধু PAID নয়। status
+  // (PLACED/PREPARING/...) আর paymentStatus সম্পূর্ণ স্বাধীন ফিল্ড —
+  // একটা order এখনো cancel-যোগ্য অবস্থায় (PLACED) থাকতে পারে অথচ কেউ
+  // ইতিমধ্যে তার উপর আংশিক refund করে ফেলেছে (যেমন একটা item stock-এ
+  // নেই বলে)। তখন order-টা PAID নয়, PARTIALLY_REFUNDED — কিন্তু কার্ডে
+  // এখনো বাকি টাকা আছে, আর সেটা ফেরত পাওয়ার এটাই একমাত্র পথ (cancel
+  // ছাড়া customer-কে কেউ আর মনে করিয়েও দেবে না)। শুধু "PAID" চেক করলে
+  // এই বাকি টাকাটা কার্ডে কখনো ফেরত না গিয়ে চুপচাপ আটকে থাকতো।
+  const isRefundable =
+    existing.paymentStatus === "PAID" || existing.paymentStatus === "PARTIALLY_REFUNDED";
+
+  if (existing.paymentMethod === "ONLINE" && isRefundable) {
     const refund = await refundOrder({
       orderId,
       reason: reason ? `Order cancelled: ${reason}` : "Order cancelled",
