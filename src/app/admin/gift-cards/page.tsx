@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import GiftCardActions from "./GiftCardActions";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 export default async function AdminGiftCardsPage({
   searchParams,
@@ -8,6 +10,9 @@ export default async function AdminGiftCardsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
+
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
 
   const giftCards = await prisma.giftCard.findMany({
     where: q
@@ -64,7 +69,8 @@ export default async function AdminGiftCardsPage({
                 <div className="min-w-[200px]">
                   <p className="text-sm font-mono font-semibold text-gray-800">{giftCard.code}</p>
                   <p className="text-xs text-gray-400">
-                    ${balance.toFixed(2)} remaining of ${initialAmount.toFixed(2)}
+                    {formatAmount(balance.toFixed(units), settings.currency)} remaining of{" "}
+                    {formatAmount(initialAmount.toFixed(units), settings.currency)}
                     {spent > 0 && ` (${((spent / initialAmount) * 100).toFixed(0)}% used)`}
                   </p>
 
@@ -88,6 +94,7 @@ export default async function AdminGiftCardsPage({
                     giftCardId={giftCard.id}
                     isActive={giftCard.isActive}
                     balance={balance}
+                    currency={settings.currency}
                   />
                 </div>
               </div>

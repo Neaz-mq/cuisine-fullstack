@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import AddInventoryItemForm from "./AddInventoryItemForm";
 import InventoryItemActions from "./InventoryItemActions";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount } from "@/lib/currency-format";
 
 const UNIT_LABELS: Record<string, string> = {
   GRAM: "g",
@@ -11,6 +13,10 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 export default async function AdminInventoryPage() {
+  // Ingredient costs are money too — the currency here feeds straight into
+  // the food-cost percentages on Insights, so a hardcoded "$" there was
+  // quietly mislabelling every margin figure.
+  const settings = await getRestaurantSettings();
   // Includes inactive items too (unlike the public-facing /api/admin/inventory
   // GET, which only returns active ones) — a manager managing the raw list
   // needs to see everything, including items they've deactivated, to
@@ -64,7 +70,14 @@ export default async function AdminInventoryPage() {
               <span className="text-sm text-gray-500 text-right">
                 {item.reorderThreshold > 0 ? `${item.reorderThreshold} ${UNIT_LABELS[item.unit]}` : "—"}
               </span>
-              <span className="text-sm text-gray-600 text-right">${item.costPerUnit.toFixed(4)}</span>
+              {/* ⚠️ ৪ দশমিক, currency-র নিজের দশমিক সংখ্যা নয়।
+                  কাঁচামালের দাম প্রায়ই গ্রাম বা মিলিলিটার প্রতি — চিকেন
+                  ০.০০৮০/গ্রাম। দুই দশমিকে কেটে ফেললে সেটা ০.০১ হয়ে যেতো,
+                  অর্থাৎ ২৫% বেশি, আর Insights-এর প্রতিটা food cost শতাংশ
+                  ভুল হতো। এটা প্রদর্শনযোগ্য দামের ধরন নয়, হিসাবের হার। */}
+              <span className="text-sm text-gray-600 text-right">
+                {formatAmount(item.costPerUnit.toFixed(4), settings.currency, 4)}
+              </span>
               <span className="text-sm text-gray-500 text-right">
                 {item._count.usedInRecipes} recipe{item._count.usedInRecipes === 1 ? "" : "s"}
               </span>
@@ -72,6 +85,7 @@ export default async function AdminInventoryPage() {
                 <InventoryItemActions
                   itemId={item.id}
                   costPerUnit={item.costPerUnit.toNumber()}
+                  currency={settings.currency}
                   isActive={item.isActive}
                 />
               </div>

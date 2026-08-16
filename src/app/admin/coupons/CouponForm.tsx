@@ -12,7 +12,7 @@ type MenuCategory = {
   items: { id: string; title: string; price: number }[];
 };
 
-export default function CouponForm() {
+export default function CouponForm({ currency }: { currency: string }) {
   const router = useRouter();
 
   const [code, setCode] = useState("");
@@ -318,7 +318,9 @@ export default function CouponForm() {
                         onChange={() => toggleSet(selectedItemIds, setSelectedItemIds, item.id)}
                       />
                       {item.title}
-                      <span className="text-xs text-gray-400">${item.price.toFixed(2)}</span>
+                      <span className="text-xs text-gray-400">
+                        {currency} {item.price.toFixed(2)}
+                      </span>
                     </label>
                   ))}
                 </div>

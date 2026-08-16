@@ -13,7 +13,8 @@ export type Delivery = {
   customerName: string;
   phone: string;
   address: string;
-  totalAmount: number;
+  /** Already formatted to the order's own currency, e.g. "BDT 107.41". */
+  totalAmount: string;
   paymentMethod: "COD" | "ONLINE";
   destLat: number;
   destLng: number;
@@ -174,7 +175,7 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
 
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-dashed border-gray-200">
                 <span className="text-sm font-semibold text-[#2C6252]">
-                  USD ${d.totalAmount.toFixed(2)}{" "}
+                  {d.totalAmount}{" "}
                   <span className="text-xs font-normal text-gray-400">
                     {d.paymentMethod === "COD" ? "· Collect cash" : "· Paid online"}
                   </span>

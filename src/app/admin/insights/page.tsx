@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { calculateFoodCost, getFoodCostHealth, type FoodCostHealth } from "@/lib/menu-profitability";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 // Minimum approved reviews before we trust a menu item's average rating
 // enough to base an insight on it — a single 5-star review shouldn't label
@@ -34,6 +36,13 @@ type ItemStat = {
 };
 
 export default async function AdminInsightsPage() {
+  // Every figure on this page is money, and the food-cost percentages that
+  // drive the whole margin analysis come from InventoryItem.costPerUnit —
+  // so a hardcoded "$" here was mislabelling the very numbers an owner uses
+  // to decide what stays on the menu.
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
+  const money = (value: number) => formatAmount(value.toFixed(units), settings.currency);
   const [menuItems, orderItemAgg, reviewAgg] = await Promise.all([
     prisma.menuItem.findMany({
       select: {
@@ -201,7 +210,7 @@ export default async function AdminInsightsPage() {
                 </div>
                 <span className="text-xs text-gray-500 w-16 text-right">{item.quantity} sold</span>
                 <span className="text-xs font-semibold text-[#2C6252] w-20 text-right">
-                  ${item.revenue.toFixed(2)}
+                  {money(item.revenue)}
                 </span>
               </div>
             ))}
@@ -345,8 +354,8 @@ export default async function AdminInsightsPage() {
                 {itemsWithRecipe.map((item) => (
                   <tr key={item.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-2 pr-3 text-gray-700 truncate max-w-[160px]">{item.title}</td>
-                    <td className="py-2 px-3 text-right text-gray-600">${item.price.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-right text-gray-600">${item.foodCost.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{money(item.price)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{money(item.foodCost)}</td>
                     <td className="py-2 px-3 text-right">
                       <span
                         className={`text-xs font-semibold px-2 py-0.5 rounded-full ${foodCostHealthStyles[item.foodCostHealth]}`}
@@ -354,10 +363,10 @@ export default async function AdminInsightsPage() {
                         {item.foodCostPercent?.toFixed(0)}%
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right text-gray-600">${item.grossMargin.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-gray-600">{money(item.grossMargin)}</td>
                     <td className="py-2 px-3 text-right text-gray-500">{item.quantity}</td>
                     <td className="py-2 pl-3 text-right font-semibold text-[#2C6252]">
-                      ${item.totalProfitContribution.toFixed(2)}
+                      {money(item.totalProfitContribution)}
                     </td>
                   </tr>
                 ))}
@@ -397,7 +406,7 @@ export default async function AdminInsightsPage() {
                   />
                 </div>
                 <span className="text-xs font-semibold text-[#2C6252] w-20 text-right">
-                  ${cat.revenue.toFixed(2)}
+                  {money(cat.revenue)}
                 </span>
               </div>
             ))}

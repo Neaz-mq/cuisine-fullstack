@@ -6,10 +6,14 @@ import { useRouter } from "next/navigation";
 export default function InventoryItemActions({
   itemId,
   costPerUnit,
+  currency,
   isActive,
 }: {
   itemId: string;
   costPerUnit: number;
+  /** Passed down from the server page rather than fetched here — no extra
+   *  request, and no moment where the prompt shows the wrong currency. */
+  currency: string;
   isActive: boolean;
 }) {
   const router = useRouter();
@@ -31,7 +35,7 @@ export default function InventoryItemActions({
 
   function handleEditCost() {
     const input = window.prompt(
-      `Current cost per unit is $${costPerUnit.toFixed(4)}. Enter the new cost per unit:`,
+      `Current cost per unit is ${currency} ${costPerUnit.toFixed(4)}. Enter the new cost per unit:`,
       String(costPerUnit)
     );
     if (input === null) return;

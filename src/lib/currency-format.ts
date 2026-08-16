@@ -65,8 +65,24 @@ export function minorUnitsFor(currency: string): number {
  * দ্ব্যর্থক ($ কোন ডলার?) আর অনেক font-এ অনুপস্থিত, অথচ কোডটা সব
  * জায়গায় একই অর্থ বহন করে। চালানে দ্ব্যর্থতা সবচেয়ে ব্যয়বহুল।
  */
-export function formatAmount(value: string | number, currency: string): string {
-  const units = minorUnitsFor(currency);
+export function formatAmount(
+  value: string | number,
+  currency: string,
+  /**
+   * দশমিক সংখ্যা জোর করে বসানোর সুযোগ — ডিফল্ট currency-র নিজস্ব সংখ্যা।
+   *
+   * ⚠️ এটা যোগ করতে হয়েছে একটা বাস্তব বাগের পর। কাঁচামালের দাম প্রায়ই
+   * গ্রাম বা মিলিলিটার প্রতি — রান্নার তেল ০.০০৩০/মিলি। সেটা টাকার
+   * ডিফল্ট দুই দশমিকে সাজালে "BDT 0.00" হয়ে যেতো, অর্থাৎ তালিকা বলতো
+   * তেলের কোনো দামই নেই, অথচ Insights-এর food cost ঠিকই সেটা ধরছিল।
+   *
+   * সেসব ক্ষেত্রে caller নিজেই দশমিক ঠিক করে দেয়। এটা প্রদর্শনযোগ্য
+   * দাম নয় — হিসাবের হার, আর হারের নির্ভুলতা মুদ্রার নির্ভুলতার চেয়ে
+   * বেশি হতে পারে।
+   */
+  decimalPlaces?: number
+): string {
+  const units = decimalPlaces ?? minorUnitsFor(currency);
   const asNumber = typeof value === "number" ? value : parseFloat(value);
 
   if (!Number.isFinite(asNumber)) return `${currency} ${value}`;

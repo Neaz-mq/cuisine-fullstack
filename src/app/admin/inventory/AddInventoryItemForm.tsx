@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const UNIT_OPTIONS = [
@@ -11,7 +11,32 @@ const UNIT_OPTIONS = [
   { value: "PIECE", label: "Pieces (pc)" },
 ];
 
+
+/**
+ * The restaurant's configured currency, for labelling amount inputs.
+ *
+ * A client component can't read RestaurantSettings directly (that would
+ * drag Prisma into the browser bundle), so it comes over /api/settings.
+ * Empty string until it arrives — the label just reads "Amount" for a
+ * moment rather than flashing a wrong currency.
+ */
+function useCurrency() {
+  const [currency, setCurrency] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.currency && setCurrency(data.currency))
+      .catch(() => {
+        // Label falls back to no currency — nothing else breaks.
+      });
+  }, []);
+
+  return currency;
+}
+
 export default function AddInventoryItemForm() {
+  const currency = useCurrency();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
@@ -118,7 +143,7 @@ export default function AddInventoryItemForm() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Cost per unit (USD)
+            Cost per unit{currency ? ` (${currency})` : ""}
           </label>
           <input
             type="number"

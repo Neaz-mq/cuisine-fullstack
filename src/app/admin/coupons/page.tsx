@@ -2,21 +2,29 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import ActiveToggle from "./ActiveToggle";
 import DeleteCouponButton from "./DeleteCouponButton";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 // Prisma-র Decimal-এ toFixed আছে, তাই ধরনটা কেবল চওড়া করা হলো —
 // রূপান্তরের দরকার নেই।
 type DecimalLike = { toFixed(dp: number): string };
 
-function formatDiscount(coupon: {
-  type: string;
-  percentOff: number | null;
-  fixedOff: DecimalLike | null;
-  maxDiscountAmount: DecimalLike | null;
-}) {
+function formatDiscount(
+  coupon: {
+    type: string;
+    percentOff: number | null;
+    fixedOff: DecimalLike | null;
+    maxDiscountAmount: DecimalLike | null;
+  },
+  currency: string,
+  units: number
+) {
+  const money = (value: DecimalLike) => formatAmount(value.toFixed(units), currency);
+
   if (coupon.type === "FIXED") {
-    return `$${coupon.fixedOff?.toFixed(2)} off`;
+    return coupon.fixedOff ? `${money(coupon.fixedOff)} off` : "—";
   }
-  const cap = coupon.maxDiscountAmount ? ` (capped at $${coupon.maxDiscountAmount.toFixed(2)})` : "";
+  const cap = coupon.maxDiscountAmount ? ` (capped at ${money(coupon.maxDiscountAmount)})` : "";
   return `${coupon.percentOff}% off${cap}`;
 }
 
@@ -40,6 +48,8 @@ function formatRestriction(coupon: {
 }
 
 export default async function AdminCouponsPage() {
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
   const coupons = await prisma.coupon.findMany({
     orderBy: { createdAt: "desc" },
     include: {
@@ -75,11 +85,13 @@ export default async function AdminCouponsPage() {
               <div key={coupon.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                 <div className="min-w-[160px]">
                   <p className="text-sm font-mono font-semibold text-gray-800">{coupon.code}</p>
-                  <p className="text-xs text-gray-400">{formatDiscount(coupon)}</p>
+                  <p className="text-xs text-gray-400">{formatDiscount(coupon, settings.currency, units)}</p>
 
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-gray-400">
                     {coupon.minOrderValue != null && (
-                      <span>Min order ${coupon.minOrderValue.toFixed(2)}</span>
+                      <span>
+                        Min order {formatAmount(coupon.minOrderValue.toFixed(units), settings.currency)}
+                      </span>
                     )}
                     {coupon.expiresAt && (
                       <span className={expired ? "text-red-500 font-medium" : ""}>

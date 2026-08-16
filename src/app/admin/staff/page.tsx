@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import { canViewSensitiveStaffFields } from "@/lib/permissions";
 import DeactivateStaffButton from "./DeactivateStaffButton";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 const ROLE_STYLES: Record<string, string> = {
   OWNER: "bg-purple-100 text-purple-700",
@@ -14,6 +16,8 @@ const ROLE_STYLES: Record<string, string> = {
 };
 
 export default async function AdminStaffPage() {
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
   const session = await requireAdmin();
   const viewerId = session.user.id;
   const viewerRole = (session.user as { role?: string }).role;
@@ -76,7 +80,7 @@ export default async function AdminStaffPage() {
 
                 {canSeeSensitive && member.staffProfile?.salary != null && (
                   <span className="text-sm text-gray-600">
-                    ${member.staffProfile.salary.toFixed(2)}/mo
+                    {formatAmount(member.staffProfile.salary.toFixed(units), settings.currency)}/mo
                   </span>
                 )}
 
