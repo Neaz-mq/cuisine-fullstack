@@ -60,15 +60,21 @@ export default async function AdminOrderDetailPage({
   const isPaid =
     order.paymentStatus === "PAID" || order.paymentStatus === "PARTIALLY_REFUNDED";
 
+  // REFUNDED is checked before the generic !isPaid branch on purpose:
+  // "not paid" and "fully refunded" are opposite situations (no money ever
+  // moved vs. all of it already came back) and staff reading this message
+  // need to be able to tell them apart at a glance.
   const refundBlockedReason = !isOnline
     ? "This order was paid in person, so there is nothing to send back through Stripe."
-    : !isPaid
-      ? "This order has not been paid, so there is nothing to refund."
-      : !order.stripePaymentIntentId
-        ? "This order was paid before refunds were supported, so no Stripe payment reference was stored. Refund it from the Stripe dashboard — it will appear here automatically."
-        : refundable.lessThanOrEqualTo(0)
-          ? "Fully refunded."
-          : null;
+    : order.paymentStatus === "REFUNDED"
+      ? "This order has already been fully refunded."
+      : !isPaid
+        ? "This order has not been paid, so there is nothing to refund."
+        : !order.stripePaymentIntentId
+          ? "This order was paid before refunds were supported, so no Stripe payment reference was stored. Refund it from the Stripe dashboard — it will appear here automatically."
+          : refundable.lessThanOrEqualTo(0)
+            ? "Fully refunded."
+            : null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">

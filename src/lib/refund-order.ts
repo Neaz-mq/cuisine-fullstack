@@ -46,6 +46,7 @@ export type RefundFailure =
   | "Order not found"
   | "Only online card payments can be refunded here"
   | "This order has not been paid"
+  | "This order has already been fully refunded"
   | "Amount must be greater than zero"
   | "Amount is more than what is left to refund"
   | "This order has no Stripe payment on record"
@@ -110,6 +111,14 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
   // হাতে নগদ ফেরত দেওয়া, যা এই সিস্টেমের কাজ নয়।
   if (order.paymentMethod !== "ONLINE") {
     return { ok: false, error: "Only online card payments can be refunded here" };
+  }
+
+  // REFUNDED-কে "not been paid"-এর সাথে গুলিয়ে ফেলা যাবে না — দুটো
+  // সম্পূর্ণ ভিন্ন পরিস্থিতি। একটায় টাকাই ওঠেনি, আরেকটায় পুরো টাকা
+  // ইতিমধ্যে ফেরত হয়ে গেছে। staff দুটোর একই বার্তা দেখলে বিভ্রান্ত
+  // হবে — মনে করবে payment-ই হয়নি।
+  if (order.paymentStatus === "REFUNDED") {
+    return { ok: false, error: "This order has already been fully refunded" };
   }
 
   // PENDING বা FAILED order-এ ফেরত দেওয়ার মতো কিছুই নেই। ইতিমধ্যে

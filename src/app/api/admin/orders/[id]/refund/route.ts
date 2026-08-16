@@ -35,6 +35,7 @@ const STATUS_BY_ERROR: Record<RefundFailure, number> = {
   "Order not found": 404,
   "Only online card payments can be refunded here": 409,
   "This order has not been paid": 409,
+  "This order has already been fully refunded": 409,
   "Amount must be greater than zero": 400,
   "Amount is more than what is left to refund": 409,
   "This order has no Stripe payment on record": 409,
