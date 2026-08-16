@@ -24,6 +24,12 @@ export type Scope =
   | "categories"
   | "inventory"
   | "orders"
+  // Issuing money back is deliberately its own scope, separate from
+  // "orders". Plenty of staff need to move an order through its statuses;
+  // far fewer should be able to send a customer's money back to their
+  // card. Bundling the two would have made every shift lead a refund
+  // authority by accident.
+  | "refunds"
   | "kitchen"
   | "tables"
   | "reservations"
@@ -42,6 +48,7 @@ const ALL_SCOPES: Scope[] = [
   "categories",
   "inventory",
   "orders",
+  "refunds",
   "kitchen",
   "tables",
   "reservations",
@@ -101,6 +108,10 @@ const SCOPE_PATH: Record<Scope, string> = {
   categories: "/admin/categories",
   inventory: "/admin/inventory",
   orders: "/admin/orders",
+  // No page of its own — refunds are issued from an order's detail page.
+  // The path exists only so a role holding this scope and nothing else
+  // still has somewhere to land.
+  refunds: "/admin/orders",
   kitchen: "/admin/kitchen",
   tables: "/admin/tables",
   reservations: "/admin/reservations",
@@ -134,6 +145,10 @@ const SCOPE_PRIORITY: Scope[] = [
   "settings",
   "insights",
   "marketing",
+  // Last: nobody's home section is "refunds" — it has no page, and anyone
+  // holding it holds "orders" too. Present only so the list stays
+  // exhaustive over Scope.
+  "refunds",
 ];
 
 export function isStaffRole(role?: string | null): role is StaffRole {

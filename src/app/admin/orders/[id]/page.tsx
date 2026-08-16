@@ -5,6 +5,9 @@ import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "../OrderStatusSelect";
 import PaymentStatusBadge from "../PaymentStatusBadge";
 import AssignRiderPanel from "./AssignRiderPanel";
+import RefundPanel from "./RefundPanel";
+import { requireAdmin } from "@/lib/require-admin";
+import { hasPermission } from "@/lib/permissions";
 import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 export default async function AdminOrderDetailPage({
@@ -14,6 +17,12 @@ export default async function AdminOrderDetailPage({
 }) {
   const { id } = await params;
 
+  // Refunds are their own scope — issuing money back is a different
+  // responsibility from moving an order through its statuses, so a role
+  // can be allowed one without the other (see lib/permissions.ts).
+  const session = await requireAdmin();
+  const canRefund = hasPermission((session.user as { role?: string }).role, "refunds");
+
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
@@ -21,6 +30,12 @@ export default async function AdminOrderDetailPage({
       user: true,
       table: true,
       deliveryTracking: { select: { riderId: true } },
+      // Newest first — the usual question is "what was the last thing we
+      // sent back", not the first.
+      refunds: {
+        orderBy: { createdAt: "desc" },
+        include: { issuedBy: { select: { name: true, email: true } } },
+      },
     },
   });
 
@@ -33,6 +48,27 @@ export default async function AdminOrderDetailPage({
   const money = (value: { toFixed(dp: number): string }) =>
     formatAmount(value.toFixed(units), order.currency);
   const positive = (value: { greaterThan(n: number): boolean }) => value.greaterThan(0);
+
+  // ── Refund state ─────────────────────────────────────────────────────
+  //
+  // Refundable amount is measured against totalAmount — what was actually
+  // charged to the card — not grandTotal. Anything paid with a gift card
+  // or loyalty points never reached Stripe, so it cannot come back from
+  // there; cancelOrder() returns that to the ledger instead.
+  const refundable = order.totalAmount.minus(order.refundedAmount);
+  const isOnline = order.paymentMethod === "ONLINE";
+  const isPaid =
+    order.paymentStatus === "PAID" || order.paymentStatus === "PARTIALLY_REFUNDED";
+
+  const refundBlockedReason = !isOnline
+    ? "This order was paid in person, so there is nothing to send back through Stripe."
+    : !isPaid
+      ? "This order has not been paid, so there is nothing to refund."
+      : !order.stripePaymentIntentId
+        ? "This order was paid before refunds were supported, so no Stripe payment reference was stored. Refund it from the Stripe dashboard — it will appear here automatically."
+        : refundable.lessThanOrEqualTo(0)
+          ? "Fully refunded."
+          : null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -111,6 +147,75 @@ export default async function AdminOrderDetailPage({
       {!isDineIn && (
         <div className="mb-6">
           <AssignRiderPanel orderId={order.id} currentRiderId={order.deliveryTracking?.riderId ?? null} />
+        </div>
+      )}
+
+      {/* Only shown to roles holding the "refunds" scope. Hiding it is not
+          the security boundary — the API route checks the same scope — but
+          there is no reason to show a control someone can't use. */}
+      {canRefund && isOnline && (
+        <RefundPanel
+          orderId={order.id}
+          currency={order.currency}
+          remaining={refundable.toNumber()}
+          chargedLabel={money(order.totalAmount)}
+          refundedLabel={positive(order.refundedAmount) ? money(order.refundedAmount) : null}
+          remainingLabel={money(refundable)}
+          canRefund={refundBlockedReason === null}
+          blockedReason={refundBlockedReason}
+        />
+      )}
+
+      {order.refunds.length > 0 && (
+        <div className="border border-gray-200 rounded-md p-4 bg-white mb-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Refund history
+          </h2>
+          <div className="space-y-2">
+            {order.refunds.map((refund) => (
+              <div
+                key={refund.id}
+                className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+              >
+                <span className="text-gray-700">
+                  {money(refund.amount)}
+                  <span className="text-gray-400">
+                    {" · "}
+                    {refund.createdAt.toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                    {" · "}
+                    {/* No issuer means it came from the Stripe dashboard
+                        rather than this app — worth being able to tell
+                        apart when reconciling. */}
+                    {refund.issuedBy?.name ?? refund.issuedBy?.email ?? "Stripe dashboard"}
+                  </span>
+                  {refund.reason && (
+                    <span className="text-gray-400"> · {refund.reason}</span>
+                  )}
+                </span>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    refund.status === "SUCCEEDED"
+                      ? "bg-sky-100 text-sky-700"
+                      : refund.status === "PENDING"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                  }`}
+                  title={refund.failureReason ?? undefined}
+                >
+                  {refund.status === "SUCCEEDED"
+                    ? "Sent"
+                    : refund.status === "PENDING"
+                      ? "Pending — check Stripe"
+                      : "Failed"}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -197,6 +302,13 @@ export default async function AdminOrderDetailPage({
             <div className="flex justify-between text-gray-600">
               <span>Points redeemed ({order.pointsRedeemed} pts)</span>
               <span className="text-[#2C6252]">-{money(order.pointsRedeemedAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.refundedAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Refunded</span>
+              <span className="text-sky-700">-{money(order.refundedAmount)}</span>
             </div>
           )}
 

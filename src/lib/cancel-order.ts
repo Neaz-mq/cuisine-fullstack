@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { canTransition } from "@/lib/order-state-machine";
 import { reverseLoyaltyPointsRedemption } from "@/lib/loyalty-redemption";
 import { type Money, ZERO } from "@/lib/money";
+import { refundOrder } from "@/lib/refund-order";
 
 /**
  * src/lib/cancel-order.ts
@@ -39,6 +40,14 @@ export interface ReversalSummary {
   giftCardRefunded: Money;
   loyaltyPointsReversed: number;
   redeemedPointsRefunded: number;
+
+  /**
+   * কার্ডে ফেরত পাঠানো টাকা। শূন্য থাকে COD/dine-in order-এ, আর এমন
+   * online order-এও যেখানে কখনো টাকা কাটা হয়নি (abandoned checkout)।
+   */
+  cardRefunded: Money;
+  /** Stripe refund চেষ্টা করে ব্যর্থ হলে কারণ — cancel তবু হয়ে যায়। */
+  cardRefundError: string | null;
 }
 
 type CancelResult =
@@ -62,6 +71,8 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
       giftCardAmount: true,
       pointsAwarded: true,
       pointsRedeemed: true,
+      paymentMethod: true,
+      paymentStatus: true,
     },
   });
 
@@ -82,6 +93,8 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
     giftCardRefunded: ZERO,
     loyaltyPointsReversed: 0,
     redeemedPointsRefunded: 0,
+    cardRefunded: ZERO,
+    cardRefundError: null,
   };
 
   const order = await prisma.$transaction(
@@ -120,6 +133,36 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<Can
     // round trip, পুরোটা সময় row lock ধরে রেখে।
     { timeout: 15000 }
   );
+
+  // ── কার্ডের টাকা ফেরত ────────────────────────────────────────────────
+  //
+  // ⚠️ ইচ্ছাকৃতভাবে transaction-এর বাইরে, এবং তার পরে।
+  //
+  // Stripe একটা বাইরের সিস্টেম — তার call database transaction-এর ভেতরে
+  // রাখলে network latency-টুকু পুরো সময় row lock ধরে রাখত, আর Stripe
+  // ধীর হলে অন্য order-ও আটকে যেত। উল্টোটাও খারাপ: refund সফল হওয়ার পর
+  // transaction rollback হলে টাকা চলে যেত অথচ order বাতিলই হতো না।
+  //
+  // তাই আগে বাতিল (আমাদের নিজের state), তারপর টাকা ফেরত। refund ব্যর্থ
+  // হলে order বাতিলই থাকে আর summary-তে কারণটা ফেরত যায় — কারণ "বাতিল
+  // হয়েছে কিন্তু টাকা ফেরত যায়নি" অবস্থাটা দৃশ্যমান হওয়া দরকার, নীরবে
+  // পুরো cancel ব্যর্থ করে দেওয়ার চেয়ে।
+  //
+  // refundOrder() নিজেই যাচাই করে টাকা আদৌ কাটা হয়েছিল কিনা, তাই
+  // abandoned checkout (PENDING) বা COD-এ এটা নিরীহভাবে ফিরে আসে।
+  if (existing.paymentMethod === "ONLINE" && existing.paymentStatus === "PAID") {
+    const refund = await refundOrder({
+      orderId,
+      reason: reason ? `Order cancelled: ${reason}` : "Order cancelled",
+    });
+
+    if (refund.ok) {
+      summary.cardRefunded = refund.amount;
+    } else {
+      summary.cardRefundError = refund.detail ?? refund.error;
+      console.error("Card refund failed while cancelling order", orderId, refund.error);
+    }
+  }
 
   return { ok: true, order, reversed: summary };
 }

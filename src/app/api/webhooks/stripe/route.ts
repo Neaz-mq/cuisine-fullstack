@@ -7,6 +7,7 @@ import { syncCustomerToAudience } from "@/lib/resend";
 import { createGiftCard } from "@/lib/gift-cards";
 import { sendGiftCardEmail } from "@/lib/send-gift-card-email";
 import { cancelOrder } from "@/lib/cancel-order";
+import { recordExternalRefunds } from "@/lib/refund-order";
 
 /**
  * src/app/api/webhooks/stripe/route.ts
@@ -85,7 +86,36 @@ export async function POST(request: Request) {
 
         const orderId = session.metadata?.orderId;
         if (orderId) {
-          await handleOrderPaid(orderId);
+          await handleOrderPaid(orderId, session);
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        // Stripe dashboard থেকে সরাসরি refund করা হয়েছে।
+        //
+        // এটা না সামলালে দুই জায়গায় দুই সত্য থাকত: Stripe বলত টাকা ফেরত
+        // গেছে, আমাদের admin বলত order সম্পূর্ণ PAID। হিসাব মেলানোর সময়
+        // সেটাই সবচেয়ে বিভ্রান্তিকর।
+        //
+        // আমাদের নিজের UI থেকে করা refund-ও এই event হয়ে ফিরে আসে —
+        // তখন Refund row ইতিমধ্যে আছে, তাই stripeRefundId-এর unique
+        // constraint চুপচাপ সেটা উপেক্ষা করে।
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId =
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id;
+
+        if (paymentIntentId) {
+          await recordExternalRefunds(
+            paymentIntentId,
+            (charge.refunds?.data ?? []).map((r) => ({
+              id: r.id,
+              amount: r.amount,
+              reason: r.reason,
+            }))
+          );
         }
         break;
       }
@@ -129,10 +159,24 @@ export async function POST(request: Request) {
  * sync চালায়। দাবিটা updateMany দিয়ে — যে call count 1 পায় সেটাই
  * একমাত্র email পাঠায়, বাকি duplicate delivery চুপচাপ ফিরে যায়।
  */
-async function handleOrderPaid(orderId: string) {
+async function handleOrderPaid(orderId: string, session: Stripe.Checkout.Session) {
+  // ⚠️ payment_intent এখানেই ধরে রাখতে হয়, আর কোথাও নয়।
+  //
+  // Stripe-এর Refunds API একটা payment intent বা charge id ছাড়া কাজ করে
+  // না, অথচ আগে এই webhook শুধু metadata.orderId পড়ে বাকি সব ফেলে দিত।
+  // ফলে টাকা নেওয়া যেত কিন্তু ফেরত দেওয়ার কোনো পথ থাকত না — এই একটা
+  // লাইন না থাকায় গোটা refund feature-ই অসম্ভব ছিল।
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+
   const claim = await prisma.order.updateMany({
     where: { id: orderId, paymentStatus: { not: "PAID" } },
-    data: { paymentStatus: "PAID" },
+    data: {
+      paymentStatus: "PAID",
+      ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
+    },
   });
 
   // count 0 মানে অন্য কোনো delivery ইতিমধ্যে এটা সামলে ফেলেছে।
