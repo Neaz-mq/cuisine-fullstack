@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import RiderDashboard, { type Delivery } from "./RiderDashboard";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 export default async function MyDeliveriesPage() {
   const session = await auth();
@@ -26,6 +27,7 @@ export default async function MyDeliveriesPage() {
           state: true,
           zip: true,
           totalAmount: true,
+          currency: true,
           paymentMethod: true,
         },
       },
@@ -42,7 +44,12 @@ export default async function MyDeliveriesPage() {
       address: [d.order.address, d.order.apartment, d.order.city, d.order.state, d.order.zip]
         .filter(Boolean)
         .join(", "),
-      totalAmount: d.order.totalAmount.toNumber(),
+      // /api/rider/deliveries-এর সাথে হুবহু একই আকৃতি — নইলে প্রথম
+      // poll-এর পরেই অঙ্কের চেহারা বদলে যেতো।
+      totalAmount: formatAmount(
+        d.order.totalAmount.toFixed(minorUnitsFor(d.order.currency)),
+        d.order.currency
+      ),
       paymentMethod: d.order.paymentMethod,
       destLat: d.destLat,
       destLng: d.destLng,

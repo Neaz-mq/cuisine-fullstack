@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 type Category = { id: string; name: string };
 
@@ -19,7 +19,32 @@ type MenuItemFormProps = {
   };
 };
 
+
+/**
+ * The restaurant's configured currency, for labelling amount inputs.
+ *
+ * A client component can't read RestaurantSettings directly (that would
+ * drag Prisma into the browser bundle), so it comes over /api/settings.
+ * Empty string until it arrives — the label just reads "Amount" for a
+ * moment rather than flashing a wrong currency.
+ */
+function useCurrency() {
+  const [currency, setCurrency] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.currency && setCurrency(data.currency))
+      .catch(() => {
+        // Label falls back to no currency — nothing else breaks.
+      });
+  }, []);
+
+  return currency;
+}
+
 export default function MenuItemForm({ categories, initialData }: MenuItemFormProps) {
+  const currency = useCurrency();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
@@ -132,9 +157,16 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
 
       <div className="flex gap-4">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Price{currency ? ` (${currency})` : ""}
+          </label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
+            {/* The ISO code rather than a "$" glyph — the restaurant may not
+                be pricing in dollars, and a wrong symbol on the one screen
+                where prices are SET is how wrong prices get typed. */}
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+              {currency}
+            </span>
             <input
               type="number"
               step="0.01"
@@ -142,7 +174,7 @@ export default function MenuItemForm({ categories, initialData }: MenuItemFormPr
               placeholder="e.g. 8.99"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-md text-sm"
+              className={`w-full ${currency ? "pl-12" : "pl-3"} pr-3 py-2 border border-gray-300 rounded-md text-sm`}
               required
             />
           </div>

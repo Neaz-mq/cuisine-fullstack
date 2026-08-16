@@ -6,8 +6,20 @@ import OrderStatusSelect from "./OrderStatusSelect";
 import OrdersToolbar from "./OrdersToolbar";
 import Pagination from "./Pagination";
 import PaymentStatusBadge from "./PaymentStatusBadge";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 const PAGE_SIZE = 10;
+
+/**
+ * Formatted against each order's OWN currency, not today's settings.
+ *
+ * This list can legitimately mix currencies — if the restaurant switches,
+ * older orders keep the one they were placed in — so every row formats
+ * from its own snapshot rather than a single page-level setting.
+ */
+function money(order: { currency: string }, value: { toFixed(dp: number): string }) {
+  return formatAmount(value.toFixed(minorUnitsFor(order.currency)), order.currency);
+}
 
 // order.shippingMethod is optional now (dine-in orders have none), so this
 // can no longer assume "not Uber Eats therefore Food Panda" — that used to
@@ -129,7 +141,7 @@ export default async function AdminOrdersPage({
                       {item.menuItem.title}{" "}
                       <span className="text-gray-400">x{item.quantity}</span>
                     </span>
-                    <span>${item.price.times(item.quantity).toFixed(2)}</span>
+                    <span>{money(order, item.price.times(item.quantity))}</span>
                   </div>
                 ))}
               </div>
@@ -151,7 +163,7 @@ export default async function AdminOrdersPage({
                   )}
                 </span>
                 <span className="font-bold text-[#2C6252]">
-                  USD ${order.totalAmount.toFixed(2)}
+                  {money(order, order.totalAmount)}
                 </span>
               </div>
             </div>

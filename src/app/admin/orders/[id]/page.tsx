@@ -5,6 +5,7 @@ import { formatOrderId } from "@/lib/format-order-id";
 import OrderStatusSelect from "../OrderStatusSelect";
 import PaymentStatusBadge from "../PaymentStatusBadge";
 import AssignRiderPanel from "./AssignRiderPanel";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -26,6 +27,12 @@ export default async function AdminOrderDetailPage({
   if (!order) notFound();
 
   const isDineIn = order.orderType === "DINE_IN";
+
+  // This order's own currency, not today's settings.
+  const units = minorUnitsFor(order.currency);
+  const money = (value: { toFixed(dp: number): string }) =>
+    formatAmount(value.toFixed(units), order.currency);
+  const positive = (value: { greaterThan(n: number): boolean }) => value.greaterThan(0);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -119,10 +126,90 @@ export default async function AdminOrderDetailPage({
                 {item.menuItem.title}{" "}
                 <span className="text-gray-400">x{item.quantity}</span>
               </span>
-              <span>${item.price.times(item.quantity).toFixed(2)}</span>
+              <span>{money(item.price.times(item.quantity))}</span>
             </div>
           ))}
         </div>
+        {/* ── The bill ────────────────────────────────────────────────
+            Staff need this as much as the customer does: a refund, a
+            dispute or a cash reconciliation all turn on knowing how much of
+            the total was tax (the government's) and how much was tip (the
+            staff's) — neither of which is the restaurant's revenue. */}
+        <div className="space-y-1.5 pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>Subtotal</span>
+            <span>{money(order.subtotal)}</span>
+          </div>
+
+          {positive(order.discountAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+              <span className="text-[#2C6252]">-{money(order.discountAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.tierDiscountAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Tier discount</span>
+              <span className="text-[#2C6252]">-{money(order.tierDiscountAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.serviceCharge) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Service charge</span>
+              <span>{money(order.serviceCharge)}</span>
+            </div>
+          )}
+
+          {positive(order.deliveryFee) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Delivery</span>
+              <span>{money(order.deliveryFee)}</span>
+            </div>
+          )}
+
+          {positive(order.taxAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>
+                {order.taxName}
+                {/* The rate is shown because it is snapshotted per order —
+                    an old invoice charged at 5% must still read 5% after
+                    the restaurant moves to 10%. */}
+                <span className="text-gray-400">
+                  {" @ "}
+                  {Number(order.taxRate) * 100}%
+                  {order.taxMode === "INCLUSIVE" ? ", included" : ""}
+                </span>
+              </span>
+              <span>{money(order.taxAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.giftCardAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ""}</span>
+              <span className="text-[#2C6252]">-{money(order.giftCardAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.pointsRedeemedAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>Points redeemed ({order.pointsRedeemed} pts)</span>
+              <span className="text-[#2C6252]">-{money(order.pointsRedeemedAmount)}</span>
+            </div>
+          )}
+
+          {positive(order.tipAmount) && (
+            <div className="flex justify-between text-gray-600">
+              <span>
+                Tip <span className="text-gray-400">(staff, not revenue)</span>
+              </span>
+              <span>{money(order.tipAmount)}</span>
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-between items-center pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
           <span className="text-gray-500 flex items-center gap-2">
             {isDineIn
@@ -144,9 +231,7 @@ export default async function AdminOrderDetailPage({
               <PaymentStatusBadge status={order.paymentStatus} />
             )}
           </span>
-          <span className="font-bold text-[#2C6252]">
-            USD ${order.totalAmount.toFixed(2)}
-          </span>
+          <span className="font-bold text-[#2C6252]">{money(order.totalAmount)}</span>
         </div>
       </div>
     </div>

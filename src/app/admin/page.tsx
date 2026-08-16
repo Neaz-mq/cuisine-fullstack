@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
 import BusinessSummaryCard from "@/components/admin/BusinessSummaryCard";
+import { Prisma } from "@/generated/prisma/client";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 function formatOrderId(id: string) {
   return `#ORD-${id.slice(-6).toUpperCase()}`;
@@ -53,7 +56,16 @@ export default async function AdminDashboardPage() {
     }),
     prisma.order.count({ where: { status: "DELIVERED" } }),
     prisma.order.aggregate({
-      _sum: { totalAmount: true },
+      // ⚠️ totalAmount নয় — grandTotal আর taxAmount।
+      //
+      // totalAmount-এ কর আর বকশিশ দুটোই আছে। করের টাকা সরকারের, বকশিশ
+      // কর্মীর — দুটোকেই "আয়" গুনলে মালিকের প্রতিটা সংখ্যা ফুলে যেতো,
+      // আর VAT ১৫% এমন দেশে ঠিক ততটাই বেশি।
+      //
+      // /api/admin/insights/summary ইতিমধ্যেই net sales ব্যবহার করে;
+      // এই dashboard-টা করতো না, ফলে মালিক এক অ্যাপে দুই রকম revenue
+      // দেখতেন।
+      _sum: { grandTotal: true, taxAmount: true },
       where: { status: { not: "CANCELLED" } },
     }),
     prisma.order.findMany({
@@ -66,7 +78,7 @@ export default async function AdminDashboardPage() {
         createdAt: { gte: sevenDaysAgo },
         status: { not: "CANCELLED" },
       },
-      select: { createdAt: true, totalAmount: true },
+      select: { createdAt: true, grandTotal: true, taxAmount: true },
     }),
     prisma.orderItem.findMany({
       where: {
@@ -76,13 +88,22 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  const totalRevenue = revenueResult._sum.totalAmount ?? 0;
+  // Net sales — বিল থেকে কর বাদ। gift card বা point দিয়ে দেওয়া অংশ বাদ
+  // দেওয়া হয়নি: খাবার বিক্রি হয়েছে, কেবল পরিশোধ আগে হয়েছিল।
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
+  const revenueMoney = (value: { toFixed(dp: number): string }) =>
+    formatAmount(value.toFixed(units), settings.currency);
+
+  const totalRevenue = (revenueResult._sum.grandTotal ?? new Prisma.Decimal(0)).minus(
+    revenueResult._sum.taxAmount ?? new Prisma.Decimal(0)
+  );
 
   const stats = [
     { label: "Total Orders", value: totalOrders },
     { label: "Pending / In Progress", value: pendingOrders },
     { label: "Delivered", value: deliveredOrders },
-    { label: "Total Revenue", value: `USD $${totalRevenue.toFixed(2)}` },
+    { label: "Total Revenue", value: revenueMoney(totalRevenue) },
   ];
 
   // --- Daily revenue chart (last 7 days) ---
@@ -98,8 +119,9 @@ export default async function AdminDashboardPage() {
     );
     if (dayIndex >= 0 && dayIndex < 7) {
       // Decimal -> number, কারণ এটা কেবল bar chart-এর উচ্চতা। টাকার
-      // হিসাব নয়, তাই এখানে float সম্পূর্ণ নিরাপদ।
-      dayBuckets[dayIndex].revenue += order.totalAmount.toNumber();
+      // হিসাব নয়, তাই এখানে float সম্পূর্ণ নিরাপদ। ভিত্তিটা উপরের মতোই
+      // net sales, যাতে দুটো সংখ্যা একে অপরের সাথে মেলে।
+      dayBuckets[dayIndex].revenue += order.grandTotal.minus(order.taxAmount).toNumber();
     }
   });
   const maxRevenue = Math.max(...dayBuckets.map((d) => d.revenue), 1);
@@ -176,7 +198,12 @@ export default async function AdminDashboardPage() {
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[order.status] ?? "bg-gray-100 text-gray-700"}`}>
                 {order.status.replace(/_/g, " ")}
               </span>
-              <span className="text-sm font-semibold text-[#2C6252]">${order.totalAmount.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-[#2C6252]">
+                {formatAmount(
+                  order.totalAmount.toFixed(minorUnitsFor(order.currency)),
+                  order.currency
+                )}
+              </span>
             </div>
           ))
         )}
@@ -188,7 +215,9 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="border border-gray-200 rounded-md p-4 bg-white">
           <p className="text-xs text-gray-400 mb-1">Revenue (last 7 days)</p>
-          <p className="text-xl font-bold text-[#2C6252]">USD ${weekTotal.toFixed(2)}</p>
+          <p className="text-xl font-bold text-[#2C6252]">
+            {settings.currency} {weekTotal.toFixed(units)}
+          </p>
         </div>
         <div className="border border-gray-200 rounded-md p-4 bg-white">
           <p className="text-xs text-gray-400 mb-1">Orders (last 7 days)</p>
@@ -204,7 +233,7 @@ export default async function AdminDashboardPage() {
           {dayBuckets.map((day) => (
             <div key={day.label} className="flex-1 flex flex-col items-center justify-end h-full">
               <span className="text-xs text-gray-500 mb-1">
-                {day.revenue > 0 ? `$${day.revenue.toFixed(0)}` : ""}
+                {day.revenue > 0 ? day.revenue.toFixed(0) : ""}
               </span>
               <div
                 className="w-full bg-[#2C6252] rounded-t-sm transition-all"
@@ -237,7 +266,7 @@ export default async function AdminDashboardPage() {
                 </div>
                 <span className="text-xs text-gray-500 w-16 text-right">{item.quantity} sold</span>
                 <span className="text-xs font-semibold text-[#2C6252] w-20 text-right">
-                  ${item.revenue.toFixed(2)}
+                  {settings.currency} {item.revenue.toFixed(units)}
                 </span>
               </div>
             ))}

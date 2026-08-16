@@ -7,10 +7,14 @@ export default function GiftCardActions({
   giftCardId,
   isActive,
   balance,
+  currency,
 }: {
   giftCardId: string;
   isActive: boolean;
   balance: number;
+  /** Passed down from the server page rather than fetched here — no extra
+   *  request, and no moment where the prompt shows the wrong currency. */
+  currency: string;
 }) {
   const router = useRouter();
   const [active, setActive] = useState(isActive);
@@ -31,7 +35,7 @@ export default function GiftCardActions({
 
   function handleAdjust() {
     const input = window.prompt(
-      `Current balance is $${balance.toFixed(2)}. Enter an amount to add (e.g. 10) or deduct (e.g. -5):`
+      `Current balance is ${currency} ${balance.toFixed(2)}. Enter an amount to add (e.g. 10) or deduct (e.g. -5):`
     );
     if (!input) return;
 

@@ -2,8 +2,12 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import AvailabilityToggle from "./AvailabilityToggle";
 import DeleteMenuItemButton from "./DeleteMenuItemButton";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
 
 export default async function AdminMenuPage() {
+  const settings = await getRestaurantSettings();
+  const units = minorUnitsFor(settings.currency);
   const categories = await prisma.category.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -48,7 +52,7 @@ export default async function AdminMenuPage() {
                       </div>
 
                       <span className="text-sm font-semibold text-[#2C6252] w-16 text-right">
-                        ${item.price.toFixed(2)}
+                        {formatAmount(item.price.toFixed(units), settings.currency)}
                       </span>
 
                       <AvailabilityToggle itemId={item.id} isAvailable={item.isAvailable} />
