@@ -43,6 +43,10 @@ model User {
   reviews             Review[]
   loyaltyTransactions LoyaltyTransaction[]
 
+  // Refunds this user ISSUED, not ones they received — only staff ever
+  // appear here. A customer's refunds hang off their Order.
+  issuedRefunds       Refund[]
+
   // Present only for staff accounts (role != CUSTOMER). A CUSTOMER user
   // never has one of these — the Staff management feature is what creates
   // both the User row and this row together, in one transaction.
@@ -394,6 +398,42 @@ model Order {
   // delivery/at table" admin action exists yet).
   paymentStatus PaymentStatus @default(PENDING)
 
+  // ---------------------------------------------------------------------
+  // Refunds
+  // ---------------------------------------------------------------------
+
+  /**
+   * The Stripe PaymentIntent this order was charged on.
+   *
+   * ⚠️ Without this a refund is simply impossible: Stripe's Refunds API
+   * needs a payment intent or charge id, and until now the webhook only
+   * ever read `metadata.orderId` off the session and threw the rest away.
+   * Orders paid BEFORE this column existed therefore cannot be refunded
+   * through the app — they have to be refunded from the Stripe dashboard,
+   * and the charge.refunded webhook will then record it here anyway.
+   *
+   * Null for COD / Pay-at-Table orders, which were never charged online.
+   */
+  stripePaymentIntentId String? @unique
+
+  /**
+   * How much has actually been sent back, summed across every successful
+   * Refund below. Denormalised on purpose — the admin orders list would
+   * otherwise need an aggregate per row — but it is only ever written by
+   * the refund flow, in the same transaction that writes the Refund row.
+   *
+   * Also acts as the concurrency guard: the claim is a conditional
+   * increment (`refundedAmount <= totalAmount - amount`), so two admins
+   * clicking Refund at the same moment cannot together send back more
+   * than was charged. Same compare-and-set shape as stockDeductedAt.
+   */
+  refundedAmount Decimal @default(0) @db.Decimal(12, 3)
+
+  /** When the FIRST refund on this order succeeded. */
+  refundedAt DateTime?
+
+  refunds Refund[]
+
   // Captured at checkout, independent of User.marketingConsent, because
   // guest checkout (userId = null) has no User row to store a preference
   // on. This is what the checkout.session.completed webhook (and the COD
@@ -488,6 +528,16 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+
+  // Money has been sent back to the customer. PARTIALLY_REFUNDED means
+  // some of it has — a single wrong dish off a five-dish order, say.
+  //
+  // These are DERIVED from Order.refundedAmount, never set by hand: the
+  // ledger of Refund rows is the truth, and this enum is a denormalised
+  // read of it for badges and filters. See recomputePaymentStatus() in
+  // lib/refund-order.ts.
+  PARTIALLY_REFUNDED
+  REFUNDED
 }
 
 // Live rider tracking for OWN_DELIVERY orders. One row per order, created
@@ -1479,4 +1529,76 @@ model PurchaseOrderItem {
   // Same reasoning as MenuItemIngredient's uniqueness constraint.
   @@unique([purchaseOrderId, inventoryItemId])
   @@index([inventoryItemId])
+}
+
+/**
+ * An append-only ledger of money sent back to a customer.
+ *
+ * One row per refund attempt, never mutated except to move status
+ * PENDING -> SUCCEEDED/FAILED. Same philosophy as StockMovement,
+ * GiftCardTransaction and LoyaltyTransaction: the rows are the record of
+ * what happened, and Order.refundedAmount is a cache of their sum.
+ *
+ * ── Why the row is written BEFORE Stripe is called ────────────────────
+ *
+ * A refund is an external side effect that cannot be rolled back by a
+ * database transaction. If we called Stripe first and crashed before
+ * writing the row, the customer would have their money and we would have
+ * no record — and the next click would send it again.
+ *
+ * So the row is created PENDING first, and its id is used as the Stripe
+ * idempotency key. A crash leaves a visible PENDING row to reconcile
+ * rather than silent double-spend, and a retry with the same key is a
+ * no-op at Stripe's end.
+ */
+model Refund {
+  id String @id @default(cuid())
+
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  /** Always positive. The direction is implied by the model. */
+  amount   Decimal @db.Decimal(12, 3)
+  /** Snapshotted, like everywhere else — the order's currency at the time. */
+  currency String
+
+  status RefundStatus @default(PENDING)
+
+  /**
+   * Stripe's refund id (`re_...`). Unique, and that uniqueness is the real
+   * idempotency guard for the charge.refunded webhook: a refund started
+   * from the Stripe dashboard arrives as an event with no row of ours
+   * behind it, and this constraint stops repeated deliveries recording it
+   * twice.
+   *
+   * Null while PENDING, and null forever for a FAILED attempt.
+   */
+  stripeRefundId String? @unique
+
+  /** Free text from whoever pressed the button — shown in the admin UI. */
+  reason String?
+
+  /**
+   * The staff member who issued it. Null when Stripe itself is the origin
+   * (dashboard refund arriving via webhook), which is exactly the case
+   * worth being able to tell apart during a dispute.
+   */
+  issuedBy   User?   @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedById String?
+
+  /** Stripe's own message when status is FAILED, kept for support. */
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
+
+enum RefundStatus {
+  /** Row written, Stripe not yet confirmed. Needs reconciling if it sticks. */
+  PENDING
+  SUCCEEDED
+  FAILED
 }

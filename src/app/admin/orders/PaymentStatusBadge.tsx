@@ -17,12 +17,19 @@ const STATUS_STYLES: Record<string, string> = {
   PAID: "bg-green-100 text-green-700",
   PENDING: "bg-amber-100 text-amber-700",
   FAILED: "bg-red-100 text-red-700",
+  // Refunded states are blue rather than red: money going back is a
+  // normal, completed outcome, not a failure. Red here would have staff
+  // chasing a problem that doesn't exist.
+  PARTIALLY_REFUNDED: "bg-sky-100 text-sky-700",
+  REFUNDED: "bg-sky-100 text-sky-700",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   PAID: "Paid",
   PENDING: "Payment pending",
   FAILED: "Payment failed",
+  PARTIALLY_REFUNDED: "Partly refunded",
+  REFUNDED: "Refunded",
 };
 
 export default function PaymentStatusBadge({ status }: { status: string }) {
