@@ -25,6 +25,7 @@ import { ZERO, sum, toMoney, toStripeMinorUnits, type Money } from "@/lib/money"
 import { parseBody } from "@/lib/validations/parse";
 import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * src/app/api/checkout/create-session/route.ts
@@ -60,6 +61,33 @@ import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email"
  */
 export async function POST(request: Request) {
   try {
+    // /api/orders (COD) rate-limits at 10 per 10 minutes per IP — this is
+    // the ONLINE-payment equivalent of that same action (create an order),
+    // so it gets the same guard. This route is a stricter target than that
+    // one, though: unlike a COD order, a single call here already deducts
+    // stock, consumes a coupon's usage slot, and debits a gift card's
+    // balance — all before any payment is confirmed. Guest checkout is
+    // allowed (session is optional below), so IP is the only identity
+    // available at this point; per-customer limits are enforced later,
+    // inside coupon/gift-card validation itself.
+    //
+    // ⚠️ rate-limit.ts is process-local — see its own file comment. This
+    // deters casual scripted abuse; it is not a hard distributed
+    // guarantee, and shouldn't be relied on as one.
+    const rateLimitResult = checkRateLimit(request, "create-checkout-session", {
+      limit: 10,
+      windowMs: 10 * 60_000,
+    });
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many checkout attempts from this device. Please wait a moment and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) },
+        }
+      );
+    }
+
     const parsed = await parseBody(request, createCheckoutSessionSchema);
     if (parsed instanceof NextResponse) return parsed;
     const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent } =
