@@ -37,7 +37,15 @@ import { hasPermission, hasAnyPermission, isStaffRole, type Scope } from "@/lib/
  * (staffProfile), এখন সেই একই query-তে role-ও আসে। শুধু একটা lookup
  * আরেকটা দিয়ে বদলে গেছে, নতুন round trip যোগ হয়নি।
  */
-async function loadActiveRole(userId: string): Promise<string | null> {
+/**
+ * Exported so lib/order-access.ts can reuse it.
+ *
+ * ⚠️ Do NOT reimplement this anywhere. The whole point is that role comes
+ * from the database on every request, never from the session/JWT — a
+ * demoted MANAGER's token still says MANAGER until it expires. A second
+ * copy of this logic is exactly how that bug comes back.
+ */
+export async function loadActiveRole(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true, staffProfile: { select: { isActive: true } } },

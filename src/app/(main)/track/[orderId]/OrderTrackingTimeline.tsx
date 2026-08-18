@@ -27,12 +27,23 @@ type OrderItem = {
   menuItem: { title: string };
 };
 
+/**
+ * ⚠️ স্থানাঙ্কগুলো nullable, এবং সেটা ইচ্ছাকৃত।
+ *
+ * Server (page.tsx আর GET /api/orders/[id] — দুটোই lib/order-access.ts-এর
+ * canSeeRiderLocation ব্যবহার করে) rider-এর অবস্থান কেবল তখনই পাঠায় যখন
+ * order সত্যিই পথে আছে। ডেলিভারি শেষ হলে বা এখনো শুরু না হলে এই পাঁচটা
+ * field null হয়ে আসে।
+ *
+ * object টা তবু null হয় না, কারণ নিচের chat panel deliveredAt দেখে
+ * "এই ডেলিভারি শেষ — চ্যাট বন্ধ" বার্তাটা দেখায়।
+ */
 type DeliveryTracking = {
-  riderLat: number;
-  riderLng: number;
-  riderLocationUpdatedAt: string;
-  destLat: number;
-  destLng: number;
+  riderLat: number | null;
+  riderLng: number | null;
+  riderLocationUpdatedAt: string | null;
+  destLat: number | null;
+  destLng: number | null;
   deliveredAt: string | null;
 };
 
@@ -92,6 +103,30 @@ function stepsFor(orderType: "DELIVERY" | "DINE_IN") {
     },
     { key: "DELIVERED", label: orderType === "DINE_IN" ? "Served" : "Delivered", icon: PackageCheck },
   ] as const;
+}
+
+/**
+ * Type guard — TypeScript-কে বোঝায় যে স্থানাঙ্কগুলো এখানে number,
+ * null নয়, যাতে LiveDeliveryMap-এ non-null assertion (`!`) লিখতে না হয়।
+ */
+function hasRiderLocation(
+  tracking: DeliveryTracking | null
+): tracking is DeliveryTracking & {
+  riderLat: number;
+  riderLng: number;
+  destLat: number;
+  destLng: number;
+  riderLocationUpdatedAt: string;
+} {
+  return (
+    tracking !== null &&
+    tracking.deliveredAt === null &&
+    tracking.riderLat !== null &&
+    tracking.riderLng !== null &&
+    tracking.destLat !== null &&
+    tracking.destLng !== null &&
+    tracking.riderLocationUpdatedAt !== null
+  );
 }
 
 export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: TrackedOrder }) {
@@ -207,10 +242,17 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
         </p>
       )}
 
+{/*
+        Map টা কেবল তখনই, যখন server আসলেই স্থানাঙ্ক পাঠিয়েছে।
+        status/deliveredAt check গুলো রেখে দেওয়া হয়েছে — server ওই একই
+        নিয়মই প্রয়োগ করে, কিন্তু client-এ দ্বিতীয়বার যাচাই করলে server
+        আর UI-র নিয়ম কখনো আলাদা হয়ে গেলে খালি map-এর বদলে কিছুই দেখাবে
+        না। hasRiderLocation-ই আসল রক্ষী; বাকিগুলো পাঠককে উদ্দেশ্যটা
+        মনে করিয়ে দেয়।
+      */}
       {order.status === "OUT_FOR_DELIVERY" &&
         order.orderType === "DELIVERY" &&
-        order.deliveryTracking &&
-        !order.deliveryTracking.deliveredAt && (
+        hasRiderLocation(order.deliveryTracking) && (
           <LiveDeliveryMap
             rider={{ lat: order.deliveryTracking.riderLat, lng: order.deliveryTracking.riderLng }}
             destination={{ lat: order.deliveryTracking.destLat, lng: order.deliveryTracking.destLng }}

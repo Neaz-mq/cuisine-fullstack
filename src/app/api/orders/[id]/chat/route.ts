@@ -2,15 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validations/parse";
 import { sendChatMessageSchema } from "@/lib/validations/chat";
+import { resolveOrderAccess } from "@/lib/order-access";
 
 /**
  * GET/POST /api/orders/[id]/chat
  *
  * Customer side of the rider <-> customer live chat (see ChatMessage in
- * prisma/schema.prisma for the full design note). Public/unauthenticated,
- * same trust model as GET /api/orders/[id] — the unguessable order id
- * *is* the access token, since guest checkout customers have no account
- * to authenticate with.
+ * prisma/schema.prisma for the full design note). Same trust model as
+ * GET /api/orders/[id], and now literally the same code path: both go
+ * through resolveOrderAccess() in lib/order-access.ts.
+ *
+ * ⚠️ That sentence used to end differently. It said "public/
+ * unauthenticated — the unguessable order id *is* the access token",
+ * full stop, for every order. It now holds only for GUEST orders. If the
+ * order is bound to an account, the reader has to be that account (or
+ * staff). Anything else gets a 404 — never a 403, which would confirm
+ * the order exists.
+ *
+ * This route had to move in lockstep with GET /api/orders/[id]: leaving
+ * it open would have meant an attacker could still read the customer's
+ * first name off every chat message, and post messages to their rider.
  *
  * GET returns the full message history regardless of order status, so a
  * customer can still read what was said after delivery. POST (sending a
@@ -19,17 +30,31 @@ import { sendChatMessageSchema } from "@/lib/validations/chat";
  * messaging feature before or after that window.
  */
 
+/**
+ * Order + access check in one place, so GET and POST cannot drift apart.
+ *
+ * `userId` is selected purely to feed resolveOrderAccess — it is never
+ * returned to the caller.
+ */
 async function loadOrderForChat(id: string) {
-  return prisma.order.findUnique({
+  const order = await prisma.order.findUnique({
     where: { id },
     select: {
       id: true,
+      userId: true,
       firstName: true,
       status: true,
       orderType: true,
       shippingMethod: true,
     },
   });
+
+  if (!order) return null;
+
+  const access = await resolveOrderAccess(order);
+  if (!access) return null;
+
+  return order;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

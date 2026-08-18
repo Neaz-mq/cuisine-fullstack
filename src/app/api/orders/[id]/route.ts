@@ -8,19 +8,23 @@ import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { cancelOrder } from "@/lib/cancel-order";
 import { transitionError } from "@/lib/order-state-machine";
 import { minorUnitsFor } from "@/lib/currency-format";
+import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
 
-// Public, unauthenticated lookup for the /track/[orderId] page. Guest
-// checkout customers have no account to log into, so tracking has to work
-// without a session — the unguessable cuid order id is effectively the
-// access token here (same pattern most delivery apps use for tracking
-// links). Deliberately selects only tracking-relevant fields — not phone,
-// full address, or email — to limit what's exposed on an endpoint with no
-// auth check.
-//
-// deliveryTracking is included for the same reason but goes further:
-// riderId/rider name/phone are NEVER selected here, only the coordinates
-// and timestamp the live map needs. A guest with just the order link
-// should be able to see "your rider is here on the map", not who they are.
+/**
+ * GET /api/orders/[id] — /track/[orderId] পাতার poll endpoint.
+ *
+ * ⚠️ এখানে আগে কোনো auth ছিলই না। PATCH-এ requireApiScopeAny বসানো
+ * ছিল, GET-এ কিছুই না — অর্থাৎ id জানলেই যে কেউ গ্রাহকের নাম, শহর,
+ * পুরো চালান আর rider-এর live GPS পড়তে পারতো।
+ *
+ * এখন প্রতিটা request lib/order-access.ts-এর মধ্য দিয়ে যায়। নিয়মগুলো
+ * ওই file-এ বিস্তারিত; সংক্ষেপে: guest order-এ id-ই টিকিট, কিন্তু
+ * order-এর একজন মালিক থাকলে তাকে (বা staff-কে) log in করতে হবে।
+ *
+ * Field নির্বাচন আগের মতোই সংকীর্ণ — phone, পুরো ঠিকানা, email কখনোই
+ * যায় না। deliveryTracking-এ rider-এর id/নাম/ফোনও কখনো select হয় না,
+ * শুধু map-এর জন্য দরকারি স্থানাঙ্ক আর timestamp।
+ */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -39,6 +43,10 @@ export async function GET(
       city: true,
       orderType: true,
       shippingMethod: true,
+
+      // Access সিদ্ধান্তের জন্য — client-এ কখনো পাঠানো হয় না, নিচে
+      // response বানানোর সময় ইচ্ছাকৃতভাবে বাদ দেওয়া হয়েছে।
+      userId: true,
 
       // পূর্ণ চালান — /track পাতা প্রতি ১৫ সেকেন্ডে এটা poll করে, তাই
       // এখানকার আকৃতি server-render করা প্রথম আকৃতির সাথে হুবহু মিলতে
@@ -84,19 +92,43 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  // ⚠️ money field গুলো number-এ নামিয়ে পাঠানো হয়, কাঁচা Decimal নয়।
-  //
-  // এই endpoint-টা /track/[orderId]-এর OrderTrackingTimeline প্রতি ১৫
-  // সেকেন্ডে poll করে, আর সেখানকার type বলে totalAmount একটা number।
-  // JSON.stringify Decimal-কে string বানায় ("1050"), ফলে প্রথম render
-  // ঠিক দেখাত (server থেকে সরাসরি এসেছে) কিন্তু প্রথম poll-এর পরেই
-  // totalAmount.toFixed(2) crash করত — খুঁজে বের করা কঠিন একটা বাগ।
+  const access = await resolveOrderAccess(order);
+  if (!access) {
+    // ইচ্ছাকৃতভাবে 404, 403 নয়। 403 নিশ্চিত করে দিত যে এই id-তে একটা
+    // order আছে — সেটাই enumeration oracle।
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
   // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয়।
   const units = minorUnitsFor(order.currency);
   const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
 
+  // ⚠️ `...order` spread করা হয় না ইচ্ছাকৃতভাবে।
+  //
+  // এটা একটা security boundary — কী কী বাইরে যাচ্ছে সেটা এখানে হাতে
+  // লেখা থাকলে ভবিষ্যতে কেউ উপরের select-এ একটা field যোগ করলে (ধরা
+  // যাক phone, বা access check-এর জন্য আরেকটা internal column) সেটা
+  // নিজে থেকে response-এ ঢুকে পড়বে না। spread হলে ঢুকতো, আর কেউ
+  // টেরও পেতো না।
+  //
+  // এ কারণেই `userId`-ও এখানে নেই: ওটা কেবল resolveOrderAccess-এর
+  // জন্য select করা হয়েছিল, দেখানোর জন্য নয়।
   return NextResponse.json({
-    ...order,
+    id: order.id,
+    status: order.status,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    firstName: order.firstName,
+    city: order.city,
+    orderType: order.orderType,
+    shippingMethod: order.shippingMethod,
+    table: order.table,
+
+    currency: order.currency,
+    taxName: order.taxName,
+    taxMode: order.taxMode,
+    pointsRedeemed: order.pointsRedeemed,
+
     subtotal: money(order.subtotal),
     discountAmount: money(order.discountAmount),
     tierDiscountAmount: money(order.tierDiscountAmount),
@@ -114,7 +146,42 @@ export async function GET(
       ...item,
       price: money(item.price.times(item.quantity)),
     })),
+    deliveryTracking: serializeTracking(order),
   });
+}
+
+/**
+ * deliveryTracking → client-এর আকৃতি, স্থানাঙ্ক gate করে।
+ *
+ * Object টা রাখা হয় (null করা হয় না) কারণ /track পাতার chat panel
+ * deliveredAt দেখে "এই ডেলিভারি শেষ — চ্যাট বন্ধ" বার্তাটা দেখায়।
+ * কিন্তু delivery-র জানালা পেরিয়ে গেলে rider-এর স্থানাঙ্ক null হয়ে
+ * যায় — কারণ তখন ওটা আর order tracking নয়।
+ */
+function serializeTracking(order: {
+  status: string;
+  deliveryTracking: {
+    riderLat: number;
+    riderLng: number;
+    riderLocationUpdatedAt: Date;
+    destLat: number;
+    destLng: number;
+    deliveredAt: Date | null;
+  } | null;
+}) {
+  const tracking = order.deliveryTracking;
+  if (!tracking) return null;
+
+  const live = canSeeRiderLocation(order);
+
+  return {
+    riderLat: live ? tracking.riderLat : null,
+    riderLng: live ? tracking.riderLng : null,
+    riderLocationUpdatedAt: live ? tracking.riderLocationUpdatedAt.toISOString() : null,
+    destLat: live ? tracking.destLat : null,
+    destLng: live ? tracking.destLng : null,
+    deliveredAt: tracking.deliveredAt?.toISOString() ?? null,
+  };
 }
 
 /**
