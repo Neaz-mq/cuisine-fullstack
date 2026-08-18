@@ -1,8 +1,33 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import OrderTrackingTimeline from "./OrderTrackingTimeline";
 import { minorUnitsFor } from "@/lib/currency-format";
+import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
+
+/**
+ * /track/[orderId]
+ *
+ * ⚠️ এই পাতাটাই ছিল আসল ফাঁকটা।
+ *
+ * GET /api/orders/[id]-এ auth বসানোর পরেও এই পাতা একা হাতে সব ফাঁস
+ * করে দিতো — এটা একটা server component, নিজেই Prisma থেকে পড়ে, নিজেই
+ * render করে, poll endpoint-টাকে ছোঁয়ও না প্রথম বার। শুধু API বন্ধ
+ * করলে দরজায় তালা লাগিয়ে জানালা খোলা রাখা হতো।
+ *
+ * তাই দুটোই এখন এক নিয়মে চলে — lib/order-access.ts।
+ *
+ * ── 404 নয়, login redirect কেন ────────────────────────────────────────
+ *
+ * API route denial-এ 404 দেয় (enumeration আটকাতে)। কিন্তু পাতায় 404
+ * ভুল উত্তর: এখানে সবচেয়ে সম্ভাব্য দৃশ্যটা কোনো আক্রমণ নয় — গ্রাহক
+ * নিজেই, confirmation email-এর link ফোনে খুলেছে যেখানে সে logged out।
+ * তাকে "Order not found" দেখানো মানে একটা dead end।
+ *
+ * তাই callbackUrl সহ /login-এ পাঠানো হয়: log in করলে সে ঠিক এই
+ * পাতাতেই ফিরে আসবে। Guest order কখনো এই শাখায় পৌঁছায় না, কারণ
+ * মালিকহীন order-এ bearer access সবসময় পাশ করে।
+ */
 
 export default async function TrackOrderPage({
   params,
@@ -18,6 +43,9 @@ export default async function TrackOrderPage({
       status: true,
       createdAt: true,
       updatedAt: true,
+
+      // Access সিদ্ধান্তের জন্য — client component-এ কখনো যায় না।
+      userId: true,
 
       // পূর্ণ চালান — প্রতিটাই order-এর নিজস্ব snapshot, আজকের settings
       // নয়। তাই হার বদলালেও পুরোনো চালান অবিকৃত থাকে।
@@ -67,6 +95,17 @@ export default async function TrackOrderPage({
     notFound();
   }
 
+  const access = await resolveOrderAccess(order);
+  if (!access) {
+    redirect(`/login?callbackUrl=${encodeURIComponent(`/track/${orderId}`)}`);
+  }
+
+  // Rider-এর স্থানাঙ্ক কেবল ডেলিভারির জানালাটুকুতেই। বাইরে গেলে
+  // object টা থাকে (chat panel-এর "চ্যাট বন্ধ" বার্তার জন্য) কিন্তু
+  // coordinate গুলো null — কারণ শেষ হয়ে যাওয়া ডেলিভারির rider কোথায়
+  // আছে, সেটা আর tracking নয়।
+  const showRiderLocation = canSeeRiderLocation(order);
+
   // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয় — একটা
   // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে দেখানো ভুল হতো।
   const units = minorUnitsFor(order.currency);
@@ -92,7 +131,25 @@ export default async function TrackOrderPage({
         */}
         <OrderTrackingTimeline
           initialOrder={{
-            ...order,
+            // ⚠️ `...order` spread নয়, প্রতিটা field হাতে লেখা।
+            //
+            // client component-এ যা পাঠানো হয় তা RSC payload-এ চলে
+            // যায়, অর্থাৎ browser-এ পড়া যায়। spread করলে উপরের
+            // select-এ যোগ হওয়া যেকোনো নতুন field নীরবে সেখানে পৌঁছে
+            // যেতো — `userId` সহ, যেটা কেবল resolveOrderAccess-এর
+            // জন্য পড়া হয়েছে, দেখানোর জন্য নয়।
+            id: order.id,
+            status: order.status,
+            firstName: order.firstName,
+            city: order.city,
+            orderType: order.orderType,
+            shippingMethod: order.shippingMethod,
+            table: order.table,
+            currency: order.currency,
+            taxName: order.taxName,
+            taxMode: order.taxMode,
+            pointsRedeemed: order.pointsRedeemed,
+
             createdAt: order.createdAt.toISOString(),
             updatedAt: order.updatedAt.toISOString(),
             // Decimal -> string, currency-র নিজের দশমিক সংখ্যায়।
@@ -125,10 +182,13 @@ export default async function TrackOrderPage({
             })),
             deliveryTracking: order.deliveryTracking
               ? {
-                  ...order.deliveryTracking,
-                  // non-null in the schema (@default(now())), so no ?? null
-                  riderLocationUpdatedAt:
-                    order.deliveryTracking.riderLocationUpdatedAt.toISOString(),
+                  riderLat: showRiderLocation ? order.deliveryTracking.riderLat : null,
+                  riderLng: showRiderLocation ? order.deliveryTracking.riderLng : null,
+                  destLat: showRiderLocation ? order.deliveryTracking.destLat : null,
+                  destLng: showRiderLocation ? order.deliveryTracking.destLng : null,
+                  riderLocationUpdatedAt: showRiderLocation
+                    ? order.deliveryTracking.riderLocationUpdatedAt.toISOString()
+                    : null,
                   deliveredAt: order.deliveryTracking.deliveredAt?.toISOString() ?? null,
                 }
               : null,
