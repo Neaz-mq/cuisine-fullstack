@@ -40,6 +40,35 @@ import { minorUnitsFor } from "@/lib/currency-format";
  * count 0 মানে ইতিমধ্যে কেউ দাবি করে ফেলেছে। ঠিক সেই ধরনের atomic claim
  * যা advance-order-to-preparing.ts-এ stockDeductedAt দিয়ে করা হয় —
  * read-then-write নয়, নইলে দুটো tab থেকে দুবার পুরো টাকা ফেরত যেতে পারত।
+ *
+ * ── ⚠️ ধাপ ৩ আর ৪-এর মাঝের ফাঁক (আগের বাগ) ──────────────────────────
+ *
+ * ধাপ ৩ শেষ হওয়ার সাথে সাথে Stripe `charge.refunded` webhook পাঠায় —
+ * প্রায়ই ধাপ ৪ লেখার আগেই। তখনকার অবস্থাটা ছিল:
+ *
+ *   ধাপ ৩ → Stripe re_X ফেরত দিল
+ *   [ফাঁক] → webhook এলো। recordExternalRefunds re_X খুঁজল, পেল না
+ *            (কারণ stripeRefundId তখনো লেখা হয়নি), তাই একটা *দ্বিতীয়*
+ *            Refund row বানাল আর refundedAmount আবার বাড়াল
+ *   ধাপ ৪ → আমাদের update ওই re_X বসাতে গিয়ে P2002 খেল
+ *          → catch-এ পড়ল → row FAILED, দাবি ফেরত
+ *          → admin দেখল "Stripe refused the refund"
+ *
+ * টাকা কিন্তু ফেরত চলেই গেছে। মোট অঙ্কটা কাকতালীয়ভাবে ঠিক থাকত
+ * (+A webhook, +A দাবি, −A catch = +A), কিন্তু paymentStatus হিসাব হতো
+ * ক্ষণিকের 2A থেকে — তাই আংশিক refund-ও REFUNDED দেখাত — ledger-এ একটা
+ * ভুতুড়ে FAILED row পড়ে থাকত, আর সবচেয়ে খারাপ, staff ভাবত ফেরত হয়নি
+ * বলে Stripe dashboard থেকে হাতে আরেকবার পাঠাত। সেটাই আসল দ্বিগুণ ফেরত।
+ *
+ * ── সমাধান: refund-টা নিজের কিনা তা metadata দিয়ে চেনা ───────────────
+ *
+ * ধাপ ৩-এ Stripe refund-এ `metadata.refundId` বসানোই ছিল, শুধু webhook
+ * সেটা ফেলে দিত। এখন সেটা পড়া হয়, আর ওই id-র row থাকলে নতুন row না
+ * বানিয়ে *সেটাকেই* মিলিয়ে নেওয়া হয় (recordExternalRefunds-এ বিস্তারিত)।
+ *
+ * এতে race-টা আর সম্ভব নয়, কারণ PENDING row ধাপ ২-এ তৈরি হয় — অর্থাৎ
+ * Stripe-কে ডাকার *আগে*। webhook যত দ্রুতই আসুক, row-টা সবসময় তার চেয়ে
+ * পুরোনো।
  */
 
 export type RefundFailure =
@@ -52,6 +81,8 @@ export type RefundFailure =
   | "This order has no Stripe payment on record"
   | "Stripe refused the refund";
 
+export type PaymentStatusAfterRefund = "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+
 export type RefundResult =
   | {
       ok: true;
@@ -59,7 +90,7 @@ export type RefundResult =
       amount: Money;
       /** Total refunded on this order after this one. */
       refundedAmount: Money;
-      paymentStatus: "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED";
+      paymentStatus: PaymentStatusAfterRefund;
     }
   | { ok: false; error: RefundFailure; detail?: string };
 
@@ -75,10 +106,46 @@ export type RefundResult =
 export function recomputePaymentStatus(
   refundedAmount: Money,
   totalAmount: Money
-): "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED" {
+): PaymentStatusAfterRefund {
   if (refundedAmount.lessThanOrEqualTo(ZERO)) return "PAID";
   if (refundedAmount.greaterThanOrEqualTo(totalAmount)) return "REFUNDED";
   return "PARTIALLY_REFUNDED";
+}
+
+/**
+ * Order-এর refundedAmount থেকে paymentStatus আর refundedAt মিলিয়ে দেওয়া।
+ *
+ * সবসময় *তাজা* refundedAmount পড়ে হিসাব করে, আগে পড়া কোনো মান থেকে নয়।
+ * এটাই ছিল আরেকটা নীরব বাগের উৎস: refundOrder শুরুতে order পড়ত, তারপর
+ * webhook মাঝখানে অঙ্ক বদলে দিলে শেষে বাসি মান দিয়ে status লেখা হতো —
+ * আংশিক refund-ও REFUNDED দেখাত।
+ *
+ * refundedAt একবারই বসে — "কবে থেকে টাকা ফেরত যেতে শুরু করল" প্রশ্নের
+ * উত্তর প্রথম ফেরতের সময়, শেষটার নয়।
+ */
+async function settleOrderAfterRefund(
+  tx: Prisma.TransactionClient,
+  orderId: string
+): Promise<{ refundedAmount: Money; paymentStatus: PaymentStatusAfterRefund } | null> {
+  const fresh = await tx.order.findUnique({
+    where: { id: orderId },
+    select: { refundedAmount: true, totalAmount: true, refundedAt: true },
+  });
+  if (!fresh) return null;
+
+  const paymentStatus = recomputePaymentStatus(fresh.refundedAmount, fresh.totalAmount);
+
+  await tx.order.update({
+    where: { id: orderId },
+    data: {
+      paymentStatus,
+      // PAID মানে কার্যত কিছুই ফেরত যায়নি (বা দাবিটা ফিরিয়ে দেওয়া
+      // হয়েছে) — তখন refundedAt বসানো মিথ্যা বলা হতো।
+      refundedAt: fresh.refundedAt ?? (paymentStatus === "PAID" ? null : new Date()),
+    },
+  });
+
+  return { refundedAmount: fresh.refundedAmount, paymentStatus };
 }
 
 export interface RefundInput {
@@ -139,8 +206,7 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
   const alreadyRefunded = order.refundedAmount;
   const remaining = order.totalAmount.minus(alreadyRefunded);
 
-  const amount =
-    input.amount === undefined ? remaining : toMoney(input.amount);
+  const amount = input.amount === undefined ? remaining : toMoney(input.amount);
 
   if (amount.lessThanOrEqualTo(ZERO)) {
     return { ok: false, error: "Amount must be greater than zero" };
@@ -153,6 +219,10 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
   //
   // দুটো একই transaction-এ, যাতে দাবি করা হয়েছে অথচ row লেখা হয়নি এমন
   // অবস্থা কখনো না থাকে — সেটা হলে টাকা চিরতরে "সংরক্ষিত" থেকে যেতো।
+  //
+  // এই row-টা Stripe-কে ডাকার আগে তৈরি হয় বলেই webhook কখনো এর চেয়ে
+  // এগিয়ে যেতে পারে না — নিচের metadata-ভিত্তিক মিলিয়ে নেওয়াটা তাই
+  // সবসময় একটা বিদ্যমান row খুঁজে পায়।
   const maxAllowed = order.totalAmount.minus(amount);
 
   const claimed = await prisma.$transaction(async (tx) => {
@@ -190,6 +260,10 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
   // idempotencyKey হিসেবে refund row-এর id। একই key-তে দ্বিতীয়বার call
   // করলে Stripe নতুন refund না বানিয়ে আগেরটাই ফেরত দেয় — তাই network
   // hiccup-এ SDK retry করলেও দুবার টাকা যাবে না।
+  //
+  // metadata.refundId কেবল সাজসজ্জা নয় — charge.refunded webhook এটা
+  // পড়েই বোঝে refund-টা আমাদেরই তৈরি, আর তখন নতুন row না বানিয়ে এই
+  // row-টাই মিলিয়ে নেয়।
   try {
     const stripeRefund = await getStripeClient().refunds.create(
       {
@@ -200,31 +274,34 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
       { idempotencyKey: `refund_${claimed.id}` }
     );
 
-    const finalRefundedAmount = alreadyRefunded.plus(amount);
-    const paymentStatus = recomputePaymentStatus(finalRefundedAmount, order.totalAmount);
-
-    await prisma.$transaction([
-      prisma.refund.update({
-        where: { id: claimed.id },
+    // ── ধাপ ৪ (সফল পথ) ──────────────────────────────────────────────
+    //
+    // updateMany + status guard, সরাসরি update নয়। webhook ইতিমধ্যে এই
+    // row-টা SUCCEEDED করে ফেলে থাকলে count 0 আসবে — সেটা ব্যর্থতা নয়,
+    // কেবল "কাজটা অন্য কেউ আগে সেরে ফেলেছে"।
+    //
+    // দুই পথেই stripeRefundId-তে একই মান (re_X) বসে, আর দুটোই *একই*
+    // row-এ লেখে — তাই unique constraint আর কখনো এখানে ভাঙে না। আগের
+    // বাগটা ঠিক এখানেই ছিল, কারণ webhook একটা আলাদা row বানিয়ে ফেলত।
+    const settled = await prisma.$transaction(async (tx) => {
+      await tx.refund.updateMany({
+        where: { id: claimed.id, status: "PENDING" },
         data: { status: "SUCCEEDED", stripeRefundId: stripeRefund.id },
-      }),
-      prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus,
-          // প্রথম সফল refund-এর সময়টাই ধরে রাখা হয়, পরেরগুলো বদলায় না —
-          // "কবে থেকে টাকা ফেরত যেতে শুরু করল" প্রশ্নের উত্তর ওটাই।
-          refundedAt: order.refundedAt ?? new Date(),
-        },
-      }),
-    ]);
+      });
+
+      return settleOrderAfterRefund(tx, order.id);
+    });
+
+    const finalRefundedAmount = settled?.refundedAmount ?? alreadyRefunded.plus(amount);
 
     return {
       ok: true,
       refundId: claimed.id,
       amount,
       refundedAmount: finalRefundedAmount,
-      paymentStatus,
+      paymentStatus:
+        settled?.paymentStatus ??
+        recomputePaymentStatus(finalRefundedAmount, order.totalAmount),
     };
   } catch (error) {
     // ── ধাপ ৪ (ব্যর্থ পথ): দাবি ফিরিয়ে দেওয়া ──────────────────────
@@ -232,20 +309,64 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
     // Stripe না নিলে টাকা যায়নি, তাই refundedAmount আবার কমিয়ে দিতে হবে —
     // নইলে বাকি টাকা চিরতরে আটকে থাকত আর ভবিষ্যতে বৈধ refund আটকে যেতো।
     //
+    // ⚠️ কিন্তু শর্তসাপেক্ষে। "Stripe নেয়নি" আর "আমরা উত্তরটা পাইনি" এক
+    // জিনিস নয় — read timeout-এ refund ঠিকই হয়ে যেতে পারে, আর তখন
+    // webhook এসে row-টা SUCCEEDED করে দেয়। সেই অবস্থায় দাবি ফিরিয়ে
+    // দিলে ledger বলত টাকা ফেরত যায়নি, অথচ গ্রাহক টাকা পেয়ে গেছেন।
+    //
+    // তাই status guard: row এখনো PENDING থাকলেই কেবল ছেড়ে দেওয়া হয়।
+    //
     // row মুছে ফেলা হয় না: ব্যর্থ চেষ্টাও ঘটনা, আর support-এ "কেন হলো না"
     // জানতে failureReason-টাই একমাত্র সূত্র।
     const detail = error instanceof Error ? error.message : String(error);
 
-    await prisma.$transaction([
-      prisma.refund.update({
-        where: { id: claimed.id },
+    const released = await prisma.$transaction(async (tx) => {
+      const flip = await tx.refund.updateMany({
+        where: { id: claimed.id, status: "PENDING" },
         data: { status: "FAILED", failureReason: detail.slice(0, 500) },
-      }),
-      prisma.order.update({
+      });
+
+      // webhook আমাদের আগেই এটা নিষ্পত্তি করে ফেলেছে — টাকা গেছে।
+      if (flip.count !== 1) return null;
+
+      await tx.order.update({
         where: { id: order.id },
         data: { refundedAmount: { decrement: amount } },
-      }),
-    ]);
+      });
+
+      return settleOrderAfterRefund(tx, order.id);
+    });
+
+    if (!released) {
+      // ব্যর্থতা নয়, সফলতা — আমাদের call উত্তর পায়নি, কিন্তু Stripe
+      // refund-টা করেছে এবং webhook সেটা নিশ্চিত করেছে। এখানে
+      // "Stripe refused the refund" বলা মানেই staff-কে হাতে আরেকবার
+      // ফেরত পাঠাতে পাঠানো — অর্থাৎ সত্যিকারের দ্বিগুণ ফেরত।
+      console.warn(
+        "Stripe refund call failed but a webhook had already settled it",
+        order.id,
+        claimed.id,
+        detail
+      );
+
+      const fresh = await prisma.order.findUnique({
+        where: { id: order.id },
+        select: { refundedAmount: true, totalAmount: true },
+      });
+
+      const settledAmount = fresh?.refundedAmount ?? alreadyRefunded.plus(amount);
+
+      return {
+        ok: true,
+        refundId: claimed.id,
+        amount,
+        refundedAmount: settledAmount,
+        paymentStatus: recomputePaymentStatus(
+          settledAmount,
+          fresh?.totalAmount ?? order.totalAmount
+        ),
+      };
+    }
 
     console.error("Stripe refund failed", order.id, detail);
     return { ok: false, error: "Stripe refused the refund", detail };
@@ -253,19 +374,42 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
 }
 
 /**
- * Stripe dashboard থেকে সরাসরি করা refund রেকর্ড করে (charge.refunded)।
+ * Stripe থেকে আসা একটা refund-এর আকৃতি (charge.refunded webhook)।
  *
- * এটা না থাকলে দুই জায়গায় দুই সত্য থাকত: Stripe বলত টাকা ফেরত গেছে,
- * আমাদের admin বলত order এখনো সম্পূর্ণ PAID। হিসাব মেলানোর সময় সেটাই
- * সবচেয়ে বিভ্রান্তিকর।
+ * `metadata` আগে এখানে ছিল না, আর সেটাই ছিল race-টার মূল কারণ — refund
+ * আমাদের নিজের তৈরি কিনা চেনার একমাত্র তথ্যটাই webhook route ফেলে দিত।
+ */
+export interface ExternalRefund {
+  id: string;
+  amount: number;
+  reason?: string | null;
+  metadata?: Record<string, string> | null;
+}
+
+/**
+ * Stripe-এ ঘটে যাওয়া refund গুলো আমাদের ledger-এ মেলানো (charge.refunded)।
  *
- * Idempotency আসে Refund.stripeRefundId-এর unique constraint থেকে —
- * Stripe একই event বারবার পাঠায়, আর আমাদের নিজেদের তৈরি refund-ও এই
- * event হিসেবে ফিরে আসে (তখন row ইতিমধ্যে আছে, তাই কিছুই হয় না)।
+ * দুই রকম refund এই পথ দিয়ে আসে, আর দুটোকে আলাদা করে চেনা জরুরি:
+ *
+ *   ১. **Dashboard থেকে হাতে করা** — আমাদের কাছে কোনো row নেই। নতুন row
+ *      বানাতে হবে, refundedAmount বাড়াতে হবে। এটাই এই function-এর মূল
+ *      কাজ: নইলে Stripe বলত টাকা ফেরত গেছে আর admin বলত order সম্পূর্ণ
+ *      PAID।
+ *
+ *   ২. **আমাদের নিজের refundOrder() থেকে** — row আগে থেকেই আছে
+ *      (metadata.refundId), শুধু হয়তো এখনো PENDING। এখানে নতুন row
+ *      বানানো মানেই দ্বিগুণ হিসাব। বদলে ওই row-টাই মিলিয়ে নেওয়া হয়।
+ *
+ * আগে ২ নম্বরটা চেনা হতো কেবল stripeRefundId দিয়ে — কিন্তু সেটা
+ * refundOrder ধাপ ৪-এ লেখে, অর্থাৎ webhook আসার পরেও হতে পারে। তাই
+ * metadata.refundId-ই এখন প্রথম ভরসা: ওই row ধাপ ২-এ তৈরি হয়, Stripe-কে
+ * ডাকার আগেই, তাই webhook কখনো তার চেয়ে এগিয়ে থাকতে পারে না।
+ *
+ * ফেরত দেয় কতগুলো refund এই ডাকে *নতুন করে* হিসাবে যোগ হলো।
  */
 export async function recordExternalRefunds(
   paymentIntentId: string,
-  refunds: { id: string; amount: number; reason?: string | null }[]
+  refunds: ExternalRefund[]
 ): Promise<number> {
   const order = await prisma.order.findUnique({
     where: { stripePaymentIntentId: paymentIntentId },
@@ -274,19 +418,88 @@ export async function recordExternalRefunds(
   if (!order) return 0;
 
   const units = minorUnitsFor(order.currency);
+
+  /** অঙ্ক বদলেছে এমন refund-এর সংখ্যা — এটাই ফেরত যায়। */
   let recorded = 0;
+  /** কিছু একটা লেখা হয়েছে কিনা — status recompute করা লাগবে কিনা তার জন্য। */
+  let touched = 0;
 
   for (const refund of refunds) {
-    // এই refund আমাদেরই তৈরি হতে পারে (উপরের flow), তখন row-টা আগে থেকেই
-    // আছে — কিছু করার নেই।
+    // Stripe minor unit -> Money, এই order-এর currency অনুযায়ী।
+    const asMoney = fromMinorUnits(refund.amount, units);
+
+    // ── ২ নম্বর: আমাদের নিজের তৈরি refund ────────────────────────────
+    const ownRefundId = refund.metadata?.refundId;
+    if (ownRefundId) {
+      const own = await prisma.refund.findUnique({
+        where: { id: ownRefundId },
+        select: { id: true, orderId: true, status: true },
+      });
+
+      // orderId মিলিয়ে দেখা হয় কারণ metadata বাইরের ইনপুট — অন্য
+      // environment বা restore করা database থেকে আসা একটা id ভুল
+      // order-এ টাকা যোগ করে দিতে পারত।
+      if (own && own.orderId === order.id) {
+        if (own.status === "SUCCEEDED") {
+          // আগেই নিষ্পত্তি হয়ে গেছে। Stripe একই event বারবার পাঠায়,
+          // তাই এটাই সবচেয়ে সাধারণ ঘটনা।
+          continue;
+        }
+
+        if (own.status === "PENDING") {
+          // refundOrder এখনো ধাপ ৩ আর ৪-এর মাঝে। দাবিটা ইতিমধ্যে
+          // refundedAmount-এ যোগ হয়ে আছে, তাই এখানে **বাড়ানো যাবে না** —
+          // শুধু id বসিয়ে SUCCEEDED করা।
+          //
+          // ঠিক এই জায়গাটাতেই আগে একটা দ্বিতীয় row তৈরি হতো, আর তার
+          // পরেই refundOrder-এর update P2002 খেয়ে সফল refund-কে
+          // "Stripe refused" বানিয়ে দিত।
+          const stamped = await prisma.refund.updateMany({
+            where: { id: own.id, status: "PENDING" },
+            data: { status: "SUCCEEDED", stripeRefundId: refund.id },
+          });
+          if (stamped.count === 1) touched += 1;
+          continue;
+        }
+
+        // FAILED — refundOrder দাবি ছেড়ে দিয়েছিল, অথচ Stripe বলছে টাকা
+        // ঠিকই গেছে (call টা timeout হয়েছিল, refund হয়নি এমন নয়)।
+        // এটাই সেই বিরল অবস্থা যেখানে ledger সারিয়ে নিতে হয়।
+        // Counter গুলো transaction-এর *বাইরে* বাড়ে। ভেতরে বাড়ালে
+        // callback পুনরায় চললে (বা আংশিক ব্যর্থ হলে) হিসাব দুবার
+        // গোনা হতে পারত — return করা boolean-ই একমাত্র সত্য।
+        const repaired = await prisma.$transaction(async (tx) => {
+          const flip = await tx.refund.updateMany({
+            where: { id: own.id, status: "FAILED" },
+            data: { status: "SUCCEEDED", stripeRefundId: refund.id, failureReason: null },
+          });
+          if (flip.count !== 1) return false;
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: { refundedAmount: { increment: asMoney } },
+          });
+
+          return true;
+        });
+
+        if (repaired) {
+          recorded += 1;
+          touched += 1;
+        }
+        continue;
+      }
+    }
+
+    // ── ১ নম্বর: dashboard থেকে করা refund ───────────────────────────
+    //
+    // stripeRefundId-এর lookup এখনো দরকার: Stripe একই event বারবার
+    // পাঠায়, আর metadata ছাড়া refund-এ চেনার আর কিছুই নেই।
     const existing = await prisma.refund.findUnique({
       where: { stripeRefundId: refund.id },
       select: { id: true },
     });
     if (existing) continue;
-
-    // Stripe minor unit -> Money, এই order-এর currency অনুযায়ী।
-    const asMoney = fromMinorUnits(refund.amount, units);
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -306,13 +519,11 @@ export async function recordExternalRefunds(
 
         await tx.order.update({
           where: { id: order.id },
-          data: {
-            refundedAmount: { increment: asMoney },
-            refundedAt: order.refundedAt ?? new Date(),
-          },
+          data: { refundedAmount: { increment: asMoney } },
         });
       });
       recorded += 1;
+      touched += 1;
     } catch (error) {
       // stripeRefundId-এ P2002 মানে সমান্তরাল কোনো delivery এটা আগেই
       // লিখে ফেলেছে — সেটাই কাম্য আচরণ, ভুল নয়।
@@ -320,19 +531,13 @@ export async function recordExternalRefunds(
     }
   }
 
-  if (recorded > 0) {
-    const fresh = await prisma.order.findUnique({
-      where: { id: order.id },
-      select: { refundedAmount: true, totalAmount: true },
+  if (touched > 0) {
+    // তাজা অঙ্ক থেকে status — উপরে পড়া order.refundedAmount ততক্ষণে
+    // বাসি হয়ে যেতে পারে, কারণ refundOrder সমান্তরালে দাবি করে থাকতে
+    // পারে। আগে এখানে সেই বাসি মানই ব্যবহার হতো।
+    await prisma.$transaction(async (tx) => {
+      await settleOrderAfterRefund(tx, order.id);
     });
-    if (fresh) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: recomputePaymentStatus(fresh.refundedAmount, fresh.totalAmount),
-        },
-      });
-    }
   }
 
   return recorded;
