@@ -98,9 +98,16 @@ export async function POST(request: Request) {
         // গেছে, আমাদের admin বলত order সম্পূর্ণ PAID। হিসাব মেলানোর সময়
         // সেটাই সবচেয়ে বিভ্রান্তিকর।
         //
-        // আমাদের নিজের UI থেকে করা refund-ও এই event হয়ে ফিরে আসে —
-        // তখন Refund row ইতিমধ্যে আছে, তাই stripeRefundId-এর unique
-        // constraint চুপচাপ সেটা উপেক্ষা করে।
+        // আমাদের নিজের UI থেকে করা refund-ও এই event হয়ে ফিরে আসে।
+        //
+        // ⚠️ `metadata` অবশ্যই পাঠাতে হবে — এটাই ছিল একটা race-এর মূল।
+        //
+        // refundOrder() প্রতিটা Stripe refund-এ metadata.refundId বসায়,
+        // কিন্তু এই map() আগে সেটা ফেলে দিত। ফলে recordExternalRefunds
+        // চিনতে পারত কেবল stripeRefundId দিয়ে — যা refundOrder Stripe-এর
+        // উত্তর পাওয়ার *পরে* লেখে। এই event প্রায়ই তার আগেই পৌঁছে যায়,
+        // তখন একটা দ্বিতীয় Refund row তৈরি হতো আর সফল refund-টা
+        // admin-এ "Stripe refused the refund" দেখাত।
         const charge = event.data.object as Stripe.Charge;
         const paymentIntentId =
           typeof charge.payment_intent === "string"
@@ -114,6 +121,7 @@ export async function POST(request: Request) {
               id: r.id,
               amount: r.amount,
               reason: r.reason,
+              metadata: r.metadata ?? null,
             }))
           );
         }
