@@ -2,7 +2,7 @@ import { getResendClient, EMAIL_FROM } from "@/lib/resend";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { type Money, toMoney } from "@/lib/money";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 const SHIPPING_LABELS: Record<string, string> = {
   UBER_EATS: "Uber Eats",
@@ -45,6 +45,7 @@ interface OrderForEmail {
   tipAmount: Money | number;
   totalAmount: Money | number;
   currency: string;
+  currencyMinorUnits: number;
 
   shippingMethod: string | null;
   paymentMethod: string;
@@ -70,7 +71,7 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
 
     // এই order-এর নিজের currency অনুযায়ী, আজকের settings অনুযায়ী নয় —
     // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে পাঠানো ভুল হতো।
-    const units = minorUnitsFor(order.currency);
+    const units = order.currencyMinorUnits;
     const money = (value: Money) => formatAmount(value.toFixed(units), order.currency);
     const optionalMoney = (value: Money) => (value.greaterThan(0) ? money(value) : null);
 

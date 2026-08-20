@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import OrderTrackingTimeline from "./OrderTrackingTimeline";
-import { minorUnitsFor } from "@/lib/currency-format";
 import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
 
 /**
@@ -61,6 +60,7 @@ export default async function TrackOrderPage({
       grandTotal: true,
       totalAmount: true,
       currency: true,
+      currencyMinorUnits: true,
       giftCardAmount: true,
       pointsRedeemed: true,
       pointsRedeemedAmount: true,
@@ -108,7 +108,7 @@ export default async function TrackOrderPage({
 
   // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয় — একটা
   // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে দেখানো ভুল হতো।
-  const units = minorUnitsFor(order.currency);
+  const units = order.currencyMinorUnits;
   const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
 
   return (

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { calculateOrderPricing, resolveTaxRate, type PricingSettings } from "@/lib/pricing";
+import {
+  calculateOrderPricing,
+  resolveTaxRate,
+  pricingToOrderFields,
+  type PricingSettings,
+} from "@/lib/pricing";
 import { toStripeMinorUnits, toMoney, extractInclusiveTax } from "@/lib/money";
 
 /**
@@ -404,5 +409,49 @@ describe("Float drift — যে কারণে পুরো কাজটা �
   it("অন্তর্ভুক্ত কর বের করার সূত্র যোগের সূত্র নয়", () => {
     // ১১৫-তে ১৫% অন্তর্ভুক্ত মানে কর ১৫, ১৭.২৫ নয়।
     expect(extractInclusiveTax(toMoney(115), toMoney(0.15)).toFixed(2)).toBe("15.00");
+  });
+});
+
+describe("Order row-এ যাওয়া snapshot গুলো", () => {
+  /**
+   * ⚠️ এই block-টা আছে একটা নির্দিষ্ট বাগের জন্য।
+   *
+   * Order-এ currency snapshot করা ছিল, কিন্তু দশমিকের সংখ্যা ছিল না।
+   * ফলে দুটো আলাদা উৎস তৈরি হয়েছিল যারা একে অপরকে চিনত না:
+   *
+   *   • charge হতো settings.currencyMinorUnits দিয়ে
+   *   • refund আর প্রদর্শন চলত currency-format.ts-এর hardcoded তালিকা
+   *     দিয়ে, মুদ্রার কোড দেখে অনুমান করে
+   *
+   * মিললে কিছু হতো না। না মিললে — যেমন কেউ ইয়েন বেছে দশমিক ২ রেখে
+   * দিল, যেটা settings form আটকায় না — Stripe-এ ১০০ গুণ বেশি charge
+   * যেতো আর refund যেতো ১০০ গুণ কম।
+   *
+   * pricingToOrderFields() হলো একমাত্র জায়গা যা দিয়ে দুটো checkout
+   * route-ই Order row লেখে, তাই snapshot-টা এখান থেকে বেরোচ্ছে কিনা
+   * সেটাই আসল পাহারা।
+   */
+  it("দশমিকের সংখ্যা settings থেকে order row-তে বয়ে যায়", () => {
+    const priced = calculateOrderPricing({ orderType: "DELIVERY", items: [item(100)] }, BD);
+
+    expect(pricingToOrderFields(priced).currencyMinorUnits).toBe(2);
+  });
+
+  it("শূন্য-দশমিক মুদ্রায় ০ বয়ে যায়, ডিফল্ট ২ নয়", () => {
+    // এটাই সেই কেস যেখানে অনুমান করা আর snapshot করা ভিন্ন উত্তর দেয়।
+    const priced = calculateOrderPricing({ orderType: "DELIVERY", items: [item(1200)] }, JP);
+
+    expect(pricingToOrderFields(priced).currencyMinorUnits).toBe(0);
+  });
+
+  it("currency আর তার দশমিক সবসময় একসাথে যায়", () => {
+    // দুটো আলাদা হয়ে গেলে চালান একরকম দেখাবে আর charge হবে আরেক
+    // রকম — তাই একই helper থেকে দুটোই আসা চাই।
+    const row = pricingToOrderFields(
+      calculateOrderPricing({ orderType: "DINE_IN", items: [item(800, 2)] }, JP)
+    );
+
+    expect(row.currency).toBe("JPY");
+    expect(row.currencyMinorUnits).toBe(0);
   });
 });

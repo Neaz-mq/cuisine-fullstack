@@ -464,6 +464,9 @@ export async function POST(request: Request) {
           tipAmount: order.tipAmount,
           totalAmount: order.totalAmount,
           currency: order.currency,
+          // currency-র সাথেই যায় — চালানের অঙ্কগুলো এই order-এর নিজের
+          // দশমিকে সাজাতে হবে, আজকের settings-এর দশমিকে নয়।
+          currencyMinorUnits: order.currencyMinorUnits,
 
           shippingMethod: order.shippingMethod as string,
           paymentMethod: order.paymentMethod,

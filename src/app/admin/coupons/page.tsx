@@ -3,7 +3,7 @@ import Link from "next/link";
 import ActiveToggle from "./ActiveToggle";
 import DeleteCouponButton from "./DeleteCouponButton";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 // Prisma-র Decimal-এ toFixed আছে, তাই ধরনটা কেবল চওড়া করা হলো —
 // রূপান্তরের দরকার নেই।
@@ -49,7 +49,7 @@ function formatRestriction(coupon: {
 
 export default async function AdminCouponsPage() {
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
   const coupons = await prisma.coupon.findMany({
     orderBy: { createdAt: "desc" },
     include: {

@@ -3,11 +3,11 @@ import Link from "next/link";
 import AvailabilityToggle from "./AvailabilityToggle";
 import DeleteMenuItemButton from "./DeleteMenuItemButton";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 export default async function AdminMenuPage() {
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
   const categories = await prisma.category.findMany({
     orderBy: { name: "asc" },
     include: {

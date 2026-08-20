@@ -53,8 +53,27 @@ const MINOR_UNIT_EXCEPTIONS: Record<string, number> = {
   LYD: 3,
 };
 
-/** এই currency-তে কয়টা দশমিক দেখানো উচিত। অচেনা হলে ২। */
-export function minorUnitsFor(currency: string): number {
+/**
+ * এই currency-তে সাধারণত কয়টা দশমিক থাকে। অচেনা হলে ২।
+ *
+ * ⚠️ এটা একটা **পরামর্শ**, কোনো সিদ্ধান্ত নয় — নাম বদলে
+ * `defaultMinorUnitsFor` করা হয়েছে ঠিক সেটা মনে করিয়ে দিতেই।
+ *
+ * এর একমাত্র বৈধ কাজ দুটো:
+ *
+ *   ১. admin নতুন currency বাছলে "Decimal places" ঘরে কী বসানো উচিত
+ *      তার প্রস্তাব দেওয়া
+ *   ২. formatAmount()-এ fallback, যখন caller নিজে কিছু বলেনি
+ *
+ * টাকার আসল হিসাবে — charge, refund, চালান — এটা **কখনো** ব্যবহার করা
+ * যাবে না। ওখানে order.currencyMinorUnits পড়তে হবে, অর্থাৎ order যখন
+ * তৈরি হয়েছিল তখন কার্যকর মানটা।
+ *
+ * কারণটা তেতো অভিজ্ঞতা: charge হতো settings থেকে, refund হতো এই
+ * তালিকা থেকে। admin ইয়েন বেছে দশমিক ২ রেখে দিলে (UI সেটা আটকায় না)
+ * Stripe-এ ১০০ গুণ বেশি যেতো আর ফেরত আসত ১০০ গুণ কম — নীরবে।
+ */
+export function defaultMinorUnitsFor(currency: string): number {
   return MINOR_UNIT_EXCEPTIONS[currency?.toUpperCase()] ?? 2;
 }
 
@@ -82,7 +101,7 @@ export function formatAmount(
    */
   decimalPlaces?: number
 ): string {
-  const units = decimalPlaces ?? minorUnitsFor(currency);
+  const units = decimalPlaces ?? defaultMinorUnitsFor(currency);
   const asNumber = typeof value === "number" ? value : parseFloat(value);
 
   if (!Number.isFinite(asNumber)) return `${currency} ${value}`;

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { calculateFoodCost, getFoodCostHealth, type FoodCostHealth } from "@/lib/menu-profitability";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 // Minimum approved reviews before we trust a menu item's average rating
 // enough to base an insight on it — a single 5-star review shouldn't label
@@ -41,7 +41,7 @@ export default async function AdminInsightsPage() {
   // so a hardcoded "$" here was mislabelling the very numbers an owner uses
   // to decide what stays on the menu.
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
   const money = (value: number) => formatAmount(value.toFixed(units), settings.currency);
   const [menuItems, orderItemAgg, reviewAgg] = await Promise.all([
     prisma.menuItem.findMany({
