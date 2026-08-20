@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Poppins } from "next/font/google";
+import { Poppins, Frank_Ruhl_Libre, Sora } from "next/font/google";
 import "./globals.css";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, Slide } from "react-toastify";
@@ -18,6 +18,25 @@ const geistMono = Geist_Mono({
 });
 const poppins = Poppins({
   variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+// Serif display font used for the "Cuisine" logo wordmark and other
+// serif headings (see register page) — matches the Figma spec (700
+// weight, 30px, 126% line-height, -1% letter-spacing on the logo).
+// Self-hosted via next/font like the other fonts here, rather than a
+// CSS @import, so there's no extra request to fonts.googleapis.com and
+// no layout shift while it loads.
+const frankRuhlLibre = Frank_Ruhl_Libre({
+  variable: "--font-frank-ruhl",
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "900"],
+});
+// Body/supporting-text font used for the hero subtext under the "Great
+// Food, Delivered With Care" heading (400 weight, 12px, 160%
+// line-height, per Figma). Self-hosted via next/font like the others.
+const sora = Sora({
+  variable: "--font-sora",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
 });
@@ -64,7 +83,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${frankRuhlLibre.variable} ${sora.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>

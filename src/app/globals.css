@@ -27,6 +27,23 @@
   writing-mode: vertical-lr;
 }
 
+/* Frank Ruhl Libre utility — apply to the "Cuisine" logo wordmark and any
+   other serif headings that should match the Figma type spec, instead of
+   Tailwind's generic `font-serif` (which falls back to the browser's
+   default serif, not this specific typeface). Sourced from the
+   --font-frank-ruhl CSS variable set by next/font/google in layout.tsx
+   (self-hosted, no external request) — not a plain-string font-family. */
+.font-frank-ruhl {
+  font-family: var(--font-frank-ruhl), serif;
+}
+
+/* Sora — hero subtext under the "Great Food, Delivered With Care"
+   heading (400 weight, 12px, 160% line-height, per Figma). Sourced from
+   the --font-sora CSS variable set by next/font/google in layout.tsx. */
+.font-sora {
+  font-family: var(--font-sora), sans-serif;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

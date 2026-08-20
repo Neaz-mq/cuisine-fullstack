@@ -65,7 +65,9 @@ const csp = [
   // through next/image (proxied same-origin via /_next/image, so CSP
   // wouldn't even see the cross-origin request) but others are still
   // plain <img> tags that hit Cloudinary directly, so it must be listed
-  // here explicitly or the browser blocks them outright. tile.openstreetmap.org
+  // here explicitly or the browser blocks them outright. This covers both
+  // Cloudinary cloud names in use (dxohwanal + dzi3u164c) since img-src is
+  // matched by domain only, not by path. tile.openstreetmap.org
   // covers the live delivery map's map tiles (LiveDeliveryMap.tsx) — Leaflet
   // renders tiles as plain <img> tags against OSM's *.tile.openstreetmap.org
   // subdomains (a,b,c load-balanced), so all three need to be allowed.
@@ -138,11 +140,21 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       // Marketing/content images (chef photos, menu banners, etc.) hosted
-      // on Cloudinary under this project's single cloud name.
+      // on Cloudinary under this project's original cloud name.
       {
         protocol: "https",
         hostname: "res.cloudinary.com",
         pathname: "/dxohwanal/**",
+      },
+      // Second Cloudinary cloud name — used for design-asset uploads like
+      // the register-page hero photo (signup_czzdi1.webp). Same host,
+      // different cloud/path prefix, so it needs its own pattern entry:
+      // next/image matches remotePatterns by exact pathname prefix, not
+      // just by hostname.
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/dzi3u164c/**",
       },
       // Menu item photos uploaded via /api/admin/upload-image, served back
       // out through Supabase Storage's public URL convention:
