@@ -16,6 +16,7 @@ import { calculateOrderPricing } from "@/lib/pricing";
 import { ZERO, serializeMoney, type Money } from "@/lib/money";
 import { quoteSchema } from "@/lib/validations/checkout";
 import { parseBody } from "@/lib/validations/parse";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/checkout/quote
@@ -44,13 +45,62 @@ import { parseBody } from "@/lib/validations/parse";
  * coupon-এর ব্যবহারও গোনা হয় না — সেসব হয় order তৈরির transaction-এর
  * ভেতরে, যেখানে concurrency guard আছে। দুটো ট্যাবে একই gift card quote
  * করা যায়, কিন্তু খরচ হবে একবারই।
+ *
+ * ── কেন এখানে rate limit ─────────────────────────────────────────────
+ *
+ * /api/coupons/validate আর /api/gift-cards/validate — দুটোতেই কোড
+ * brute-force ঠেকাতে limit বসানো আছে। কিন্তু এই endpoint-টা couponCode
+ * আর giftCardCode দুটোই নেয় আর বলে দেয় সেগুলো বৈধ কিনা, অথচ এখানে
+ * কোনো limit ছিল না। অর্থাৎ ওই দুটো limit কার্যত পাশ কাটানো যেতো —
+ * শুধু অন্য একটা URL-এ একই প্রশ্ন করে।
+ *
+ * ── কিন্তু একটাই সংখ্যা এখানে চলে না ─────────────────────────────────
+ *
+ * Carts.tsx প্রতিটা cart পরিবর্তনে quote চায় — quantity বদল, বকশিশের
+ * ঘরে টাইপ, ছাড় প্রয়োগ, সবেতেই (৩০০ms debounce সহ)। একজন সাধারণ
+ * গ্রাহক checkout করতে করতে সহজেই ২০–৪০টা quote চাইতে পারেন। তাই
+ * validate endpoint-গুলোর মতো ২০/মিনিট বসালে আসল গ্রাহকই আটকে যেতেন।
+ *
+ * তাই দুটো আলাদা bucket, কারণ প্রশ্ন দুটোও আলাদা:
+ *
+ *   • নিজের cart-এর দাম জানতে চাওয়া — ঘন ঘন ও বৈধ, তাই উদার সীমা
+ *   • কোনো কোড সঙ্গে পাঠানো — সেটাই আসলে "এই কোডটা কি খাটে?" প্রশ্ন,
+ *     তাই validate endpoint-গুলোর সমান বাজেট
  */
 export async function POST(req: NextRequest) {
+  // উদার সীমা: cart বদলালেই নতুন quote লাগে, ওটা আক্রমণ নয়।
+  const quoteLimit = checkRateLimit(req, "checkout-quote", {
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!quoteLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment and try again." },
+      { status: 429, headers: { "Retry-After": String(quoteLimit.retryAfterSeconds) } }
+    );
+  }
+
   const parsed = await parseBody(req, quoteSchema);
   if (parsed instanceof NextResponse) return parsed;
 
   const { items, orderType, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent, phone } =
     parsed;
+
+  // কোড সঙ্গে থাকলে এটা কার্যত একটা validate call, তাই সেই endpoint-
+  // গুলোর সমান বাজেট — আলাদা scope, যাতে উপরের উদার bucket-টা এই
+  // কড়া হিসাবের সাথে মিশে না যায়।
+  if (couponCode || giftCardCode) {
+    const codeLimit = checkRateLimit(req, "checkout-quote-code", {
+      limit: 20,
+      windowMs: 60_000,
+    });
+    if (!codeLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(codeLimit.retryAfterSeconds) } }
+      );
+    }
+  }
 
   const resolution = await resolveOrderItems(items);
   if (!resolution.ok) {
@@ -170,6 +220,13 @@ export async function POST(req: NextRequest) {
     // client যা চেয়েছিল তার সাথে server কী মেনে নিল, তা মেলানোর জন্য।
     appliedCouponCode: couponInfo?.code ?? null,
     appliedGiftCardCode: giftCardInfo?.code ?? null,
-    giftCardBalance: giftCardInfo ? m(giftCardInfo.balance) : null,
+    // ⚠️ giftCardBalance এখান থেকে সরানো হয়েছে।
+    //
+    // কার্ডের অবশিষ্ট balance ফেরত যেতো, অথচ Carts.tsx সেটা কখনো
+    // দেখাতো না — type-এ ঘোষিত ছিল, ব্যবহার হতো না। এই বিলে কতটা
+    // কাটছে সেটা giftCardAmount-ই বলে, আর সেটাই গ্রাহকের দরকার।
+    //
+    // পার্থক্যটা হলো একটা কোড অনুমান করে ফেললে কতটা জানা যায়: শুধু
+    // "কোডটা খাটে" নাকি "কোডটা খাটে এবং এতে ৳৫০০০ পড়ে আছে"।
   });
 }

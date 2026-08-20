@@ -61,7 +61,10 @@ type Quote = {
   totalAmount: string;
   appliedCouponCode: string | null;
   appliedGiftCardCode: string | null;
-  giftCardBalance: string | null;
+  // giftCardBalance ইচ্ছাকৃতভাবে নেই — server আর পাঠায় না। কার্ডে কত
+  // পড়ে আছে সেটা এই পাতার দরকার হয় না (giftCardAmount বলে দেয় এই
+  // বিলে কতটা কাটছে), আর কেউ কোড অনুমান করে ফেললে তাকে বাড়তি কিছু
+  // জানানোর কারণ নেই।
 };
 
 type PublicSettings = {
