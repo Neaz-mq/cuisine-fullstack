@@ -82,8 +82,9 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen w-full bg-[#F9F6F3] flex items-center justify-center px-4 py-6 lg:py-10">
-      {/* Outer white card — radius 30, padding 20, gap 20 (from Figma Dev Mode) */}
-      <div className="w-full max-w-[1320px] bg-white rounded-[30px] p-3 lg:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-5 shadow-sm lg:h-[894px]">
+      {/* Outer white card — 1280×894, radius 30, padding 20, gap 20 (Figma).
+          Flat #FFFFFF fill: the Figma frame has no Effects, so no shadow here. */}
+      <div className="w-full max-w-[1280px] bg-white rounded-[30px] p-3 lg:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-5 lg:h-[894px]">
         {/* Left visual panel — hidden on small screens */}
         <div className="hidden lg:block relative rounded-[22px] overflow-hidden w-full h-full">
           <Image
@@ -95,8 +96,9 @@ export default function RegisterPage() {
             sizes="(min-width: 1024px) 50vw, 100vw"
           />
 
-          {/* Dark gradient overlay for text legibility */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/5" />
+          {/* Bottom scrim — 549px tall, anchored to the bottom (Figma: Rectangle 610×549).
+              Deliberately not inset-0: the top of the image stays clear. */}
+          <div className="absolute bottom-0 left-0 right-0 h-[549px] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
 
           {/* Logo */}
           <Link
@@ -116,8 +118,8 @@ export default function RegisterPage() {
             </span>
           </Link>
 
-          {/* Bottom content — centered as a block, per Figma */}
-          <div className="absolute bottom-10 left-10 right-10 z-10 text-white text-center">
+          {/* Bottom content — 50px insets leave exactly 510px, matching the form panel padding */}
+          <div className="absolute bottom-10 left-[50px] right-[50px] z-10 text-white text-center">
             <h2 className="font-frank-ruhl text-[38px] font-semibold leading-[114%] tracking-[-0.01em] text-white">
               Great Food, Delivered
               <br />
@@ -128,8 +130,8 @@ export default function RegisterPage() {
               get personalized offers from Cuisine.
             </p>
 
-            {/* Stats — 3 × 161.03px + 2 × 12px gap = 507px (Figma Dev Mode) */}
-            <div className="mt-8 grid grid-cols-3 gap-3 w-full max-w-[507px] mx-auto">
+            {/* Stats — 510px across with 13.45px gaps yields 161.03px cards, per Figma */}
+            <div className="mt-8 grid grid-cols-3 gap-[13.45px] w-full">
               <div className="bg-[#F9F6F3] rounded-[14px] h-[73px] px-[30px] flex flex-col items-center justify-center gap-2">
                 <div className="font-sora font-semibold text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
                   50K+
@@ -158,9 +160,10 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Right form panel — its own cream card (BG #F9F6F3, radius 30, padding 30/50/30/50, gap 24 per Figma), same fixed height as the image panel */}
+        {/* Right form panel — BG #F9F6F3, radius 30, padding 30/50/30/50, gap 24 (Figma) */}
         <div className="w-full h-full bg-[#F9F6F3] rounded-[30px] flex items-center justify-center px-5 py-8 sm:px-[50px] sm:py-[30px] overflow-y-auto">
-          <div className="w-full max-w-md">
+          {/* 610 - 50 - 50 = 510px of content width */}
+          <div className="w-full max-w-[510px]">
             {/* Mobile-only logo */}
             <div className="flex lg:hidden items-center justify-between mb-6">
               <Link
@@ -186,7 +189,7 @@ export default function RegisterPage() {
               href="/"
               className="hidden lg:inline-flex items-center gap-3 mb-10 group"
             >
-              <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-700 group-hover:bg-gray-50 transition-colors shadow-sm">
+              <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-700 group-hover:bg-gray-50 transition-colors">
                 <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none">
                   <path
                     d="M12.5 15L7.5 10L12.5 5"
@@ -229,7 +232,8 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            {/* space-y-6 = 24px, matching the Figma frame gap */}
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -397,7 +401,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-[#F4A261] to-[#EE6C8B] text-white py-3.5 rounded-full font-semibold text-sm hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full bg-gradient-to-r from-[#F4A261] to-[#EE6C8B] text-white py-3.5 rounded-full font-semibold text-sm hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
