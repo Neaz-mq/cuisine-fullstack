@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { getStripeClient } from "@/lib/stripe";
 import { type Money, toMoney, ZERO, toStripeMinorUnits } from "@/lib/money";
-import { minorUnitsFor } from "@/lib/currency-format";
 
 /**
  * src/lib/refund-order.ts
@@ -167,6 +166,7 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
       totalAmount: true,
       refundedAmount: true,
       currency: true,
+      currencyMinorUnits: true,
       stripePaymentIntentId: true,
       refundedAt: true,
     },
@@ -268,7 +268,14 @@ export async function refundOrder(input: RefundInput): Promise<RefundResult> {
     const stripeRefund = await getStripeClient().refunds.create(
       {
         payment_intent: order.stripePaymentIntentId,
-        amount: toStripeMinorUnits(amount, minorUnitsFor(order.currency)),
+        // ⚠️ order-এর নিজের snapshot, currency কোড দেখে অনুমান নয়।
+        //
+        // আগে এখানে minorUnitsFor(order.currency) ছিল — একটা hardcoded
+        // তালিকা — অথচ charge হয়েছিল settings.currencyMinorUnits দিয়ে।
+        // দুটো আলাদা হলে refund-টা charge-এর চেয়ে ১০০ গুণ ছোট বা বড়
+        // হয়ে যেতো, আর সেটা টাকার হিসাবের সবচেয়ে খারাপ ধরনের ভুল:
+        // নীরব, এবং গ্রাহকের পক্ষে বা বিপক্ষে দুদিকেই যেতে পারে।
+        amount: toStripeMinorUnits(amount, order.currencyMinorUnits),
         metadata: { orderId: order.id, refundId: claimed.id },
       },
       { idempotencyKey: `refund_${claimed.id}` }
@@ -413,11 +420,20 @@ export async function recordExternalRefunds(
 ): Promise<number> {
   const order = await prisma.order.findUnique({
     where: { stripePaymentIntentId: paymentIntentId },
-    select: { id: true, currency: true, totalAmount: true, refundedAmount: true, refundedAt: true },
+    select: {
+      id: true,
+      currency: true,
+      currencyMinorUnits: true,
+      totalAmount: true,
+      refundedAmount: true,
+      refundedAt: true,
+    },
   });
   if (!order) return 0;
 
-  const units = minorUnitsFor(order.currency);
+  // Stripe যে minor unit-এ অঙ্ক পাঠায়, সেটা charge-এর সময়কার হিসাব —
+  // তাই order-এর snapshot দিয়েই ফিরিয়ে আনতে হবে।
+  const units = order.currencyMinorUnits;
 
   /** অঙ্ক বদলেছে এমন refund-এর সংখ্যা — এটাই ফেরত যায়। */
   let recorded = 0;

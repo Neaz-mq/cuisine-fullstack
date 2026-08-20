@@ -6,7 +6,7 @@ import OrderStatusSelect from "./OrderStatusSelect";
 import OrdersToolbar from "./OrdersToolbar";
 import Pagination from "./Pagination";
 import PaymentStatusBadge from "./PaymentStatusBadge";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 const PAGE_SIZE = 10;
 
@@ -17,8 +17,11 @@ const PAGE_SIZE = 10;
  * older orders keep the one they were placed in — so every row formats
  * from its own snapshot rather than a single page-level setting.
  */
-function money(order: { currency: string }, value: { toFixed(dp: number): string }) {
-  return formatAmount(value.toFixed(minorUnitsFor(order.currency)), order.currency);
+function money(
+  order: { currency: string; currencyMinorUnits: number },
+  value: { toFixed(dp: number): string }
+) {
+  return formatAmount(value.toFixed(order.currencyMinorUnits), order.currency);
 }
 
 // order.shippingMethod is optional now (dine-in orders have none), so this

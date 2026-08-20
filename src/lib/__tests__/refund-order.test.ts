@@ -119,6 +119,15 @@ interface FakeOrder {
   totalAmount: Money;
   refundedAmount: Money;
   currency: string;
+  /**
+   * ⚠️ currency-র সাথেই রাখতে হবে, নইলে toStripeMinorUnits() undefined
+   * পেয়ে "[DecimalError] Invalid argument: undefined" ছোড়ে।
+   *
+   * refundOrder আগে minorUnitsFor(currency) দিয়ে দশমিক অনুমান করত।
+   * এখন order-এর নিজের snapshot পড়ে — কারণ charge হয়েছিল settings-এর
+   * মান দিয়ে, আর দুটো আলাদা হলে refund ১০০ গুণ ভুল হতো।
+   */
+  currencyMinorUnits: number;
   stripePaymentIntentId: string | null;
   refundedAt: Date | null;
 }
@@ -172,6 +181,7 @@ function seedOrder(overrides: Partial<FakeOrder> = {}): FakeOrder {
     totalAmount: toMoney(100),
     refundedAmount: ZERO,
     currency: "USD",
+    currencyMinorUnits: 2,
     stripePaymentIntentId: "pi_123",
     refundedAt: null,
     ...overrides,
@@ -423,12 +433,34 @@ describe("refundOrder — success paths", () => {
   });
 
   it("scales minor units correctly for a three-decimal currency", async () => {
-    seedOrder({ currency: "KWD", totalAmount: toMoney(10) });
+    seedOrder({ currency: "KWD", currencyMinorUnits: 3, totalAmount: toMoney(10) });
 
     await refundOrder({ orderId: "order_1", amount: 1.5 });
 
     expect(mockRefundsCreate).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 1500 }), // 1.500 KWD -> 1500 fils
+      expect.anything()
+    );
+  });
+
+  it("uses the order's own minor units, not a guess from the currency code", async () => {
+    /**
+     * ⚠️ এই test-টার fixture ইচ্ছাকৃতভাবে *অসঙ্গত*: currency JPY কিন্তু
+     * দশমিক ২। বাস্তবে এমন order তৈরি হয় যখন admin ইয়েন বেছে
+     * "Decimal places" ২-তে রেখে দেয় — settings form সেটা আটকায় না।
+     *
+     * আসল কথাটা হলো ওই order-টা **২ দশমিক ধরেই charge হয়েছিল**।
+     * তাই refund-ও ২ ধরেই যেতে হবে, নইলে গ্রাহক ১০০ গুণ কম ফেরত পাবেন।
+     *
+     * আগের কোড এখানে defaultMinorUnitsFor("JPY") = 0 ব্যবহার করত, ফলে
+     * ¥12.50 ফেরত যেতো ১২ minor unit হিসেবে, ১২৫০ নয়।
+     */
+    seedOrder({ currency: "JPY", currencyMinorUnits: 2 });
+
+    await refundOrder({ orderId: "order_1", amount: 12.5 });
+
+    expect(mockRefundsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 1250 }),
       expect.anything()
     );
   });
@@ -731,7 +763,7 @@ describe("recordExternalRefunds", () => {
   });
 
   it("converts Stripe minor units using the order's own currency", async () => {
-    seedOrder({ currency: "KWD", totalAmount: toMoney(50) });
+    seedOrder({ currency: "KWD", currencyMinorUnits: 3, totalAmount: toMoney(50) });
 
     await recordExternalRefunds("pi_123", [{ id: "re_kwd", amount: 1500 }]);
 

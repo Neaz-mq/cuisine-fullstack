@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import GiftCardActions from "./GiftCardActions";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 export default async function AdminGiftCardsPage({
   searchParams,
@@ -12,7 +12,7 @@ export default async function AdminGiftCardsPage({
   const { q } = await searchParams;
 
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
 
   const giftCards = await prisma.giftCard.findMany({
     where: q

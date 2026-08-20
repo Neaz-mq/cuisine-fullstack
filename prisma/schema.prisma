@@ -246,9 +246,31 @@ model Order {
   //
   // ISO 4217. Stored per order because a restaurant that changes currency
   // (or a future multi-branch deployment) must not retroactively relabel
-  // historical invoices. lib/money.ts maps this to the minor-unit
-  // exponent Stripe expects — 0 for JPY/KRW, 2 for most, 3 for KWD/BHD.
+  // historical invoices.
   currency String @default("BDT")
+
+  // How many decimals this order's currency has — snapshotted for exactly
+  // the same reason as `currency` itself.
+  //
+  // ⚠️ This is NOT derivable from the code above, and the comment on
+  // `currency` used to claim it was ("lib/money.ts maps this to the
+  // minor-unit exponent Stripe expects"). Two separate sources of truth
+  // existed and neither knew about the other:
+  //
+  //   • charging read settings.currencyMinorUnits — whatever the admin set
+  //   • refunding and every display read a hardcoded table in
+  //     lib/currency-format.ts, guessing from the currency code
+  //
+  // When those disagree — pick JPY but leave decimals at 2, which the
+  // settings form permits — Stripe is charged 100x too much and refunded
+  // 100x too little. The override is a plain input in the admin UI, so
+  // this was never only theoretical.
+  //
+  // Now the value in force when the order was placed is written here once,
+  // and charging, refunding and the invoice all read this single figure.
+  // Later settings changes leave old invoices untouched, exactly as with
+  // currency.
+  currencyMinorUnits Int @default(2)
 
   // What the tax line was called on this invoice: "VAT", "GST",
   // "Sales Tax", "Consumption Tax", "IVA". Snapshotted so a rebrand in

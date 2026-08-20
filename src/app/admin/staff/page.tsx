@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { canViewSensitiveStaffFields } from "@/lib/permissions";
 import DeactivateStaffButton from "./DeactivateStaffButton";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 const ROLE_STYLES: Record<string, string> = {
   OWNER: "bg-purple-100 text-purple-700",
@@ -17,7 +17,7 @@ const ROLE_STYLES: Record<string, string> = {
 
 export default async function AdminStaffPage() {
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
   const session = await requireAdmin();
   const viewerId = session.user.id;
   const viewerRole = (session.user as { role?: string }).role;

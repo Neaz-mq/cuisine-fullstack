@@ -138,6 +138,11 @@ export interface PricedOrder {
 
   // Order row-তে হুবহু কপি হয়ে যাওয়া snapshot গুলো।
   currency: string;
+  /**
+   * দশমিক সংখ্যা — currency-র সাথেই যায়, কারণ কোড দেখে অনুমান করা
+   * চলবে না। বিস্তারিত Order.currencyMinorUnits-এর comment-এ।
+   */
+  currencyMinorUnits: number;
   taxName: string;
   taxRate: Money;
   taxMode: TaxModeForPricing;
@@ -271,6 +276,7 @@ export function calculateOrderPricing(
     tipAmount,
     totalAmount,
     currency: settings.currency,
+    currencyMinorUnits: settings.currencyMinorUnits,
     taxName: settings.taxName,
     taxRate,
     taxMode: settings.taxMode,
@@ -300,6 +306,7 @@ export function pricingToOrderFields(priced: PricedOrder) {
     pointsRedeemedAmount: priced.pointsRedeemedAmount,
     totalAmount: priced.totalAmount,
     currency: priced.currency,
+    currencyMinorUnits: priced.currencyMinorUnits,
     taxName: priced.taxName,
     taxRate: priced.taxRate,
     taxMode: priced.taxMode,

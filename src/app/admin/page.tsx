@@ -6,7 +6,7 @@ import { hasPermission, firstAllowedPath } from "@/lib/permissions";
 import BusinessSummaryCard from "@/components/admin/BusinessSummaryCard";
 import { Prisma } from "@/generated/prisma/client";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 function formatOrderId(id: string) {
   return `#ORD-${id.slice(-6).toUpperCase()}`;
@@ -91,7 +91,7 @@ export default async function AdminDashboardPage() {
   // Net sales — বিল থেকে কর বাদ। gift card বা point দিয়ে দেওয়া অংশ বাদ
   // দেওয়া হয়নি: খাবার বিক্রি হয়েছে, কেবল পরিশোধ আগে হয়েছিল।
   const settings = await getRestaurantSettings();
-  const units = minorUnitsFor(settings.currency);
+  const units = settings.currencyMinorUnits;
   const revenueMoney = (value: { toFixed(dp: number): string }) =>
     formatAmount(value.toFixed(units), settings.currency);
 
@@ -200,7 +200,9 @@ export default async function AdminDashboardPage() {
               </span>
               <span className="text-sm font-semibold text-[#2C6252]">
                 {formatAmount(
-                  order.totalAmount.toFixed(minorUnitsFor(order.currency)),
+                  // প্রতিটা order-এর নিজের snapshot — এই তালিকায়
+                  // ভিন্ন মুদ্রার order মিশে থাকতে পারে।
+                  order.totalAmount.toFixed(order.currencyMinorUnits),
                   order.currency
                 )}
               </span>

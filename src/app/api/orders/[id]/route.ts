@@ -7,7 +7,6 @@ import { markOrderDelivered } from "@/lib/mark-order-delivered";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { cancelOrder } from "@/lib/cancel-order";
 import { transitionError } from "@/lib/order-state-machine";
-import { minorUnitsFor } from "@/lib/currency-format";
 import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
 
 /**
@@ -62,6 +61,7 @@ export async function GET(
       tipAmount: true,
       grandTotal: true,
       currency: true,
+      currencyMinorUnits: true,
       giftCardAmount: true,
       pointsRedeemed: true,
       pointsRedeemedAmount: true,
@@ -100,7 +100,7 @@ export async function GET(
   }
 
   // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয়।
-  const units = minorUnitsFor(order.currency);
+  const units = order.currencyMinorUnits;
   const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
 
   // ⚠️ `...order` spread করা হয় না ইচ্ছাকৃতভাবে।

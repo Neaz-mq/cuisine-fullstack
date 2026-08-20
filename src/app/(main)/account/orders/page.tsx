@@ -5,7 +5,7 @@ import Container from "@/components/Container";
 import { redirect } from "next/navigation";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderAgainButton from "./OrderAgainButton";
-import { formatAmount, minorUnitsFor, isPositiveAmount } from "@/lib/currency-format";
+import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
 
 /**
  * src/app/(main)/account/orders/page.tsx
@@ -94,7 +94,7 @@ export default async function MyOrdersPage() {
               // Each order carries its own currency, so a list can legitimately
               // mix them — an old order placed in another currency must not be
               // relabelled with today's.
-              const units = minorUnitsFor(order.currency);
+              const units = order.currencyMinorUnits;
               const money = (value: { toFixed(dp: number): string }) =>
                 formatAmount(value.toFixed(units), order.currency);
 

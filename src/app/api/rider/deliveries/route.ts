@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 /**
  * GET /api/rider/deliveries
@@ -41,6 +41,7 @@ export async function GET() {
           zip: true,
           totalAmount: true,
           currency: true,
+          currencyMinorUnits: true,
           paymentMethod: true,
         },
       },
@@ -64,7 +65,7 @@ export async function GET() {
         // COD-এ ঠিক এই অঙ্কটাই হাতে নেবেন, তাই ভুল মুদ্রা বা ভুল দশমিক
         // সরাসরি ভুল টাকা তোলা মানে।
         totalAmount: formatAmount(
-          d.order.totalAmount.toFixed(minorUnitsFor(d.order.currency)),
+          d.order.totalAmount.toFixed(d.order.currencyMinorUnits),
           d.order.currency
         ),
         paymentMethod: d.order.paymentMethod,

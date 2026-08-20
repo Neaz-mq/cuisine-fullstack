@@ -8,7 +8,7 @@ import AssignRiderPanel from "./AssignRiderPanel";
 import RefundPanel from "./RefundPanel";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission } from "@/lib/permissions";
-import { formatAmount, minorUnitsFor } from "@/lib/currency-format";
+import { formatAmount } from "@/lib/currency-format";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -44,7 +44,7 @@ export default async function AdminOrderDetailPage({
   const isDineIn = order.orderType === "DINE_IN";
 
   // This order's own currency, not today's settings.
-  const units = minorUnitsFor(order.currency);
+  const units = order.currencyMinorUnits;
   const money = (value: { toFixed(dp: number): string }) =>
     formatAmount(value.toFixed(units), order.currency);
   const positive = (value: { greaterThan(n: number): boolean }) => value.greaterThan(0);
