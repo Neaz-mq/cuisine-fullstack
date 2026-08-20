@@ -26,6 +26,7 @@ import { parseBody } from "@/lib/validations/parse";
 import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { cancelOrder } from "@/lib/cancel-order";
 
 /**
  * src/app/api/checkout/create-session/route.ts
@@ -193,33 +194,36 @@ export async function POST(request: Request) {
     giftCardAmount = priced.giftCardAmount;
     pointsRedeemedAmount = priced.pointsRedeemedAmount;
 
-    // Stripe খুব ছোট অঙ্ক charge করে না। coupon + tier discount + gift
-    // card + points redemption মিলিয়ে পুরো bill ঢেকে ফেললে চার্জ করার
-    // মতো কিছুই থাকে না — আগে তবুও Stripe session বানানোর চেষ্টা হতো, আর
-    // customer ঠিক সেই মুহূর্তে একটা কঠিন error পেতো যখন সবচেয়ে মসৃণ
-    // অভিজ্ঞতা আশা করছিল। অথচ ততক্ষণে তার balance debit হয়ে গেছে।
+    // coupon + tier discount + gift card + points মিলিয়ে পুরো bill ঢেকে
+    // ফেললে চার্জ করার মতো কিছুই থাকে না — Stripe-কে ডাকাই অর্থহীন।
     //
-    // ⚠️ সীমাটা এখন minor unit-এ, "0.5" নয়। ৫০ সেন্ট মানে ৫০ ইয়েন নয়,
-    // আর ০.৫ ইয়েন বলে কিছু নেই — পুরোনো hardcoded 0.5 জাপানে কার্যত
-    // প্রতিটা order-কেই "fully covered" ধরে নিতো না, বরং উল্টো: ¥০.৪৯-এর
-    // মতো অসম্ভব অঙ্ক ছাড়া কিছুই ধরা পড়তো না।
+    // ⚠️ এখানে আগে `chargeableMinorUnits < 50` ছিল, আর সেটা দুটো
+    // সম্পূর্ণ আলাদা পরিস্থিতিকে এক করে ফেলতো:
     //
-    // ৫০ minor unit Stripe-এর প্রকাশিত সর্বনিম্নের কাছাকাছি অনুমান
-    // (USD ৫০¢, JPY ¥৫০, GBP ৩০p)। মুদ্রাভেদে হুবহু মিলবে না — নিচের
-    // সীমার ঠিক উপরে কিন্তু Stripe-এর সীমার নিচে পড়া কোনো অঙ্ক এখনো
-    // Stripe থেকে error পাবে। বিরল, কিন্তু জানা সীমাবদ্ধতা।
-    const STRIPE_MINIMUM_MINOR_UNITS = 50;
-
-    const chargeableMinorUnits = toStripeMinorUnits(
-      priced.totalAmount,
-      pricingSettings.currencyMinorUnits
-    );
-
+    //   ১. সত্যিই কিছু চার্জ করার নেই (বৈধ — comp করে দাও)
+    //   ২. অঙ্কটা Stripe-এর সর্বনিম্নের চেয়ে ছোট (ভুল — গ্রাহককে
+    //      বলতে হবে, নীরবে বিনামূল্যে দিয়ে দেওয়া যাবে না)
+    //
+    // আর সংখ্যাটা নিজেই ভুল ছিল, কারণ Stripe-এর সীমা presentment
+    // মুদ্রার ৫০ minor unit নয় — **৫০ US সেন্টের সমতুল্য**, আজকের
+    // বিনিময় হারে। টাকায় ৫০ minor unit = ৳০.৫০ ≈ $0.004, অথচ Stripe
+    // চায় প্রায় ৳৬০। অর্থাৎ ৳০.৫০ থেকে ৳৬০ পর্যন্ত গোটা পরিসরটাই
+    // guard পেরিয়ে গিয়ে Stripe-এ amount_too_small খেতো।
+    //
+    //     "The Checkout Session's total amount must convert to at least
+    //      50 cents. ৳19.93 converts to approximately $0.16."
+    //
+    // সেই সীমাটা ভবিষ্যদ্বাণী করার চেষ্টা এখন ছেড়ে দেওয়া হয়েছে। বিনিময়
+    // হার প্রতিদিন বদলায় আর সেটা Stripe জানে, আমরা জানি না — একটা
+    // hardcoded টেবিল রাখা মানে সেটা নীরবে বাসি হতে থাকা। বদলে Stripe-কেই
+    // সিদ্ধান্ত নিতে দেওয়া হয়, আর সে না করলে নিচের catch সেটা গ্রাহকের
+    // ভাষায় অনুবাদ করে দেয়।
+    //
     // ⚠️ tip এখানে গুরুত্বপূর্ণ: বিল পুরোটা gift card-এ মিটে গেলেও গ্রাহক
-    // যদি বকশিশ দেন তবে totalAmount > 0, তাই Stripe লাগবেই। তাই শর্তটা
-    // grandTotal-এর নয়, totalAmount-এর উপর — যাতে বকশিশের টাকা চুপচাপ
-    // হারিয়ে না যায়।
-    const isFullyCoveredByDiscounts = chargeableMinorUnits < STRIPE_MINIMUM_MINOR_UNITS;
+    // বকশিশ দিলে totalAmount > 0, তাই Stripe লাগবেই। শর্তটা তাই
+    // grandTotal-এর নয়, totalAmount-এর উপর — যাতে বকশিশ চুপচাপ হারিয়ে
+    // না যায়।
+    const hasNothingToCharge = priced.totalAmount.lessThanOrEqualTo(ZERO);
 
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -243,7 +247,7 @@ export async function POST(request: Request) {
           // এখানেই PAID লিখতে হয়। নাহলে order চিরকাল PENDING থেকে যেতো
           // এবং assign-rider-এর নতুন payment check এটাকে dispatch হতে
           // দিত না, যদিও গ্রাহক পুরো টাকাই দিয়ে ফেলেছেন।
-          paymentStatus: isFullyCoveredByDiscounts ? "PAID" : "PENDING",
+          paymentStatus: hasNothingToCharge ? "PAID" : "PENDING",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
           giftCardCode: giftCardInfo?.code ?? null,
@@ -296,7 +300,7 @@ export async function POST(request: Request) {
 
     // Discounts-এ পুরোটা ঢাকা: Stripe-এর কিছুই করার নেই। এই path-এ কোনো
     // webhook আসবে না, তাই confirmation email-ও এখানেই পাঠাতে হয়।
-    if (isFullyCoveredByDiscounts) {
+    if (hasNothingToCharge) {
       try {
         await sendOrderConfirmationEmail(order);
       } catch (error) {
@@ -315,144 +319,170 @@ export async function POST(request: Request) {
 
     const stripe = getStripeClient();
 
-    // Discount Stripe-এর দিকেও প্রয়োগ করা হয়, এই একটা session-এর জন্য
-    // তৈরি এককালীন Stripe-native coupon দিয়ে (duration: "once") — প্রতিটা
-    // line item-এর unit_amount হাতে সমন্বয় করার বদলে, যেটার জন্য নিজস্ব
-    // cent-rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
+    // ⚠️ এখান থেকে নিচের return পর্যন্ত সবকিছু একটা আলাদা try-এ মোড়া,
+    // আর তার কারণটা গুরুতর।
     //
-    // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
-    // তাই coupon discount আর gift-card amount দুটো মিলিয়ে একটাই Stripe
-    // coupon বানানো হয় — amount_off = discountAmount + giftCardAmount।
-    // আমাদের নিজের DB total-ও ঠিক একইভাবে দুটো বাদ দিয়ে হিসাব করা, তাই
-    // যেটাই (বা দুটোই) প্রযোজ্য হোক, দুই দিক মিলে থাকে।
+    // উপরের $transaction ইতিমধ্যে **commit হয়ে গেছে**: order তৈরি,
+    // coupon consumed, gift card-এর balance কাটা, points redeemed। সেটা
+    // আর ফিরিয়ে নেওয়ার কোনো database-স্তরের উপায় নেই।
     //
-    // সবসময় amount_off (সেন্টে) দিয়ে বানানো হয়, percent_off দিয়ে নয় —
-    // এতেই maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted
-    // পেজেও সঠিকভাবে বসে, শুধু আমাদের DB total-এ নয়। সাধারণ percent_off
-    // coupon cap আর fixed-amount দুটোকেই উপেক্ষা করতো।
+    // আগে Stripe এখানে throw করলে বাইরের catch একটা সাদামাটা 500 ফেরত
+    // দিতো, ব্যস। ফলাফল:
     //
-    // Stripe amount_off-এ ধনাত্মক পূর্ণসংখ্যা চায়, তাই শূন্যে নেমে আসা
-    // combined discount পাঠানোই হয় না। tierDiscountAmount আর
-    // pointsRedeemedAmount দুটোও এখানে যোগ হয় — আমাদের নিজের DB total এই
-    // চারটে বাদ দিয়েই হিসাব করা, তাই Stripe-এর charge ঠিক ততটাই কমতে
-    // হবে যতটা আমাদের total কমেছে।
-    const stripeCurrency = pricingSettings.currency.toLowerCase();
-    const minorUnits = pricingSettings.currencyMinorUnits;
-    const toMinor = (amount: Money) => toStripeMinorUnits(amount, minorUnits);
+    //   • order চিরকাল PLACED / PENDING হয়ে পড়ে থাকতো
+    //   • গ্রাহকের gift card-এর টাকা কাটা থেকে যেতো
+    //   • points খরচ হয়ে যেতো, coupon "ব্যবহৃত" হিসেবে আটকে থাকতো
+    //   • আর কোনো Stripe session তৈরিই হয়নি বলে checkout.session.expired
+    //     কখনো আসতো না — অর্থাৎ cancelOrder() কখনো চলতো না
+    //
+    // অর্থাৎ ফেরত দেওয়ার একমাত্র স্বয়ংক্রিয় পথটাই বন্ধ ছিল। BDT-তে
+    // amount_too_small খাওয়া প্রতিটা চেষ্টা একটা করে অনাথ order আর
+    // এক দফা কাটা gift card রেখে গেছে।
+    //
+    // তাই এখন Stripe ব্যর্থ হলেই cancelOrder() ডাকা হয়, যেটা ওই সবকিছুই
+    // ফিরিয়ে দেয় — session expiry-র জন্য অপেক্ষা না করে।
+    try {
+      // Discount Stripe-এর দিকেও প্রয়োগ করা হয়, এই একটা session-এর জন্য
+      // তৈরি এককালীন Stripe-native coupon দিয়ে (duration: "once") — প্রতিটা
+      // line item-এর unit_amount হাতে সমন্বয় করার বদলে, যেটার জন্য নিজস্ব
+      // cent-rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
+      //
+      // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
+      // তাই coupon discount আর gift-card amount দুটো মিলিয়ে একটাই Stripe
+      // coupon বানানো হয় — amount_off = discountAmount + giftCardAmount।
+      // আমাদের নিজের DB total-ও ঠিক একইভাবে দুটো বাদ দিয়ে হিসাব করা, তাই
+      // যেটাই (বা দুটোই) প্রযোজ্য হোক, দুই দিক মিলে থাকে।
+      //
+      // সবসময় amount_off (সেন্টে) দিয়ে বানানো হয়, percent_off দিয়ে নয় —
+      // এতেই maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted
+      // পেজেও সঠিকভাবে বসে, শুধু আমাদের DB total-এ নয়। সাধারণ percent_off
+      // coupon cap আর fixed-amount দুটোকেই উপেক্ষা করতো।
+      //
+      // Stripe amount_off-এ ধনাত্মক পূর্ণসংখ্যা চায়, তাই শূন্যে নেমে আসা
+      // combined discount পাঠানোই হয় না। tierDiscountAmount আর
+      // pointsRedeemedAmount দুটোও এখানে যোগ হয় — আমাদের নিজের DB total এই
+      // চারটে বাদ দিয়েই হিসাব করা, তাই Stripe-এর charge ঠিক ততটাই কমতে
+      // হবে যতটা আমাদের total কমেছে।
+      const stripeCurrency = pricingSettings.currency.toLowerCase();
+      const minorUnits = pricingSettings.currencyMinorUnits;
+      const toMinor = (amount: Money) => toStripeMinorUnits(amount, minorUnits);
 
-    // ── Stripe-এ পাঠানো line item ────────────────────────────────────────
-    //
-    // খাবারের লাইনগুলোর পর কর, service charge, delivery fee আর বকশিশ
-    // আলাদা line item হিসেবে যায়। আগে শুধু খাবারই যেতো, তাই Stripe-এর
-    // হিসাব করা মোট আর আমাদের totalAmount আলাদা হতো — এখন কর/fee/tip
-    // যুক্ত হওয়ায় পার্থক্যটা আর "শূন্য" থাকতো না, গ্রাহক কম টাকা দিয়ে
-    // চলে যেতেন।
-    //
-    // ⚠️ INCLUSIVE mode-এ করের কোনো আলাদা লাইন যায় না, ইচ্ছাকৃতভাবে:
-    // সেখানে কর ইতিমধ্যে প্রতিটা খাবারের দামের ভেতরে। আলাদা লাইন দিলে
-    // ইউরোপ/জাপানে প্রতিটা গ্রাহকের কাছ থেকে কর দুবার আদায় হতো।
-    const extraLine = (label: string, amount: Money) =>
-      amount.greaterThan(0)
-        ? [
-            {
-              quantity: 1,
-              price_data: {
-                currency: stripeCurrency,
-                unit_amount: toMinor(amount),
-                product_data: { name: label },
-              },
-            },
-          ]
-        : [];
-
-    const lineItems = [
-      ...resolvedItems.map((i) => ({
-        quantity: i.quantity,
-        price_data: {
-          currency: stripeCurrency,
-          // Stripe সবচেয়ে ছোট একক চায়। গুণকটা settings থেকে আসে, কোডে
-          // লেখা 100 নয় — ¥1,200 এখন 1200 হয়ে যায়, 120000 নয়।
-          unit_amount: toMinor(toMoney(i.price)),
-          product_data: { name: i.title },
-        },
-      })),
-      ...extraLine("Service charge", priced.serviceCharge),
-      ...extraLine("Delivery", priced.deliveryFee),
-      ...(priced.taxMode === "EXCLUSIVE" ? extraLine(priced.taxName, priced.taxAmount) : []),
-      ...extraLine("Tip", priced.tipAmount),
-    ];
-
-    // Discount Stripe-এর দিকেও প্রয়োগ করা হয়, এই একটা session-এর জন্য
-    // তৈরি এককালীন Stripe-native coupon দিয়ে (duration: "once") — প্রতিটা
-    // line item-এর unit_amount হাতে সমন্বয় করার বদলে, যেটার জন্য নিজস্ব
-    // rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
-    //
-    // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
-    // তাই coupon, tier discount, gift card আর point — চারটেই মিলিয়ে
-    // একটাই Stripe coupon বানানো হয়। আমাদের নিজের totalAmount-ও ঠিক এই
-    // চারটে বাদ দিয়েই হিসাব করা, তাই দুই দিক মিলে থাকে।
-    //
-    // সবসময় amount_off দিয়ে বানানো হয়, percent_off দিয়ে নয় — এতেই
-    // maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted পেজেও
-    // সঠিকভাবে বসে, শুধু আমাদের DB total-এ নয়।
-    const combinedDiscountMinor = toMinor(
-      sum(
-        priced.discountAmount,
-        priced.tierDiscountAmount,
-        priced.giftCardAmount,
-        priced.pointsRedeemedAmount
-      )
-    );
-
-    const stripeDiscounts =
-      combinedDiscountMinor > 0
-        ? [
-            {
-              coupon: (
-                await stripe.coupons.create({
-                  amount_off: combinedDiscountMinor,
+      // ── Stripe-এ পাঠানো line item ────────────────────────────────────────
+      //
+      // খাবারের লাইনগুলোর পর কর, service charge, delivery fee আর বকশিশ
+      // আলাদা line item হিসেবে যায়। আগে শুধু খাবারই যেতো, তাই Stripe-এর
+      // হিসাব করা মোট আর আমাদের totalAmount আলাদা হতো — এখন কর/fee/tip
+      // যুক্ত হওয়ায় পার্থক্যটা আর "শূন্য" থাকতো না, গ্রাহক কম টাকা দিয়ে
+      // চলে যেতেন।
+      //
+      // ⚠️ INCLUSIVE mode-এ করের কোনো আলাদা লাইন যায় না, ইচ্ছাকৃতভাবে:
+      // সেখানে কর ইতিমধ্যে প্রতিটা খাবারের দামের ভেতরে। আলাদা লাইন দিলে
+      // ইউরোপ/জাপানে প্রতিটা গ্রাহকের কাছ থেকে কর দুবার আদায় হতো।
+      const extraLine = (label: string, amount: Money) =>
+        amount.greaterThan(0)
+          ? [
+              {
+                quantity: 1,
+                price_data: {
                   currency: stripeCurrency,
-                  duration: "once",
-                  // এই coupon একটামাত্র session-এর জন্য। এটা ছাড়া প্রতিটা
-                  // discounted order Stripe account-এ একটা করে চিরস্থায়ী,
-                  // পুনঃব্যবহারযোগ্য coupon object রেখে যেতো — কয়েক হাজার
-                  // order পরে dashboard-এর coupon তালিকা অব্যবহার্য হয়ে
-                  // যায়, আর কেউ id জেনে গেলে সেটা আবার প্রয়োগ করতে পারতো।
-                  max_redemptions: 1,
-                  // ইচ্ছাকৃতভাবে সাধারণ নাম। আগে এখানে coupon code আর gift
-                  // card code জোড়া দেওয়া হতো, ফলে customer-এর gift card
-                  // code Stripe-এর hosted পেজে এবং dashboard/report-এ
-                  // দেখা যেতো।
-                  name: "Discount",
-                })
-              ).id,
-            },
-          ]
-        : undefined;
+                  unit_amount: toMinor(amount),
+                  product_data: { name: label },
+                },
+              },
+            ]
+          : [];
 
-    const checkoutSession = await stripe.checkout.sessions.create(
-      {
-        mode: "payment",
-        payment_method_types: ["card"],
-        customer_email: billing.email,
-        line_items: lineItems,
-        discounts: stripeDiscounts,
-        metadata: { orderId: order.id },
-        success_url: `${appUrl}/track/${order.id}?payment=success`,
-        cancel_url: `${appUrl}/carts?payment=cancelled`,
-      },
-      // এই Order-এর জন্য ঠিক একটাই Checkout Session। network hiccup-এ
-      // SDK নিজে থেকে retry করলে বা একই order-এ কোনোভাবে দ্বিতীয়বার call
-      // হলে Stripe নতুন session না বানিয়ে আগেরটাই ফেরত দেয় — নাহলে একই
-      // order-এর দুটো live session থেকে দুবার charge হওয়া সম্ভব হতো।
-      { idempotencyKey: `checkout_${order.id}` }
-    );
+      const lineItems = [
+        ...resolvedItems.map((i) => ({
+          quantity: i.quantity,
+          price_data: {
+            currency: stripeCurrency,
+            // Stripe সবচেয়ে ছোট একক চায়। গুণকটা settings থেকে আসে, কোডে
+            // লেখা 100 নয় — ¥1,200 এখন 1200 হয়ে যায়, 120000 নয়।
+            unit_amount: toMinor(toMoney(i.price)),
+            product_data: { name: i.title },
+          },
+        })),
+        ...extraLine("Service charge", priced.serviceCharge),
+        ...extraLine("Delivery", priced.deliveryFee),
+        ...(priced.taxMode === "EXCLUSIVE" ? extraLine(priced.taxName, priced.taxAmount) : []),
+        ...extraLine("Tip", priced.tipAmount),
+      ];
 
-    if (!checkoutSession.url) {
-      throw new Error("Stripe did not return a checkout URL");
+      // Discount Stripe-এর দিকেও প্রয়োগ করা হয়, এই একটা session-এর জন্য
+      // তৈরি এককালীন Stripe-native coupon দিয়ে (duration: "once") — প্রতিটা
+      // line item-এর unit_amount হাতে সমন্বয় করার বদলে, যেটার জন্য নিজস্ব
+      // rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
+      //
+      // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
+      // তাই coupon, tier discount, gift card আর point — চারটেই মিলিয়ে
+      // একটাই Stripe coupon বানানো হয়। আমাদের নিজের totalAmount-ও ঠিক এই
+      // চারটে বাদ দিয়েই হিসাব করা, তাই দুই দিক মিলে থাকে।
+      //
+      // সবসময় amount_off দিয়ে বানানো হয়, percent_off দিয়ে নয় — এতেই
+      // maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted পেজেও
+      // সঠিকভাবে বসে, শুধু আমাদের DB total-এ নয়।
+      const combinedDiscountMinor = toMinor(
+        sum(
+          priced.discountAmount,
+          priced.tierDiscountAmount,
+          priced.giftCardAmount,
+          priced.pointsRedeemedAmount
+        )
+      );
+
+      const stripeDiscounts =
+        combinedDiscountMinor > 0
+          ? [
+              {
+                coupon: (
+                  await stripe.coupons.create({
+                    amount_off: combinedDiscountMinor,
+                    currency: stripeCurrency,
+                    duration: "once",
+                    // এই coupon একটামাত্র session-এর জন্য। এটা ছাড়া প্রতিটা
+                    // discounted order Stripe account-এ একটা করে চিরস্থায়ী,
+                    // পুনঃব্যবহারযোগ্য coupon object রেখে যেতো — কয়েক হাজার
+                    // order পরে dashboard-এর coupon তালিকা অব্যবহার্য হয়ে
+                    // যায়, আর কেউ id জেনে গেলে সেটা আবার প্রয়োগ করতে পারতো।
+                    max_redemptions: 1,
+                    // ইচ্ছাকৃতভাবে সাধারণ নাম। আগে এখানে coupon code আর gift
+                    // card code জোড়া দেওয়া হতো, ফলে customer-এর gift card
+                    // code Stripe-এর hosted পেজে এবং dashboard/report-এ
+                    // দেখা যেতো।
+                    name: "Discount",
+                  })
+                ).id,
+              },
+            ]
+          : undefined;
+
+      const checkoutSession = await stripe.checkout.sessions.create(
+        {
+          mode: "payment",
+          payment_method_types: ["card"],
+          customer_email: billing.email,
+          line_items: lineItems,
+          discounts: stripeDiscounts,
+          metadata: { orderId: order.id },
+          success_url: `${appUrl}/track/${order.id}?payment=success`,
+          cancel_url: `${appUrl}/carts?payment=cancelled`,
+        },
+        // এই Order-এর জন্য ঠিক একটাই Checkout Session। network hiccup-এ
+        // SDK নিজে থেকে retry করলে বা একই order-এ কোনোভাবে দ্বিতীয়বার call
+        // হলে Stripe নতুন session না বানিয়ে আগেরটাই ফেরত দেয় — নাহলে একই
+        // order-এর দুটো live session থেকে দুবার charge হওয়া সম্ভব হতো।
+        { idempotencyKey: `checkout_${order.id}` }
+      );
+
+      if (!checkoutSession.url) {
+        throw new Error("Stripe did not return a checkout URL");
+      }
+
+      return NextResponse.json({ url: checkoutSession.url, orderId: order.id }, { status: 201 });
+    } catch (stripeError) {
+      return abandonCheckout(order.id, stripeError);
     }
-
-    return NextResponse.json({ url: checkoutSession.url, orderId: order.id }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
       return NextResponse.json(
@@ -478,4 +508,70 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Stripe checkout শুরু করা যায়নি — order আর তার সাথে খরচ হয়ে যাওয়া সব
+ * কিছু ফিরিয়ে দাও।
+ *
+ * ── কেন এই function-টার অস্তিত্ব দরকার ────────────────────────────────
+ *
+ * order তৈরির $transaction ততক্ষণে commit হয়ে গেছে। coupon "ব্যবহৃত",
+ * gift card-এর balance কাটা, points খরচ। Stripe থেকে error আসা মানে
+ * গ্রাহক কিছুই কেনেননি — অথচ দাম দিয়ে ফেলেছেন।
+ *
+ * সাধারণত এই ফেরতটা checkout.session.expired webhook দিয়ে হয় (২৪ ঘণ্টা
+ * পরে, cancelOrder ডেকে)। কিন্তু এখানে **কোনো session-ই তৈরি হয়নি**,
+ * তাই সেই webhook কখনো আসবে না। অপেক্ষা করার কিছু নেই — এখনই ফেরাতে হবে।
+ *
+ * cancelOrder() নিজে idempotent (ভেতরে status ও ledger guard আছে), তাই
+ * বিরল যে ক্ষেত্রে session আসলে তৈরি হয়েছিল কিন্তু উত্তরটা আমাদের কাছে
+ * পৌঁছায়নি — সেখানে ২৪ ঘণ্টা পর expiry webhook দ্বিতীয়বার ডাকলেও কিছু
+ * দুবার ফেরত যাবে না।
+ */
+async function abandonCheckout(orderId: string, error: unknown): Promise<NextResponse> {
+  console.error("Stripe checkout could not be started, reversing order", orderId, error);
+
+  try {
+    const result = await cancelOrder(orderId, "Stripe checkout could not be started");
+    if (!result.ok) {
+      // ফেরত দেওয়াই যায়নি — এটাই সবচেয়ে খারাপ অবস্থা, কারণ গ্রাহকের
+      // gift card কাটা থেকে যাবে আর কেউ জানবে না। জোরে চিৎকার করা ছাড়া
+      // এখানে করার কিছু নেই; হাতে মেলাতে হবে।
+      console.error("⚠️ Order could not be reversed after a failed checkout", orderId, result.error);
+    }
+  } catch (cancelError) {
+    console.error("⚠️ Order could not be reversed after a failed checkout", orderId, cancelError);
+  }
+
+  // amount_too_small আলাদা করে ধরা হয়, কারণ এটাই একমাত্র Stripe error
+  // যেটার সমাধান গ্রাহকের নিজের হাতে আছে — আর তাকে সেটা বলা না হলে সে
+  // একই কাজ বারবার করতে থাকবে।
+  //
+  // Stripe-এর সীমা presentment মুদ্রার কোনো স্থির অঙ্ক নয়, বরং ৫০ US
+  // সেন্টের সমতুল্য — তাই এখানে নির্দিষ্ট কোনো সংখ্যা বলা হয় না। বললে
+  // সেটা বিনিময় হারের সাথে নীরবে ভুল হয়ে যেতো।
+  if (isAmountTooSmall(error)) {
+    return NextResponse.json(
+      {
+        error:
+          "This order is too small to pay for online. Please add a little more to your cart, or choose Cash on Delivery.",
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json(
+    { error: "Failed to start checkout. Please try again." },
+    { status: 500 }
+  );
+}
+
+/** Stripe-এর `amount_too_small` — অঙ্কটা তার সর্বনিম্নের নিচে। */
+function isAmountTooSmall(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: string }).code === "amount_too_small"
+  );
 }
