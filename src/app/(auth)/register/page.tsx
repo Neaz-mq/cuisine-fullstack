@@ -20,9 +20,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -126,8 +124,8 @@ export default function RegisterPage() {
               With Care
             </h2>
             <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-4 max-w-sm mx-auto">
-              Sign in to track your orders, save your favorite dishes, and
-              get personalized offers from Cuisine.
+              Sign in to track your orders, save your favorite dishes, and get
+              personalized offers from Cuisine.
             </p>
 
             {/* Stats — 510px across with 13.45px gaps yields 161.03px cards, per Figma */}
@@ -184,13 +182,17 @@ export default function RegisterPage() {
               </Link>
             </div>
 
-            {/* Back to Home — boxed chevron + separate label, matches Figma */}
+            {/* Back to Home — 60×60 box (radius 16), 30×30 chevron, Sora 18px label at black/70, per Figma */}
             <Link
               href="/"
               className="hidden lg:inline-flex items-center gap-3 mb-10 group"
             >
-              <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-700 group-hover:bg-gray-50 transition-colors">
-                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none">
+              <span className="w-[60px] h-[60px] rounded-[16px] bg-white flex items-center justify-center text-gray-900 group-hover:bg-gray-50 transition-colors">
+                <svg
+                  className="w-[30px] h-[30px]"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                >
                   <path
                     d="M12.5 15L7.5 10L12.5 5"
                     stroke="currentColor"
@@ -200,18 +202,18 @@ export default function RegisterPage() {
                   />
                 </svg>
               </span>
-              <span className="text-sm text-gray-500 group-hover:text-gray-700 transition-colors">
+              <span className="font-sora font-normal text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors">
                 Back to Home
               </span>
             </Link>
 
+            {/* Heading + subtitle — Frank Ruhl Libre 36/130% and Sora 12/160%, per Figma */}
             <div className="mb-8">
-              <h1 className="font-frank-ruhl text-3xl font-bold text-gray-900">
+              <h1 className="font-frank-ruhl font-medium text-[36px] leading-[130%] tracking-normal text-black">
                 Create Your Account
               </h1>
-              <p className="mt-2 text-sm text-gray-500">
-                Join Cuisine to order, save favorites, and get exclusive
-                deals.
+              <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
+                Join Cuisine to order, save favorites, and get exclusive deals.
               </p>
             </div>
 
@@ -334,15 +336,25 @@ export default function RegisterPage() {
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showPassword ? (
-                      <svg className="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="w-4.5 h-4.5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
                         <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.359 1.359a2.5 2.5 0 013.14 3.14l1.359 1.359a4 4 0 00-5.858-5.858z" />
                         <path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z" />
                       </svg>
                     ) : (
-                      <svg className="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="w-4.5 h-4.5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
                         <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
                         <path
                           fillRule="evenodd"
@@ -388,23 +400,29 @@ export default function RegisterPage() {
                 </span>
                 <span className="text-sm text-gray-600">
                   I agree to the{" "}
-                  <Link href="/terms" className="font-semibold text-gray-900 hover:underline">
+                  <Link
+                    href="/terms"
+                    className="font-semibold text-gray-900 hover:underline"
+                  >
                     Terms
                   </Link>{" "}
                   &{" "}
-                  <Link href="/privacy" className="font-semibold text-gray-900 hover:underline">
+                  <Link
+                    href="/privacy"
+                    className="font-semibold text-gray-900 hover:underline"
+                  >
                     Privacy Policy
                   </Link>
                 </span>
               </label>
-
+              {/* Sign Up — 56px tall, radius 100, gradient #FF9540 → #FF70C6 (Figma) */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-[#F4A261] to-[#EE6C8B] text-white py-3.5 rounded-full font-semibold text-sm hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-[56px] px-6 bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-white rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="flex items-center justify-center gap-3">
                     <svg
                       className="animate-spin h-4 w-4"
                       viewBox="0 0 24 24"
@@ -431,12 +449,12 @@ export default function RegisterPage() {
                 )}
               </button>
             </form>
-
+            {/* Google — same 56px pill, Sora 600 16px at black/100 (Figma) */}
             <button
               onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="w-full mt-3 border border-gray-900 py-3.5 rounded-full flex items-center justify-center gap-2.5 text-sm font-medium text-gray-800 bg-white hover:bg-gray-50 transition"
+              className="w-full h-[56px] px-6 mt-3 border border-gray-900 rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-gray-50 transition"
             >
-              <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -457,11 +475,12 @@ export default function RegisterPage() {
               Sign Up with Google
             </button>
 
-            <p className="text-center text-sm text-gray-500 mt-7">
+            {/* Log in line — Sora 400 16px, centered (Figma) */}
+            <p className="text-center font-sora font-normal text-[16px] leading-[160%] text-black/70 mt-7">
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="text-gray-900 font-semibold hover:underline"
+                className="font-semibold text-black hover:underline"
               >
                 Log in
               </Link>
