@@ -9,12 +9,14 @@ import Image from "next/image";
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,12 +25,12 @@ export default function LoginPage() {
     setLoading(true);
 
     const result = await signIn("credentials", {
-      email: form.email,
+      email: form.email.trim().toLowerCase(),
       password: form.password,
       redirect: false,
     });
 
-    if (result?.error) {
+    if (!result?.ok || result.error) {
       setError("Incorrect email or password");
       setLoading(false);
       return;
@@ -43,101 +45,131 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Left visual panel — hidden on small screens */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#2C6252] relative overflow-hidden items-center justify-center">
-        <div className="absolute -top-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -right-16 w-96 h-96 bg-orange-400/10 rounded-full blur-3xl" />
+    // overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও page-এ horizontal bar আসবে না
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-2 py-4 sm:px-4 sm:py-6 lg:py-10">
+      {/* Outer white card — register page-এর সাথে ঠিক একই grid/radius/padding নিয়ম */}
+      <div className="w-full max-w-[1280px] bg-white rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] p-2 sm:p-3 lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+        {/* Left visual panel — register page-এর মতোই, শুধু ছবি আলাদা (pizza) */}
+        <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
+          <Image
+            // TODO: register page-এ burger ছবি ব্যবহার হয়েছে, Figma login design-এ pizza ছবি
+            // দেখানো আছে — সেই আসল asset URL বসিয়ে দাও, আপাতত একই cloudinary URL রাখা হলো।
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787220856/signup_czzdi1.webp"
+            alt="Great food, delivered with care"
+            fill
+            priority
+            className="object-cover"
+            sizes="(min-width: 1024px) 50vw, 100vw"
+          />
 
-        <div className="relative z-10 max-w-md px-10 text-white text-center">
+          <div className="absolute bottom-0 left-0 right-0 h-[64%] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
+
           <Link
             href="/"
-            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl mb-8 transition-colors"
+            className="absolute top-8 xl:top-10 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-2"
             aria-label="Back to home"
           >
             <Image
               src="/logo.svg"
               alt="Cuisine Logo"
-              width={25}
-              height={25}
-              className="w-6 h-6 brightness-0 invert"
+              width={40}
+              height={40}
+              className="w-9 h-9 xl:w-10 xl:h-10"
             />
-            <span className="font-bold text-lg text-white">Cuisine</span>
+            <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
+              Cuisine
+            </span>
           </Link>
 
-          <h2 className="text-3xl font-bold leading-tight">
-            Welcome back.
-          </h2>
-          <p className="mt-4 text-white/80 text-base leading-relaxed">
-            Log in to pick up right where you left off — your saved
-            dishes, past orders, and faster checkout are all waiting.
-          </p>
+          <div className="absolute bottom-6 left-6 right-6 xl:bottom-10 xl:left-[50px] xl:right-[50px] z-10 text-white text-center">
+            <h2 className="font-frank-ruhl text-[30px] xl:text-[38px] font-semibold leading-[114%] tracking-[-0.01em] text-white">
+              Great Food, Delivered
+              <br />
+              With Care
+            </h2>
+            <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
+              Sign in to track your orders, save your favorite dishes, and get
+              personalized offers from Cuisine.
+            </p>
 
-          <div className="mt-10 flex items-center justify-center gap-2 text-sm text-white/70">
-            <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full bg-orange-300 border-2 border-[#2C6252]" />
-              <div className="w-8 h-8 rounded-full bg-white/30 border-2 border-[#2C6252]" />
-              <div className="w-8 h-8 rounded-full bg-orange-500 border-2 border-[#2C6252]" />
+            <div className="mt-6 xl:mt-8 grid grid-cols-3 gap-2 xl:gap-[13.45px] w-full">
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+                  50K+
+                </div>
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                  Happy Guests
+                </div>
+              </div>
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+                  4.9
+                </div>
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                  Average Rating
+                </div>
+              </div>
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+                  24/7
+                </div>
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                  Live Kitchen
+                </div>
+              </div>
             </div>
-            <span>Trusted by thousands of hungry customers</span>
           </div>
         </div>
-      </div>
 
-      {/* Right form panel */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-12 sm:px-6 lg:px-16">
-        <div className="w-full max-w-md">
-          {/* Mobile-only logo + back link (left panel is hidden below lg) */}
-          <div className="flex lg:hidden items-center justify-between mb-6">
+        {/* Right form panel — register page-এর মতোই layout, ফিল্ড কম (email + password) */}
+        <div className="w-full min-w-0 h-full bg-white lg:bg-[#F9F6F3] rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 xl:px-[50px] xl:py-[30px]">
+          <div className="w-full max-w-[510px] mx-auto">
             <Link
               href="/"
-              className="flex items-center gap-2"
-              aria-label="Back to home"
+              className="inline-flex items-center gap-2.5 xl:gap-3 group mb-6 sm:mb-8 xl:mb-10"
             >
-              <Image
-                src="/logo.svg"
-                alt="Cuisine Logo"
-                width={25}
-                height={25}
-                className="w-6 h-6"
-              />
-              <span className="font-bold text-lg text-[#2C6252]">
-                Cuisine
+              <span className="w-11 h-11 xl:w-[60px] xl:h-[60px] shrink-0 rounded-[14px] xl:rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
+                <svg
+                  className="w-5 h-5 xl:w-[30px] xl:h-[30px]"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12.5 15L7.5 10L12.5 5"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span className="font-sora font-normal text-[14px] sm:text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
+                Back to Home
               </span>
             </Link>
-          </div>
 
-          <div className="bg-[#F8F8F8] rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-10">
-            {/* Desktop-only back-to-home text link */}
-            <Link
-              href="/"
-              className="hidden lg:inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Back to home
-            </Link>
-
-            <div className="mb-8">
-              <h1 className="text-2xl font-bold text-gray-900">
-                Log in to your account
+            <div className="mb-6 sm:mb-7 xl:mb-8">
+              <h1 className="font-frank-ruhl font-medium text-[28px] sm:text-[32px] xl:text-[36px] leading-[130%] tracking-normal text-black">
+                Login Your Account
               </h1>
-              <p className="mt-2 text-sm text-gray-500">
-                Enter your details to continue ordering.
+              <p className="font-sora font-normal text-[11px] sm:text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
+                Access your account to order your favorite dishes in just a
+                few clicks.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 bg-red-50 text-red-600 text-sm p-3 mb-5 rounded-lg border border-red-100">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100"
+              >
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     fillRule="evenodd"
@@ -145,62 +177,74 @@ export default function LoginPage() {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span>{error}</span>
+                <span className="min-w-0">{error}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email
+                <label
+                  htmlFor="email"
+                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                >
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="email"
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
                   required
-                  className="w-full border border-gray-300 bg-white px-3.5 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
+                  autoComplete="email"
+                  className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Password
-                  </label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs font-medium text-[#2C6252] hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
+                <label
+                  htmlFor="password"
+                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                >
+                  Password <span className="text-red-500">*</span>
+                </label>
                 <div className="relative">
                   <input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={form.password}
                     onChange={handleChange}
                     required
-                    className="w-full border border-gray-300 bg-white px-3.5 py-2.5 pr-10 rounded-lg text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
-                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    placeholder="Password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    tabIndex={-1}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
                     aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? (
-                      <svg className="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="w-[18px] h-[18px]"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
                         <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.359 1.359a2.5 2.5 0 013.14 3.14l1.359 1.359a4 4 0 00-5.858-5.858z" />
                         <path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z" />
                       </svg>
                     ) : (
-                      <svg className="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="w-[18px] h-[18px]"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
                         <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
                         <path
                           fillRule="evenodd"
@@ -213,17 +257,67 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Remember me + Forgot password — একই সারিতে, Figma design অনুযায়ী */}
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <span
+                    className={`w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
+                      remember
+                        ? "bg-white border-black"
+                        : "bg-white border-black/25"
+                    }`}
+                  >
+                    {remember && (
+                      <svg
+                        viewBox="0 0 12 12"
+                        className="w-3 h-3"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M2 6.2L4.5 8.7L10 3"
+                          stroke="#000000"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black/80">
+                    Remember me
+                  </span>
+                </label>
+
+                <Link
+                  href="/forgot-password"
+                  className="font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black hover:underline whitespace-nowrap"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+
+              {/* Login — register page-এর Sign Up button-এর সাথে একদম identical style */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#FF4C15] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-orange-600 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                aria-busy={loading}
+                className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="flex items-center gap-2 sm:gap-3">
                     <svg
                       className="animate-spin h-4 w-4"
                       viewBox="0 0 24 24"
                       fill="none"
+                      aria-hidden="true"
                     >
                       <circle
                         className="opacity-25"
@@ -247,19 +341,17 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="flex items-center my-6">
-              <div className="flex-1 border-t border-gray-200" />
-              <span className="px-3 text-xs font-medium text-gray-400 uppercase tracking-wide">
-                or
-              </span>
-              <div className="flex-1 border-t border-gray-200" />
-            </div>
-
             <button
+              type="button"
               onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="w-full border border-gray-300 py-2.5 rounded-lg flex items-center justify-center gap-2.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm"
+              disabled={loading}
+              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
-              <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
+              <svg
+                className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -280,11 +372,11 @@ export default function LoginPage() {
               Log In with Google
             </button>
 
-            <p className="text-center text-sm text-gray-500 mt-7">
+            <p className="text-center font-sora font-normal text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black/70 mt-5 sm:mt-6 xl:mt-7">
               Don&apos;t have an account?{" "}
               <Link
                 href="/register"
-                className="text-[#2C6252] font-semibold hover:underline"
+                className="font-semibold text-black hover:underline"
               >
                 Sign Up
               </Link>
