@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
+import CountryCodeSelect, {
+  DEFAULT_COUNTRY,
+  type Country,
+} from "@/components/CountryCodeSelect";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,6 +19,7 @@ export default function RegisterPage() {
     phone: "",
     password: "",
   });
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [agreed, setAgreed] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,9 +46,9 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           // NOTE: current /api/register only accepts { name, email, password }.
-          // firstName + lastName are combined below. `phone` is collected but
-          // not yet sent — extend the API route + Prisma schema first if you
-          // want it persisted, then add it here.
+          // firstName + lastName are combined below. `phone` is collected and
+          // normalised to E.164 below, but not yet sent — extend the API route
+          // + Prisma schema first, then add it here.
           name: `${form.firstName} ${form.lastName}`.trim(),
           email: form.email,
           password: form.password,
@@ -79,12 +84,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F9F6F3] flex items-center justify-center px-4 py-6 lg:py-10">
-      {/* Outer white card — 1280×894, radius 30, padding 20, gap 20 (Figma).
-          Flat #FFFFFF fill: the Figma frame has no Effects, so no shadow here. */}
-      <div className="w-full max-w-[1280px] bg-white rounded-[30px] p-3 lg:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-5 lg:h-[894px]">
-        {/* Left visual panel — hidden on small screens */}
-        <div className="hidden lg:block relative rounded-[22px] overflow-hidden w-full h-full">
+    // overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও page-এ horizontal bar আসবে না
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-2 py-4 sm:px-4 sm:py-6 lg:py-10">
+      {/* Outer white card — Figma মান (1280×894, radius 30, padding 20, gap 20) xl থেকে।
+          min-h ব্যবহার করা হয়েছে fixed h-এর বদলে: 894px floor হিসেবে থাকে, কিন্তু
+          content বেশি হলে card বড় হয় — ভেতরে scrollbar আসে না।
+          Figma frame-এ কোনো Effects নেই, তাই shadow দেওয়া হয়নি। */}
+      <div className="w-full max-w-[1280px] bg-white rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] p-2 sm:p-3 lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+        {/* Left visual panel — lg-এর নিচে hidden, তাই mobile-এ form-ই পুরো screen পায়।
+            min-w-0: grid child যেন কখনো নিজের content-এর কারণে column ছাড়িয়ে না যায় */}
+        <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
             src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787220856/signup_czzdi1.webp"
             alt="Great food, delivered with care"
@@ -94,14 +103,14 @@ export default function RegisterPage() {
             sizes="(min-width: 1024px) 50vw, 100vw"
           />
 
-          {/* Bottom scrim — 549px tall, anchored to the bottom (Figma: Rectangle 610×549).
-              Deliberately not inset-0: the top of the image stays clear. */}
-          <div className="absolute bottom-0 left-0 right-0 h-[549px] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
+          {/* Bottom scrim — Figma: Rectangle 610×549, অর্থাৎ panel height-এর ~64%।
+              ইচ্ছে করেই inset-0 নয়, যাতে image-এর উপরের অংশ পরিষ্কার থাকে। */}
+          <div className="absolute bottom-0 left-0 right-0 h-[64%] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
 
-          {/* Logo */}
+          {/* Logo — শুধু desktop-এর image panel-এ */}
           <Link
             href="/"
-            className="absolute top-10 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-2"
+            className="absolute top-8 xl:top-10 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-2"
             aria-label="Back to home"
           >
             <Image
@@ -109,48 +118,48 @@ export default function RegisterPage() {
               alt="Cuisine Logo"
               width={40}
               height={40}
-              className="w-10 h-10"
+              className="w-9 h-9 xl:w-10 xl:h-10"
             />
-            <span className="font-frank-ruhl font-bold text-[30px] leading-[126%] tracking-[-0.01em] text-white">
+            <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
               Cuisine
             </span>
           </Link>
 
-          {/* Bottom content — 50px insets leave exactly 510px, matching the form panel padding */}
-          <div className="absolute bottom-10 left-[50px] right-[50px] z-10 text-white text-center">
-            <h2 className="font-frank-ruhl text-[38px] font-semibold leading-[114%] tracking-[-0.01em] text-white">
+          {/* Bottom content — xl-এ 50px inset মানে ঠিক 510px, form panel padding-এর সমান */}
+          <div className="absolute bottom-6 left-6 right-6 xl:bottom-10 xl:left-[50px] xl:right-[50px] z-10 text-white text-center">
+            <h2 className="font-frank-ruhl text-[30px] xl:text-[38px] font-semibold leading-[114%] tracking-[-0.01em] text-white">
               Great Food, Delivered
               <br />
               With Care
             </h2>
-            <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-4 max-w-sm mx-auto">
+            <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
               Sign in to track your orders, save your favorite dishes, and get
               personalized offers from Cuisine.
             </p>
 
-            {/* Stats — 510px across with 13.45px gaps yields 161.03px cards, per Figma */}
-            <div className="mt-8 grid grid-cols-3 gap-[13.45px] w-full">
-              <div className="bg-[#F9F6F3] rounded-[14px] h-[73px] px-[30px] flex flex-col items-center justify-center gap-2">
-                <div className="font-sora font-semibold text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+            {/* Stats — xl-এ 510px ও 13.45px gap মিলে 161.03px cards হয় (Figma) */}
+            <div className="mt-6 xl:mt-8 grid grid-cols-3 gap-2 xl:gap-[13.45px] w-full">
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
                   50K+
                 </div>
-                <div className="font-sora font-normal text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
                   Happy Guests
                 </div>
               </div>
-              <div className="bg-[#F9F6F3] rounded-[14px] h-[73px] px-[30px] flex flex-col items-center justify-center gap-2">
-                <div className="font-sora font-semibold text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
                   4.9
                 </div>
-                <div className="font-sora font-normal text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
                   Average Rating
                 </div>
               </div>
-              <div className="bg-[#F9F6F3] rounded-[14px] h-[73px] px-[30px] flex flex-col items-center justify-center gap-2">
-                <div className="font-sora font-semibold text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
+              <div className="min-w-0 bg-[#F9F6F3] rounded-[14px] h-[64px] xl:h-[73px] px-2 xl:px-[30px] flex flex-col items-center justify-center gap-1.5 xl:gap-2">
+                <div className="font-sora font-semibold text-[13px] xl:text-[14px] leading-[120%] tracking-normal text-[#000000] whitespace-nowrap">
                   24/7
                 </div>
-                <div className="font-sora font-normal text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
+                <div className="font-sora font-normal text-[11px] xl:text-[12px] leading-[120%] tracking-normal text-[#2D5132]/70 whitespace-nowrap">
                   Live Kitchen
                 </div>
               </div>
@@ -158,67 +167,52 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Right form panel — BG #F9F6F3, radius 30, padding 30/50/30/50, gap 24 (Figma) */}
-        <div className="w-full h-full bg-[#F9F6F3] rounded-[30px] flex items-center justify-center px-5 py-8 sm:px-[50px] sm:py-[30px] overflow-y-auto">
-          {/* 610 - 50 - 50 = 510px of content width */}
-          <div className="w-full max-w-[510px]">
-            {/* Mobile-only logo */}
-            <div className="flex lg:hidden items-center justify-between mb-6">
-              <Link
-                href="/"
-                className="flex items-center gap-2"
-                aria-label="Back to home"
-              >
-                <Image
-                  src="/logo.svg"
-                  alt="Cuisine Logo"
-                  width={40}
-                  height={40}
-                  className="w-10 h-10"
-                />
-                <span className="font-frank-ruhl font-bold text-2xl leading-[126%] tracking-[-0.01em] text-[#2C6252]">
-                  Cuisine
-                </span>
-              </Link>
-            </div>
-
-            {/* Back to Home — 60×60 box (radius 16), 30×30 chevron, Sora 18px label at black/70, per Figma */}
+        {/* Right form panel — mobile/tablet-এ white (Figma mobile design), lg থেকে cream।
+            Figma 320px frame: padding 20px (px-5), gap 21.33px।
+            overflow-y-auto ইচ্ছে করেই নেই: card-এর min-h content অনুযায়ী বাড়ে,
+            তাই ভেতরে কোনো scrollbar দরকার হয় না। */}
+        <div className="w-full min-w-0 h-full bg-white lg:bg-[#F9F6F3] rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 xl:px-[50px] xl:py-[30px]">
+          {/* xl-এ 610 - 50 - 50 = 510px content width */}
+          <div className="w-full max-w-[510px] mx-auto">
+            {/* Back to Home — Figma: 60×60 box (radius 16), 30×30 chevron, Sora 400 at black/70।
+                Mobile-এ box cream, কারণ panel তখন white */}
             <Link
               href="/"
-              className="hidden lg:inline-flex items-center gap-3 mb-10 group"
+              className="inline-flex items-center gap-2.5 xl:gap-3 group mb-6 sm:mb-8 xl:mb-10"
             >
-              <span className="w-[60px] h-[60px] rounded-[16px] bg-white flex items-center justify-center text-gray-900 group-hover:bg-gray-50 transition-colors">
+              <span className="w-11 h-11 xl:w-[60px] xl:h-[60px] shrink-0 rounded-[14px] xl:rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
                 <svg
-                  className="w-[30px] h-[30px]"
+                  className="w-5 h-5 xl:w-[30px] xl:h-[30px]"
                   viewBox="0 0 20 20"
                   fill="none"
                 >
                   <path
                     d="M12.5 15L7.5 10L12.5 5"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="1.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 </svg>
               </span>
-              <span className="font-sora font-normal text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors">
+              <span className="font-sora font-normal text-[14px] sm:text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
                 Back to Home
               </span>
             </Link>
 
-            {/* Heading + subtitle — Frank Ruhl Libre 36/130% and Sora 12/160%, per Figma */}
-            <div className="mb-8">
-              <h1 className="font-frank-ruhl font-medium text-[36px] leading-[130%] tracking-normal text-black">
+            {/* Heading + subtitle — Frank Ruhl Libre 500 130% ও Sora 400 160%।
+                Mobile heading 28px: Figma-র 320px frame থেকে হিসাব করা */}
+            <div className="mb-6 sm:mb-7 xl:mb-8">
+              <h1 className="font-frank-ruhl font-medium text-[28px] sm:text-[32px] xl:text-[36px] leading-[130%] tracking-normal text-black">
                 Create Your Account
               </h1>
-              <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
+              <p className="font-sora font-normal text-[11px] sm:text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
                 Join Cuisine to order, save favorites, and get exclusive deals.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 bg-red-50 text-red-600 text-sm p-3 mb-5 rounded-lg border border-red-100">
+              <div className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100">
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
                   viewBox="0 0 20 20"
@@ -230,15 +224,17 @@ export default function RegisterPage() {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span>{error}</span>
+                <span className="min-w-0">{error}</span>
               </div>
             )}
 
-            {/* space-y-6 = 24px, matching the Figma frame gap */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {/* space-y — xl-এ 24px, Figma frame gap-এর সমান */}
+            <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
+              {/* Figma-র 320px frame-এ দুটো পাশাপাশি; 280px content-এ প্রতিটি ~134px */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="min-w-0">
+                  {/* Labels — Figma: Frank Ruhl Libre 500, LH 160%, black/100 */}
+                  <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
                     First Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -247,13 +243,13 @@ export default function RegisterPage() {
                     value={form.firstName}
                     onChange={handleChange}
                     required
-                    className="w-full border border-gray-200 bg-white px-3.5 py-2.5 rounded-xl text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
+                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="First name"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <div className="min-w-0">
+                  <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
                     Last Name
                   </label>
                   <input
@@ -261,14 +257,14 @@ export default function RegisterPage() {
                     name="lastName"
                     value={form.lastName}
                     onChange={handleChange}
-                    className="w-full border border-gray-200 bg-white px-3.5 py-2.5 rounded-xl text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
+                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Last name"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
                   Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -277,47 +273,35 @@ export default function RegisterPage() {
                   value={form.email}
                   onChange={handleChange}
                   required
-                  className="w-full border border-gray-200 bg-white px-3.5 py-2.5 rounded-xl text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
+                  className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
                 </label>
-                <div className="flex items-stretch border border-gray-200 bg-white rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#2C6252]/30 focus-within:border-[#2C6252]">
-                  <div className="flex items-center gap-1.5 px-3.5 border-r border-gray-200 text-sm text-gray-700 shrink-0">
-                    <span className="inline-block w-4 h-3 rounded-[2px] bg-[#006A4E] relative overflow-hidden">
-                      <span className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[#F42A41]" />
-                    </span>
-                    <span>+880</span>
-                    <svg
-                      className="w-3.5 h-3.5 text-gray-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
+                {/* overflow-hidden ইচ্ছে করেই নেই: থাকলে country dropdown clip হয়ে যেত।
+                    তাই input-এ আলাদা করে rounded-r-xl দেওয়া হয়েছে */}
+                <div className="flex items-stretch h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-[#2C6252]/30">
+                  <CountryCodeSelect value={country} onChange={setCountry} />
+                  {/* min-w-0: flex item হিসেবে input যেন container ছাড়িয়ে না যায় */}
                   <input
                     type="tel"
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
                     required
-                    className="w-full px-3.5 py-2.5 text-gray-900 placeholder-gray-400 text-sm focus:outline-none"
+                    inputMode="numeric"
+                    className="w-full min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none"
                     placeholder="1XXXXXXXXX"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
                   Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -328,21 +312,19 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     required
                     minLength={6}
-                    className="w-full border border-gray-200 bg-white px-3.5 py-2.5 pr-10 rounded-xl text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252] transition-colors"
-                    placeholder="At least 6 characters"
+                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    placeholder="Min 6 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1"
                     tabIndex={-1}
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <svg
-                        className="w-4.5 h-4.5"
+                        className="w-[18px] h-[18px]"
                         viewBox="0 0 20 20"
                         fill="currentColor"
                       >
@@ -351,7 +333,7 @@ export default function RegisterPage() {
                       </svg>
                     ) : (
                       <svg
-                        className="w-4.5 h-4.5"
+                        className="w-[18px] h-[18px]"
                         viewBox="0 0 20 20"
                         fill="currentColor"
                       >
@@ -367,7 +349,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Custom checkbox — native input kept for a11y/state, visually hidden */}
+              {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden */}
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -376,21 +358,15 @@ export default function RegisterPage() {
                   className="sr-only"
                 />
                 <span
-                  className={`mt-0.5 w-[18px] h-[18px] flex-shrink-0 rounded-[5px] border flex items-center justify-center transition-colors ${
-                    agreed
-                      ? "bg-white border-gray-900"
-                      : "bg-white border-gray-300"
+                  className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors ${
+                    agreed ? "bg-white border-black" : "bg-white border-black/25"
                   }`}
                 >
                   {agreed && (
-                    <svg
-                      viewBox="0 0 12 12"
-                      className="w-2.5 h-2.5"
-                      fill="none"
-                    >
+                    <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none">
                       <path
                         d="M2 6.2L4.5 8.7L10 3"
-                        stroke="#111827"
+                        stroke="#000000"
                         strokeWidth="1.6"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -398,31 +374,33 @@ export default function RegisterPage() {
                     </svg>
                   )}
                 </span>
-                <span className="text-sm text-gray-600">
+                <span className="min-w-0 font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black/80">
                   I agree to the{" "}
                   <Link
                     href="/terms"
-                    className="font-semibold text-gray-900 hover:underline"
+                    className="font-semibold text-black hover:underline"
                   >
                     Terms
                   </Link>{" "}
                   &{" "}
                   <Link
                     href="/privacy"
-                    className="font-semibold text-gray-900 hover:underline"
+                    className="font-semibold text-black hover:underline"
                   >
                     Privacy Policy
                   </Link>
                 </span>
               </label>
-              {/* Sign Up — 56px tall, radius 100, gradient #FF9540 → #FF70C6 (Figma) */}
+
+              {/* Sign Up — xl-এ 56px, radius 100, gradient #FF9540 → #FF70C6।
+                  Label color #F9F6F3 (Figma), pure white নয় */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-[56px] px-6 bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-white rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {loading ? (
-                  <span className="flex items-center justify-center gap-3">
+                  <span className="flex items-center gap-2 sm:gap-3">
                     <svg
                       className="animate-spin h-4 w-4"
                       viewBox="0 0 24 24"
@@ -449,12 +427,16 @@ export default function RegisterPage() {
                 )}
               </button>
             </form>
-            {/* Google — same 56px pill, Sora 600 16px at black/100 (Figma) */}
+
+            {/* Google — একই pill, Sora 600 at black/100 (Figma) */}
             <button
               onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="w-full h-[56px] px-6 mt-3 border border-gray-900 rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-gray-50 transition"
+              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition whitespace-nowrap"
             >
-              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+              <svg
+                className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                viewBox="0 0 24 24"
+              >
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -475,8 +457,8 @@ export default function RegisterPage() {
               Sign Up with Google
             </button>
 
-            {/* Log in line — Sora 400 16px, centered (Figma) */}
-            <p className="text-center font-sora font-normal text-[16px] leading-[160%] text-black/70 mt-7">
+            {/* Log in line — Sora 400, centered (Figma) */}
+            <p className="text-center font-sora font-normal text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black/70 mt-5 sm:mt-6 xl:mt-7">
               Already have an account?{" "}
               <Link
                 href="/login"
