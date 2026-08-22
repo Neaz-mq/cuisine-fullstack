@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { emailSchema } from "@/lib/validations/common";
+import { isValidPhone } from "@/lib/phone";
 
 /**
  * src/lib/validations/auth.ts
@@ -19,22 +20,19 @@ export const registerSchema = z.object({
     .max(200, "Password is too long"),
 
   /**
-   * E.164 only: a leading `+`, a country code that cannot start with 0,
-   * then 7–15 digits total. No spaces, dashes or parentheses.
+   * E.164, বৈধতা যাচাই হয় libphonenumber দিয়ে — দৈর্ঘ্য ও prefix দুটোই
+   * দেশভেদে আলাদা, তাই একটা সাধারণ regex দিয়ে কাজ চলে না।
    *
-   * Deliberately strict rather than forgiving. The register form already
-   * assembles this from the country picker plus the national number (and
-   * strips the domestic trunk `0` while doing so), so anything arriving
-   * here in another shape means the client is out of step with the API —
-   * which is worth a 400 rather than silently storing a number that no
-   * SMS or WhatsApp gateway will ever be able to deliver to.
+   * Client একই helper ব্যবহার করে বলে এখানে সাধারণত কিছু আটকায় না — কিন্তু
+   * client-এর check যেকোনো সময় bypass করা যায়, আর এই নম্বরেই পরে order
+   * update যাবে, তাই এখানেও একই কড়াকড়ি থাকা দরকার।
    *
-   * Optional because the field is optional in the DB: Google signups come
-   * through auth.ts's signIn callback, never this route, and provide none.
+   * Optional, কারণ DB-তেও nullable: Google signup auth.ts-এর signIn
+   * callback দিয়ে হয়, এই route দিয়ে নয়, আর সেখানে কোনো নম্বর আসে না।
    */
   phone: z
     .string()
     .trim()
-    .regex(/^\+[1-9]\d{6,14}$/, "Please enter a valid phone number")
+    .refine(isValidPhone, "Please enter a valid phone number")
     .optional(),
 });
