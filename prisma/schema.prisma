@@ -19,6 +19,20 @@ model User {
   email     String   @unique
   name      String?
   password  String?
+
+  // E.164 format (+8801785286936) — normalised client-side at signup so the
+  // stored value is unambiguous regardless of how the customer typed it.
+  // Bangladeshi customers habitually enter 01785286936, where the leading 0
+  // is a domestic trunk prefix that must NOT survive alongside the country
+  // code; the register form strips it before this ever reaches the DB.
+  //
+  // Nullable, and will stay that way: Google-signup users never provide one
+  // (NextAuth's signIn callback creates their row with no phone), and every
+  // account that existed before this column was added has none either.
+  // StaffProfile.phone is a SEPARATE, unrelated field — that one is a work
+  // contact number for staff, this one is the customer's own number.
+  phone     String?
+
   role      Role     @default(CUSTOMER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

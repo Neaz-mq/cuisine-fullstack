@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, registerSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { name, email, password } = parsed;
+    const { name, email, password, phone } = parsed;
 
     // ---- Check if email already exists ----
     const existingUser = await prisma.user.findUnique({
@@ -57,6 +57,11 @@ export async function POST(request: Request) {
       data: {
         name: name || null,
         email,
+        // Already E.164-normalised by the time it passes registerSchema —
+        // see the regex there. `?? null` rather than leaving it undefined
+        // so the column is written explicitly rather than relying on
+        // Prisma's omitted-field behaviour.
+        phone: phone ?? null,
         password: hashedPassword,
         role: "CUSTOMER",
       },

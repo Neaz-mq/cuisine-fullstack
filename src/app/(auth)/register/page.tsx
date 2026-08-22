@@ -10,6 +10,17 @@ import CountryCodeSelect, {
   type Country,
 } from "@/components/CountryCodeSelect";
 
+/**
+ * E.164 normalisation: +<dial><national>, digits only.
+ *
+ * The leading-zero strip matters — Bangladeshi customers habitually type
+ * 01785286936, where the 0 is a domestic trunk prefix that must NOT appear
+ * after the country code. Without this, +88001785286936 gets stored and
+ * every SMS/WhatsApp delivery to that number silently fails.
+ */
+const toE164 = (dial: string, national: string) =>
+  `${dial}${national.replace(/\D/g, "").replace(/^0+/, "")}`;
+
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -20,13 +31,19 @@ export default function RegisterPage() {
     password: "",
   });
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [agreed, setAgreed] = useState(true);
+  // Consent must be an explicit action, so this starts unchecked. A
+  // pre-ticked box is not valid consent under GDPR and is a dark pattern
+  // regardless of jurisdiction.
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    // Functional update: React batches these, and the object spread off a
+    // captured `form` can drop a keystroke when two fire in one tick.
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,48 +55,72 @@ export default function RegisterPage() {
       return;
     }
 
+    // HTML `required` treats "   " as filled, so trim before validating.
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    const email = form.email.trim().toLowerCase();
+    const phone = toE164(country.dial, form.phone);
+
+    if (!firstName) {
+      setError("Please enter your first name");
+      return;
+    }
+    if (phone.length < 8) {
+      setError("Please enter a valid phone number");
+      return;
+    }
+
     setLoading(true);
 
+    // ---- Step 1: create the account ----
     try {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // NOTE: current /api/register only accepts { name, email, password }.
-          // firstName + lastName are combined below. `phone` is collected and
-          // normalised to E.164 below, but not yet sent — extend the API route
-          // + Prisma schema first, then add it here.
-          name: `${form.firstName} ${form.lastName}`.trim(),
-          email: form.email,
+          name: `${firstName} ${lastName}`.trim(),
+          email,
+          phone,
           password: form.password,
         }),
       });
 
-      const data = await res.json();
+      // A 429 from the rate limiter, or a proxy error page, may not be
+      // JSON at all — don't let the parse throw into the network branch.
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(data.error || "Something went wrong");
         setLoading(false);
         return;
       }
+    } catch {
+      setError("Could not connect to server, please try again later");
+      setLoading(false);
+      return;
+    }
 
-      // Log the user in directly right after registration
+    // ---- Step 2: the account now EXISTS ----
+    // Nothing below may report "registration failed": if auto-login trips
+    // on a network hiccup, telling the user to retry sends them back to a
+    // 409 "email already exists" on an account that is genuinely theirs.
+    // Any failure here is a login problem, so route them to login.
+    try {
       const signInResult = await signIn("credentials", {
-        email: form.email,
+        email,
         password: form.password,
         redirect: false,
       });
 
-      if (signInResult?.error) {
-        // If registration succeeded but auto-login fails, send to login page
-        router.push("/login");
+      // Check `ok` too — a result can be unsuccessful with `error` unset.
+      if (!signInResult?.ok || signInResult.error) {
+        router.push("/login?registered=1");
         return;
       }
 
       router.push("/");
     } catch {
-      setError("Could not connect to server, please try again later");
-      setLoading(false);
+      router.push("/login?registered=1");
     }
   };
 
@@ -211,12 +252,19 @@ export default function RegisterPage() {
               </p>
             </div>
 
+            {/* role=alert + aria-live: a screen reader user who submits and
+                gets rejected otherwise hears nothing at all change. */}
             {error && (
-              <div className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100"
+              >
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     fillRule="evenodd"
@@ -234,29 +282,39 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="min-w-0">
                   {/* Labels — Figma: Frank Ruhl Libre 500, LH 160%, black/100 */}
-                  <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
+                  <label
+                    htmlFor="firstName"
+                    className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  >
                     First Name <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="firstName"
                     type="text"
                     name="firstName"
                     value={form.firstName}
                     onChange={handleChange}
                     required
+                    autoComplete="given-name"
                     className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="First name"
                   />
                 </div>
 
                 <div className="min-w-0">
-                  <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
+                  <label
+                    htmlFor="lastName"
+                    className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  >
                     Last Name
                   </label>
                   <input
+                    id="lastName"
                     type="text"
                     name="lastName"
                     value={form.lastName}
                     onChange={handleChange}
+                    autoComplete="family-name"
                     className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Last name"
                   />
@@ -264,22 +322,30 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
+                <label
+                  htmlFor="email"
+                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                >
                   Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="email"
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
                   required
+                  autoComplete="email"
                   className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
 
               <div>
-                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
+                <label
+                  htmlFor="phone"
+                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                >
                   Phone Number <span className="text-red-500">*</span>
                 </label>
                 {/* overflow-hidden ইচ্ছে করেই নেই: থাকলে country dropdown clip হয়ে যেত।
@@ -288,12 +354,14 @@ export default function RegisterPage() {
                   <CountryCodeSelect value={country} onChange={setCountry} />
                   {/* min-w-0: flex item হিসেবে input যেন container ছাড়িয়ে না যায় */}
                   <input
+                    id="phone"
                     type="tel"
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
                     required
-                    inputMode="numeric"
+                    inputMode="tel"
+                    autoComplete="tel-national"
                     className="w-full min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none"
                     placeholder="1XXXXXXXXX"
                   />
@@ -301,32 +369,40 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5">
+                <label
+                  htmlFor="password"
+                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                >
                   Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={form.password}
                     onChange={handleChange}
                     required
                     minLength={6}
+                    autoComplete="new-password"
                     className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Min 6 characters"
                   />
+                  {/* Reachable by keyboard: someone typing a password with an
+                      on-screen keyboard needs this as much as a mouse user. */}
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1"
-                    tabIndex={-1}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
                     aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? (
                       <svg
                         className="w-[18px] h-[18px]"
                         viewBox="0 0 20 20"
                         fill="currentColor"
+                        aria-hidden="true"
                       >
                         <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.359 1.359a2.5 2.5 0 013.14 3.14l1.359 1.359a4 4 0 00-5.858-5.858z" />
                         <path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z" />
@@ -336,6 +412,7 @@ export default function RegisterPage() {
                         className="w-[18px] h-[18px]"
                         viewBox="0 0 20 20"
                         fill="currentColor"
+                        aria-hidden="true"
                       >
                         <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
                         <path
@@ -349,21 +426,29 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden */}
+              {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden।
+                  peer-focus-visible: sr-only input-এ focus গেলে custom box-এ ring দেখায়,
+                  নাহলে keyboard user বুঝতেই পারবে না focus কোথায়। */}
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
+                  name="agreed"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  className="sr-only"
+                  className="sr-only peer"
                 />
                 <span
-                  className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors ${
+                  className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
                     agreed ? "bg-white border-black" : "bg-white border-black/25"
                   }`}
                 >
                   {agreed && (
-                    <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none">
+                    <svg
+                      viewBox="0 0 12 12"
+                      className="w-3 h-3"
+                      fill="none"
+                      aria-hidden="true"
+                    >
                       <path
                         d="M2 6.2L4.5 8.7L10 3"
                         stroke="#000000"
@@ -397,6 +482,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={loading}
+                aria-busy={loading}
                 className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {loading ? (
@@ -405,6 +491,7 @@ export default function RegisterPage() {
                       className="animate-spin h-4 w-4"
                       viewBox="0 0 24 24"
                       fill="none"
+                      aria-hidden="true"
                     >
                       <circle
                         className="opacity-25"
@@ -430,12 +517,15 @@ export default function RegisterPage() {
 
             {/* Google — একই pill, Sora 600 at black/100 (Figma) */}
             <button
+              type="button"
               onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition whitespace-nowrap"
+              disabled={loading}
+              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <svg
                 className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   fill="#4285F4"

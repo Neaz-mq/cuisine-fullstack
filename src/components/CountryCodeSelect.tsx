@@ -222,6 +222,25 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
     );
   }, [query]);
 
+  /**
+   * খোলার সময়কার state reset এখানেই হয়, কোনো effect-এ নয়।
+   *
+   * এগুলো "open হয়ে গেছে" — এই অবস্থার সাথে কিছু sync করা নয়, বরং user-এর
+   * একটা কাজের সরাসরি ফল। Effect-এ setState ডাকলে React প্রথমে পুরোনো
+   * query/activeIndex নিয়ে render করে, তারপর আবার render করে — cascading
+   * render, যেটা react-hooks/set-state-in-effect ধরে ফেলে। তিনটে setState
+   * এক event handler-এ থাকায় React সেগুলো batch করে একটাই render দেয়।
+   */
+  const openDropdown = () => {
+    setQuery("");
+    // নির্বাচিত দেশটি থেকেই highlight শুরু হয়
+    const idx = COUNTRIES.findIndex((c) => c.code === value.code);
+    setActiveIndex(idx >= 0 ? idx : 0);
+    setOpen(true);
+  };
+
+  const closeDropdown = () => setOpen(false);
+
   // বাইরে click করলে বন্ধ
   useEffect(() => {
     if (!open) return;
@@ -238,19 +257,14 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
     };
   }, [open]);
 
-  // খোলার সাথে সাথে search box-এ focus
+  // Focus সরানো — DOM API, state নয়, তাই effect-এই থাকার কথা।
+  // Effect DOM commit-এর পরে চলে, তাই ref ততক্ষণে set হয়ে গেছে।
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      // নির্বাচিত দেশটি থেকেই highlight শুরু হয়
-      const idx = COUNTRIES.findIndex((c) => c.code === value.code);
-      setActiveIndex(idx >= 0 ? idx : 0);
-      // paint-এর পরে focus, নাহলে dropdown এখনো DOM-এ নেই
-      requestAnimationFrame(() => searchRef.current?.focus());
-    }
-  }, [open, value.code]);
+    if (!open) return;
+    searchRef.current?.focus();
+  }, [open]);
 
-  // keyboard দিয়ে navigate করলে active item দৃশ্যমান রাখা
+  // keyboard দিয়ে navigate করলে active item দৃশ্যমান রাখা — এটাও DOM API
   useEffect(() => {
     if (!open) return;
     const el = listRef.current?.children[activeIndex] as HTMLElement | undefined;
@@ -258,8 +272,19 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
   }, [activeIndex, open]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // বন্ধ অবস্থায় ↓ চাপলে খুলবে; বাকি key তখন উপেক্ষা করা হয়, নাহলে
+    // অদৃশ্য list-এর activeIndex বদলাতে থাকত।
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openDropdown();
+      }
+      return;
+    }
+
     if (e.key === "Escape") {
-      setOpen(false);
+      e.preventDefault();
+      closeDropdown();
       return;
     }
     if (e.key === "ArrowDown") {
@@ -277,7 +302,7 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
       const picked = filtered[activeIndex];
       if (picked) {
         onChange(picked);
-        setOpen(false);
+        closeDropdown();
       }
     }
   };
@@ -286,7 +311,7 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
     <div ref={wrapperRef} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? closeDropdown() : openDropdown())}
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -301,6 +326,7 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
           }`}
           viewBox="0 0 20 20"
           fill="currentColor"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -323,6 +349,7 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
               }}
               onKeyDown={handleKeyDown}
               placeholder="Search country or code"
+              aria-label="Search country or dial code"
               className="w-full h-9 px-3 rounded-lg bg-[#F9F6F3] text-[14px] text-black placeholder-black/35 focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30"
             />
           </div>
@@ -345,7 +372,7 @@ export default function CountryCodeSelect({ value, onChange }: Props) {
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => {
                   onChange(c);
-                  setOpen(false);
+                  closeDropdown();
                 }}
                 className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-[14px] ${
                   i === activeIndex ? "bg-[#F9F6F3]" : ""
