@@ -9,17 +9,7 @@ import CountryCodeSelect, {
   DEFAULT_COUNTRY,
   type Country,
 } from "@/components/CountryCodeSelect";
-
-/**
- * E.164 normalisation: +<dial><national>, digits only.
- *
- * The leading-zero strip matters — Bangladeshi customers habitually type
- * 01785286936, where the 0 is a domestic trunk prefix that must NOT appear
- * after the country code. Without this, +88001785286936 gets stored and
- * every SMS/WhatsApp delivery to that number silently fails.
- */
-const toE164 = (dial: string, national: string) =>
-  `${dial}${national.replace(/\D/g, "").replace(/^0+/, "")}`;
+import { toE164, isValidPhone, examplePhone } from "@/lib/phone";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,6 +26,9 @@ export default function RegisterPage() {
   // regardless of jurisdiction.
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState("");
+  // Field-level, kept apart from `error` so a phone problem is shown next
+  // to the phone input rather than in the banner at the top of the form.
+  const [phoneError, setPhoneError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -44,6 +37,38 @@ export default function RegisterPage() {
     // Functional update: React batches these, and the object spread off a
     // captured `form` can drop a keystroke when two fire in one tick.
     setForm((prev) => ({ ...prev, [name]: value }));
+    // Clear a stale phone error the moment they start correcting it —
+    // it gets re-checked on blur.
+    if (name === "phone" && phoneError) setPhoneError("");
+  };
+
+  /**
+   * Validated on blur rather than on every keystroke: flagging "017" as
+   * invalid while someone is still mid-way through typing it is noise, not
+   * help.
+   *
+   * The country is passed in rather than read from state because the
+   * country-change handler calls this with the NEW country, before the
+   * state update has been applied.
+   */
+  const validatePhone = (national: string, forCountry: Country) => {
+    if (!national.trim()) {
+      setPhoneError("");
+      return false;
+    }
+    const ok = isValidPhone(toE164(forCountry.dial, national));
+    setPhoneError(ok ? "" : `Please enter a valid ${forCountry.name} number`);
+    return ok;
+  };
+
+  /**
+   * Re-check on country change: a number valid for one country usually
+   * isn't for another (Bangladesh takes 10 national digits, Singapore 8),
+   * so leaving a stale "valid" state here would let a bad number through.
+   */
+  const handleCountryChange = (next: Country) => {
+    setCountry(next);
+    validatePhone(form.phone, next);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,16 +84,17 @@ export default function RegisterPage() {
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
     const email = form.email.trim().toLowerCase();
-    const phone = toE164(country.dial, form.phone);
 
     if (!firstName) {
       setError("Please enter your first name");
       return;
     }
-    if (phone.length < 8) {
-      setError("Please enter a valid phone number");
+
+    // Same helper the API's zod schema uses, so the two can't drift apart.
+    if (!validatePhone(form.phone, country)) {
       return;
     }
+    const phone = toE164(country.dial, form.phone);
 
     setLoading(true);
 
@@ -226,6 +252,7 @@ export default function RegisterPage() {
                   className="w-5 h-5 xl:w-[30px] xl:h-[30px]"
                   viewBox="0 0 20 20"
                   fill="none"
+                  aria-hidden="true"
                 >
                   <path
                     d="M12.5 15L7.5 10L12.5 5"
@@ -350,8 +377,17 @@ export default function RegisterPage() {
                 </label>
                 {/* overflow-hidden ইচ্ছে করেই নেই: থাকলে country dropdown clip হয়ে যেত।
                     তাই input-এ আলাদা করে rounded-r-xl দেওয়া হয়েছে */}
-                <div className="flex items-stretch h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-[#2C6252]/30">
-                  <CountryCodeSelect value={country} onChange={setCountry} />
+                <div
+                  className={`flex items-stretch h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border rounded-xl focus-within:ring-2 ${
+                    phoneError
+                      ? "lg:border-red-300 ring-1 ring-red-300 focus-within:ring-red-400"
+                      : "lg:border-gray-200 focus-within:ring-[#2C6252]/30"
+                  }`}
+                >
+                  <CountryCodeSelect
+                    value={country}
+                    onChange={handleCountryChange}
+                  />
                   {/* min-w-0: flex item হিসেবে input যেন container ছাড়িয়ে না যায় */}
                   <input
                     id="phone"
@@ -359,13 +395,27 @@ export default function RegisterPage() {
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
+                    onBlur={() => validatePhone(form.phone, country)}
                     required
                     inputMode="tel"
                     autoComplete="tel-national"
+                    aria-invalid={!!phoneError}
+                    aria-describedby={phoneError ? "phone-error" : undefined}
                     className="w-full min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none"
-                    placeholder="1XXXXXXXXX"
+                    // A real example number for the selected country, so the
+                    // expected length is visible BEFORE they get it wrong.
+                    placeholder={examplePhone(country.code) || "Phone number"}
                   />
                 </div>
+                {phoneError && (
+                  <p
+                    id="phone-error"
+                    role="alert"
+                    className="mt-1.5 font-sora text-[12px] leading-[160%] text-red-600"
+                  >
+                    {phoneError}
+                  </p>
+                )}
               </div>
 
               <div>
