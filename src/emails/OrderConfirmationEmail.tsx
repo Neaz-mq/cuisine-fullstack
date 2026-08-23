@@ -5,7 +5,6 @@ import {
   Heading,
   Hr,
   Html,
-  Img,
   Link,
   Preview,
   Row,
@@ -13,6 +12,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
+import EmailLogo from "@/emails/EmailLogo";
 
 interface OrderConfirmationEmailProps {
   firstName: string;
@@ -89,8 +89,6 @@ function BillLine({
 
 const GREEN = "#2C6252";
 const ORANGE = "#FF4C15";
-const LOGO_URL =
-  "https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png";
 
 export default function OrderConfirmationEmail({
   firstName,
@@ -129,7 +127,7 @@ export default function OrderConfirmationEmail({
             borderRadius: "8px",
           }}
         >
-          <Img src={LOGO_URL} alt="Cuisine" width="120" style={{ marginBottom: "16px" }} />
+          <EmailLogo />
 
           <Heading style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}>
             Thanks, {firstName}! Your order is in.

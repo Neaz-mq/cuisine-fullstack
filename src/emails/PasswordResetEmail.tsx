@@ -5,12 +5,12 @@ import {
   Heading,
   Hr,
   Html,
-  Img,
   Link,
   Preview,
   Section,
   Text,
 } from "@react-email/components";
+import EmailLogo from "@/emails/EmailLogo";
 
 interface PasswordResetEmailProps {
   firstName: string;
@@ -22,8 +22,6 @@ interface PasswordResetEmailProps {
 
 const GREEN = "#2C6252";
 const ORANGE = "#FF4C15";
-const LOGO_URL =
-  "https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png";
 
 export default function PasswordResetEmail({
   firstName,
@@ -45,7 +43,7 @@ export default function PasswordResetEmail({
             borderRadius: "8px",
           }}
         >
-          <Img src={LOGO_URL} alt="Cuisine" width="120" style={{ marginBottom: "16px" }} />
+          <EmailLogo />
 
           <Heading style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}>
             Reset your password, {firstName}

@@ -32,6 +32,22 @@ export const EMAIL_FROM = process.env.EMAIL_FROM || "Cuisine <onboarding@resend.
 // to EMAIL_FROM if a dedicated marketing sender isn't configured yet.
 export const MARKETING_EMAIL_FROM = process.env.MARKETING_EMAIL_FROM || EMAIL_FROM;
 
+/**
+ * সব transactional email-এর dome mark। শুধু চিহ্নটাই — "Cuisine" শব্দটা
+ * প্রতিটি template-এ HTML text হিসেবে আঁকা হয়, ছবির অংশ হিসেবে নয়। বহু
+ * client ডিফল্টে ছবি block করে রাখে, তখন অন্তত নামটা টিকে থাকে।
+ *
+ * এক জায়গায় রাখা হয়েছে কারণ আগে প্রতিটি template নিজের `LOGO_URL`
+ * constant রাখত, এবং একটি ভুল asset (একটি সবুজ পাতার ছবি) সবগুলোতেই
+ * copy হয়ে গিয়েছিল — বহুদিন ধরে প্রতিটি order confirmation ওই ছবি নিয়ে
+ * পাঠানো হয়েছে, কেউ ধরতে পারেনি। এখন ভুল করার মতো copy একটাই।
+ *
+ * PNG, SVG নয়: Gmail/Outlook/Yahoo কেউই email-এ SVG render করে না,
+ * তাই public/logo.svg সরাসরি ব্যবহার করা যায় না।
+ */
+export const EMAIL_LOGO_URL =
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1787480180/Logo_mfttxl.png";
+
 // Created once in the Resend dashboard under Audience → Create Audience.
 // Copy its ID into .env as RESEND_AUDIENCE_ID.
 function getAudienceId(): string {

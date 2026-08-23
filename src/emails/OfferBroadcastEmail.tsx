@@ -5,12 +5,12 @@ import {
   Heading,
   Hr,
   Html,
-  Img,
   Link,
   Preview,
   Section,
   Text,
 } from "@react-email/components";
+import EmailLogo from "@/emails/EmailLogo";
 
 interface OfferBroadcastEmailProps {
   headline: string;
@@ -26,8 +26,6 @@ interface OfferBroadcastEmailProps {
 
 const GREEN = "#2C6252";
 const ORANGE = "#FF4C15";
-const LOGO_URL =
-  "https://res.cloudinary.com/dxohwanal/image/upload/v1752050762/Group_22_fhiuuw.png";
 
 export default function OfferBroadcastEmail({
   headline,
@@ -53,12 +51,9 @@ export default function OfferBroadcastEmail({
         >
           {/* Hero band — sets this apart from transactional emails at a glance */}
           <Section style={{ backgroundColor: GREEN, padding: "28px 24px", textAlign: "center" }}>
-            <Img
-              src={LOGO_URL}
-              alt="Cuisine"
-              width="110"
-              style={{ margin: "0 auto 16px auto" }}
-            />
+            {/* onDark: এই band সবুজ, তাই wordmark সাদা — ডিফল্ট গাঢ় রঙে
+                লেখাটা প্রায় পড়াই যেত না। */}
+            <EmailLogo onDark align="center" />
             <Text
               style={{
                 display: "inline-block",
