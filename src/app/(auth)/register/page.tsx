@@ -167,8 +167,24 @@ export default function RegisterPage() {
       {/* Wrapper — mobile-এ এটি শুধু grid holder, নিজের কোনো background/padding নেই।
           Figma mobile-এ card মাত্র একটাই (288px white), তাই এখানে white/padding দিলে
           double card হয়ে যেত। lg থেকে এটিই সেই Figma desktop outer card
-          (1280×894, radius 30, padding 20, gap 20)। */}
-      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+          (1280×894, radius 30, padding 20, gap 20)।
+
+          ⚠ উচ্চতা — চার auth page-এ (register / login / forgot-password /
+          reset-password) এই class দুটো হুবহু এক রাখতে হবে:
+              lg:h-[940px] xl:h-[1000px]
+          `min-h` নয়, fixed `h` — ইচ্ছাকৃতভাবে। min-h মেঝে, ছাদ নয়: register-এর
+          form লম্বা বলে সেটা floor ছাড়িয়ে বাড়তেই থাকত আর login ঠিক floor-এ
+          থেমে যেত, ফলে এক page থেকে আরেক page-এ গেলে card লাফ দিত। fixed
+          height-এ উচ্চতা আর content-এর উপর নির্ভর করে না, তাই লাফও নেই।
+          ভেতরের form panel-এ lg:overflow-y-auto আছে — কখনো content উচ্চতা
+          ছাড়ালে card না বেড়ে panel-টাই scroll করবে। সঙ্গে scrollbar-এর
+          chrome লুকানো ([scrollbar-width:none] + ::-webkit-scrollbar:hidden):
+          register-এর form 940-এ ঠিক আঁটছিল না বলে card-এর ভেতরে একটা ধূসর
+          bar বসে যাচ্ছিল। উচ্চতা 1000-এ তোলায় স্বাভাবিক অবস্থায় scroll
+          লাগেই না; bar লুকানোটা শুধু নিরাপত্তা জাল, wheel/keyboard দিয়ে
+          scroll তখনো কাজ করে।
+          */}
+      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:h-[940px] xl:h-[1000px]">
         {/* Left visual panel — lg-এর নিচে hidden, তাই mobile-এ form-ই পুরো screen পায়।
             min-w-0: grid child যেন কখনো নিজের content-এর কারণে column ছাড়িয়ে না যায় */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
@@ -248,7 +264,7 @@ export default function RegisterPage() {
         {/* Form panel = Figma mobile-এর সেই একমাত্র white card:
             Fill 288px (320 - 16 - 16), radius 20, padding 20, gap 20, #FFFFFF।
             lg থেকে cream inner panel, আগের মতোই। */}
-        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
+        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center lg:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {/* mobile-এ 320px frame মানে content ঠিক 248px (288 - 20 - 20),
               যেটা Figma-র heading width-এর সাথে মেলে। xl-এ 510px */}
           <div className="w-full max-w-[510px] mx-auto">

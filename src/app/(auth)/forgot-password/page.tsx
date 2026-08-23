@@ -55,8 +55,24 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-4 py-5 lg:px-4 lg:py-10">
       {/* Wrapper — mobile-এ শুধু grid holder, নিজের background/padding নেই।
           Figma mobile-এ card মাত্র একটাই (288px white)। lg থেকে এটিই Figma
-          desktop outer card (1280×894, radius 30, padding 20, gap 20)। */}
-      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+          desktop outer card (1280×894, radius 30, padding 20, gap 20)।
+
+          ⚠ উচ্চতা — চার auth page-এ (register / login / forgot-password /
+          reset-password) এই class দুটো হুবহু এক রাখতে হবে:
+              lg:h-[940px] xl:h-[1000px]
+          `min-h` নয়, fixed `h` — ইচ্ছাকৃতভাবে। min-h মেঝে, ছাদ নয়: register-এর
+          form লম্বা বলে সেটা floor ছাড়িয়ে বাড়তেই থাকত আর login ঠিক floor-এ
+          থেমে যেত, ফলে এক page থেকে আরেক page-এ গেলে card লাফ দিত। fixed
+          height-এ উচ্চতা আর content-এর উপর নির্ভর করে না, তাই লাফও নেই।
+          ভেতরের form panel-এ lg:overflow-y-auto আছে — কখনো content উচ্চতা
+          ছাড়ালে card না বেড়ে panel-টাই scroll করবে। সঙ্গে scrollbar-এর
+          chrome লুকানো ([scrollbar-width:none] + ::-webkit-scrollbar:hidden):
+          register-এর form 940-এ ঠিক আঁটছিল না বলে card-এর ভেতরে একটা ধূসর
+          bar বসে যাচ্ছিল। উচ্চতা 1000-এ তোলায় স্বাভাবিক অবস্থায় scroll
+          লাগেই না; bar লুকানোটা শুধু নিরাপত্তা জাল, wheel/keyboard দিয়ে
+          scroll তখনো কাজ করে।
+          */}
+      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:h-[940px] xl:h-[1000px]">
         {/* Left visual panel — login page-এর সাথে অভিন্ন */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
@@ -128,7 +144,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         {/* Form panel — login page-এর সাথে অভিন্ন কাঠামো, শুধু ভেতরের content আলাদা */}
-        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
+        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center lg:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {/* mobile-এ 320px frame মানে content ঠিক 248px (288 - 20 - 20)। xl-এ 510px */}
           <div className="w-full max-w-[510px] mx-auto">
             {/* Back — login/register-এর মতোই 52×52 box (radius 16), label Sora 400 16px।
