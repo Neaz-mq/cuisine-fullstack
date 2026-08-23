@@ -76,7 +76,9 @@ export default function ForgotPasswordPage() {
         {/* Left visual panel — login page-এর সাথে অভিন্ন */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787220856/signup_czzdi1.webp"
+            // Figma forgot-password design-এর ছবি। login-এ pizza, register-এ
+            // burger — তিন page-এ তিনটে, ইচ্ছাকৃতভাবে।
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787501234/e07f2ff3501ab463298a1af3cfd6da761f10b803_xkhcwx.webp"
             alt="Great food, delivered with care"
             fill
             priority
@@ -84,6 +86,14 @@ export default function ForgotPasswordPage() {
             sizes="(min-width: 1024px) 50vw, 100vw"
           />
 
+          {/* Top scrim — Figma: Rectangle 610×232, অর্থাৎ panel height-এর ~26%।
+              logo-টা যাতে যেকোনো ছবির উপর পড়া যায়। px নয়, শতাংশ: lg (940px)
+              আর xl (1000px)-এ panel-এর উচ্চতা আলাদা, fixed 232px দিলে অনুপাত
+              দুই breakpoint-এ মিলত না। */}
+          <div className="absolute top-0 left-0 right-0 h-[26%] bg-gradient-to-b from-black from-10% via-black/70 via-45% to-transparent" />
+
+          {/* Bottom scrim — Figma: Rectangle 610×549, অর্থাৎ panel height-এর ~64%।
+              ইচ্ছে করেই inset-0 নয়, যাতে ছবির মাঝের অংশ পরিষ্কার থাকে। */}
           <div className="absolute bottom-0 left-0 right-0 h-[64%] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
 
           <Link
