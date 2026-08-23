@@ -151,13 +151,15 @@ export default function RegisterPage() {
   };
 
   return (
-    // overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও page-এ horizontal bar আসবে না
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-2 py-4 sm:px-4 sm:py-6 lg:py-10">
-      {/* Outer white card — Figma মান (1280×894, radius 30, padding 20, gap 20) xl থেকে।
-          min-h ব্যবহার করা হয়েছে fixed h-এর বদলে: 894px floor হিসেবে থাকে, কিন্তু
-          content বেশি হলে card বড় হয় — ভেতরে scrollbar আসে না।
-          Figma frame-এ কোনো Effects নেই, তাই shadow দেওয়া হয়নি। */}
-      <div className="w-full max-w-[1280px] bg-white rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] p-2 sm:p-3 lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+    /* Page — Figma mobile frame: 320px wide, BG #F9F6F3, padding 20px top/bottom
+       ও 16px left/right (px-4 py-5)। lg থেকে আগের desktop padding।
+       overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও horizontal bar আসবে না */
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-4 py-5 lg:px-4 lg:py-10">
+      {/* Wrapper — mobile-এ এটি শুধু grid holder, নিজের কোনো background/padding নেই।
+          Figma mobile-এ card মাত্র একটাই (288px white), তাই এখানে white/padding দিলে
+          double card হয়ে যেত। lg থেকে এটিই সেই Figma desktop outer card
+          (1280×894, radius 30, padding 20, gap 20)। */}
+      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
         {/* Left visual panel — lg-এর নিচে hidden, তাই mobile-এ form-ই পুরো screen পায়।
             min-w-0: grid child যেন কখনো নিজের content-এর কারণে column ছাড়িয়ে না যায় */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
@@ -234,22 +236,22 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Right form panel — mobile/tablet-এ white (Figma mobile design), lg থেকে cream।
-            Figma 320px frame: padding 20px (px-5), gap 21.33px।
-            overflow-y-auto ইচ্ছে করেই নেই: card-এর min-h content অনুযায়ী বাড়ে,
-            তাই ভেতরে কোনো scrollbar দরকার হয় না। */}
-        <div className="w-full min-w-0 h-full bg-white lg:bg-[#F9F6F3] rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 xl:px-[50px] xl:py-[30px]">
-          {/* xl-এ 610 - 50 - 50 = 510px content width */}
+        {/* Form panel = Figma mobile-এর সেই একমাত্র white card:
+            Fill 288px (320 - 16 - 16), radius 20, padding 20, gap 20, #FFFFFF।
+            lg থেকে cream inner panel, আগের মতোই। */}
+        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 sm:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
+          {/* mobile-এ 320px frame মানে content ঠিক 248px (288 - 20 - 20),
+              যেটা Figma-র heading width-এর সাথে মেলে। xl-এ 510px */}
           <div className="w-full max-w-[510px] mx-auto">
-            {/* Back to Home — Figma: 60×60 box (radius 16), 30×30 chevron, Sora 400 at black/70।
-                Mobile-এ box cream, কারণ panel তখন white */}
+            {/* Back to Home — Figma mobile: 52×52 box (radius 16), label Sora 400 16px।
+                card gap 20px, তাই mb-5 */}
             <Link
               href="/"
-              className="inline-flex items-center gap-2.5 xl:gap-3 group mb-6 sm:mb-8 xl:mb-10"
+              className="inline-flex items-center gap-3 group mb-5 xl:mb-10"
             >
-              <span className="w-11 h-11 xl:w-[60px] xl:h-[60px] shrink-0 rounded-[14px] xl:rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
+              <span className="w-[52px] h-[52px] xl:w-[60px] xl:h-[60px] shrink-0 rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
                 <svg
-                  className="w-5 h-5 xl:w-[30px] xl:h-[30px]"
+                  className="w-6 h-6 xl:w-[30px] xl:h-[30px]"
                   viewBox="0 0 20 20"
                   fill="none"
                   aria-hidden="true"
@@ -263,18 +265,21 @@ export default function RegisterPage() {
                   />
                 </svg>
               </span>
-              <span className="font-sora font-normal text-[14px] sm:text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
+              <span className="font-sora font-normal text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
                 Back to Home
               </span>
             </Link>
 
-            {/* Heading + subtitle — Frank Ruhl Libre 500 130% ও Sora 400 160%।
-                Mobile heading 28px: Figma-র 320px frame থেকে হিসাব করা */}
-            <div className="mb-6 sm:mb-7 xl:mb-8">
-              <h1 className="font-frank-ruhl font-medium text-[28px] sm:text-[32px] xl:text-[36px] leading-[130%] tracking-normal text-black">
+            {/* Heading — Figma inspect: Frank Ruhl Libre 500, 36px, LH 130%, tracking 0,
+                #000000। 248px width-এ ঠিক দুই লাইনে ভাঙে (Figma-তে box height 94px)।
+                mobile-এও 36px, ছোট করা হয়নি।
+                Subtitle — Figma inspect: Sora 400, 12px, LH 160%, black/70।
+                248×38 মানে ঠিক দুই লাইন (12 × 1.6 × 2 = 38.4)। */}
+            <div className="mb-8 xl:mb-8">
+              <h1 className="font-frank-ruhl font-medium text-[36px] leading-[130%] tracking-normal text-black">
                 Create Your Account
               </h1>
-              <p className="font-sora font-normal text-[11px] sm:text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
+              <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
                 Join Cuisine to order, save favorites, and get exclusive deals.
               </p>
             </div>
@@ -285,7 +290,7 @@ export default function RegisterPage() {
               <div
                 role="alert"
                 aria-live="assertive"
-                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100"
+                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] p-3 mb-5 rounded-lg border border-red-100"
               >
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
@@ -303,18 +308,22 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* space-y — xl-এ 24px, Figma frame gap-এর সমান */}
+            {/* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */}
             <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
-              {/* Figma-র 320px frame-এ দুটো পাশাপাশি; 280px content-এ প্রতিটি ~134px */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {/* Figma mobile-এ First/Last একটার নিচে আরেকটা, tablet/desktop-এ পাশাপাশি।
+                  Breakpoint `md` (768px) ইচ্ছে করেই — `sm` (640px)-এ দিলে প্রতিটা column
+                  ~290px হয়ে placeholder কেটে যায়। 768px থেকে প্রতিটা ~340px, নিরাপদ। */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-4">
                 <div className="min-w-0">
-                  {/* Labels — Figma: Frank Ruhl Libre 500, LH 160%, black/100 */}
+                  {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
                   <label
                     htmlFor="firstName"
-                    className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                    className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                   >
                     First Name <span className="text-red-500">*</span>
                   </label>
+                  {/* Input — Figma mobile: height 40px, radius 12, bg #F9F6F3,
+                      inner padding ~14px, Sora 14px */}
                   <input
                     id="firstName"
                     type="text"
@@ -323,7 +332,7 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     required
                     autoComplete="given-name"
-                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="First name"
                   />
                 </div>
@@ -331,7 +340,7 @@ export default function RegisterPage() {
                 <div className="min-w-0">
                   <label
                     htmlFor="lastName"
-                    className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                    className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                   >
                     Last Name
                   </label>
@@ -342,7 +351,7 @@ export default function RegisterPage() {
                     value={form.lastName}
                     onChange={handleChange}
                     autoComplete="family-name"
-                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3 sm:px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Last name"
                   />
                 </div>
@@ -351,7 +360,7 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                 >
                   Email Address <span className="text-red-500">*</span>
                 </label>
@@ -363,7 +372,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   required
                   autoComplete="email"
-                  className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                  className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
@@ -371,24 +380,29 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor="phone"
-                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                 >
                   Phone Number <span className="text-red-500">*</span>
                 </label>
                 {/* overflow-hidden ইচ্ছে করেই নেই: থাকলে country dropdown clip হয়ে যেত।
                     তাই input-এ আলাদা করে rounded-r-xl দেওয়া হয়েছে */}
                 <div
-                  className={`flex items-stretch h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border rounded-xl focus-within:ring-2 ${
+                  className={`flex items-stretch h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border rounded-xl focus-within:ring-2 ${
                     phoneError
                       ? "lg:border-red-300 ring-1 ring-red-300 focus-within:ring-red-400"
                       : "lg:border-gray-200 focus-within:ring-[#2C6252]/30"
                   }`}
                 >
-                  <CountryCodeSelect
-                    value={country}
-                    onChange={handleCountryChange}
-                  />
-                  {/* min-w-0: flex item হিসেবে input যেন container ছাড়িয়ে না যায় */}
+                  {/* Figma-তে country block ~104px, বাকিটা number। shrink-0 না দিলে
+                      select flex-grow করে অর্ধেক জায়গা খেয়ে ফেলে। */}
+                  <div className="shrink-0 flex items-stretch">
+                    <CountryCodeSelect
+                      value={country}
+                      onChange={handleCountryChange}
+                    />
+                  </div>
+                  {/* flex-1 + min-w-0: w-full দিলে flex row-এ input container ছাড়িয়ে
+                      যেতে চায় আর placeholder কেটে যায় */}
                   <input
                     id="phone"
                     type="tel"
@@ -401,7 +415,7 @@ export default function RegisterPage() {
                     autoComplete="tel-national"
                     aria-invalid={!!phoneError}
                     aria-describedby={phoneError ? "phone-error" : undefined}
-                    className="w-full min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none"
+                    className="flex-1 min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none"
                     // A real example number for the selected country, so the
                     // expected length is visible BEFORE they get it wrong.
                     placeholder={examplePhone(country.code) || "Phone number"}
@@ -421,7 +435,7 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                 >
                   Password <span className="text-red-500">*</span>
                 </label>
@@ -435,7 +449,7 @@ export default function RegisterPage() {
                     required
                     minLength={6}
                     autoComplete="new-password"
-                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Min 6 characters"
                   />
                   {/* Reachable by keyboard: someone typing a password with an
@@ -478,8 +492,9 @@ export default function RegisterPage() {
 
               {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden।
                   peer-focus-visible: sr-only input-এ focus গেলে custom box-এ ring দেখায়,
-                  নাহলে keyboard user বুঝতেই পারবে না focus কোথায়। */}
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  নাহলে keyboard user বুঝতেই পারবে না focus কোথায়।
+                  Figma-তে box 18px, দুই লাইনের text-এর উল্লম্ব মাঝখানে বসে (items-center) */}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   name="agreed"
@@ -488,7 +503,7 @@ export default function RegisterPage() {
                   className="sr-only peer"
                 />
                 <span
-                  className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
+                  className={`w-[18px] h-[18px] sm:w-5 sm:h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
                     agreed ? "bg-white border-black" : "bg-white border-black/25"
                   }`}
                 >
@@ -509,7 +524,7 @@ export default function RegisterPage() {
                     </svg>
                   )}
                 </span>
-                <span className="min-w-0 font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black/80">
+                <span className="min-w-0 font-sora font-normal text-[14px] leading-[160%] text-black/80">
                   I agree to the{" "}
                   <Link
                     href="/terms"
@@ -527,53 +542,56 @@ export default function RegisterPage() {
                 </span>
               </label>
 
-              {/* Sign Up — xl-এ 56px, radius 100, gradient #FF9540 → #FF70C6।
-                  Label color #F9F6F3 (Figma), pure white নয় */}
-              <button
-                type="submit"
-                disabled={loading}
-                aria-busy={loading}
-                className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2 sm:gap-3">
-                    <svg
-                      className="animate-spin h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      />
-                    </svg>
-                    Creating account...
-                  </span>
-                ) : (
-                  "Sign Up"
-                )}
-              </button>
+              {/* Sign Up — Figma mobile: height 48, radius 100, gradient #FF9540 → #FF70C6,
+                  label #F9F6F3 (pure white নয়), Sora 600 16px।
+                  pt-5: Figma-তে checkbox আর button-এর মাঝে gap দ্বিগুণ (~40px) */}
+              <div className="pt-5 xl:pt-0">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  aria-busy={loading}
+                  className="w-full h-[48px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2 sm:gap-3">
+                      <svg
+                        className="animate-spin h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      Creating account...
+                    </span>
+                  ) : (
+                    "Sign Up"
+                  )}
+                </button>
+              </div>
             </form>
 
-            {/* Google — একই pill, Sora 600 at black/100 (Figma) */}
+            {/* Google — একই pill (48px mobile), Sora 600 16px at black/100 (Figma) */}
             <button
               type="button"
               onClick={() => signIn("google", { callbackUrl: "/" })}
               disabled={loading}
-              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="w-full h-[48px] xl:h-[56px] px-4 sm:px-6 mt-5 border border-black rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <svg
-                className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                className="w-5 h-5 shrink-0"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
@@ -597,8 +615,9 @@ export default function RegisterPage() {
               Sign Up with Google
             </button>
 
-            {/* Log in line — Sora 400, centered (Figma) */}
-            <p className="text-center font-sora font-normal text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black/70 mt-5 sm:mt-6 xl:mt-7">
+            {/* Log in line — Figma inspect: Sora 400, 12px, LH 160%, center।
+                248×19 মানে এক লাইনেই বসে। xl-এ আগের desktop মাপ (16px)। */}
+            <p className="text-center font-sora font-normal text-[12px] xl:text-[16px] leading-[160%] text-black/70 mt-4 xl:mt-7">
               Already have an account?{" "}
               <Link
                 href="/login"
