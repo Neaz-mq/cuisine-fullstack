@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * ⚠ Breakpoint note — src/app/globals.css:
+ *   --breakpoint-sm: 320px;
+ * এই project-এ `sm:` Tailwind-এর default 640px নয়, 320px থেকেই চালু হয়।
+ * তাই "মোবাইলের চেয়ে বড় screen" বোঝাতে এই ফাইলে কোথাও `sm:` নেই —
+ * সব জায়গায় `md:` (768px), `lg:` (1024px), `xl:` (1280px) ব্যবহার করা হয়েছে।
+ * নতুন class যোগ করার সময় ভুলেও `sm:` লিখো না, ওটা মোবাইলেই apply হবে।
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -239,7 +248,7 @@ export default function RegisterPage() {
         {/* Form panel = Figma mobile-এর সেই একমাত্র white card:
             Fill 288px (320 - 16 - 16), radius 20, padding 20, gap 20, #FFFFFF।
             lg থেকে cream inner panel, আগের মতোই। */}
-        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 sm:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
+        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
           {/* mobile-এ 320px frame মানে content ঠিক 248px (288 - 20 - 20),
               যেটা Figma-র heading width-এর সাথে মেলে। xl-এ 510px */}
           <div className="w-full max-w-[510px] mx-auto">
@@ -332,7 +341,7 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     required
                     autoComplete="given-name"
-                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="First name"
                   />
                 </div>
@@ -351,7 +360,7 @@ export default function RegisterPage() {
                     value={form.lastName}
                     onChange={handleChange}
                     autoComplete="family-name"
-                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Last name"
                   />
                 </div>
@@ -372,7 +381,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   required
                   autoComplete="email"
-                  className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                  className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
@@ -387,7 +396,7 @@ export default function RegisterPage() {
                 {/* overflow-hidden ইচ্ছে করেই নেই: থাকলে country dropdown clip হয়ে যেত।
                     তাই input-এ আলাদা করে rounded-r-xl দেওয়া হয়েছে */}
                 <div
-                  className={`flex items-stretch h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border rounded-xl focus-within:ring-2 ${
+                  className={`flex items-stretch h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border rounded-xl focus-within:ring-2 ${
                     phoneError
                       ? "lg:border-red-300 ring-1 ring-red-300 focus-within:ring-red-400"
                       : "lg:border-gray-200 focus-within:ring-[#2C6252]/30"
@@ -415,7 +424,7 @@ export default function RegisterPage() {
                     autoComplete="tel-national"
                     aria-invalid={!!phoneError}
                     aria-describedby={phoneError ? "phone-error" : undefined}
-                    className="flex-1 min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none"
+                    className="flex-1 min-w-0 bg-transparent px-3.5 rounded-r-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none"
                     // A real example number for the selected country, so the
                     // expected length is visible BEFORE they get it wrong.
                     placeholder={examplePhone(country.code) || "Phone number"}
@@ -449,7 +458,7 @@ export default function RegisterPage() {
                     required
                     minLength={6}
                     autoComplete="new-password"
-                    className="w-full h-[40px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Min 6 characters"
                   />
                   {/* Reachable by keyboard: someone typing a password with an
@@ -503,7 +512,7 @@ export default function RegisterPage() {
                   className="sr-only peer"
                 />
                 <span
-                  className={`w-[18px] h-[18px] sm:w-5 sm:h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
+                  className={`w-[18px] h-[18px] md:w-5 md:h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
                     agreed ? "bg-white border-black" : "bg-white border-black/25"
                   }`}
                 >
@@ -550,10 +559,10 @@ export default function RegisterPage() {
                   type="submit"
                   disabled={loading}
                   aria-busy={loading}
-                  className="w-full h-[48px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {loading ? (
-                    <span className="flex items-center gap-2 sm:gap-3">
+                    <span className="flex items-center gap-2 md:gap-3">
                       <svg
                         className="animate-spin h-4 w-4"
                         viewBox="0 0 24 24"
@@ -588,7 +597,7 @@ export default function RegisterPage() {
               type="button"
               onClick={() => signIn("google", { callbackUrl: "/" })}
               disabled={loading}
-              className="w-full h-[48px] xl:h-[56px] px-4 sm:px-6 mt-5 border border-black rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 mt-5 border border-black rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <svg
                 className="w-5 h-5 shrink-0"

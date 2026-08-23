@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * ⚠ Breakpoint note — src/app/globals.css:
+ *   --breakpoint-sm: 320px;
+ * এই project-এ `sm:` Tailwind-এর default 640px নয়, 320px থেকেই চালু হয়।
+ * তাই "মোবাইলের চেয়ে বড় screen" বোঝাতে এই ফাইলে কোথাও `sm:` নেই —
+ * সব জায়গায় `md:` (768px), `lg:` (1024px), `xl:` (1280px) ব্যবহার করা হয়েছে।
+ * নতুন class যোগ করার সময় ভুলেও `sm:` লিখো না, ওটা মোবাইলেই apply হবে।
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -45,10 +54,15 @@ export default function LoginPage() {
   };
 
   return (
-    // overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও page-এ horizontal bar আসবে না
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-2 py-4 sm:px-4 sm:py-6 lg:py-10">
-      {/* Outer white card — register page-এর সাথে ঠিক একই grid/radius/padding নিয়ম */}
-      <div className="w-full max-w-[1280px] bg-white rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] p-2 sm:p-3 lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
+    /* Page — Figma mobile frame: 320px wide, BG #F9F6F3, padding 20px top/bottom
+       ও 16px left/right (px-4 py-5)। register page-এর সাথে হুবহু একই।
+       overflow-x-hidden: কোনো child সামান্য বেড়ে গেলেও horizontal bar আসবে না */
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#F9F6F3] flex items-center justify-center px-4 py-5 lg:px-4 lg:py-10">
+      {/* Wrapper — mobile-এ শুধু grid holder, নিজের background/padding নেই।
+          Figma mobile-এ card মাত্র একটাই (288px white), তাই এখানে white/padding দিলে
+          double card হয়ে যেত। lg থেকে এটিই Figma desktop outer card
+          (1280×894, radius 30, padding 20, gap 20)। */}
+      <div className="w-full max-w-[1280px] bg-transparent p-0 rounded-none lg:bg-white lg:rounded-[30px] lg:p-4 xl:p-5 grid grid-cols-1 lg:grid-cols-2 lg:gap-4 xl:gap-5 lg:min-h-[860px] xl:min-h-[894px]">
         {/* Left visual panel — register page-এর মতোই, শুধু ছবি আলাদা (pizza) */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
@@ -121,16 +135,21 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right form panel — register page-এর মতোই layout, ফিল্ড কম (email + password) */}
-        <div className="w-full min-w-0 h-full bg-white lg:bg-[#F9F6F3] rounded-[16px] sm:rounded-[24px] xl:rounded-[30px] flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 xl:px-[50px] xl:py-[30px]">
+        {/* Form panel = Figma mobile-এর সেই একমাত্র white card:
+            Fill 288px (320 - 16 - 16), radius 20, padding 20, gap 20, #FFFFFF।
+            lg থেকে cream inner panel, আগের মতোই। */}
+        <div className="w-full min-w-0 h-full bg-white rounded-[20px] p-5 md:p-8 lg:bg-[#F9F6F3] lg:rounded-[30px] lg:p-0 lg:px-8 lg:py-10 xl:px-[50px] xl:py-[30px] flex flex-col lg:justify-center">
+          {/* mobile-এ 320px frame মানে content ঠিক 248px (288 - 20 - 20)। xl-এ 510px */}
           <div className="w-full max-w-[510px] mx-auto">
+            {/* Back to Home — Figma mobile: 52×52 box (radius 16), label Sora 400 16px।
+                card gap 20px, তাই mb-5 */}
             <Link
               href="/"
-              className="inline-flex items-center gap-2.5 xl:gap-3 group mb-6 sm:mb-8 xl:mb-10"
+              className="inline-flex items-center gap-3 group mb-5 xl:mb-10"
             >
-              <span className="w-11 h-11 xl:w-[60px] xl:h-[60px] shrink-0 rounded-[14px] xl:rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
+              <span className="w-[52px] h-[52px] xl:w-[60px] xl:h-[60px] shrink-0 rounded-[16px] bg-[#F9F6F3] lg:bg-white flex items-center justify-center text-black group-hover:opacity-80 transition-opacity">
                 <svg
-                  className="w-5 h-5 xl:w-[30px] xl:h-[30px]"
+                  className="w-6 h-6 xl:w-[30px] xl:h-[30px]"
                   viewBox="0 0 20 20"
                   fill="none"
                   aria-hidden="true"
@@ -144,18 +163,20 @@ export default function LoginPage() {
                   />
                 </svg>
               </span>
-              <span className="font-sora font-normal text-[14px] sm:text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
+              <span className="font-sora font-normal text-[16px] xl:text-[18px] leading-[160%] tracking-normal text-black/70 group-hover:text-black transition-colors whitespace-nowrap">
                 Back to Home
               </span>
             </Link>
 
-            <div className="mb-6 sm:mb-7 xl:mb-8">
-              <h1 className="font-frank-ruhl font-medium text-[28px] sm:text-[32px] xl:text-[36px] leading-[130%] tracking-normal text-black">
+            {/* Heading — Frank Ruhl Libre 500, 36px, LH 130%, tracking 0, #000000।
+                Subtitle — Sora 400, 12px, LH 160%, black/70। register page-এর সাথে অভিন্ন। */}
+            <div className="mb-8">
+              <h1 className="font-frank-ruhl font-medium text-[36px] leading-[130%] tracking-normal text-black">
                 Login Your Account
               </h1>
-              <p className="font-sora font-normal text-[11px] sm:text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
-                Access your account to order your favorite dishes in just a
-                few clicks.
+              <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
+                Access your account to order your favorite dishes in just a few
+                clicks.
               </p>
             </div>
 
@@ -163,7 +184,7 @@ export default function LoginPage() {
               <div
                 role="alert"
                 aria-live="assertive"
-                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] sm:text-sm p-3 mb-5 rounded-lg border border-red-100"
+                className="flex items-start gap-2 bg-red-50 text-red-600 text-[13px] p-3 mb-5 rounded-lg border border-red-100"
               >
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
@@ -181,14 +202,18 @@ export default function LoginPage() {
               </div>
             )}
 
+            {/* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */}
             <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
               <div>
+                {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
                 <label
                   htmlFor="email"
-                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                 >
                   Email Address <span className="text-red-500">*</span>
                 </label>
+                {/* Input — Figma mobile: height 40px, radius 12, bg #F9F6F3,
+                    inner padding ~14px, Sora 14px */}
                 <input
                   id="email"
                   type="email"
@@ -197,7 +222,7 @@ export default function LoginPage() {
                   onChange={handleChange}
                   required
                   autoComplete="email"
-                  className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                  className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                   placeholder="you@example.com"
                 />
               </div>
@@ -205,7 +230,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block font-frank-ruhl font-medium text-[13px] xl:text-[14px] leading-[160%] text-black mb-1.5"
+                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
                 >
                   Password <span className="text-red-500">*</span>
                 </label>
@@ -218,7 +243,7 @@ export default function LoginPage() {
                     onChange={handleChange}
                     required
                     autoComplete="current-password"
-                    className="w-full h-[48px] sm:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-base sm:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
                     placeholder="Password"
                   />
                   <button
@@ -257,9 +282,22 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember me + Forgot password — একই সারিতে, Figma design অনুযায়ী */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              {/* Remember me + Forgot password — একই সারিতে, Figma design অনুযায়ী।
+                  Figma mobile inspect: দুটোই Sora 400, 12px, LH 160%, Black/100।
+                  "Remember me" block 117 = checkbox 20 + gap 8 + text 89,
+                  "Forgot Password?" 109 → মোট 226px, 248px content-এ এক সারিতে বসে।
+
+                  ⚠ এই project-এ globals.css-এ `--breakpoint-sm: 320px` — অর্থাৎ
+                  Tailwind-এর `sm:` মোবাইলেই (320px থেকে) চালু হয়ে যায়। তাই
+                  "মোবাইলের চেয়ে বড়" বোঝাতে সব জায়গায় `md:` (768px) ব্যবহার করা হয়েছে,
+                  `sm:` নয়। এই row-টা 12px-এই থাকবে যতক্ষণ
+                  না xl। 14px হলে দুটো মিলে 274px হয়ে যায় আর wrap করে দুই লাইন হয়।
+
+                  min-w-0 সরানো + shrink-0: min-w-0 থাকলে label শূন্য পর্যন্ত shrink করে
+                  আর ভেতরের nowrap text box ছাড়িয়ে link-এর উপর overlap করে।
+                  flex-wrap শুধু safety net — স্বাভাবিক অবস্থায় এক সারিতেই থাকবে। */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <label className="flex shrink-0 items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     name="remember"
@@ -291,64 +329,69 @@ export default function LoginPage() {
                       </svg>
                     )}
                   </span>
-                  <span className="font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black/80">
+                  <span className="font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black whitespace-nowrap">
                     Remember me
                   </span>
                 </label>
 
                 <Link
                   href="/forgot-password"
-                  className="font-sora font-normal text-[13px] sm:text-[14px] leading-[160%] text-black hover:underline whitespace-nowrap"
+                  className="shrink-0 font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black hover:underline whitespace-nowrap"
                 >
                   Forgot Password?
                 </Link>
               </div>
 
-              {/* Login — register page-এর Sign Up button-এর সাথে একদম identical style */}
-              <button
-                type="submit"
-                disabled={loading}
-                aria-busy={loading}
-                className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2 sm:gap-3">
-                    <svg
-                      className="animate-spin h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      />
-                    </svg>
-                    Logging in...
-                  </span>
-                ) : (
-                  "Login"
-                )}
-              </button>
+              {/* Login — Figma mobile: height 48, radius 100, gradient #FF9540 → #FF70C6,
+                  label #F9F6F3 (pure white নয়), Sora 600 16px।
+                  register page-এর Sign Up button-এর সাথে একদম identical। */}
+              <div className="pt-5 xl:pt-0">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  aria-busy={loading}
+                  className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2 md:gap-3">
+                      <svg
+                        className="animate-spin h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      Logging in...
+                    </span>
+                  ) : (
+                    "Login"
+                  )}
+                </button>
+              </div>
             </form>
 
+            {/* Google — একই pill (48px mobile), Sora 600 16px at black/100 */}
             <button
               type="button"
               onClick={() => signIn("google", { callbackUrl: "/" })}
               disabled={loading}
-              className="w-full h-[50px] sm:h-[52px] xl:h-[56px] px-4 sm:px-6 mt-3 border border-black rounded-full flex items-center justify-center gap-2 sm:gap-3 font-sora font-semibold text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 mt-5 border border-black rounded-full flex items-center justify-center gap-3 font-sora font-semibold text-[16px] leading-[160%] text-black bg-white hover:bg-black/[0.03] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <svg
-                className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                className="w-5 h-5 shrink-0"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
@@ -372,7 +415,8 @@ export default function LoginPage() {
               Log In with Google
             </button>
 
-            <p className="text-center font-sora font-normal text-[14px] sm:text-[15px] xl:text-[16px] leading-[160%] text-black/70 mt-5 sm:mt-6 xl:mt-7">
+            {/* Sign Up line — Figma: Sora 400, 12px, LH 160%, center। xl-এ 16px */}
+            <p className="text-center font-sora font-normal text-[12px] xl:text-[16px] leading-[160%] text-black/70 mt-4 xl:mt-7">
               Don&apos;t have an account?{" "}
               <Link
                 href="/register"

@@ -43,6 +43,25 @@ const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
 const sentryIngestOrigin = sentryDsn ? `https://${new URL(sentryDsn).hostname}` : "";
 
 /**
+ * React-এর development build stack reconstruction ও অন্যান্য debugging
+ * feature-এর জন্য eval() ব্যবহার করে। 'unsafe-eval' ছাড়া dev-এ Next.js
+ * overlay-তে "eval() is not supported in this environment" console error
+ * আসে — page কাজ করে, কিন্তু error overlay ঢেকে রাখে আর stack trace
+ * ঠিকমতো resolve হয় না।
+ *
+ * Production-এ এটা কখনোই যোগ হয় না, এবং সেটাই মূল কথা: React-এর
+ * production build eval() ব্যবহারই করে না, অথচ 'unsafe-eval' থাকলে
+ * injected যেকোনো string executable code হয়ে যায় — অর্থাৎ CSP-র XSS
+ * protection-এর মূল উদ্দেশ্যটাই নষ্ট হয়। login + payment handle করা
+ * app-এ সেটা মেনে নেওয়ার মতো নয়।
+ *
+ * Flag-টা এখানে module scope-এ আলাদা করে রাখা হয়েছে যাতে নিচের directive
+ * list পড়লেই স্পষ্ট বোঝা যায় এটা conditional — inline ternary-তে লুকিয়ে
+ * থাকলে পরে কেউ copy করে production-এও নিয়ে যেতে পারত।
+ */
+const isDev = process.env.NODE_ENV === "development";
+
+/**
  * Builds one CSP directive from a list of sources, dropping any that are
  * empty. Several origins here are env-derived and legitimately absent in
  * some environments (no Supabase URL locally, no Sentry DSN before a
@@ -56,7 +75,15 @@ const directive = (name: string, ...sources: string[]) =>
 
 const csp = [
   directive("default-src", "'self'"),
-  directive("script-src", "'self'", "'unsafe-inline'"),
+  // 'unsafe-eval' শুধু development-এ — উপরে isDev-এর comment দ্রষ্টব্য।
+  // Empty string production-এ directive() helper-এর filter(Boolean)-এ
+  // বাদ পড়ে যায়, তাই header-এ কোনো stray space থাকে না।
+  directive(
+    "script-src",
+    "'self'",
+    "'unsafe-inline'",
+    isDev ? "'unsafe-eval'" : ""
+  ),
   directive("style-src", "'self'", "'unsafe-inline'"),
   // 'data:' covers the QR codes generated client-side by the `qrcode`
   // package (rendered as data:image/png;base64 <img> tags); the Supabase
