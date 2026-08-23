@@ -105,6 +105,12 @@ const csp = [
     "blob:",
     "https://res.cloudinary.com",
     "https://*.tile.openstreetmap.org",
+    // Google account avatars — next-auth-এর Google provider session-এ
+    // যে `image` URL দেয় (lh3.googleusercontent.com), admin topbar-এর
+    // user menu-তে সেটাই দেখানো হয়। remotePatterns-এ যোগ করাই যথেষ্ট নয়:
+    // ওটা না দিলে next/image build-time-এ throw করে, আর এটা না দিলে
+    // ছবিটা browser-এ গিয়ে নীরবে block হয় — দ্বিতীয়টা ধরা অনেক কঠিন।
+    "https://lh3.googleusercontent.com",
     supabaseOrigin
   ),
   directive("font-src", "'self'", "data:"),
@@ -182,6 +188,16 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "res.cloudinary.com",
         pathname: "/dzi3u164c/**",
+      },
+      // Google account avatars from the next-auth Google provider. Scoped
+      // to `/a/**` rather than the whole host: every Google profile photo
+      // lives under that prefix, so there's no reason to open up the rest
+      // of googleusercontent, which also serves arbitrary user uploads
+      // from other Google products.
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+        pathname: "/a/**",
       },
       // Menu item photos uploaded via /api/admin/upload-image, served back
       // out through Supabase Storage's public URL convention:

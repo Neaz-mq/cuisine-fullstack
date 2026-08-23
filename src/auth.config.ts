@@ -21,6 +21,21 @@ export const authConfig: NextAuthConfig = {
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      /**
+       * prompt=select_account — Google-কে প্রতিবার account chooser
+       * দেখাতে বাধ্য করে।
+       *
+       * এটা ছাড়া Google, ব্যবহারকারী তাদের ওখানে ইতিমধ্যে logged in
+       * থাকলে, নীরবে সেই account-এই ফিরিয়ে দেয়। ফলে admin topbar-এর
+       * "Switch Account" চাপলে logout হয়ে login page-এ যাওয়ার পর
+       * Google দিয়ে ঢুকলে হুবহু আগের account-এই ফিরে আসত — ব্যবহারকারী
+       * ভাবতেন switch কাজ করছে না, অথচ আমাদের কোডে কিছুই ভুল নেই।
+       *
+       * খরচ: যাঁর Google-এ একটাই account, তাঁকেও প্রতিবার এক ক্লিক
+       * বেশি করতে হবে। রেস্তোরাঁর শেয়ার করা terminal-এ ভুল account-এ
+       * ঢুকে পড়ার চেয়ে ওই এক ক্লিক অনেক সস্তা।
+       */
+      authorization: { params: { prompt: "select_account" } },
     }),
   ],
   callbacks: {
