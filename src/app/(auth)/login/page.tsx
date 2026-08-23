@@ -81,9 +81,9 @@ export default function LoginPage() {
         {/* Left visual panel — register page-এর মতোই, শুধু ছবি আলাদা (pizza) */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
-            // TODO: register page-এ burger ছবি ব্যবহার হয়েছে, Figma login design-এ pizza ছবি
-            // দেখানো আছে — সেই আসল asset URL বসিয়ে দাও, আপাতত একই cloudinary URL রাখা হলো।
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787220856/signup_czzdi1.webp"
+            // Figma login design-এর pizza ছবি। register page-এ burger —
+            // ইচ্ছাকৃতভাবে আলাদা, যাতে দুই page দেখতে এক না লাগে।
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787500553/922b8aca023c79d7047eec92062315def5a3e681_ijyev9.webp"
             alt="Great food, delivered with care"
             fill
             priority
@@ -91,6 +91,14 @@ export default function LoginPage() {
             sizes="(min-width: 1024px) 50vw, 100vw"
           />
 
+          {/* Top scrim — Figma: Rectangle 610×232, অর্থাৎ panel height-এর ~26%।
+              এটাই আগে বাদ পড়েছিল, তাই logo-র পেছনটা ফাঁকা লাগছিল।
+              px নয়, শতাংশ: lg (940px) আর xl (1000px)-এ panel-এর উচ্চতা আলাদা,
+              fixed 232px দিলে অনুপাত দুই breakpoint-এ মিলত না। */}
+          <div className="absolute top-0 left-0 right-0 h-[26%] bg-gradient-to-b from-black from-10% via-black/70 via-45% to-transparent" />
+
+          {/* Bottom scrim — Figma: Rectangle 610×549, অর্থাৎ panel height-এর ~64%।
+              ইচ্ছে করেই inset-0 নয়, যাতে image-এর মাঝের অংশ পরিষ্কার থাকে। */}
           <div className="absolute bottom-0 left-0 right-0 h-[64%] bg-gradient-to-t from-black from-15% via-black/75 via-45% to-transparent" />
 
           <Link
