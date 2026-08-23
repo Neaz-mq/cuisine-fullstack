@@ -80,6 +80,10 @@ model User {
   // Phase 2 — every PurchaseOrder this person has created, regardless of
   // its current status (DRAFT/ORDERED/RECEIVED/CANCELLED).
   purchaseOrdersCreated PurchaseOrder[]
+
+  // Live + spent "forgot password" requests. Cascade-deleted with the
+  // user, like every other owned row here.
+  passwordResetTokens PasswordResetToken[]
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"
@@ -1637,4 +1641,57 @@ enum RefundStatus {
   PENDING
   SUCCEEDED
   FAILED
+}
+
+/**
+ * One row per "forgot password" request. Deliberately a separate table
+ * rather than columns on User: a user can legitimately have several live
+ * requests (clicked the link twice, a mail client prefetched it), and the
+ * used/expired history is worth keeping for support when someone says
+ * "the link didn't work".
+ */
+model PasswordResetToken {
+  id String @id @default(cuid())
+
+  /**
+   * SHA-256 of the token, never the token itself. The plaintext exists
+   * only inside the email that was sent, so a database dump cannot be
+   * turned into a set of working reset links.
+   *
+   * @unique doubles as the lookup index: the reset endpoint hashes what
+   * it was handed and looks for an exact match. There is deliberately no
+   * way to search by prefix or by user — an attacker holding a partial
+   * token has nothing to probe with.
+   */
+  tokenHash String @unique
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /**
+   * Short by design — one hour. A reset link is a bearer credential for
+   * an entire account, and it sits in an inbox that may itself be shared,
+   * synced across devices, or already compromised.
+   */
+  expiresAt DateTime
+
+  /**
+   * Set the moment the token is spent, inside the same transaction that
+   * writes the new password hash. Single-use is enforced by an updateMany
+   * carrying `usedAt: null` in its WHERE and checking the returned count —
+   * the same atomic claim pattern as stockDeductedAt and Refund. Reading
+   * the row, checking `if (token.usedAt)`, then updating would let two
+   * concurrent submissions both pass the check.
+   */
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // Every live token for one user — needed to invalidate the rest once
+  // one of them is redeemed.
+  @@index([userId])
+  // Supports the cleanup of expired rows. Not urgent while the table is
+  // small, but without it that delete degrades into a full table scan
+  // exactly when the table has grown enough for it to matter.
+  @@index([expiresAt])
 }
