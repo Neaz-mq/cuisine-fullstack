@@ -30,7 +30,13 @@ const poppins = Poppins({
 const frankRuhlLibre = Frank_Ruhl_Libre({
   variable: "--font-frank-ruhl",
   subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
+  // 600 যোগ করা হয়েছে admin sidebar-এর জন্য: Figma-তে active nav item
+  // আর user card-এর নাম দুটোই Frank Ruhl Libre SemiBold (600)। তালিকায়
+  // না থাকলে ওই weight-এর ফাইলটা download-ই হয় না, browser তখন 500 বা
+  // 700-এ ঠেলে দেয় — বা নিজে থেকে মোটা করে আঁকে (synthetic bold),
+  // যেটা serif-এ বিশ্রী দেখায়। নীরব ব্যর্থতা: কিছু ভাঙে না, শুধু
+  // ফন্টটা Figma-র সাথে মেলে না আর কারণটা ধরা যায় না।
+  weight: ["400", "500", "600", "700", "900"],
 });
 // Body/supporting-text font used for the hero subtext under the "Great
 // Food, Delivered With Care" heading (400 weight, 12px, 160%
