@@ -1,29 +1,107 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { getScopesForRole, panelLabel, type Scope } from "@/lib/permissions";
 import NotificationBell from "./NotificationBell";
 import AdminTopbar, { type PanelLink } from "@/components/admin/AdminTopbar";
+import AdminSidebar, {
+  type NavIcon,
+  type SidebarItem,
+  type SidebarSection,
+} from "@/components/admin/AdminSidebar";
 
-const NAV_ITEMS: { label: string; href: string; scope: Scope | null }[] = [
-  { label: "Dashboard", href: "/admin", scope: null }, // always visible; page itself redirects if there's nothing to show
-  { label: "Orders", href: "/admin/orders", scope: "orders" },
-  { label: "My Deliveries", href: "/admin/my-deliveries", scope: "myDeliveries" },
-  { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen" },
-  { label: "Menu", href: "/admin/menu", scope: "menu" },
-  { label: "Categories", href: "/admin/categories", scope: "categories" },
-  { label: "Inventory", href: "/admin/inventory", scope: "inventory" },
-  { label: "Insights", href: "/admin/insights", scope: "insights" },
-  { label: "Reviews", href: "/admin/reviews", scope: "reviews" },
-  { label: "Loyalty", href: "/admin/loyalty", scope: "loyalty" },
-  { label: "Reservations", href: "/admin/reservations", scope: "reservations" },
-  { label: "Tables", href: "/admin/tables", scope: "tables" },
-  { label: "Coupons", href: "/admin/coupons", scope: "coupons" },
-  { label: "Gift Cards", href: "/admin/gift-cards", scope: "giftCards" },
-  { label: "Marketing", href: "/admin/marketing", scope: "marketing" },
-  { label: "Staff", href: "/admin/staff", scope: "staff" },
-  { label: "Settings", href: "/admin/settings", scope: "settings" },
+type NavDef = {
+  label: string;
+  href: string;
+  scope: Scope | null;
+  icon: NavIcon;
+};
+
+/**
+ * Figma sidebar-এর গোষ্ঠীবিন্যাস। কয়েকটা জায়গায় Figma-র নাম আর এই
+ * app-এর বাস্তবতা মেলাতে হয়েছে:
+ *
+ *  • "Offers" → /admin/marketing। ওই page-টার কাজই offer broadcast
+ *    পাঠানো, তাই নতুন page না বানিয়ে Figma-র নামটাই ব্যবহার করা হলো।
+ *  • Users / Suppliers / Payment / Notification — Figma-তে আছে, app-এ
+ *    page ছিল না। প্রতিটার জন্য "Coming soon" placeholder বসানো হয়েছে,
+ *    যাতে design-টা পুরো থাকে অথচ click করলে 404 না আসে।
+ *  • My Deliveries / Inventory / Gift Cards — Figma-তে নেই, কিন্তু
+ *    কাজ করা feature। সবচেয়ে কাছের গোষ্ঠীতে বসানো হয়েছে।
+ *
+ * scope গুলো নতুন করে বানানো হয়নি, বিদ্যমান matrix থেকেই নেওয়া:
+ * Suppliers → "inventory" (ওর API route-ও ঠিক এই scope চায়),
+ * Users → "staff", Payment → "refunds" (টাকা ফেরতের অধিকার আলাদা
+ * scope, দেখুন permissions.ts), Notification → "orders"।
+ */
+const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
+  {
+    heading: "Overview",
+    items: [
+      // scope null — সবাই দেখতে পায়; page নিজেই দেখানোর মতো কিছু না
+      // থাকলে redirect করে দেয়।
+      { label: "Dashboard", href: "/admin", scope: null, icon: "dashboard" },
+    ],
+  },
+  {
+    heading: "User Management",
+    items: [
+      { label: "Users", href: "/admin/users", scope: "staff", icon: "users" },
+      { label: "Staff", href: "/admin/staff", scope: "staff", icon: "staff" },
+      { label: "Suppliers", href: "/admin/suppliers", scope: "inventory", icon: "suppliers" },
+    ],
+  },
+  {
+    heading: "Management",
+    items: [
+      { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen", icon: "kitchen" },
+      { label: "Orders", href: "/admin/orders", scope: "orders", icon: "orders" },
+      {
+        label: "My Deliveries",
+        href: "/admin/my-deliveries",
+        scope: "myDeliveries",
+        icon: "deliveries",
+      },
+      { label: "Payment", href: "/admin/payment", scope: "refunds", icon: "payment" },
+      { label: "Categories", href: "/admin/categories", scope: "categories", icon: "categories" },
+      { label: "Menu", href: "/admin/menu", scope: "menu", icon: "menu" },
+      { label: "Inventory", href: "/admin/inventory", scope: "inventory", icon: "inventory" },
+      { label: "Tables", href: "/admin/tables", scope: "tables", icon: "tables" },
+      {
+        label: "Reservations",
+        href: "/admin/reservations",
+        scope: "reservations",
+        icon: "reservations",
+      },
+      {
+        label: "Notification",
+        href: "/admin/notifications",
+        scope: "orders",
+        icon: "notification",
+      },
+    ],
+  },
+  {
+    heading: "Marketing & Engagement",
+    items: [
+      { label: "Insights", href: "/admin/insights", scope: "insights", icon: "insights" },
+      { label: "Reviews", href: "/admin/reviews", scope: "reviews", icon: "reviews" },
+      { label: "Offers", href: "/admin/marketing", scope: "marketing", icon: "offers" },
+      { label: "Coupons", href: "/admin/coupons", scope: "coupons", icon: "coupons" },
+      { label: "Gift Cards", href: "/admin/gift-cards", scope: "giftCards", icon: "giftCards" },
+      { label: "Loyalty", href: "/admin/loyalty", scope: "loyalty", icon: "loyalty" },
+    ],
+  },
 ];
+
+/** System group — Figma-তে Settings আর Logout একসাথে পায়ের কাছে।
+ *  Logout-এর কোনো scope লাগে না, তাই সেটা AdminSidebar নিজেই আঁকে;
+ *  এখান থেকে শুধু Settings যায়। */
+const SETTINGS_NAV: NavDef = {
+  label: "Settings",
+  href: "/admin/settings",
+  scope: "settings",
+  icon: "settings",
+};
 
 export default async function AdminLayout({
   children,
@@ -33,13 +111,60 @@ export default async function AdminLayout({
   const session = await requireAdmin();
   const role = (session.user as { role?: string }).role;
   const scopes = getScopesForRole(role);
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => item.scope === null || scopes.includes(item.scope)
-  );
 
-  const pendingReviewCount = scopes.includes("reviews")
-    ? await prisma.review.count({ where: { status: "PENDING" } })
-    : 0;
+  const canSee = (scope: Scope | null) => scope === null || scopes.includes(scope);
+
+  const canSeeReviews = scopes.includes("reviews");
+  const canSeeOrders = scopes.includes("orders");
+
+  /**
+   * দুটো badge count — দুটোই শর্তসাপেক্ষ, যাতে যে role ওই section-টাই
+   * দেখে না তার জন্য অকারণে একটা DB query না চলে। আগে review count-টা
+   * একা await করা হতো; এখন দুটো একসাথে, তাই query দুটো হলেও অপেক্ষা
+   * একটারই সময় নেয়।
+   */
+  const [pendingReviewCount, newOrdersCount] = await Promise.all([
+    canSeeReviews ? prisma.review.count({ where: { status: "PENDING" } }) : 0,
+    canSeeOrders ? prisma.order.count({ where: { status: "PLACED" } }) : 0,
+  ]);
+
+  const badgeFor = (href: string): number | undefined => {
+    if (href === "/admin/reviews") return pendingReviewCount;
+    // Figma-র Notification badge। NotificationBell-এর সাথে একই সংখ্যা
+    // (status = PLACED) — দুই জায়গায় দুই রকম সংখ্যা দেখালে কোনটা সত্যি
+    // সেটা নিয়েই সন্দেহ তৈরি হতো।
+    if (href === "/admin/notifications") return newOrdersCount;
+    return undefined;
+  };
+
+  const toSidebarItem = (item: NavDef): SidebarItem => ({
+    label: item.label,
+    href: item.href,
+    icon: item.icon,
+    badge: badgeFor(item.href),
+  });
+
+  /**
+   * scope দিয়ে ছেঁকে নেওয়া। একটা section-এর একটাও item না টিকলে পুরো
+   * section-টাই বাদ — নাহলে KITCHEN role-এর কাছে "User Management"
+   * heading-টা ঝুলে থাকত, নিচে কিছু ছাড়াই।
+   */
+  const sections: SidebarSection[] = NAV_SECTIONS.map((section) => ({
+    heading: section.heading,
+    items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
+  })).filter((section) => section.items.length > 0);
+
+  const settingsItem = canSee(SETTINGS_NAV.scope) ? toSidebarItem(SETTINGS_NAV) : null;
+
+  /**
+   * Topbar-এর search এই একই ছাঁকা তালিকা থেকেই খোঁজে (Settings সহ), তাই
+   * search কখনো এমন page দেখাতে পারে না যেটা sidebar-এ নেই — অর্থাৎ
+   * খুললে 403 খেতে হবে এমন কিছু।
+   */
+  const searchableNavItems = [
+    ...sections.flatMap((section) => section.items),
+    ...(settingsItem ? [settingsItem] : []),
+  ].map((item) => ({ label: item.label, href: item.href }));
 
   /* Which bell (if any) makes sense depends on the role, not just
      "is staff" — a bell that navigates somewhere the viewer can't
@@ -63,7 +188,7 @@ export default async function AdminLayout({
         navigateTo="/admin/my-deliveries"
         ariaLabel="New delivery assignment notifications"
       />
-    ) : scopes.includes("orders") ? (
+    ) : canSeeOrders ? (
       <NotificationBell
         fetchUrl="/api/admin/notifications"
         countKey="newOrdersCount"
@@ -91,53 +216,32 @@ export default async function AdminLayout({
       : []),
   ];
 
+  const displayName = session.user.name || panelLabel(role);
+
   return (
     <div className="min-h-screen bg-[#F9F6F3] p-3 md:p-4">
       {/* Topbar পুরো প্রস্থ জুড়ে, sidebar-এর উপরে — Figma design অনুযায়ী।
           আগে logo/email/bell sidebar-এর মাথায় ছিল; সেগুলো এখানে উঠে
           এসেছে, তাই sidebar-এ শুধু navigation থাকে। */}
       <AdminTopbar
-        name={session.user.name || panelLabel(role)}
+        name={displayName}
         email={session.user.email ?? ""}
         role={role ?? ""}
         image={session.user.image}
         panels={panels}
+        navItems={searchableNavItems}
         notificationSlot={notificationBell}
       />
 
-      <div className="flex gap-3 md:gap-4 mt-3 md:mt-4">
-        <aside className="w-60 shrink-0 bg-white rounded-[24px] flex flex-col self-start sticky top-4 max-h-[calc(100vh-2rem)]">
-          {/* overflow-y-auto: nav item অনেকগুলো (OWNER-এর ১৭টা), ছোট
-              laptop-এ পুরোটা দেখা যায় না। sticky + max-h মিলে sidebar
-              নিজে scroll করে, পুরো page নয়। */}
-          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            {visibleNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-              >
-                <span>{item.label}</span>
-                {item.href === "/admin/reviews" && pendingReviewCount > 0 && (
-                  <span className="text-[11px] font-semibold bg-orange-50 text-[#FF4C15] px-2 py-0.5 rounded-full">
-                    {pendingReviewCount}
-                  </span>
-                )}
-              </Link>
-            ))}
-          </nav>
+      <div className="mt-3 flex gap-3 md:mt-4 md:gap-4">
+        <AdminSidebar
+          name={displayName}
+          email={session.user.email ?? ""}
+          sections={sections}
+          settingsItem={settingsItem}
+        />
 
-          <div className="px-3 py-4 border-t border-gray-100">
-            <Link
-              href="/"
-              className="block px-3 py-2 rounded-md text-sm text-gray-500 hover:bg-gray-100 transition-colors"
-            >
-              ← Back to site
-            </Link>
-          </div>
-        </aside>
-
-        <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

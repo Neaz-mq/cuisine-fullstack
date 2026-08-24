@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
@@ -11,6 +11,18 @@ export interface PanelLink {
   href: string;
   /** কোন icon আঁকা হবে — নিচের PANEL_ICONS map দ্রষ্টব্য। */
   icon: "kitchen" | "manager";
+}
+
+/**
+ * Search-এ যেগুলোর মধ্যে খোঁজা হবে — sidebar-এর nav item। layout থেকে
+ * আসে, এখানে হার্ডকোড করা হয় না: তালিকাটা ওখানে scope দিয়ে ছাঁকা
+ * (visibleNavItems), তাই KITCHEN role-এর কেউ "staff" লিখলে সেটা
+ * result-এই আসে না। এখানে আলাদা তালিকা রাখলে দুই জায়গা আলাদা হয়ে
+ * যেত, আর search ব্যবহারকারীকে এমন page-এ পাঠাত যেটা খুললে 403।
+ */
+export interface NavItem {
+  label: string;
+  href: string;
 }
 
 interface AdminTopbarProps {
@@ -26,6 +38,8 @@ interface AdminTopbarProps {
    * করে 403 খেতেন।
    */
   panels?: PanelLink[];
+  /** Search-এর উৎস — উপরে NavItem-এর comment দ্রষ্টব্য। */
+  navItems?: NavItem[];
   /**
    * NotificationBell server layout-এ তৈরি হয় কারণ কোন bell দেখানো হবে তা
    * role-এর উপর নির্ভর করে, আর সেই সিদ্ধান্ত ওখানেই আছে। এখানে শুধু
@@ -33,6 +47,13 @@ interface AdminTopbarProps {
    */
   notificationSlot?: React.ReactNode;
 }
+
+/**
+ * Default prop-এ `[]` সরাসরি লিখলে প্রতি render-এ নতুন array তৈরি হতো,
+ * আর নিচের useMemo-র dependency প্রতিবারই বদলে যেত — অর্থাৎ memo করার
+ * কোনো লাভই থাকত না। module scope-এ একটাই খালি array রেখে সেটা এড়ানো।
+ */
+const EMPTY_NAV: NavItem[] = [];
 
 /**
  * Dropdown icon গুলো — Figma design-এর 24px outline set।
@@ -63,11 +84,6 @@ const ICONS = {
       <path d="M7.5 17.5c1-2 2.6-3 4.5-3s3.5 1 4.5 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </>
   ),
-  switch: (
-    <>
-      <path d="M12 6v12M6 12h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </>
-  ),
   logout: (
     <>
       <path d="M14 8V6.5A1.5 1.5 0 0012.5 5h-6A1.5 1.5 0 005 6.5v11A1.5 1.5 0 006.5 19h6a1.5 1.5 0 001.5-1.5V16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -95,12 +111,16 @@ export default function AdminTopbar({
   role,
   image,
   panels = [],
+  navItems = EMPTY_NAV,
   notificationSlot,
 }: AdminTopbarProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   /**
    * বাইরে click করলে menu বন্ধ। `mousedown`, `click` নয় — click-এ করলে
@@ -128,24 +148,102 @@ export default function AdminTopbar({
     };
   }, [menuOpen]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
+  /**
+   * Search result-এর ক্ষেত্রেও একই ব্যাপার — বাইরে click করলে বন্ধ।
+   * এখানে Escape আলাদা করে input-এর onKeyDown-এও ধরা আছে, কারণ input-এ
+   * focus থাকা অবস্থায় Escape চাপলে সেটা document পর্যন্ত পৌঁছায় ঠিকই,
+   * কিন্তু browser-ভেদে `type="search"` input নিজেই Escape দিয়ে লেখা
+   * মুছে ফেলে — দুই আচরণ যেন একসাথে না ঘটে।
+   */
+  useEffect(() => {
+    if (!searchOpen) return;
 
-    /**
-     * ⚠️ এটা /admin/orders-এ `q` query param পাঠায়। ওই page এখনো `q`
-     * পড়ে কিনা জানি না — না পড়লে search কেবল order list-এ নিয়ে যাবে,
-     * filter করবে না। Figma-র "Search everything" আসলে global search
-     * বোঝায়, কিন্তু পেছনে কোনো search API নেই; order code দিয়ে খোঁজাই
-     * সবচেয়ে বাস্তব প্রথম ধাপ, কারণ admin-রা ওটাই সবচেয়ে বেশি খোঁজেন।
-     */
-    router.push(`/admin/orders?q=${encodeURIComponent(q)}`);
+    const onPointerDown = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [searchOpen]);
+
+  /**
+   * Figma-র "Search everything" এখানে মানে: sidebar-এর যে page গুলোতে
+   * এই ব্যবহারকারীর access আছে, তার মধ্যে খোঁজা। পেছনে কোনো search API
+   * নেই, তাই এটা সম্পূর্ণ client-side — তালিকাটা সর্বোচ্চ ১৭টা item,
+   * প্রতিটা keystroke-এ filter করা হলেও কিছুই টের পাওয়া যায় না।
+   *
+   * substring match, শুধু prefix নয় — "cards" লিখে "Gift Cards" পাওয়া
+   * যায়, "deliveries" লিখে "My Deliveries"। তবে prefix-এ মেলা item
+   * আগে সাজানো হয়: "in" লিখলে "Inventory"/"Insights" আগে, আর যেগুলোর
+   * মাঝখানে "in" আছে ("Marketing", "Settings") সেগুলো পরে।
+   *
+   * sort stable, তাই একই র‍্যাঙ্কের item গুলো sidebar-এর নিজস্ব ক্রমেই
+   * থাকে — "m" চাপলে My Deliveries → Menu → Marketing, ঠিক যে ক্রমে
+   * ওগুলো বাঁয়ে সাজানো আছে।
+   */
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return EMPTY_NAV;
+
+    return navItems
+      .filter((item) => item.label.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aPrefix = a.label.toLowerCase().startsWith(q) ? 0 : 1;
+        const bPrefix = b.label.toLowerCase().startsWith(q) ? 0 : 1;
+        return aPrefix - bPrefix;
+      });
+  }, [navItems, query]);
+
+  /**
+   * লেখা বদলালে result কমে যেতে পারে, অথচ activeIndex আগের জায়গায় থেকে
+   * যেতে পারে — তখন Enter চাপলে `results[activeIndex]` undefined হয়ে
+   * crash করত। render আর Enter দুই জায়গাতেই এই clamp করা মানটাই ব্যবহার
+   * হয়, তাই দুটো কখনো আলাদা হয় না।
+   */
+  const activeSafe = results.length > 0 ? Math.min(activeIndex, results.length - 1) : 0;
+
+  const goTo = (href: string) => {
+    setQuery("");
+    setSearchOpen(false);
+    setActiveIndex(0);
+    router.push(href);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      // preventDefault: নাহলে Safari/Chrome `type="search"`-এ Escape
+      // দিয়ে input-ও খালি করে দেয়, অথচ ব্যবহারকারী শুধু dropdown বন্ধ
+      // করতে চেয়েছিলেন।
+      e.preventDefault();
+      setSearchOpen(false);
+      return;
+    }
+
+    if (results.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSearchOpen(true);
+      setActiveIndex((prev) => (Math.min(prev, results.length - 1) + 1) % results.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSearchOpen(true);
+      setActiveIndex(
+        (prev) => (Math.min(prev, results.length - 1) - 1 + results.length) % results.length
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      goTo(results[activeSafe].href);
+    }
   };
 
   // Avatar না থাকলে নামের প্রথম অক্ষর। credentials দিয়ে বানানো
   // account-এ image থাকে না, আর ভাঙা <img> icon-এর চেয়ে initial ভালো।
   const initial = (name || email).trim().charAt(0).toUpperCase();
+
+  const showResults = searchOpen && query.trim().length > 0;
 
   return (
     <header className="bg-white rounded-[24px] px-4 md:px-6 h-[72px] flex items-center gap-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
@@ -163,35 +261,96 @@ export default function AdminTopbar({
         </span>
       </Link>
 
-      {/* Search — max-w দিয়ে মাঝখানে, Figma-র মতো। form ব্যবহার করা
-          হয়েছে যাতে Enter কাজ করে; button ছাড়া শুধু input দিলে
-          keyboard-only user submit করতে পারতেন না। */}
-      <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-[520px] mx-auto">
-        <div className="relative">
-          <svg
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/40 pointer-events-none"
-            viewBox="0 0 20 20"
-            fill="none"
-            aria-hidden="true"
-          >
-            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-            <path
-              d="M13.5 13.5L17 17"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search orders..."
-            aria-label="Search orders"
-            className="w-full h-[44px] bg-[#F9F6F3] rounded-full pl-11 pr-4 font-sora text-[14px] text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-[#2C6252]/25 transition-shadow"
+      {/* Search — max-w দিয়ে মাঝখানে, Figma-র মতো। <form> নয় একটা
+          <div>: Enter এখানে "submit" নয়, "যেটা highlight করা আছে সেখানে
+          যাও" — form হলে implicit submission আর নিচের onKeyDown দুটোই
+          Enter-এ চলার চেষ্টা করত। */}
+      <div ref={searchRef} className="relative flex-1 min-w-0 max-w-[520px] mx-auto">
+        <svg
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/40 pointer-events-none"
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
+          <path
+            d="M13.5 13.5L17 17"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
           />
-        </div>
-      </form>
+        </svg>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSearchOpen(true);
+            // নতুন লেখায় নতুন তালিকা — highlight আবার প্রথম item-এ।
+            setActiveIndex(0);
+          }}
+          onFocus={() => setSearchOpen(true)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Search everything..."
+          aria-label="Search pages"
+          role="combobox"
+          aria-expanded={showResults}
+          aria-controls="admin-search-results"
+          aria-autocomplete="list"
+          aria-activedescendant={
+            showResults && results.length > 0 ? `admin-search-option-${activeSafe}` : undefined
+          }
+          className="w-full h-[44px] bg-[#F9F6F3] rounded-full pl-11 pr-4 font-sora text-[14px] text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-[#2C6252]/25 transition-shadow"
+        />
+
+        {showResults && (
+          <div
+            id="admin-search-results"
+            role="listbox"
+            className="absolute left-0 right-0 top-full mt-2 bg-white rounded-[20px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50 max-h-[320px] overflow-y-auto"
+          >
+            {results.length === 0 ? (
+              <p className="px-3.5 py-3 font-sora text-[14px] text-black/50">
+                No pages match &ldquo;{query.trim()}&rdquo;
+              </p>
+            ) : (
+              results.map((item, index) => (
+                <button
+                  key={item.href}
+                  id={`admin-search-option-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeSafe}
+                  // mouse দিয়ে hover করলেই highlight সরে আসে, যাতে
+                  // keyboard আর mouse দুটো আলাদা "নির্বাচিত" item না
+                  // দেখায় — Enter সবসময় যেটা দেখা যাচ্ছে সেটাতেই যাবে।
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => goTo(item.href)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-[14px] font-sora text-[15px] text-left transition-colors ${
+                    index === activeSafe ? "bg-[#F9F6F3] text-black" : "text-black/80"
+                  }`}
+                >
+                  <svg
+                    className="w-4 h-4 shrink-0 text-black/40"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {item.label}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         {/* Bell — role অনুযায়ী layout থেকে আসে, বা কিছুই আসে না */}
@@ -299,26 +458,6 @@ export default function AdminTopbar({
               <p className="px-3.5 pt-2 pb-1 font-sora text-[11px] font-semibold uppercase tracking-wide text-[#2C6252]">
                 {role}
               </p>
-
-              {/* Switch Account — Figma-তে "Add Account" লেখা, কিন্তু নামটা
-                  ইচ্ছাকৃতভাবে বদলানো। "Add" বললে বোঝায় দুটো account
-                  একসাথে থাকবে, Gmail-এর মতো — NextAuth একবারে একটাই
-                  session ধরে, তাই সেটা মিথ্যে প্রতিশ্রুতি হতো। এখানে
-                  আসলে logout হয়ে login page-এ যাওয়া হয়, আর "Switch"
-                  ঠিক সেটাই বলে।
-
-                  callbackUrl "/login" — logout-এর "/" নয়: ব্যবহারকারী
-                  অন্য account-এ ঢুকতে চাইছেন, তাঁকে homepage-এ ফেলে
-                  আবার login খুঁজতে বলার কোনো মানে নেই। */}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black hover:bg-black/[0.04] transition-colors"
-              >
-                <MenuIcon name="switch" />
-                Switch Account
-              </button>
 
               <button
                 type="button"
