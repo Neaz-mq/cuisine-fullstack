@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
+import { Menu, Search, X } from "lucide-react";
 
 export interface PanelLink {
   label: string;
@@ -124,6 +125,18 @@ export default function AdminTopbar({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * ৩৭৫px-এ hamburger, logo, search, bell আর avatar একসাথে রাখলে
+   * search-এর জন্য পড়ে থাকে ~৭০px — placeholder "Search everything..."
+   * ওখানে "Sea" হয়ে কেটে যায়, অর্থাৎ input-টা থেকেও কাজের নয়।
+   *
+   * তাই ফোনে ওটা একটা icon: চাপলে পুরো bar জুড়ে খোলে আর বাকি সব
+   * সরে যায়। Gmail, YouTube, GitHub — সবার mobile-এ একই আচরণ, তাই
+   * ব্যবহারকারীর কাছে এটা শেখার মতো নতুন কিছু নয়।
+   */
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   /**
    * বাইরে click করলে menu বন্ধ। `mousedown`, `click` নয় — click-এ করলে
@@ -214,12 +227,28 @@ export default function AdminTopbar({
     router.push(href);
   };
 
+  const closeMobileSearch = () => {
+    setMobileSearchOpen(false);
+    setSearchOpen(false);
+    setQuery("");
+  };
+
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       // preventDefault: নাহলে Safari/Chrome `type="search"`-এ Escape
       // দিয়ে input-ও খালি করে দেয়, অথচ ব্যবহারকারী শুধু dropdown বন্ধ
       // করতে চেয়েছিলেন।
       e.preventDefault();
+
+      // ফোনে search bar-টা খোলা থাকলে Escape-এ পুরোটাই গুটিয়ে যাওয়া
+      // উচিত, শুধু dropdown নয় — নাহলে একটা খালি input খোলা থেকে যেত
+      // আর ব্যবহারকারীকে আবার X খুঁজতে হতো। Desktop-এ bar বলে কিছু
+      // নেই, তাই সেখানে আগের আচরণই থাকে।
+      if (mobileSearchOpen) {
+        closeMobileSearch();
+        return;
+      }
+
       setSearchOpen(false);
       return;
     }
@@ -246,174 +275,268 @@ export default function AdminTopbar({
   // account-এ image থাকে না, আর ভাঙা <img> icon-এর চেয়ে initial ভালো।
   const initial = (name || email).trim().charAt(0).toUpperCase();
 
+  // খুললেই keyboard আসুক — না হলে ব্যবহারকারীকে icon চেপে তারপর
+  // input-এ আবার আঙুল দিতে হতো, দুই ধাপ যেখানে এক ধাপই যথেষ্ট।
+  // focus() কোনো state বদলায় না, তাই effect-এ setState-এর প্রশ্ন নেই।
+  useEffect(() => {
+    if (mobileSearchOpen) searchInputRef.current?.focus();
+  }, [mobileSearchOpen]);
+
   const showResults = searchOpen && query.trim().length > 0;
 
+  /**
+   * Figma layout panel: Hug 86px, radius 100px, justify space-between,
+   * padding — উপরে/ডানে/নিচে 18px, বাঁয়ে 30px, BG #FFFFFF।
+   *
+   * `rounded-full`, `rounded-[100px]` নয়: border-radius কখনো উচ্চতার
+   * অর্ধেকের বেশি হতে পারে না, তাই 86px উঁচু বারে 100px চাইলে browser
+   * নিজে থেকেই 43-এ নামিয়ে আনে — অর্থাৎ পুরোপুরি গোল প্রান্ত, ঠিক যা
+   * `rounded-full` দেয়। আগের `rounded-[24px]`-এই গোলাকৃতিটা হারিয়ে
+   * যাচ্ছিল।
+   *
+   * বাঁ পাশে বেশি padding (30 vs 18) ইচ্ছাকৃত: বাঁয়ে খালি লেখা (logo),
+   * ডানে গোল pill — গোল জিনিস প্রান্তের কাছে গেলে চোখে বেশি ফাঁক লাগে,
+   * তাই কম padding দিলেই ভারসাম্য মেলে।
+   */
   return (
-    <header className="bg-white rounded-[100px] px-3 sm:px-4 md:px-6 h-[72px] flex items-center gap-2 sm:gap-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      {/* Hamburger — শুধু xl-এর নিচে, যেখানে sidebar drawer হয়ে যায়।
-          Desktop-এ sidebar এমনিতেই দৃশ্যমান, তাই সেখানে এটা কেবল
-          বিভ্রান্তি বাড়াত। */}
-      <button
-        type="button"
-        onClick={onMenuClick}
-        aria-label="Open menu"
-        className="shrink-0 rounded-lg p-2 text-black/60 transition-colors hover:bg-black/5 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:hidden"
+    <header className="bg-white rounded-full h-[72px] md:h-[86px] flex items-center justify-between gap-3 pl-3 pr-2 sm:pl-4 sm:pr-3 md:pl-[30px] md:pr-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      {/* বাঁ দল — hamburger + brand। ফোনে search খুললে পুরোটা সরে
+          যায়, যাতে input পুরো প্রস্থ পায়। */}
+      <div
+        className={`items-center gap-2 shrink-0 ${
+          mobileSearchOpen ? "hidden md:flex" : "flex"
+        }`}
       >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 7h16M4 12h16M4 17h16"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
+        {/* Hamburger — শুধু xl-এর নিচে, যেখানে sidebar drawer হয়ে যায়।
+            Desktop-এ sidebar এমনিতেই দৃশ্যমান, তাই সেখানে এটা কেবল
+            বিভ্রান্তি বাড়াত। */}
+        {/* md-এর নিচে, xl নয়: tablet-এ navigation-টা নিচের icon rail
+            সামলায়, তাই সেখানে drawer খোলার কিছু নেই।
 
-      {/* Logo — sidebar-এ আলাদা করে নেই, তাই brand mark এখানেই */}
-      <Link href="/admin" className="hidden sm:flex items-center gap-2 shrink-0">
-        <Image
-          src="/logo.svg"
-          alt=""
-          width={32}
-          height={32}
-          className="w-8 h-8"
-        />
-        <span className="font-frank-ruhl font-bold text-[22px] leading-none tracking-[-0.01em] text-black hidden md:inline">
-          Cuisine
-        </span>
-      </Link>
-
-      {/* Search — max-w দিয়ে মাঝখানে, Figma-র মতো। <form> নয় একটা
-          <div>: Enter এখানে "submit" নয়, "যেটা highlight করা আছে সেখানে
-          যাও" — form হলে implicit submission আর নিচের onKeyDown দুটোই
-          Enter-এ চলার চেষ্টা করত। */}
-      <div ref={searchRef} className="relative flex-1 min-w-0 max-w-[520px] mx-auto">
-        <svg
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-black/40 pointer-events-none"
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
+            আগে এটা background ছাড়া একটা পাতলা তিন-দাগ ছিল, পাশের গোল
+            bell আর avatar-এর সাথে বেমানান। এখন ওদের মতোই ৪৪px গোল
+            বোতাম — একই ভাষা, আর আঙুলের জন্য যথেষ্ট বড় (৪৪px মোবাইলে
+            স্পর্শ-লক্ষ্যের স্বীকৃত ন্যূনতম)। */}
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
         >
-          <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-          <path
-            d="M13.5 13.5L17 17"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSearchOpen(true);
-            // নতুন লেখায় নতুন তালিকা — highlight আবার প্রথম item-এ।
-            setActiveIndex(0);
-          }}
-          onFocus={() => setSearchOpen(true)}
-          onKeyDown={handleSearchKeyDown}
-          placeholder="Search everything..."
-          aria-label="Search pages"
-          role="combobox"
-          aria-expanded={showResults}
-          aria-controls="admin-search-results"
-          aria-autocomplete="list"
-          aria-activedescendant={
-            showResults && results.length > 0 ? `admin-search-option-${activeSafe}` : undefined
-          }
-          className="w-full h-[44px] bg-[#F9F6F3] rounded-full pl-11 pr-4 font-sora text-[14px] text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-[#2C6252]/25 transition-shadow"
-        />
+          <Menu className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+        </button>
 
-        {showResults && (
-          <div
-            id="admin-search-results"
-            role="listbox"
-            className="absolute left-0 right-0 top-full mt-2 bg-white rounded-[20px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50 max-h-[320px] overflow-y-auto"
-          >
-            {results.length === 0 ? (
-              <p className="px-3.5 py-3 font-sora text-[14px] text-black/50">
-                No pages match &ldquo;{query.trim()}&rdquo;
-              </p>
-            ) : (
-              results.map((item, index) => (
-                <button
-                  key={item.href}
-                  id={`admin-search-option-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={index === activeSafe}
-                  // mouse দিয়ে hover করলেই highlight সরে আসে, যাতে
-                  // keyboard আর mouse দুটো আলাদা "নির্বাচিত" item না
-                  // দেখায় — Enter সবসময় যেটা দেখা যাচ্ছে সেটাতেই যাবে।
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => goTo(item.href)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-[14px] font-sora text-[15px] text-left transition-colors ${
-                    index === activeSafe ? "bg-[#F9F6F3] text-black" : "text-black/80"
-                  }`}
-                >
-                  <svg
-                    className="w-4 h-4 shrink-0 text-black/40"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M4 10h12m0 0l-4-4m4 4l-4 4"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  {item.label}
-                </button>
-              ))
-            )}
-          </div>
-        )}
+        {/* Logo — sidebar-এ আলাদা করে নেই, তাই brand mark এখানেই */}
+        <Link href="/admin" className="flex items-center gap-2 shrink-0">
+          {/* Figma: icon 34×34 */}
+          <Image
+            src="/logo.svg"
+            alt=""
+            width={34}
+            height={34}
+            className="w-[34px] h-[34px]"
+          />
+          {/* Figma typography panel: Frank Ruhl Libre, 600, 30px,
+              line-height 100%, letter-spacing −3%, #000।
+
+              ⚠️ tracking −3%, −1% নয় — sidebar-এর নাম/heading-এ −1%।
+              শব্দচিহ্নটা বড় (30px) বলে অক্ষরগুলোকে বেশি টেনে আনা হয়েছে;
+              বড় মাপে আলগা লাগে বলে এটা typography-র চেনা কৌশল।
+
+              30px ছোট পর্দায় hamburger আর search-এর সাথে আঁটে না, তাই
+              md-এর নিচে 24px। */}
+          <span className="font-frank-ruhl font-semibold text-[24px] md:text-[30px] leading-none tracking-[-0.03em] text-black hidden md:inline">
+            Cuisine
+          </span>
+        </Link>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-3 shrink-0">
-        {/* Bell — role অনুযায়ী layout থেকে আসে, বা কিছুই আসে না */}
-        {notificationSlot}
+      {/* ডান দল — Figma-তে search, bell আর user card একসাথে ডান দিকে
+          বসে, প্রায় ২০px ফাঁক দিয়ে। আগে search-টা `mx-auto` দিয়ে
+          একেবারে মাঝখানে বসানো ছিল, তাই bell থেকে অনেক দূরে সরে
+          যাচ্ছিল। */}
+      <div className="flex items-center gap-2 md:gap-5 min-w-0 flex-1 justify-end">
+        {/* <form> নয় একটা <div>: Enter এখানে "submit" নয়, "যেটা
+            highlight করা আছে সেখানে যাও" — form হলে implicit submission
+            আর নিচের onKeyDown দুটোই Enter-এ চলার চেষ্টা করত। */}
+        <div
+          ref={searchRef}
+          className={`relative min-w-0 flex-1 max-w-[505px] ${
+            mobileSearchOpen ? "block" : "hidden"
+          } md:block`}
+        >
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-black/70 pointer-events-none"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M13.5 13.5L17 17"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSearchOpen(true);
+              // নতুন লেখায় নতুন তালিকা — highlight আবার প্রথম item-এ।
+              setActiveIndex(0);
+            }}
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search everything..."
+            aria-label="Search pages"
+            role="combobox"
+            aria-expanded={showResults}
+            aria-controls="admin-search-results"
+            aria-autocomplete="list"
+            aria-activedescendant={
+              showResults && results.length > 0 ? `admin-search-option-${activeSafe}` : undefined
+            }
+            /* Figma: Sora 400, 16px, line-height 100%, letter-spacing 0%,
+               placeholder #000 @70%। আগে 14px আর black/40 ছিল — ফিকে
+               placeholder পড়া কঠিন, আর 70% স্পষ্টতই বেশি পাঠযোগ্য। */
+            className="w-full h-[50px] bg-[#F9F6F3] rounded-full pl-12 pr-4 font-sora text-[16px] leading-none tracking-normal text-black placeholder-black/70 focus:outline-none focus:ring-2 focus:ring-[#2C6252]/25 transition-shadow"
+          />
 
-        {/* User menu */}
-        <div className="relative" ref={menuRef}>
+          {showResults && (
+            <div
+              id="admin-search-results"
+              role="listbox"
+              className="absolute left-0 right-0 top-full mt-2 bg-white rounded-[20px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50 max-h-[320px] overflow-y-auto"
+            >
+              {results.length === 0 ? (
+                <p className="px-3.5 py-3 font-sora text-[14px] text-black/50">
+                  No pages match &ldquo;{query.trim()}&rdquo;
+                </p>
+              ) : (
+                results.map((item, index) => (
+                  <button
+                    key={item.href}
+                    id={`admin-search-option-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeSafe}
+                    // mouse দিয়ে hover করলেই highlight সরে আসে, যাতে
+                    // keyboard আর mouse দুটো আলাদা "নির্বাচিত" item না
+                    // দেখায় — Enter সবসময় যেটা দেখা যাচ্ছে সেটাতেই যাবে।
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => goTo(item.href)}
+                    className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-[14px] font-sora text-[15px] text-left transition-colors ${
+                      index === activeSafe ? "bg-[#F9F6F3] text-black" : "text-black/80"
+                    }`}
+                  >
+                    <svg
+                      className="w-4 h-4 shrink-0 text-black/40"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    {item.label}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ফোনে search বন্ধ করার বোতাম — খোলা অবস্থায় input-এর পাশে।
+            এটা ছাড়া বেরোনোর একমাত্র উপায় হতো keyboard-এর back, যেটা
+            আবিষ্কার করতে হয়। */}
+        <button
+          type="button"
+          onClick={closeMobileSearch}
+          aria-label="Close search"
+          className={`h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden ${
+            mobileSearchOpen ? "flex" : "hidden"
+          }`}
+        >
+          <X className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+        </button>
+
+        {/* ফোনে search খোলার বোতাম, আর bell + avatar — তিনটেই একসাথে
+            সরে যায় যখন search খোলা থাকে। */}
+        <div
+          className={`items-center gap-2 shrink-0 ${
+            mobileSearchOpen ? "hidden md:flex" : "flex"
+          } md:gap-5`}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen(true)}
+            aria-label="Search"
+            aria-expanded={mobileSearchOpen}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
+          >
+            <Search className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+          </button>
+
+          {/* Bell — role অনুযায়ী layout থেকে আসে, বা কিছুই আসে না */}
+          {notificationSlot}
+
+          {/* User menu */}
+          <div className="relative" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className="flex items-center gap-2.5 bg-[#F9F6F3] rounded-full pl-1.5 pr-3 py-1.5 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+            /* Figma layout panel: Hug 266×50, radius 100px,
+               padding 6/12/6/6, gap 20px, BG #F9F6F3।
+               উচ্চতা 50 − উপরে-নিচে 6 = ভেতরের সব কিছু 38px, তাই
+               avatar-ও 38। */
+            className="flex items-center gap-3 xl:gap-5 h-[50px] bg-[#F9F6F3] rounded-full p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
           >
             {image ? (
               <Image
                 src={image}
                 alt=""
-                width={36}
-                height={36}
-                className="w-9 h-9 rounded-full object-cover shrink-0"
+                width={38}
+                height={38}
+                className="w-[38px] h-[38px] rounded-full object-cover shrink-0"
               />
             ) : (
-              <span className="w-9 h-9 rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[14px] flex items-center justify-center shrink-0">
+              <span className="w-[38px] h-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[14px] flex items-center justify-center shrink-0">
                 {initial}
               </span>
             )}
 
             {/* মোবাইলে নাম/email লুকানো — 320px-এ ওটুকু জায়গা নেই,
                 avatar-ই যথেষ্ট affordance */}
-            <span className="hidden md:flex flex-col items-start min-w-0">
-              <span className="font-sora font-semibold text-[14px] leading-tight text-black truncate max-w-[160px]">
+            {/* Figma: এই দুই লাইনের ব্লকটা 166×38। উচ্চতাটাই মাপ দুটো
+                নিশ্চিত করে — 18px নাম (line-height 1.14 ≈ 20.5) + 12px
+                email (≈13.7) ≈ 38। sidebar-এর user card-এ হুবহু একই
+                জোড়া, তাই দুটো জায়গা দেখতে এক লাগে। */}
+            {/* xl-এর নিচে শুধু avatar — Figma-র tablet নকশায় trigger-টা
+                একটা গোল ছবি, নাম/email নিচের dropdown-এ। ৭৬৮px-এ
+                search আর ২৬৬px চওড়া pill একসাথে রাখলে search-টা
+                "Searc..." হয়ে যেত (ঠিক যেটা তোমার screenshot-এ)। */}
+            <span className="hidden xl:flex flex-col items-start min-w-0">
+              <span className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate max-w-[166px]">
                 {name}
               </span>
-              <span className="font-sora text-[12px] leading-tight text-black/50 truncate max-w-[160px]">
+              <span className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate max-w-[166px]">
                 {email}
               </span>
             </span>
 
             <svg
-              className={`w-4 h-4 text-black/50 shrink-0 transition-transform ${
+              className={`hidden xl:block w-4 h-4 text-black/50 shrink-0 transition-transform ${
                 menuOpen ? "rotate-180" : ""
               }`}
               viewBox="0 0 20 20"
@@ -437,11 +560,17 @@ export default function AdminTopbar({
             >
               {/* মোবাইলে trigger button-এ নাম দেখানো হয় না, তাই এখানে —
                   নাহলে কোন account-এ আছি সেটা জানার উপায় থাকত না */}
-              <div className="px-3 pt-2 pb-3 md:hidden">
-                <p className="font-sora font-semibold text-[14px] text-black truncate">
+              {/* xl-এর নিচে trigger-এ শুধু avatar থাকে, তাই কোন
+                  account-এ আছি সেটা জানার একমাত্র জায়গা এটাই। sidebar-এর
+                  user card-এর মতোই একই typography, যাতে তিন জায়গা
+                  দেখতে এক লাগে। */}
+              <div className="px-3 pt-2 pb-3 xl:hidden">
+                <p className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate">
                   {name}
                 </p>
-                <p className="font-sora text-[12px] text-black/50 truncate">{email}</p>
+                <p className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate">
+                  {email}
+                </p>
               </div>
 
               {/* Profile — Figma-র প্রথম item, cream pill দিয়ে হাইলাইট করা।
@@ -492,6 +621,7 @@ export default function AdminTopbar({
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </header>

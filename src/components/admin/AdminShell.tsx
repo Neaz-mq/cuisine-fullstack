@@ -7,6 +7,7 @@ import AdminSidebar, {
   type SidebarItem,
   type SidebarSection,
 } from "@/components/admin/AdminSidebar";
+import AdminNavRail from "@/components/admin/AdminNavRail";
 
 /**
  * src/components/admin/AdminShell.tsx
@@ -112,6 +113,17 @@ export default function AdminShell({
         navItems={navItems}
         notificationSlot={notificationSlot}
         onMenuClick={openDrawer}
+      />
+
+      {/* Tablet-এর navigation — Figma-র নকশা অনুযায়ী শুধু icon-এর একটা
+          অনুভূমিক সারি, drawer নয়।
+          md–xl-এর মাঝেই কেবল: ফোনে ১৭টা icon পাশাপাশি রাখলে প্রতিটা
+          এত ছোট হতো যে আঙুলে ঠিকভাবে চাপাই যেত না (তাই সেখানে drawer),
+          আর xl-এ পুরো label সহ কলামই বেশি কাজের। */}
+      <AdminNavRail
+        sections={sections}
+        settingsItem={settingsItem}
+        className="hidden md:flex xl:hidden"
       />
 
       <div className="flex gap-[10px]">

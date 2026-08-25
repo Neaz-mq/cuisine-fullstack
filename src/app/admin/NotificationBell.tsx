@@ -129,12 +129,23 @@ export default function NotificationBell({
   return (
     <button
       onClick={handleClick}
-      className="relative p-2 rounded-md hover:bg-gray-100 transition-colors"
+      /* Figma layout panel: Hug 50×50, radius 100px, padding 15px,
+         BG #F9F6F3 — অর্থাৎ ডান পাশের user card-এর মতোই একটা বৃত্ত।
+         আগে এটা ছিল rounded-md আর background-হীন, তাই পাশের গোল
+         pill-টার সাথে বেমানান লাগত। padding 15px + icon 20px = 50। */
+      className="relative w-[50px] h-[50px] shrink-0 flex items-center justify-center rounded-full bg-[#F9F6F3] hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
       aria-label={ariaLabel}
     >
-      <Bell className="w-5 h-5 text-gray-600" />
+      <Bell className="w-5 h-5 text-black/70" strokeWidth={1.8} />
       {count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 bg-[#FF4C15] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+        /* Figma-তে badge-টা বৃত্তের *বাইরে* উঁকি দেয়, ভেতরে নয় — ডান
+           প্রান্তে মিলিয়ে, উপরে সামান্য বেরিয়ে। ভেতরে বসালে ওটা
+           ঘণ্টার গায়ে চেপে বসে আর দুটোই পড়তে অসুবিধা হয়।
+
+           `min-w` + `px-1`, স্থির চওড়া নয়: গণনা দুই অঙ্কে গেলে (১২টা
+           নতুন order) স্থির ২০px-এ সংখ্যাটা কেটে যেত। এক অঙ্কে এটা
+           নিখুঁত বৃত্তই থাকে। */
+        <span className="absolute -top-0.5 right-0 bg-red-600 text-white text-[11px] font-bold leading-none rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center">
           {count > 9 ? "9+" : count}
         </span>
       )}

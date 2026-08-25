@@ -75,7 +75,7 @@ export type NavIcon =
   | "loyalty"
   | "settings";
 
-const ICONS: Record<NavIcon, LucideIcon> = {
+export const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   users: Users,
   staff: User,
@@ -194,7 +194,7 @@ interface AdminSidebarProps {
  * `/admin/menu/new` বা `/admin/orders/abc123`-এ গেলেও parent item
  * active থাকে।
  */
-function isActivePath(pathname: string, href: string): boolean {
+export function isActivePath(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -375,7 +375,7 @@ export default function AdminSidebar({
        * `invisible`-ও লাগে, নাহলে বন্ধ drawer-এর ১৭টা link-এ Tab করে
        * পৌঁছানো যেত অথচ পর্দায় কিছুই দেখা যেত না।
        */
-      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] xl:visible xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[24px] [&::-webkit-scrollbar]:hidden ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] md:hidden xl:visible xl:flex xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[24px] [&::-webkit-scrollbar]:hidden ${
         mobileOpen ? "translate-x-0" : "invisible -translate-x-full"
       } ${collapsed ? "xl:w-[72px]" : "xl:w-64"}`}
     >
@@ -422,31 +422,51 @@ export default function AdminSidebar({
         </div>
       </div>
 
-      <nav ref={contentRef} className="px-3 py-3">
+      {/**
+       * Figma-র section frame: Vertical, gap 16px।
+       *
+       * ১৬px-টা সব জায়গায় — heading থেকে প্রথম item, item থেকে item,
+       * আর এক section থেকে পরের section। শেষেরটা spec-এ সরাসরি লেখা
+       * নেই (ওটা parent frame-এর gap), কিন্তু মকআপে মেপে দেখা যায়
+       * "Users → Staff" আর "Suppliers → Management" দুটোর দূরত্ব
+       * সমান, অর্থাৎ একই ১৬।
+       *
+       * তাই heading আর item গুলো এখন এক flex column-এর সরাসরি সন্তান,
+       * প্রত্যেকের আলাদা margin নয় — একটাই `gap-4` পুরোটা সামলায়।
+       * আগে item-এর মাঝে ছিল ৮px আর heading-এ নিজস্ব pt/pb, ফলে
+       * তালিকাটা মকআপের চেয়ে চাপা দেখাত।
+       */}
+      <nav ref={contentRef} className="flex flex-col gap-4 px-3 py-3">
         {sections.map((section) => (
-          <div key={section.heading} className="mb-3 last:mb-0">
+          <div key={section.heading} className="flex flex-col gap-4">
             {/* collapsed-এ heading-এর বদলে একটা সরু বিভাজক — গোষ্ঠীর
                 সীমানাটুকু থাকে, অথচ ৭৬px-এ "Marketing & Engagement"
                 লেখার চেষ্টা করতে হয় না। */}
             {collapsed ? (
-              <div aria-hidden="true" className="mx-2 mb-2 border-t border-gray-100 first:border-0" />
+              <div aria-hidden="true" className="mx-2 border-t border-gray-100 first:border-0" />
             ) : (
-              <p className={`px-3 pb-1.5 pt-2 ${HEADING_TEXT}`}>
-                {section.heading}
-              </p>
+              /**
+                * heading-এ কোনো বাঁ padding নেই, ইচ্ছাকৃতভাবে।
+                *
+                * Figma-তে "Overview" শুরু হয় ঠিক যেখানে নিচের pill-এর
+                * বাঁ প্রান্ত, আর icon গুলো তার চেয়ে ভেতরে — কারণ
+                * pill-এর নিজের ১২px padding আছে। অর্থাৎ ইন্ডেন্টটা
+                * আলাদা করে বসানো নয়, item-এর গড়ন থেকেই আসে।
+                *
+                * আগে heading-এও `px-3` ছিল, তাই heading আর icon এক
+                * সারিতে পড়ে যেত আর গোষ্ঠীর মাথা-শরীরের ভাগটা চোখে
+                * ধরা পড়ত না।
+                */
+              <p className={HEADING_TEXT}>{section.heading}</p>
             )}
 
-            <div className="space-y-2">{section.items.map(renderItem)}</div>
+            {section.items.map(renderItem)}
           </div>
         ))}
       </nav>
 
-      <div className="space-y-2 border-t border-gray-100 px-3 py-3">
-        {!collapsed && (
-          <p className={`px-3 pb-1.5 ${HEADING_TEXT}`}>
-            System
-          </p>
-        )}
+      <div className="flex flex-col gap-4 border-t border-gray-100 px-3 py-3">
+        {!collapsed && <p className={HEADING_TEXT}>System</p>}
 
         {settingsItem && renderItem(settingsItem)}
 
