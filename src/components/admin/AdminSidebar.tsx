@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -28,6 +28,7 @@ import {
   Truck,
   User,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -179,6 +180,9 @@ interface AdminSidebarProps {
   sections: SidebarSection[];
   /** System group-এ Settings — scope না থাকলে layout এটা পাঠায় না। */
   settingsItem?: SidebarItem | null;
+  /** xl-এর নিচে drawer খোলা কিনা — AdminShell থেকে। */
+  mobileOpen?: boolean;
+  onClose?: () => void;
 }
 
 /**
@@ -198,9 +202,52 @@ export default function AdminSidebar({
   email,
   sections,
   settingsItem,
+  mobileOpen = false,
+  onClose,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  /**
+   * ⚠️ এটা কেবল desktop-এর ধারণা। drawer-এ ৭২px সরু অবস্থার কোনো
+   * অর্থ নেই — ওখানে হয় পুরোটা খোলা, নয় সম্পূর্ণ বন্ধ। তাই নিচের
+   * class গুলোয় collapsed-এর প্রভাব `xl:` দিয়ে ঘেরা।
+   */
   const [collapsed, setCollapsed] = useState(false);
+
+  /**
+   * নিচের দিকে হালকা fade — কেবল তখনই, যখন সত্যিই আরও item নিচে আছে।
+   *
+   * scrollbar লুকানো (নকশার দাবি), ফলে তালিকা যেখানে শেষ হয় সেখানে
+   * কার্ডটা একটা item-এর মাঝখানে হঠাৎ কেটে যায় আর দেখে মনে হয় কিছু
+   * ভেঙে গেছে — নিচে যে আরও আছে তার কোনো ইঙ্গিতই থাকে না।
+   *
+   * শর্তসাপেক্ষ হওয়াটা জরুরি: একেবারে নিচে পৌঁছে গেলেও fade থেকে গেলে
+   * সেটা উল্টো মিথ্যে বলত ("আরও আছে"), আর ব্যবহারকারী অকারণে scroll
+   * করতে থাকতেন।
+   */
+  const scrollRef = useRef<HTMLElement>(null);
+  const [showFade, setShowFade] = useState(false);
+
+  const updateFade = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // ১px-এর ছাড় — browser গুলো ভগ্নাংশ পিক্সেলে scrollTop রাখে, তাই
+    // ঠিক সমান কখনোই মেলে না আর "নিচে পৌঁছেছি" অবস্থাটা ধরা পড়ত না।
+    const scrollable = el.scrollHeight > el.clientHeight + 1;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    setShowFade(scrollable && !atBottom);
+  }, []);
+
+  // collapsed বদলালে তালিকার উচ্চতাও বদলায় (label লুকিয়ে গেলে item
+  // সরু হয় না, কিন্তু heading গুলো বিভাজক হয়ে যায়) — তাই সেটাও
+  // নির্ভরতা। sections বদলানো মানে ভিন্ন role, ভিন্ন দৈর্ঘ্য।
+  useEffect(() => {
+    updateFade();
+  }, [updateFade, collapsed, sections]);
+
+  useEffect(() => {
+    window.addEventListener("resize", updateFade);
+    return () => window.removeEventListener("resize", updateFade);
+  }, [updateFade]);
 
   /**
    * Collapsed অবস্থায় label লুকিয়ে যায়, তাই `title` — icon-এর উপর
@@ -272,6 +319,8 @@ export default function AdminSidebar({
 
   return (
     <aside
+      ref={scrollRef}
+      onScroll={updateFade}
       /**
        * ২০টা nav item ৪৮px করে — কোনো সাধারণ পর্দাতেই পুরোটা আঁটে না।
        * আগে শুধু <nav>-টা scroll করত আর System দলটা পায়ে আটকানো ছিল,
@@ -282,9 +331,25 @@ export default function AdminSidebar({
        * উচ্চতায় থাকে, System দলটা তালিকার শেষেই বসে (Figma-তেও তাই), আর
        * scrollbar-এর chrome লুকানো — auth page গুলোতে একই কায়দা।
        */
-      className={`sticky top-4 flex max-h-[calc(100vh-2rem)] shrink-0 flex-col self-start overflow-y-auto rounded-[24px] bg-white transition-[width] duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-        collapsed ? "w-[72px]" : "w-64"
-      }`}
+      /**
+       * একই DOM node, দুটো সম্পূর্ণ আলাদা আচরণ:
+       *
+       * lg ও তার উপরে — page-এর সাথে বয়ে চলা কলাম (sticky), ৩০px নিচে
+       * আটকানো। collapse toggle এখানেই অর্থবহ।
+       *
+       * xl-এর নিচে — বাঁ দিক থেকে বেরিয়ে আসা drawer (fixed, পূর্ণ
+       * উচ্চতা)। ৩৬০px চওড়া ফোনে ২৫৬px sidebar স্থায়ীভাবে রাখলে
+       * বিষয়বস্তুর জন্য ১০০px পড়ে থাকত।
+       *
+       * বন্ধ অবস্থায় translate দিয়ে সরানো, `hidden` দিয়ে নয় — তাতে
+       * দুই দিকেই animation থাকে। কিন্তু শুধু translate যথেষ্ট নয়:
+       * সরিয়ে রাখা জিনিসও keyboard-এর নাগালে থেকে যায়, তাই
+       * `invisible`-ও লাগে, নাহলে বন্ধ drawer-এর ১৭টা link-এ Tab করে
+       * পৌঁছানো যেত অথচ পর্দায় কিছুই দেখা যেত না।
+       */
+      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] xl:visible xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[24px] [&::-webkit-scrollbar]:hidden ${
+        mobileOpen ? "translate-x-0" : "invisible -translate-x-full"
+      } ${collapsed ? "xl:w-[72px]" : "xl:w-64"}`}
     >
       {/* User card — Figma-তে sidebar-এর মাথায়। topbar-এও নাম/email আছে
           ঠিকই, কিন্তু ওটা সরু হলে (md-এর নিচে) লুকিয়ে যায়, তাই এখানে
@@ -302,15 +367,29 @@ export default function AdminSidebar({
             </div>
           )}
 
+          {/* একই কোণে দুটো ভিন্ন বোতাম, breakpoint অনুযায়ী।
+              Desktop-এ collapse করার কোনো মানে হয়, mobile-এ হয় না
+              (ওখানে drawer হয় খোলা, নয় বন্ধ) — সেখানে দরকার বন্ধ
+              করার উপায়, নাহলে backdrop-এ tap করা ছাড়া উপায় থাকে না
+              আর সেটা আবিষ্কার করতে হয়। */}
           <button
             type="button"
             onClick={() => setCollapsed((prev) => !prev)}
             aria-expanded={!collapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+            className="hidden shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:block"
           >
             <PanelLeft className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:hidden"
+          >
+            <X className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -367,6 +446,16 @@ export default function AdminSidebar({
           </Link>
         )}
       </div>
+
+      {/* sticky, absolute নয় — absolute হলে এটা বিষয়বস্তুর সাথে গড়িয়ে
+          উপরে উঠে যেত। -mt-12 দিয়ে উচ্চতাটা কেটে দেওয়া হয়, তাই এটা
+          কোনো বাড়তি জায়গা নেয় না, শুধু শেষ item-এর উপর ছায়া ফেলে। */}
+      {showFade && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none sticky bottom-0 -mt-12 h-12 shrink-0 rounded-b-[24px] bg-gradient-to-t from-white via-white/80 to-transparent"
+        />
+      )}
     </aside>
   );
 }

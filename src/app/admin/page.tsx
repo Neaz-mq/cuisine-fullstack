@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Calendar, ClipboardCheck, ClipboardList, LoaderCircle } from "lucide-react";
+import {
+  AlarmClock,
+  Calendar,
+  CircleAlert,
+  ClipboardCheck,
+  ClipboardList,
+  LoaderCircle,
+  NotepadText,
+  TriangleAlert,
+} from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
@@ -369,15 +378,33 @@ export default async function AdminDashboardPage({
       .filter((id) => outOfStockIds.has(id))
   ).size;
 
+  // Figma-তে প্রতিটা কার্ডের ডান কোণে একটা icon — তীব্রতা অনুযায়ী
+  // বেছে নেওয়া: নোটবই → সতর্কবার্তা → ত্রিভুজ → ঘড়ি।
   const inventoryStats = [
     {
       label: "Total Items",
       value: inventoryItems.length,
       hint: "Active ingredients tracked",
+      icon: NotepadText,
     },
-    { label: "Low Stock", value: lowStockCount, hint: "At or below reorder level" },
-    { label: "Out of Stock", value: outOfStockIds.size, hint: "Blocking menu items" },
-    { label: "Emergency", value: emergencyCount, hint: "Needed for today's orders" },
+    {
+      label: "Low Stock",
+      value: lowStockCount,
+      hint: "At or below reorder level",
+      icon: CircleAlert,
+    },
+    {
+      label: "Out of Stock",
+      value: outOfStockIds.size,
+      hint: "Blocking menu items",
+      icon: TriangleAlert,
+    },
+    {
+      label: "Emergency",
+      value: emergencyCount,
+      hint: "Needed for today's orders",
+      icon: AlarmClock,
+    },
   ];
 
   const totalPages = Math.max(1, Math.ceil(listTotal / ORDERS_PER_PAGE));
@@ -555,9 +582,16 @@ export default async function AdminDashboardPage({
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {inventoryStats.map((item) => (
             <div key={item.label} className="rounded-[16px] bg-[#F9F6F3] p-4">
-              <h3 className="font-frank-ruhl text-[18px] font-semibold text-[#121212]">
-                {item.label}
-              </h3>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-frank-ruhl text-[18px] font-semibold text-[#121212]">
+                  {item.label}
+                </h3>
+                <item.icon
+                  className="h-[18px] w-[18px] shrink-0 text-gray-500"
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+              </div>
               <p className="mt-3 font-frank-ruhl text-[26px] font-bold leading-none text-[#121212]">
                 {item.value}
               </p>
@@ -606,7 +640,7 @@ export default async function AdminDashboardPage({
                   <span className="w-4 shrink-0 font-sora text-[13px] text-gray-400">
                     {index + 1}
                   </span>
-                  <span className="w-28 shrink-0 font-sora text-[14px] leading-tight text-[#121212]">
+                  <span className="w-20 shrink-0 font-sora text-[13px] leading-tight text-[#121212] sm:w-28 sm:text-[14px]">
                     {item.title}
                   </span>
 

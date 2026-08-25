@@ -2,12 +2,13 @@ import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { getScopesForRole, panelLabel, type Scope } from "@/lib/permissions";
 import NotificationBell from "./NotificationBell";
-import AdminTopbar, { type PanelLink } from "@/components/admin/AdminTopbar";
-import AdminSidebar, {
+import { type PanelLink } from "@/components/admin/AdminTopbar";
+import {
   type NavIcon,
   type SidebarItem,
   type SidebarSection,
 } from "@/components/admin/AdminSidebar";
+import AdminShell from "@/components/admin/AdminShell";
 
 type NavDef = {
   label: string;
@@ -219,30 +220,29 @@ export default async function AdminLayout({
   const displayName = session.user.name || panelLabel(role);
 
   return (
-    <div className="min-h-screen bg-[#F9F6F3] p-3 md:p-4">
-      {/* Topbar পুরো প্রস্থ জুড়ে, sidebar-এর উপরে — Figma design অনুযায়ী।
-          আগে logo/email/bell sidebar-এর মাথায় ছিল; সেগুলো এখানে উঠে
-          এসেছে, তাই sidebar-এ শুধু navigation থাকে। */}
-      <AdminTopbar
+    /**
+     * এই server component-এর কাজ শুধু data জোগাড় করা — কে কী দেখতে
+     * পাবে (scope), badge-এর সংখ্যা, কোন bell। পর্দার গঠন আর
+     * mobile drawer-এর state AdminShell-এর দায়িত্ব, কারণ সেগুলোর
+     * জন্য useState/usePathname লাগে আর সেটা server-এ সম্ভব নয়।
+     *
+     * বাইরের div-টা পুরো প্রস্থে background ধরে রাখে; ভেতরে shell
+     * নিজেই ১৭৬০-এ থেমে মাঝখানে বসে।
+     */
+    <div className="min-h-screen bg-[#F9F6F3]">
+      <AdminShell
         name={displayName}
         email={session.user.email ?? ""}
         role={role ?? ""}
         image={session.user.image}
         panels={panels}
         navItems={searchableNavItems}
+        sections={sections}
+        settingsItem={settingsItem}
         notificationSlot={notificationBell}
-      />
-
-      <div className="mt-3 flex gap-3 md:mt-4 md:gap-4">
-        <AdminSidebar
-          name={displayName}
-          email={session.user.email ?? ""}
-          sections={sections}
-          settingsItem={settingsItem}
-        />
-
-        <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
-      </div>
+      >
+        {children}
+      </AdminShell>
     </div>
   );
 }

@@ -46,6 +46,8 @@ interface AdminTopbarProps {
    * বসানোর জায়গা — এই component-কে permission নিয়ে ভাবতে হয় না।
    */
   notificationSlot?: React.ReactNode;
+  /** xl-এর নিচে nav drawer খোলে — AdminShell থেকে। */
+  onMenuClick?: () => void;
 }
 
 /**
@@ -113,6 +115,7 @@ export default function AdminTopbar({
   panels = [],
   navItems = EMPTY_NAV,
   notificationSlot,
+  onMenuClick,
 }: AdminTopbarProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -246,9 +249,28 @@ export default function AdminTopbar({
   const showResults = searchOpen && query.trim().length > 0;
 
   return (
-    <header className="bg-white rounded-[24px] px-4 md:px-6 h-[72px] flex items-center gap-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <header className="bg-white rounded-[100px] px-3 sm:px-4 md:px-6 h-[72px] flex items-center gap-2 sm:gap-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      {/* Hamburger — শুধু xl-এর নিচে, যেখানে sidebar drawer হয়ে যায়।
+          Desktop-এ sidebar এমনিতেই দৃশ্যমান, তাই সেখানে এটা কেবল
+          বিভ্রান্তি বাড়াত। */}
+      <button
+        type="button"
+        onClick={onMenuClick}
+        aria-label="Open menu"
+        className="shrink-0 rounded-lg p-2 text-black/60 transition-colors hover:bg-black/5 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:hidden"
+      >
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 7h16M4 12h16M4 17h16"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+
       {/* Logo — sidebar-এ আলাদা করে নেই, তাই brand mark এখানেই */}
-      <Link href="/admin" className="flex items-center gap-2 shrink-0">
+      <Link href="/admin" className="hidden sm:flex items-center gap-2 shrink-0">
         <Image
           src="/logo.svg"
           alt=""
