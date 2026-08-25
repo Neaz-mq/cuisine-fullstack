@@ -17,6 +17,11 @@ import { toast } from "react-toastify";
  * oversight — worth revisiting if this gets used often enough that
  * re-generating every visit feels wasteful.
  */
+
+/** Figma-র Primary gradient — sidebar-এর active item আর dashboard-এর
+ *  Total Revenue কার্ডে ঠিক এই দুটো stop-ই ব্যবহার হয়। */
+const GRADIENT = "bg-gradient-to-r from-[#FF9540] to-[#FF70C6]";
+
 export default function BusinessSummaryCard() {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +32,11 @@ export default function BusinessSummaryCard() {
       const res = await fetch("/api/admin/insights/summary", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? "Couldn't generate a summary right now.");
+        // model বন্ধ হয়ে যাওয়ার বার্তাটা লম্বা আর নির্দিষ্ট, তাই সেটা
+        // যেন কাটা না পড়ে — toast-টা বেশিক্ষণ থাকে।
+        toast.error(data.error ?? "Couldn't generate a summary right now.", {
+          autoClose: res.status === 503 ? 10000 : undefined,
+        });
         return;
       }
       setSummary(data.summary);
@@ -39,37 +48,37 @@ export default function BusinessSummaryCard() {
   }
 
   return (
-    <div className="border border-gray-200 rounded-md p-5 bg-white mb-8">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-[#2C6252]" />
+    <div className="rounded-[20px] bg-white p-5 md:p-6">
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="flex items-center gap-1.5 font-sora text-[12px] font-semibold uppercase tracking-wide text-gray-500">
+          <Sparkles className="h-4 w-4 text-[#FF9540]" aria-hidden="true" />
           AI Business Summary
         </h3>
         {summary && (
           <button
             onClick={handleGenerate}
             disabled={loading}
-            className="text-xs text-[#2C6252] font-medium hover:underline flex items-center gap-1 disabled:opacity-50"
+            className="flex items-center gap-1 font-sora text-[12px] font-medium text-[#FF4C15] hover:underline disabled:opacity-50"
           >
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
             Regenerate
           </button>
         )}
       </div>
 
       {!summary ? (
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-sm text-gray-400">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="font-sora text-[14px] text-gray-400">
             Get a plain-English summary of this week&apos;s performance.
           </p>
           <button
             onClick={handleGenerate}
             disabled={loading}
-            className="shrink-0 bg-[#2C6252] text-white text-sm font-semibold px-4 py-2 rounded-md hover:bg-[#234f42] transition-colors disabled:opacity-50 flex items-center gap-2"
+            className={`flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 font-sora text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 ${GRADIENT}`}
           >
             {loading ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Generating…
               </>
             ) : (
@@ -78,7 +87,7 @@ export default function BusinessSummaryCard() {
           </button>
         </div>
       ) : (
-        <p className="text-sm text-gray-700 leading-relaxed mt-3">{summary}</p>
+        <p className="mt-3 font-sora text-[14px] leading-relaxed text-gray-700">{summary}</p>
       )}
     </div>
   );

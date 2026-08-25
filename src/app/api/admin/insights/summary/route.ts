@@ -127,6 +127,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary });
   } catch (error) {
     console.error("POST /api/admin/insights/summary error:", error);
+
+    /**
+     * Groq প্রতি কয়েক মাসেই পুরোনো model বন্ধ করে দেয় (llama-3.3-70b
+     * বন্ধ হয়েছে ১৬ আগস্ট ২০২৬-এ)। তখন প্রতিটা call 400
+     * `model_decommissioned` দিয়ে ফেরে — কিন্তু নিচের সাধারণ বার্তাটা
+     * সেটাকে "পরে চেষ্টা করুন" বানিয়ে দিত, অথচ পরে চেষ্টা করে কোনোদিনই
+     * কাজ হতো না। এখন কারণটা সরাসরি বলা হয়, কারণ এই endpoint শুধু
+     * insights-scope থাকা admin-ই ছুঁতে পারে — অর্থাৎ যিনি দেখবেন
+     * তিনিই ঠিক করার লোক।
+     *
+     * duck-typing দিয়ে দেখা হচ্ছে, groq-sdk-এর APIError class import
+     * করে নয়: এতে SDK-র version বদলালেও এই শর্তটা ভাঙে না।
+     */
+    const groqError =
+      error && typeof error === "object" && "error" in error
+        ? (error as { error?: { error?: { code?: string } } }).error?.error
+        : undefined;
+
+    if (groqError?.code === "model_decommissioned") {
+      return NextResponse.json(
+        {
+          error:
+            "The AI model this app uses has been retired by Groq. " +
+            "Update GROQ_MODEL (or the default in lib/business-summary.ts) to a current model.",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Couldn't generate a summary right now. Please try again shortly." },
       { status: 500 }

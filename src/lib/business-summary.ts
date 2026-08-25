@@ -26,11 +26,20 @@ export type WeeklySummaryStats = {
   currency: string;
 };
 
-// llama-3.3-70b-versatile is Groq's general-purpose model — free tier as
-// of writing, good enough quality for "narrate these numbers in plain
-// English," and fast (this runs synchronously behind a button click, not
-// a background job). Swap here if Groq's free-tier lineup changes.
-const MODEL = "llama-3.3-70b-versatile";
+/**
+ * আগে এখানে `llama-3.3-70b-versatile` ছিল। Groq ১৭ জুন ২০২৬-এ ওটার
+ * deprecation ঘোষণা করে এবং **১৬ আগস্ট ২০২৬**-এ বন্ধ করে দেয়; তারপর
+ * থেকে প্রতিটা call 400 `model_decommissioned` দিয়ে ফিরছিল, যেটা
+ * route-এর catch-এ গিয়ে "Couldn't generate a summary right now" হয়ে
+ * দেখা দিত। Groq-এর প্রস্তাবিত বিকল্পই এখানে বসানো হলো।
+ * তালিকা: https://console.groq.com/docs/deprecations
+ *
+ * env var দিয়ে বদলানো যায়, কারণ এটা তৃতীয়বার ঘটল — Groq প্রতি কয়েক
+ * মাসেই lineup বদলায়। পরেরবার model বন্ধ হলে `GROQ_MODEL` সেট করেই
+ * চালু রাখা যাবে, deploy-এর অপেক্ষা না করে। সেট না থাকলে নিচের
+ * ডিফল্টটাই চলে, তাই .env-এ কিছু না দিলেও কাজ করে।
+ */
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 function pctChange(current: Money | number, previous: Money | number): string {
   const now = toMoney(current);
@@ -58,7 +67,21 @@ export async function generateWeeklySummary(stats: WeeklySummaryStats): Promise<
   const completion = await getGroqClient().chat.completions.create({
     model: MODEL,
     temperature: 0.4,
-    max_tokens: 220,
+    /**
+     * ⚠️ gpt-oss একটা reasoning model, আর তার ভাবনার token গুলোও এই
+     * বাজেটের ভেতরেই গোনা হয়। আগের `max_tokens: 220` রেখে দিলে পুরোটা
+     * ভাবনাতেই খরচ হয়ে যেত আর content ফাঁকা আসত — অর্থাৎ নিচের
+     * "empty response" error, যেটা দেখতে ঠিক decommission-এর মতোই।
+     * তাই বাজেট বাড়ানো, আর ভাবনা কম রাখতে reasoning_effort কমানো।
+     *
+     * `max_tokens` নয়, `max_completion_tokens` — Groq প্রথমটাকে
+     * deprecated ধরে (OpenAI-র API-র সাথে মেলাতে)।
+     */
+    max_completion_tokens: 1200,
+    // কাজটা সহজ: দেওয়া সংখ্যা গুলো দুই-চার বাক্যে বলা। এর জন্য গভীর
+    // ভাবনার দরকার নেই, আর button-এর পেছনে বসে থাকা মানুষটার কাছে
+    // দ্রুত উত্তরটাই বেশি জরুরি।
+    reasoning_effort: "low",
     messages: [
       {
         role: "system",
@@ -83,7 +106,10 @@ export async function generateWeeklySummary(stats: WeeklySummaryStats): Promise<
 
   const text = completion.choices[0]?.message?.content?.trim();
   if (!text) {
-    throw new Error("Groq returned an empty response");
+    // model-এর নামটা বার্তায় রাখা হলো, কারণ এই ব্যর্থতাটা প্রায়
+    // সবসময়ই model বদলের পর ঘটে — server log-এ নামটা থাকলে কারণ
+    // খুঁজতে এক ধাপ কম লাগে।
+    throw new Error(`Groq returned an empty response (model: ${MODEL})`);
   }
   return text;
 }
