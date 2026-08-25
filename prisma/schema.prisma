@@ -265,7 +265,12 @@ model Order {
   // ISO 4217. Stored per order because a restaurant that changes currency
   // (or a future multi-branch deployment) must not retroactively relabel
   // historical invoices.
-  currency String @default("BDT")
+  //
+  // ⚠️ এই default-টা কেবল সেই ক্ষেত্রে কাজে লাগে যখন order তৈরির কোড
+  // currency না পাঠিয়ে row বানায় — বাস্তবে সেটা হয় না, checkout সবসময়
+  // RestaurantSettings থেকে নিয়ে বসায়। তাই এটা বদলানো মানে নিছক
+  // "fresh install কী ধরে নেবে" বদলানো, চলমান কোনো হিসাব নয়।
+  currency String @default("USD")
 
   // How many decimals this order's currency has — snapshotted for exactly
   // the same reason as `currency` itself.
@@ -956,13 +961,14 @@ model RestaurantSettings {
   // them. The owner picks these once during setup; lib/pricing.ts is the
   // only consumer.
   //
-  // The defaults describe a Bangladeshi non-AC restaurant (5% VAT added on
-  // top of menu prices, no service charge, tipping off) purely because a
-  // fresh install has to boot with SOMETHING. They carry no other meaning.
+  // A fresh install boots in USD with 5% tax added on top of menu prices,
+  // no service charge and tipping off — purely because it has to boot with
+  // SOMETHING. These carry no other meaning, and every one of them is
+  // editable at /admin/settings.
   // -------------------------------------------------------------------------
 
-  // ISO 4217, e.g. "BDT", "USD", "EUR", "JPY", "KWD".
-  currency String @default("BDT")
+  // ISO 4217, e.g. "USD", "BDT", "EUR", "JPY", "KWD".
+  currency String @default("USD")
 
   // How many decimal places this currency subdivides into: 0 for JPY, KRW
   // and VND (there are no sen), 2 for most, 3 for KWD, BHD and OMR.

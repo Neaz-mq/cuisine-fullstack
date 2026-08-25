@@ -2,7 +2,7 @@ import { getResendClient, EMAIL_FROM } from "@/lib/resend";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { type Money, toMoney } from "@/lib/money";
-import { formatAmount } from "@/lib/currency-format";
+import { formatAmountWithCode } from "@/lib/currency-format";
 
 const SHIPPING_LABELS: Record<string, string> = {
   UBER_EATS: "Uber Eats",
@@ -72,7 +72,11 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
     // এই order-এর নিজের currency অনুযায়ী, আজকের settings অনুযায়ী নয় —
     // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে পাঠানো ভুল হতো।
     const units = order.currencyMinorUnits;
-    const money = (value: Money) => formatAmount(value.toFixed(units), order.currency);
+    // ⚠️ formatAmount() নয় — ওটা এখন "$19.93" দেখায়, যেটা পর্দার জন্য
+    // ঠিক কিন্তু রসিদের জন্য নয়। গ্রাহক ছ'মাস পর mail ঘেঁটে "$" দেখলে
+    // সেটা কোন ডলার ছিল বোঝার উপায় থাকে না, বিশেষত এই app-এ যেখানে
+    // দোকান মাঝপথে currency বদলাতে পারে। রসিদে ISO কোডই থাকে।
+    const money = (value: Money) => formatAmountWithCode(value.toFixed(units), order.currency);
     const optionalMoney = (value: Money) => (value.greaterThan(0) ? money(value) : null);
 
     await getResendClient().emails.send({

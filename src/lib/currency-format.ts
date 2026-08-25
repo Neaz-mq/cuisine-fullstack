@@ -78,11 +78,53 @@ export function defaultMinorUnitsFor(currency: string): number {
 }
 
 /**
- * "BDT 105.00", "JPY 1200", "KWD 12.345"।
+ * পর্দায় দেখানোর চিহ্ন।
  *
- * চিহ্ন (৳, ¥, $) নয়, ISO কোড ব্যবহার করা হয় ইচ্ছাকৃতভাবে: চিহ্নগুলো
- * দ্ব্যর্থক ($ কোন ডলার?) আর অনেক font-এ অনুপস্থিত, অথচ কোডটা সব
- * জায়গায় একই অর্থ বহন করে। চালানে দ্ব্যর্থতা সবচেয়ে ব্যয়বহুল।
+ * আগে এই ফাইল সব জায়গায় ISO কোড দেখাত, আর তার যুক্তি ছিল: চিহ্নগুলো
+ * দ্ব্যর্থক ($ কোন ডলার?) আর অনেক font-এ অনুপস্থিত। যুক্তিটা এখনো
+ * সত্যি — তাই সেটা ফেলে দেওয়া হয়নি, ভাগ করা হয়েছে:
+ *
+ *   • পর্দায় (dashboard, তালিকা, checkout) চিহ্ন — design এটাই চায়,
+ *     আর সেখানে গ্রাহক জানেনই কোন দোকানে আছেন।
+ *   • চালান/email-এ ISO কোড — formatAmountWithCode() দ্রষ্টব্য।
+ *
+ * দ্ব্যর্থতার সমস্যাটা এখানে ডলারের ভাইদের আলাদা চিহ্ন দিয়ে সামলানো
+ * হয়েছে: শুধু USD-ই খালি "$", বাকিরা "CA$", "A$", "S$"। একইভাবে
+ * CNY "CN¥", কারণ ¥ একা লিখলে JPY না CNY বোঝা যায় না।
+ *
+ * যে currency-র ভালো চিহ্ন নেই বা font-এ ঠিকমতো আসে না (AED, SAR,
+ * KWD, BHD, OMR) সেগুলো তালিকার বাইরে — তাদের ক্ষেত্রে ISO কোডই দেখানো
+ * হয়, যেটা পড়া না-যাওয়া চিহ্নের চেয়ে ঢের ভালো।
+ */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  BDT: "৳",
+  EUR: "€",
+  GBP: "£",
+  INR: "₹",
+  PKR: "₨",
+  THB: "฿",
+  MYR: "RM",
+  JPY: "¥",
+  CNY: "CN¥",
+  KRW: "₩",
+  VND: "₫",
+  AUD: "A$",
+  CAD: "CA$",
+  SGD: "S$",
+};
+
+/** এই currency-র চিহ্ন, নাকি null যদি কোড দেখানোই ভালো হয়। */
+export function symbolFor(currency: string): string | null {
+  return CURRENCY_SYMBOLS[currency?.toUpperCase()] ?? null;
+}
+
+/**
+ * "$300.00", "৳105.00", "¥1200", "KWD 12.345"।
+ *
+ * চিহ্ন জানা থাকলে চিহ্ন (ফাঁক ছাড়া, design যেমন দেখায়), নাহলে ISO
+ * কোড আর একটা ফাঁক। চালান বা email-এর জন্য formatAmountWithCode()
+ * ব্যবহার করতে হবে — সেখানে কোডটাই থাকা দরকার।
  */
 export function formatAmount(
   value: string | number,
@@ -99,6 +141,30 @@ export function formatAmount(
    * দাম নয় — হিসাবের হার, আর হারের নির্ভুলতা মুদ্রার নির্ভুলতার চেয়ে
    * বেশি হতে পারে।
    */
+  decimalPlaces?: number
+): string {
+  const units = decimalPlaces ?? defaultMinorUnitsFor(currency);
+  const asNumber = typeof value === "number" ? value : parseFloat(value);
+
+  if (!Number.isFinite(asNumber)) return `${currency} ${value}`;
+
+  const symbol = symbolFor(currency);
+  return symbol
+    ? `${symbol}${asNumber.toFixed(units)}`
+    : `${currency} ${asNumber.toFixed(units)}`;
+}
+
+/**
+ * সবসময় ISO কোড: "USD 300.00", "BDT 105.00"।
+ *
+ * চালান, রসিদ আর email-এর জন্য। একজন গ্রাহক ছ'মাস পর নিজের mail ঘেঁটে
+ * "$19.93" দেখলে সেটা কোন ডলার ছিল বোঝার উপায় থাকে না — বিশেষত এই
+ * app-এ, যেখানে দোকান মাঝপথে currency বদলাতে পারে আর পুরোনো order
+ * নিজের currency নিয়েই থেকে যায়। কোডটা সেই প্রশ্নটাই উঠতে দেয় না।
+ */
+export function formatAmountWithCode(
+  value: string | number,
+  currency: string,
   decimalPlaces?: number
 ): string {
   const units = decimalPlaces ?? defaultMinorUnitsFor(currency);

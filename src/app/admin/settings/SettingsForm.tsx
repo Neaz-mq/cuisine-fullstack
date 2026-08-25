@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useTransition } from "react";
+// currency-format.ts ইচ্ছাকৃতভাবে Prisma-মুক্ত, তাই client component-এও
+// import করা নিরাপদ — ওই ফাইলের header-এ কারণটা লেখা আছে।
+import { formatAmount } from "@/lib/currency-format";
 
 const TIMEZONES = [
   "Asia/Dhaka",
@@ -235,7 +238,11 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
     });
   }
 
-  const money = (value: string) => `${form.currency} ${value}`;
+  // আগে এখানে হাতে লেখা `${form.currency} ${value}` ছিল, ফলে preview-টা
+  // "BDT 105.00" দেখাত অথচ আসল পর্দাগুলো "৳105.00"। preview-র পুরো
+  // উদ্দেশ্যই "গ্রাহক যা দেখবেন" — তাই একই function ব্যবহার করা হলো।
+  const money = (value: string) =>
+    formatAmount(value, form.currency, form.currencyMinorUnits);
   const line = preview ? preview[previewType] : null;
 
   return (
@@ -537,7 +544,7 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
           <div>
             <h2 className="text-sm font-semibold text-gray-800">What a customer would see</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              A sample order of 2 × {form.currency} 50, priced by the same code that prices real
+              A sample order of 2 × {money("50")}, priced by the same code that prices real
               orders.
             </p>
           </div>
