@@ -183,6 +183,8 @@ interface AdminSidebarProps {
   /** xl-এর নিচে drawer খোলা কিনা — AdminShell থেকে। */
   mobileOpen?: boolean;
   onClose?: () => void;
+  /** যেকোনো nav link চাপলে — drawer বন্ধ করার জন্য। */
+  onNavigate?: () => void;
 }
 
 /**
@@ -204,6 +206,7 @@ export default function AdminSidebar({
   settingsItem,
   mobileOpen = false,
   onClose,
+  onNavigate,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   /**
@@ -225,6 +228,7 @@ export default function AdminSidebar({
    * করতে থাকতেন।
    */
   const scrollRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
   const [showFade, setShowFade] = useState(false);
 
   const updateFade = useCallback(() => {
@@ -237,16 +241,36 @@ export default function AdminSidebar({
     setShowFade(scrollable && !atBottom);
   }, []);
 
-  // collapsed বদলালে তালিকার উচ্চতাও বদলায় (label লুকিয়ে গেলে item
-  // সরু হয় না, কিন্তু heading গুলো বিভাজক হয়ে যায়) — তাই সেটাও
-  // নির্ভরতা। sections বদলানো মানে ভিন্ন role, ভিন্ন দৈর্ঘ্য।
+  /**
+   * ResizeObserver, কারণ fade-টা DOM মেপে ঠিক হয় — render-এর সময়
+   * scrollHeight জানা সম্ভব নয়, তাই এটা derive করা যায় না।
+   *
+   * দুটো জিনিস মাপা হয়, কারণ দুটো আলাদা কারণে বদলায়:
+   *   • aside নিজে — জানালার উচ্চতা বদলালে (clientHeight)
+   *   • ভেতরের nav — collapse করলে heading গুলো বিভাজক হয়ে যায় আর
+   *     তালিকা খাটো হয় (scrollHeight)
+   *
+   * শুধু aside দেখলে দ্বিতীয়টা ধরা পড়ত না: collapse করলে তার নিজের
+   * মাপ একই থাকে, বদলায় কেবল ভেতরের বিষয়বস্তু।
+   *
+   * এটা আগের দুটো effect-এর জায়গা নিয়েছে (একটা mount-এ মেপে নিত,
+   * আরেকটা window resize শুনত)। তিনটে লাভ: ResizeObserver পর্যবেক্ষণ
+   * শুরু করার সাথে সাথেই একবার নিজে থেকে চলে, তাই প্রথম মাপটা এমনিতেই
+   * হয়ে যায়; collapsed/sections কে নির্ভরতা হিসেবে লেখার দরকার নেই
+   * (মাপই সত্য, অনুমান নয়); আর setState observer-এর callback-এ যায়,
+   * effect-এর শরীরে নয় — react-hooks/set-state-in-effect ঠিক সেটাই
+   * ধরেছিল, আর সেটা নিছক নিয়ম নয়: effect-এ setState মানে প্রতিবার
+   * একটা বাড়তি render pass।
+   */
   useEffect(() => {
-    updateFade();
-  }, [updateFade, collapsed, sections]);
+    const aside = scrollRef.current;
+    const content = contentRef.current;
+    if (!aside || !content) return;
 
-  useEffect(() => {
-    window.addEventListener("resize", updateFade);
-    return () => window.removeEventListener("resize", updateFade);
+    const observer = new ResizeObserver(updateFade);
+    observer.observe(aside);
+    observer.observe(content);
+    return () => observer.disconnect();
   }, [updateFade]);
 
   /**
@@ -264,6 +288,10 @@ export default function AdminSidebar({
       <Link
         key={item.href}
         href={item.href}
+        // Drawer অবস্থায় link চাপার পর সেটা খোলা থেকে গেলে নতুন
+        // page-টা তার পেছনে load হতো। desktop-এ onNavigate পাঠানোই
+        // হয় না, তাই সেখানে এটা কিছুই করে না।
+        onClick={onNavigate}
         title={titleFor(item.label)}
         aria-current={active ? "page" : undefined}
         className={`${ITEM_BASE} ${
@@ -394,7 +422,7 @@ export default function AdminSidebar({
         </div>
       </div>
 
-      <nav className="px-3 py-3">
+      <nav ref={contentRef} className="px-3 py-3">
         {sections.map((section) => (
           <div key={section.heading} className="mb-3 last:mb-0">
             {/* collapsed-এ heading-এর বদলে একটা সরু বিভাজক — গোষ্ঠীর
@@ -440,6 +468,7 @@ export default function AdminSidebar({
         {!collapsed && (
           <Link
             href="/"
+            onClick={onNavigate}
             className="flex items-center gap-2 rounded-[12px] px-3 py-2.5 font-sora text-[13px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             ← Back to site

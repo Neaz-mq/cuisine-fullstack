@@ -50,24 +50,32 @@ export default function AdminShell({
   notificationSlot?: ReactNode;
   children: ReactNode;
 }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
   /**
-   * পাতা বদলালে drawer নিজে থেকে বন্ধ হয়।
+   * "drawer কোন পাতায় খোলা হয়েছিল" — খোলা/বন্ধ boolean নয়।
    *
-   * এটা না থাকলে mobile-এ একটা link চাপার পর নতুন page-টা drawer-এর
-   * পেছনে load হতো আর ব্যবহারকারীকে হাত দিয়ে বন্ধ করতে হতো — প্রতিবার।
+   * এতে "পাতা বদলালে drawer বন্ধ হবে" নিয়মটা আলাদা করে লিখতেই হয় না,
+   * এমনিতেই বেরিয়ে আসে: pathname বদলালে openPath আর মেলে না, তাই
+   * mobileOpen নিজে থেকেই false।
+   *
+   * আগে এটা একটা useEffect ছিল যেটা pathname বদলালে setMobileOpen(false)
+   * ডাকত। কাজ করত, কিন্তু ভুল কাঠামো — আর CI-এর
+   * react-hooks/set-state-in-effect ঠিক সেটাই ধরেছে: effect-এর শরীরে
+   * setState মানে প্রতিটা navigation-এ বাড়তি একটা render pass, শুধু
+   * এমন একটা তথ্য ঠিক করতে যেটা ইতিমধ্যেই render-এর সময় জানা।
    */
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const mobileOpen = openPath !== null && openPath === pathname;
+
+  const openDrawer = () => setOpenPath(pathname);
+  const closeDrawer = () => setOpenPath(null);
 
   /** Escape — যেকোনো overlay-র জন্য প্রত্যাশিত আচরণ। */
   useEffect(() => {
     if (!mobileOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Escape") setOpenPath(null);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -103,7 +111,7 @@ export default function AdminShell({
         panels={panels}
         navItems={navItems}
         notificationSlot={notificationSlot}
-        onMenuClick={() => setMobileOpen(true)}
+        onMenuClick={openDrawer}
       />
 
       <div className="flex gap-[10px]">
@@ -113,7 +121,7 @@ export default function AdminShell({
         {mobileOpen && (
           <div
             className="fixed inset-0 z-40 bg-black/40 xl:hidden"
-            onClick={() => setMobileOpen(false)}
+            onClick={closeDrawer}
             aria-hidden="true"
           />
         )}
@@ -124,7 +132,10 @@ export default function AdminShell({
           sections={sections}
           settingsItem={settingsItem}
           mobileOpen={mobileOpen}
-          onClose={() => setMobileOpen(false)}
+          onClose={closeDrawer}
+          // একই পাতার link চাপলে pathname বদলায় না, তাই উপরের
+          // derivation-টা drawer বন্ধ করে না। সেই ফাঁকটা এখানে বন্ধ।
+          onNavigate={closeDrawer}
         />
 
         <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
