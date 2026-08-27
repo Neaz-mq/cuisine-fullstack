@@ -6,7 +6,7 @@ import {
   CircleAlert,
   ClipboardCheck,
   ClipboardList,
-  LoaderCircle,
+  LoaderPinwheel,
   NotepadText,
   TriangleAlert,
 } from "lucide-react";
@@ -243,7 +243,11 @@ export default async function AdminDashboardPage({
     {
       label: "In Progress",
       value: pendingOrders,
-      icon: LoaderCircle,
+      // Figma-র ঘুরন্ত/কেন্দ্রমুখী চিহ্ন — lucide-এর LoaderCircle একটা
+      // নিছক ভাঙা বৃত্ত, যেটা "কিছু একটা চলছে" বোঝায় না, দেখতে
+      // অসম্পূর্ণ লাগে। LoaderPinwheel-এর কেন্দ্রমুখী পাপড়িগুলো
+      // মকআপের সমকেন্দ্রিক বলয়ের অনেক কাছাকাছি।
+      icon: LoaderPinwheel,
       delta: percentChange(
         countOf(thisWeekStatuses, IN_PROGRESS),
         countOf(lastWeekStatuses, IN_PROGRESS)
@@ -415,11 +419,11 @@ export default async function AdminDashboardPage({
     <div className="space-y-4">
       {/* --- Welcome header --- */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-sora text-[26px] font-bold tracking-[-0.01em] text-[#3A3A3A] md:text-[30px]">
+            
+        <h1 className="font-sora text-[26px] font-semibold leading-none tracking-normal text-black/70 md:text-[30px]">
           Welcome Back,{" "}
-          {/* গ্রেডিয়েন্ট লেখা: background-টা লেখার আকারে কেটে নেওয়া হয়।
-              `text-transparent` না দিলে লেখাটাই gradient-কে ঢেকে দিত। */}
-          <span className="bg-gradient-to-r from-[#FF9540] to-[#FF70C6] bg-clip-text text-transparent">
+         
+          <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
             {session.user.name ?? "there"}!
           </span>
         </h1>
@@ -436,25 +440,66 @@ export default async function AdminDashboardPage({
       <RevenueHeroCard amount={money(totalRevenue.toNumber())} deltaPercent={revenueDelta} />
 
       {/* --- তিনটে stat card --- */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/**
+       * Figma-র সারি: Flow Horizontal, Fill 1059 × Hug 142, gap 20px।
+       * `gap-5` = 1.25rem = 20px; আগে `gap-4` (16px) ছিল।
+       */}
+      <div className="grid gap-5 md:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-[20px] bg-white p-5">
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="font-frank-ruhl text-[20px] font-semibold text-[#121212]">
+          /**
+           * Figma-র card: Flow Vertical, Fill 339.67 × Hug 142,
+           * radius 16px, padding 16px, gap 20px, BG #FFFFFF।
+           *
+           * আগে `rounded-[20px] ... p-5` ছিল — radius আর padding দুটোই
+           * চার পয়েন্ট বেশি, তাই card গুলো মকআপের চেয়ে গোল আর ফাঁপা
+           * দেখাত।
+           *
+           * ভেতরের দূরত্বটা flex column + gap দিয়ে, mt-* দিয়ে নয়:
+           * আগে ছিল mt-4 (16px) আর mt-2 (8px), অর্থাৎ Figma-র সমান
+           * ২০/২০-এর বদলে দুটো আলাদা মান।
+           */
+          <div key={stat.label} className="flex flex-col gap-5 rounded-[16px] bg-white p-4">
+            <div className="flex items-center justify-between gap-2">
+              {/* Figma Typography: Frank Ruhl Libre, 500 Medium, 20px,
+                  line-height 100%, letter-spacing 0%, Black/100 #000000।
+                  আগে font-semibold (600) আর text-[#121212] ছিল। */}
+              <h2 className="font-frank-ruhl text-[20px] font-medium leading-none tracking-normal text-black">
                 {stat.label}
               </h2>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3]">
-                <stat.icon className="h-4 w-4 text-[#121212]" strokeWidth={1.8} aria-hidden="true" />
+
+              {/**
+               * ⚠️ ৩৪px মাপটা Figma panel থেকে সরাসরি নেওয়া নয়, হিসাব
+               * করে বার করা — card-এর Hug height 142 থেকে:
+               *
+               *   142 − 16 − 16 (padding)      = 110
+               *   110 − 20 − 20 (দুটো gap)     = 70  ← তিন সারির মোট
+               *   70 − 12 ("VS last Week")     = 58
+               *   58 − 24 (সংখ্যা)             = 34  ← প্রথম সারির উচ্চতা
+               *
+               * প্রথম সারিতে সবচেয়ে লম্বা জিনিসটাই উচ্চতা ঠিক করে, আর
+               * শিরোনামটা মাত্র 20px — কাজেই ওই ৩৪ বৃত্তটারই।
+               * Figma-তে বৃত্তটা select করে মিলিয়ে নিও।
+               */}
+              <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3]">
+                <stat.icon
+                  className="h-[18px] w-[18px] text-[#121212]"
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </span>
             </div>
 
-            <div className="mt-4 flex items-center gap-3">
-              <p className="font-frank-ruhl text-[28px] font-bold leading-none text-[#121212]">
+            <div className="flex items-center gap-3">
+              {/* Figma Typography: Frank Ruhl Libre, 600 SemiBold, 24px,
+                  line-height 100%, letter-spacing 0%, Black/100 #000000।
+                  আগে text-[28px] font-bold (700) ছিল। */}
+              <p className="font-frank-ruhl text-[24px] font-semibold leading-none tracking-normal text-black">
                 {stat.value}
               </p>
+
               {stat.delta !== null && (
                 <span
-                  className={`rounded-full px-2.5 py-1 font-sora text-[12px] font-medium ${
+                  className={`rounded-full px-2.5 py-1.5 font-sora text-[12px] font-normal leading-none ${
                     stat.delta >= 0 ? "bg-[#E4F7EC] text-[#2F9E63]" : "bg-[#FDE8E8] text-[#D2504F]"
                   }`}
                 >
@@ -464,7 +509,14 @@ export default async function AdminDashboardPage({
               )}
             </div>
 
-            <p className="mt-2 font-sora text-[12px] text-gray-500">VS last Week</p>
+            {/* Figma Typography: Sora, 400 Regular, 12px, line-height
+                100%, letter-spacing 0%, Black/70。
+                আগে text-gray-500 ছিল — একটা কঠিন ধূসর, যেটা সাদা ছাড়া
+                অন্য background-এ ভিন্ন রকম বসে; Black/70 নিচের রঙটা
+                মিশতে দেয়। */}
+            <p className="font-sora text-[12px] font-normal leading-none tracking-normal text-black/70">
+              VS last Week
+            </p>
           </div>
         ))}
       </div>
