@@ -465,14 +465,27 @@ export default function AdminSidebar({
         ))}
       </nav>
 
+      {/**
+       * System group — Figma-তে Settings আর Logout, ঠিক এই ক্রমে,
+       * তালিকার একেবারে পায়ের কাছে।
+       *
+       * ⚠️ এখানে আগে একটা "← Back to site" link ছিল, Logout-এর নিচে।
+       * সেটা সরানো হয়েছে: storefront-এ ফেরার কাজটা এখন topbar-এর
+       * logo করে (AdminTopbar-এ href="/"), তাই দুটো রাখলে একই গন্তব্যে
+       * দুটো রাস্তা থাকত — আর পর্দার দুই প্রান্তে বসে থাকা দুটো link
+       * একই জায়গায় নিয়ে গেলে ব্যবহারকারী ভাবেন নিশ্চয়ই একটা অন্যটার
+       * চেয়ে আলাদা কিছু করে।
+       *
+       * ফলে Logout এখন সত্যিই শেষ item, আর সেটাই কাম্য: destructive
+       * action তালিকার শেষে থাকলে ভুল করে চাপার সম্ভাবনা কম, কারণ
+       * তার নিচে আর কোনো লক্ষ্য নেই যেখানে যেতে গিয়ে হাত ফসকাতে পারে।
+       */}
       <div className="flex flex-col gap-4 border-t border-gray-100 px-3 py-3">
         {!collapsed && <p className={HEADING_TEXT}>System</p>}
 
         {settingsItem && renderItem(settingsItem)}
 
-        {/* Logout — dropdown-এর মতোই `signOut`, callbackUrl "/" (storefront)।
-            Figma-তে এটা System group-এর শেষ item, তাই nav-এর ভেতরে নয়,
-            এখানেই। */}
+        {/* Logout — dropdown-এর মতোই `signOut`, callbackUrl "/" (storefront)। */}
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/" })}
@@ -484,16 +497,6 @@ export default function AdminSidebar({
           <LogOut className="h-6 w-6 shrink-0" strokeWidth={1.8} aria-hidden="true" />
           {!collapsed && "Logout"}
         </button>
-
-        {!collapsed && (
-          <Link
-            href="/"
-            onClick={onNavigate}
-            className="flex items-center gap-2 rounded-[12px] px-3 py-2.5 font-sora text-[13px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-          >
-            ← Back to site
-          </Link>
-        )}
       </div>
 
       {/* sticky, absolute নয় — absolute হলে এটা বিষয়বস্তুর সাথে গড়িয়ে

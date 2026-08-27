@@ -17,9 +17,10 @@ export interface PanelLink {
 /**
  * Search-এ যেগুলোর মধ্যে খোঁজা হবে — sidebar-এর nav item। layout থেকে
  * আসে, এখানে হার্ডকোড করা হয় না: তালিকাটা ওখানে scope দিয়ে ছাঁকা
- * (visibleNavItems), তাই KITCHEN role-এর কেউ "staff" লিখলে সেটা
- * result-এই আসে না। এখানে আলাদা তালিকা রাখলে দুই জায়গা আলাদা হয়ে
- * যেত, আর search ব্যবহারকারীকে এমন page-এ পাঠাত যেটা খুললে 403।
+ * (layout.tsx-এর `searchableNavItems`), তাই KITCHEN role-এর কেউ
+ * "staff" লিখলে সেটা result-এই আসে না। এখানে আলাদা তালিকা রাখলে দুই
+ * জায়গা আলাদা হয়ে যেত, আর search ব্যবহারকারীকে এমন page-এ পাঠাত
+ * যেটা খুললে 403।
  */
 export interface NavItem {
   label: string;
@@ -326,8 +327,37 @@ export default function AdminTopbar({
           <Menu className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
         </button>
 
-        {/* Logo — sidebar-এ আলাদা করে নেই, তাই brand mark এখানেই */}
-        <Link href="/admin" className="flex items-center gap-2 shrink-0">
+        {/**
+         * Logo — sidebar-এ আলাদা করে নেই, তাই brand mark এখানেই।
+         *
+         * গন্তব্য `/` (storefront home), `/admin` নয় — designer-এর
+         * সিদ্ধান্ত। Shopify/Stripe-এর মতো dashboard-এ logo সাধারণত
+         * panel-এর নিজের home-এ ফেরায়, কিন্তু এখানে brand mark-টাকে
+         * রেস্তোরাঁর সাইটে ফেরার দরজা হিসেবে ধরা হয়েছে।
+         *
+         * ⚠️ এই কারণেই AdminSidebar থেকে "← Back to site" link-টা
+         * সরানো হয়েছে। দুটো একসাথে রাখলে একই গন্তব্যে দুটো রাস্তা
+         * থাকত, আর তখন প্রশ্ন উঠত কোনটা "আসল" — বিশেষত যখন দুটো
+         * পর্দার দুই প্রান্তে। একটাই থাকুক, সেটাই স্পষ্ট।
+         *
+         * Panel-এর dashboard-এ ফেরার পথ হারায়নি: sidebar-এর Overview
+         * গোষ্ঠীর প্রথম item-ই "Dashboard" (/admin), আর সেটা প্রতিটা
+         * role-ই দেখতে পায় (scope: null, দেখুন layout.tsx-এর
+         * NAV_SECTIONS)।
+         *
+         * aria-label লাগে কারণ link-টার ভেতরে কোনো accessible text নেই:
+         * <Image>-এ `alt=""` (সচেতনভাবে — পাশের wordmark একই কথা বলে,
+         * দুটোই পড়লে screen reader "Cuisine Cuisine" বলত), আর
+         * wordmark-টা `hidden md:inline`। ফলে ফোনে link-টা নামহীন হয়ে
+         * যেত — screen reader শুধু "link" বলত, কোথায় যায় তার কোনো
+         * ইঙ্গিত ছাড়াই। label-এ গন্তব্যটাও বলা আছে, কারণ admin panel-এ
+         * বসে logo চাপলে যে সাইটে চলে যাবে সেটা আগেভাগে জানা দরকার।
+         */}
+        <Link
+          href="/"
+          aria-label="Cuisine — back to site"
+          className="flex items-center gap-2 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+        >
           {/* Figma: icon 34×34 */}
           <Image
             src="/logo.svg"
@@ -525,7 +555,7 @@ export default function AdminTopbar({
             {/* xl-এর নিচে শুধু avatar — Figma-র tablet নকশায় trigger-টা
                 একটা গোল ছবি, নাম/email নিচের dropdown-এ। ৭৬৮px-এ
                 search আর ২৬৬px চওড়া pill একসাথে রাখলে search-টা
-                "Searc..." হয়ে যেত (ঠিক যেটা তোমার screenshot-এ)। */}
+                "Searc..." হয়ে যেত। */}
             <span className="hidden xl:flex flex-col items-start min-w-0">
               <span className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate max-w-[166px]">
                 {name}
@@ -558,8 +588,6 @@ export default function AdminTopbar({
               role="menu"
               className="absolute right-0 top-full mt-2 w-[248px] bg-white rounded-[24px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50"
             >
-              {/* মোবাইলে trigger button-এ নাম দেখানো হয় না, তাই এখানে —
-                  নাহলে কোন account-এ আছি সেটা জানার উপায় থাকত না */}
               {/* xl-এর নিচে trigger-এ শুধু avatar থাকে, তাই কোন
                   account-এ আছি সেটা জানার একমাত্র জায়গা এটাই। sidebar-এর
                   user card-এর মতোই একই typography, যাতে তিন জায়গা

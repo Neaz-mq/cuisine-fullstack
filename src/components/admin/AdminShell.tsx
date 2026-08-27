@@ -27,6 +27,17 @@ import AdminNavRail from "@/components/admin/AdminNavRail";
  * client component-এ ReactNode পাঠানো Next-এর স্বীকৃত slot pattern,
  * আর এতে NotificationBell-এর role-ভিত্তিক সিদ্ধান্তটা server-এই থেকে
  * যায়।
+ *
+ * ── Figma-র দুটো gap, দুটো আলাদা মান ──────────────────────────────
+ * নিচে দু'জায়গায় gap আছে আর দুটো ইচ্ছাকৃতভাবে আলাদা, কারণ Figma-তে
+ * এরা দুটো ভিন্ন frame:
+ *
+ *   বাইরের frame — Flow Vertical, gap 24px   → topbar ↕ নিচের সারি
+ *   ভেতরের frame — Flow Horizontal, gap 40px → sidebar ↔ content
+ *
+ * একটাকে আরেকটার সমান করে দিলে মকআপের ছন্দটাই নষ্ট হয়: উল্লম্বে
+ * জিনিসগুলো পুরো প্রস্থ জুড়ে থাকে বলে কম ফাঁকেই সীমানা বোঝা যায়,
+ * অনুভূমিকে দুটো কার্ড পাশাপাশি বলে বেশি ফাঁক লাগে।
  */
 export default function AdminShell({
   name,
@@ -103,7 +114,18 @@ export default function AdminShell({
   }, [mobileOpen]);
 
   return (
-    <div className="mx-auto flex max-w-[1760px] flex-col gap-[10px] p-3 sm:p-4 xl:p-[30px]">
+    /**
+     * Figma-র বাইরের frame: Flow Vertical, gap 24px (`gap-6`)।
+     *
+     * আগে `gap-[10px]` ছিল, তাই topbar-এর গোল pill আর নিচের কার্ডগুলো
+     * প্রায় গায়ে লেগে থাকত — মকআপে যে জায়গাটুকু bar-টাকে "ভাসমান"
+     * দেখায়, সেটাই হারিয়ে যাচ্ছিল।
+     *
+     * ছোট পর্দায় ২৪px বাড়াবাড়ি: সেখানে উল্লম্ব জায়গাই দুর্লভ, আর দুটো
+     * পূর্ণ-প্রস্থ কার্ডের মাঝে ১২px-এই সীমানা স্পষ্ট। তাই মানটা
+     * xl-scoped, ঠিক যেভাবে নিচের ৪০px-ও।
+     */
+    <div className="mx-auto flex max-w-[1760px] flex-col gap-3 p-3 sm:p-4 xl:gap-6 xl:p-[30px]">
       <AdminTopbar
         name={name}
         email={email}
@@ -126,13 +148,40 @@ export default function AdminShell({
         className="hidden md:flex xl:hidden"
       />
 
-      <div className="flex gap-[10px]">
-        {/* Backdrop — শুধু xl-এর নিচে, আর শুধু খোলা থাকলে। xl:hidden
-            না দিলে desktop-এ resize করার পর একটা অদৃশ্য স্তর click
-            আটকে রাখত। */}
+      {/**
+       * Figma-র parent frame: Flow Horizontal, gap 40px — sidebar আর
+       * ডান পাশের content-এর মধ্যে ঠিক ততটাই ফাঁক। আগে এখানে
+       * `gap-[10px]` ছিল, তাই দুটো কার্ড প্রায় গায়ে লেগে থাকত আর
+       * মকআপের শ্বাস নেওয়ার জায়গাটা হারিয়ে যেত।
+       *
+       * `gap-10` = 2.5rem = 40px, তাই আলাদা করে `gap-[40px]` লেখার
+       * দরকার নেই।
+       *
+       * xl-scoped, কারণ তার নিচে এই gap-এর কোনো অস্তিত্বই নেই:
+       * xl-এর নিচে AdminSidebar হয় `fixed` (drawer), নয় `md:hidden` —
+       * দুটোর কোনোটাই flex item নয়, তাই <main> একাই থাকে আর gap কিছুই
+       * করে না। তবু `gap-0` স্পষ্ট করে লেখা, যাতে পরে কেউ পড়ে না ভাবে
+       * ফোনেও ৪০px ফাঁক যাচ্ছে।
+       *
+       * হিসাবটা মিলিয়ে দেখার মতো: 256 (xl:w-64 sidebar) + 40 (gap)
+       * বাদ দিলে Figma-র ১৩৮০px frame-এ content-এর জন্য ১০৮৪px পড়ে
+       * থাকে — মকআপে ঠিক তাই।
+       */}
+      <div className="flex gap-0 xl:gap-10">
+        {/**
+         * Backdrop — শুধু drawer যেখানে সত্যিই খুলতে পারে, অর্থাৎ
+         * md-এর নিচে।
+         *
+         * আগে এটা `xl:hidden` ছিল, কিন্তু hamburger নিজেই `md:hidden`
+         * আর sidebar-ও `md:hidden` — অর্থাৎ 768px থেকে উপরে drawer বলে
+         * কিছু নেই, ওখানে AdminNavRail কাজটা করে। ফলে ফোনে drawer খুলে
+         * tablet প্রস্থে ঘোরালে (বা resize করলে) drawer উধাও হয়ে যেত
+         * অথচ কালো overlay আর locked body scroll থেকে যেত — ব্যবহারকারীর
+         * কাছে page-টা নিছক জমে গেছে মনে হতো।
+         */}
         {mobileOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/40 xl:hidden"
+            className="fixed inset-0 z-40 bg-black/40 md:hidden"
             onClick={closeDrawer}
             aria-hidden="true"
           />
