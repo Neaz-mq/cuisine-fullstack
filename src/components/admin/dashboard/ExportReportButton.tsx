@@ -70,7 +70,11 @@ export default function ExportReportButton() {
         type="button"
         onClick={handleExport}
         disabled={busy}
-        className="flex items-center gap-2 rounded-full bg-[#121212] px-5 py-3 font-sora text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        // h-11 — পাশের তারিখ-pill-ও ৪৪px, তাই দুটোর উপর-নিচ একসারিতে
+        // পড়ে। আগে `py-3` ছিল, যেটা ~৪৬px দিত আর বোতামটা এক-দুই পিক্সেল
+        // নিচে ঝুলে থাকত। whitespace-nowrap: সরু পর্দায় "Export Report"
+        // দু'লাইনে ভাঙলে বোতামটা লম্বা হয়ে যেত।
+        className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-[#121212] px-5 font-sora text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
       >
         {busy ? (
           <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />

@@ -120,7 +120,7 @@ export interface SidebarItem {
  * উপরে-নিচে সরে যাবে।
  */
 const ITEM_BASE =
-  "relative flex items-center gap-2 rounded-[12px] py-3 transition-colors";
+  "flex h-12 flex-1 items-center gap-2 rounded-[12px] p-3 transition-colors";
 
 /**
  * Typography panel থেকে: Frank Ruhl Libre, weight 600, 20px,
@@ -145,8 +145,33 @@ const ITEM_BASE =
  */
 const ITEM_TEXT = "font-frank-ruhl text-[20px] leading-6 tracking-normal";
 
-/** Colors panel-এর Linear Gradient: #FF9540 → #FF70C6 (কমলা → গোলাপি)। */
-const ACTIVE_GRADIENT = "bg-gradient-to-r from-[#FF9540] to-[#FF70C6]";
+/**
+ * ⚠️ নিষ্ক্রিয় item-এর রঙ Figma-তে #000000, #121212 নয় — আগেরটা
+ * এক ধাপ ধূসর ছিল, তাই পুরো তালিকাটা মকআপের চেয়ে ফিকে লাগত। রঙটা
+ * renderItem-এ Link-এর গায়ে বসে, span-এ নয়, যাতে icon আর লেখা
+ * দুটোই একসাথে বদলায়।
+ */
+
+/**
+ * Figma: `linear-gradient(93.36deg, #FF9540 0%, #FF70C6 145.78%)`
+ *
+ * ⚠️ হুবহু এই gradient-টাই RevenueHeroCard-এও — একই design token।
+ * আগে এখানে `bg-gradient-to-r from-[#FF9540] to-[#FF70C6]` ছিল, যেটা
+ * ৯০° আর গোলাপি-স্টপ ১০০%। ফলে pill-এর ডান কিনারা খাঁটি গোলাপি হয়ে
+ * যেত, অথচ মকআপে ওখানে এখনো প্রবাল রঙ — স্টপটা ১৪৫.৭৮%, অর্থাৎ
+ * গোলাপির শেষ প্রান্ত pill-এর অনেক বাইরে পড়ে।
+ */
+const ACTIVE_GRADIENT = "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)]";
+
+/**
+ * Logout-এর লাল — Figma: #D72A37 (icon, লেখা, accent bar তিনটেতেই)।
+ *
+ * আগে Tailwind-এর `text-red-500` (#EF4444) ছিল, যেটা লক্ষণীয়ভাবে
+ * হালকা — cream background-এ ওটা ধোয়াটে দেখাত, যেন লেখাটা ঝাপসা।
+ * hover-এর গোলাপি আভাটাও #FAE7EC, `red-50` নয়।
+ */
+const DANGER = "#D72A37";
+const DANGER_TINT = "#FAE7EC";
 
 /**
  * বাকি তিনটে text style, প্রতিটাই Figma-র নিজস্ব inspect panel থেকে।
@@ -285,63 +310,76 @@ export default function AdminSidebar({
     const active = isActivePath(pathname, item.href);
 
     return (
-      <Link
-        key={item.href}
-        href={item.href}
-        // Drawer অবস্থায় link চাপার পর সেটা খোলা থেকে গেলে নতুন
-        // page-টা তার পেছনে load হতো। desktop-এ onNavigate পাঠানোই
-        // হয় না, তাই সেখানে এটা কিছুই করে না।
-        onClick={onNavigate}
-        title={titleFor(item.label)}
-        aria-current={active ? "page" : undefined}
-        className={`${ITEM_BASE} ${
-          collapsed ? "justify-center px-0" : "px-3"
-        } ${
-          active
-            ? `${ACTIVE_GRADIENT} font-semibold text-white`
-            : "font-normal text-[#121212] hover:bg-gray-100"
-        }`}
-      >
-        {/* Figma-র বাঁ পাশের কমলা accent bar — active item-এর গায়ে
-            লেগে থাকে। collapsed-এ বাদ: ওই প্রস্থে bar আর icon-এর মাঝে
-            জায়গা থাকে না, icon-টাই কেন্দ্রচ্যুত দেখাত। */}
-        {active && !collapsed && (
-          <span
-            aria-hidden="true"
-            className="absolute -left-3 top-0 h-full w-[4px] rounded-full bg-[#FF9540]"
-          />
-        )}
-
-        <Icon className="h-6 w-6 shrink-0" strokeWidth={1.8} aria-hidden="true" />
-
+      /**
+       * Figma: row, gap 7, উচ্চতা 48 — বাঁয়ে ৩px accent bar, তারপর
+       * pill।
+       *
+       * ⚠️ bar-টা flex sibling, absolute নয়। Figma-তে ওটা সবসময় থাকে;
+       * নিষ্ক্রিয় অবস্থায় শুধু `opacity: 0`। তাই সক্রিয় হলে item-টা
+       * ডানে সরে যায় না — আগে `absolute -left-3` ছিল, যেটা pill-এর
+       * বাইরে ঝুলে থাকত আর collapsed অবস্থায় জায়গাই পেত না।
+       */
+      <div key={item.href} className="flex items-center gap-[7px]">
         {!collapsed && (
-          <>
-            <span className={`flex-1 truncate ${ITEM_TEXT}`}>
-              {item.label}
-            </span>
-            {!!item.badge && item.badge > 0 && (
-              <span
-                className={`rounded-full px-2 py-0.5 font-sora text-[12px] font-semibold ${
-                  active ? "bg-white/25 text-white" : "bg-orange-50 text-[#FF4C15]"
-                }`}
-              >
-                {item.badge}
-              </span>
-            )}
-          </>
-        )}
-
-        {/* collapsed-এ badge-টা icon-এর কোণে একটা ছোট বিন্দু হয়ে যায় —
-            সংখ্যাটা ওই জায়গায় পড়া যেত না, কিন্তু "কিছু একটা জমে আছে"
-            সংকেতটুকু থাকা জরুরি, নাহলে collapse করলেই pending কাজ
-            অদৃশ্য হয়ে যেত। */}
-        {collapsed && !!item.badge && item.badge > 0 && (
           <span
             aria-hidden="true"
-            className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#FF4C15]"
+            className={`h-[30px] w-[3px] shrink-0 rounded-full ${
+              active ? ACTIVE_GRADIENT : "opacity-0"
+            }`}
           />
         )}
-      </Link>
+
+        <Link
+          href={item.href}
+          // Drawer অবস্থায় link চাপার পর সেটা খোলা থেকে গেলে নতুন
+          // page-টা তার পেছনে load হতো। desktop-এ onNavigate পাঠানোই
+          // হয় না, তাই সেখানে এটা কিছুই করে না।
+          onClick={onNavigate}
+          title={titleFor(item.label)}
+          aria-current={active ? "page" : undefined}
+          className={`${ITEM_BASE} ${collapsed ? "justify-center" : ""} ${
+            active
+              ? `${ACTIVE_GRADIENT} font-semibold text-white`
+              : "font-normal text-black hover:bg-[#F9F6F3]"
+          }`}
+        >
+          <Icon className="h-6 w-6 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+
+          {!collapsed && (
+            <>
+              <span className={`flex-1 truncate ${ITEM_TEXT}`}>{item.label}</span>
+              {/* Figma: 20×20 বাক্স, radius 4, BG #FAE7EC, লেখা
+                  Frank Ruhl 400 12px #D72A37 — গোল pill নয়।
+                  সক্রিয় item-এ ওই গোলাপি gradient-এর উপর মিশে যেত,
+                  তাই সেখানে সাদা আভা। */}
+              {!!item.badge && item.badge > 0 && (
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] font-frank-ruhl text-[12px] font-normal leading-none ${
+                    active ? "bg-white/25 text-white" : ""
+                  }`}
+                  style={
+                    active ? undefined : { backgroundColor: DANGER_TINT, color: DANGER }
+                  }
+                >
+                  {item.badge}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* collapsed-এ badge-টা icon-এর কোণে একটা ছোট বিন্দু হয়ে যায় —
+              সংখ্যাটা ওই জায়গায় পড়া যেত না, কিন্তু "কিছু একটা জমে আছে"
+              সংকেতটুকু থাকা জরুরি, নাহলে collapse করলেই pending কাজ
+              অদৃশ্য হয়ে যেত। */}
+          {collapsed && !!item.badge && item.badge > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute right-2 top-2 h-2 w-2 rounded-full"
+              style={{ backgroundColor: DANGER }}
+            />
+          )}
+        </Link>
+      </div>
     );
   };
 
@@ -375,21 +413,25 @@ export default function AdminSidebar({
        * `invisible`-ও লাগে, নাহলে বন্ধ drawer-এর ১৭টা link-এ Tab করে
        * পৌঁছানো যেত অথচ পর্দায় কিছুই দেখা যেত না।
        */
-      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] md:hidden xl:visible xl:flex xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[24px] [&::-webkit-scrollbar]:hidden ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] md:hidden xl:visible xl:flex xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[20px] [&::-webkit-scrollbar]:hidden ${
         mobileOpen ? "translate-x-0" : "invisible -translate-x-full"
-      } ${collapsed ? "xl:w-[72px]" : "xl:w-64"}`}
+      } ${collapsed ? "xl:w-[88px]" : "xl:w-[281px]"}`}
     >
       {/* User card — Figma-তে sidebar-এর মাথায়। topbar-এও নাম/email আছে
           ঠিকই, কিন্তু ওটা সরু হলে (md-এর নিচে) লুকিয়ে যায়, তাই এখানে
           পুনরাবৃত্তি বরং কাজে লাগে। */}
-      <div className={`sticky top-0 z-10 border-b border-gray-100 bg-white ${collapsed ? "px-3 py-4" : "p-3"}`}>
+      {/* Figma: card 241×57, BG #F9F6F3, radius 8, padding 8, আর
+          তার নিচে একটা 1px #D9D9D9 রেখা। কার্ডটার নিজের কোনো border
+          নেই — আগে `border-gray-200` ছিল, তাই দুটো রেখা দেখা যেত। */}
+      <div className={`sticky top-0 z-10 bg-white p-5 ${collapsed ? "px-5" : ""}`}>
         <div
-          className={`flex items-center gap-2 rounded-[12px] ${
-            collapsed ? "justify-center" : "border border-gray-200 px-3 py-2.5"
+          className={`flex items-center gap-5 rounded-lg bg-[#F9F6F3] p-2 ${
+            collapsed ? "justify-center" : "h-[57px] justify-between"
           }`}
         >
           {!collapsed && (
-            <div className="min-w-0 flex-1">
+            /* Figma: নাম আর email-এর মাঝে 6px। */
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <p className={`truncate ${NAME_TEXT}`}>{name}</p>
               <p className={`truncate ${EMAIL_TEXT}`}>{email}</p>
             </div>
@@ -406,98 +448,109 @@ export default function AdminSidebar({
             aria-expanded={!collapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:block"
+            className="hidden shrink-0 rounded-lg text-black transition-opacity hover:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40 xl:block"
           >
-            <PanelLeft className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+            {/* Figma: grid-4 icon, 24×24, কালো। */}
+            <PanelLeft className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
           </button>
 
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 xl:hidden"
+            className="shrink-0 rounded-lg text-black transition-opacity hover:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40 xl:hidden"
           >
-            <X className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+            <X className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
       </div>
 
       {/**
-       * Figma-র section frame: Vertical, gap 16px।
+       * Figma-র বিন্যাস, তিন স্তরে:
        *
-       * ১৬px-টা সব জায়গায় — heading থেকে প্রথম item, item থেকে item,
-       * আর এক section থেকে পরের section। শেষেরটা spec-এ সরাসরি লেখা
-       * নেই (ওটা parent frame-এর gap), কিন্তু মকআপে মেপে দেখা যায়
-       * "Users → Staff" আর "Suppliers → Management" দুটোর দূরত্ব
-       * সমান, অর্থাৎ একই ১৬।
+       *   section ↔ section        20px  (Frame 2147232319)
+       *   heading → প্রথম item     16px  (Frame 2147236216 ইত্যাদি)
+       *   item ↔ item              12px  (ভেতরের Frame 2147236218)
        *
-       * তাই heading আর item গুলো এখন এক flex column-এর সরাসরি সন্তান,
-       * প্রত্যেকের আলাদা margin নয় — একটাই `gap-4` পুরোটা সামলায়।
-       * আগে item-এর মাঝে ছিল ৮px আর heading-এ নিজস্ব pt/pb, ফলে
-       * তালিকাটা মকআপের চেয়ে চাপা দেখাত।
+       * ⚠️ শেষ দুটো আলাদা, আর আগে দুটোই ১৬ ছিল — তাই তালিকাটা
+       * মকআপের চেয়ে ঢিলে দেখাত আর একটা গোষ্ঠীর ভেতরের item গুলো
+       * পাশের গোষ্ঠীর মতোই দূরে সরে থাকত, ফলে ভাগটাই চোখে পড়ত না।
+       *
+       * (User Management-এ Figma নিজেই ১৬ দেখায়, বাকি সব গোষ্ঠীতে ১২ —
+       * স্পষ্টতই অসাবধানতা। সংখ্যাগরিষ্ঠটাই নেওয়া হয়েছে।)
+       *
+       * Card padding 20px — Figma-র Frame 2147232808।
        */}
-      <nav ref={contentRef} className="flex flex-col gap-4 px-3 py-3">
+      <nav ref={contentRef} className="flex flex-col gap-5 px-5 pb-5">
+        {/* Figma: user card-এর নিচে একটা 1px #D9D9D9 রেখা। */}
+        <div aria-hidden="true" className="h-px shrink-0 bg-[#D9D9D9]" />
+
         {sections.map((section) => (
           <div key={section.heading} className="flex flex-col gap-4">
             {/* collapsed-এ heading-এর বদলে একটা সরু বিভাজক — গোষ্ঠীর
-                সীমানাটুকু থাকে, অথচ ৭৬px-এ "Marketing & Engagement"
+                সীমানাটুকু থাকে, অথচ ৮৮px-এ "Marketing & Engagement"
                 লেখার চেষ্টা করতে হয় না। */}
             {collapsed ? (
-              <div aria-hidden="true" className="mx-2 border-t border-gray-100 first:border-0" />
+              <div aria-hidden="true" className="mx-2 border-t border-[#D9D9D9] first:border-0" />
             ) : (
               /**
                 * heading-এ কোনো বাঁ padding নেই, ইচ্ছাকৃতভাবে।
                 *
-                * Figma-তে "Overview" শুরু হয় ঠিক যেখানে নিচের pill-এর
-                * বাঁ প্রান্ত, আর icon গুলো তার চেয়ে ভেতরে — কারণ
-                * pill-এর নিজের ১২px padding আছে। অর্থাৎ ইন্ডেন্টটা
-                * আলাদা করে বসানো নয়, item-এর গড়ন থেকেই আসে।
-                *
-                * আগে heading-এও `px-3` ছিল, তাই heading আর icon এক
-                * সারিতে পড়ে যেত আর গোষ্ঠীর মাথা-শরীরের ভাগটা চোখে
-                * ধরা পড়ত না।
+                * Figma-তে "Overview" শুরু হয় ঠিক যেখানে item-এর
+                * accent bar, আর icon গুলো তার চেয়ে ভেতরে — কারণ
+                * bar (3) + gap (7) + pill padding (12) = 22px ইন্ডেন্ট
+                * item-এর গড়ন থেকেই আসে, আলাদা করে বসানো নয়।
                 */
               <p className={HEADING_TEXT}>{section.heading}</p>
             )}
 
-            {section.items.map(renderItem)}
+            <div className="flex flex-col gap-3">{section.items.map(renderItem)}</div>
           </div>
         ))}
+
+        {/**
+         * System গোষ্ঠী — Figma-তে Settings আর Logout, ঠিক এই ক্রমে,
+         * তালিকার একেবারে পায়ের কাছে।
+         *
+         * ⚠️ এখানে আগে একটা "← Back to site" link ছিল, Logout-এর নিচে।
+         * সেটা সরানো হয়েছে: storefront-এ ফেরার কাজটা এখন topbar-এর
+         * logo করে (AdminTopbar-এ href="/"), তাই দুটো রাখলে একই গন্তব্যে
+         * দুটো রাস্তা থাকত।
+         *
+         * ফলে Logout এখন সত্যিই শেষ item, আর সেটাই কাম্য: destructive
+         * action তালিকার শেষে থাকলে ভুল করে চাপার সম্ভাবনা কম, কারণ
+         * তার নিচে আর কোনো লক্ষ্য নেই যেখানে যেতে গিয়ে হাত ফসকাতে পারে।
+         */}
+        <div className="flex flex-col gap-4">
+          {collapsed ? (
+            <div aria-hidden="true" className="mx-2 border-t border-[#D9D9D9]" />
+          ) : (
+            <p className={HEADING_TEXT}>System</p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {settingsItem && renderItem(settingsItem)}
+
+            {/* Logout — dropdown-এর মতোই `signOut`, callbackUrl "/"।
+                Figma: icon, লেখা আর accent bar তিনটেই #D72A37। */}
+            <div className="flex items-center gap-[7px]">
+              {!collapsed && <span aria-hidden="true" className="h-[30px] w-[3px] shrink-0" />}
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/" })}
+                title={titleFor("Logout")}
+                className={`${ITEM_BASE} ${ITEM_TEXT} font-normal ${
+                  collapsed ? "justify-center" : ""
+                }`}
+                style={{ color: DANGER }}
+              >
+                <LogOut className="h-6 w-6 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+                {!collapsed && <span className="flex-1 text-left">Logout</span>}
+              </button>
+            </div>
+          </div>
+        </div>
       </nav>
-
-      {/**
-       * System group — Figma-তে Settings আর Logout, ঠিক এই ক্রমে,
-       * তালিকার একেবারে পায়ের কাছে।
-       *
-       * ⚠️ এখানে আগে একটা "← Back to site" link ছিল, Logout-এর নিচে।
-       * সেটা সরানো হয়েছে: storefront-এ ফেরার কাজটা এখন topbar-এর
-       * logo করে (AdminTopbar-এ href="/"), তাই দুটো রাখলে একই গন্তব্যে
-       * দুটো রাস্তা থাকত — আর পর্দার দুই প্রান্তে বসে থাকা দুটো link
-       * একই জায়গায় নিয়ে গেলে ব্যবহারকারী ভাবেন নিশ্চয়ই একটা অন্যটার
-       * চেয়ে আলাদা কিছু করে।
-       *
-       * ফলে Logout এখন সত্যিই শেষ item, আর সেটাই কাম্য: destructive
-       * action তালিকার শেষে থাকলে ভুল করে চাপার সম্ভাবনা কম, কারণ
-       * তার নিচে আর কোনো লক্ষ্য নেই যেখানে যেতে গিয়ে হাত ফসকাতে পারে।
-       */}
-      <div className="flex flex-col gap-4 border-t border-gray-100 px-3 py-3">
-        {!collapsed && <p className={HEADING_TEXT}>System</p>}
-
-        {settingsItem && renderItem(settingsItem)}
-
-        {/* Logout — dropdown-এর মতোই `signOut`, callbackUrl "/" (storefront)। */}
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/" })}
-          title={titleFor("Logout")}
-          className={`${ITEM_BASE} ${ITEM_TEXT} w-full font-normal text-red-500 hover:bg-red-50 ${
-            collapsed ? "justify-center px-0" : "px-3"
-          }`}
-        >
-          <LogOut className="h-6 w-6 shrink-0" strokeWidth={1.8} aria-hidden="true" />
-          {!collapsed && "Logout"}
-        </button>
-      </div>
 
       {/* sticky, absolute নয় — absolute হলে এটা বিষয়বস্তুর সাথে গড়িয়ে
           উপরে উঠে যেত। -mt-12 দিয়ে উচ্চতাটা কেটে দেওয়া হয়, তাই এটা
@@ -505,7 +558,7 @@ export default function AdminSidebar({
       {showFade && (
         <div
           aria-hidden="true"
-          className="pointer-events-none sticky bottom-0 -mt-12 h-12 shrink-0 rounded-b-[24px] bg-gradient-to-t from-white via-white/80 to-transparent"
+          className="pointer-events-none sticky bottom-0 -mt-12 h-12 shrink-0 rounded-b-[20px] bg-gradient-to-t from-white via-white/80 to-transparent"
         />
       )}
     </aside>

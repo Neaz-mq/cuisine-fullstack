@@ -30,7 +30,7 @@ import ExportReportButton from "@/components/admin/dashboard/ExportReportButton"
 import RevenueChart, {
   type RevenueDay,
 } from "@/components/admin/dashboard/RevenueChart";
-import RevenueRangeSelect from "@/components/admin/dashboard/RevenueRangeSelect";
+import RangeSelect from "@/components/admin/dashboard/RangeSelect";
 import {
   buildRevenueBuckets,
   bucketIndexOf,
@@ -53,12 +53,23 @@ function formatDateTime(date: Date) {
   return `${day}, ${time}`;
 }
 
+/**
+ * Order Status pill-এর রঙ — Figma-র CSS export থেকে।
+ *
+ * মকআপে তিনটে অবস্থা আঁকা: Delivered, Order Place, Preparing। বাকি
+ * দুটো (পথে আছে, বাতিল) নকশায় নেই, তাই একই পরিবারের রঙ বেছে নেওয়া
+ * হয়েছে — হালকা পটভূমি + গাঢ় লেখা, আর লালটা design system-এর
+ * #FF3F5C, যেটা hero card আর chart tooltip-এও আছে।
+ *
+ * আগের মানগুলো চোখে মেপে বসানো ছিল আর প্রতিটাই ফিকে — Figma-র
+ * সবুজ #0ECF00, আমার ছিল #2F9E63।
+ */
 const STATUS_STYLES: Record<string, string> = {
-  PLACED: "bg-[#E8F1FF] text-[#3B82C4]",
-  PREPARING: "bg-[#FFF6E0] text-[#C08A2E]",
-  OUT_FOR_DELIVERY: "bg-[#FFEDE3] text-[#D9662B]",
-  DELIVERED: "bg-[#E4F7EC] text-[#2F9E63]",
-  CANCELLED: "bg-[#FDE8E8] text-[#D2504F]",
+  PLACED: "bg-[#E5EDFF] text-[#0090FF]",
+  PREPARING: "bg-[#FFF2DA] text-[#FF9E00]",
+  OUT_FOR_DELIVERY: "bg-[#FFEDE0] text-[#FF7100]",
+  DELIVERED: "bg-[#E8FFEC] text-[#0ECF00]",
+  CANCELLED: "bg-[#FFE9EC] text-[#FF3F5C]",
 };
 
 /** Figma-র Order Status কলামে "Order Place" লেখা, enum-এর "PLACED" নয়। */
@@ -70,8 +81,15 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-/** Top Selling Items-এর bar রঙ — Figma-র ক্রম অনুযায়ী। */
-const BAR_COLORS = ["#F5943F", "#6CC763", "#A87BF5", "#FF6FB5", "#FF8B7A"];
+/**
+ * Top Selling Items-এর bar রঙ — Figma-র CSS export থেকে হুবহু, ক্রম
+ * সহ। আগের মানগুলো (#F5943F, #6CC763, #A87BF5, #FF6FB5, #FF8B7A)
+ * চোখে মেপে বসানো ছিল, প্রতিটাই এক-দু' ধাপ ফিকে।
+ *
+ * প্রথমটা Primary/100 — অর্থাৎ সবচেয়ে বেশি বিক্রির পদটা ব্র্যান্ডের
+ * নিজের রঙ পায়, বাকিরা আলাদা করে চেনার জন্য।
+ */
+const BAR_COLORS = ["#FF9540", "#6DCB66", "#AE80FF", "#FF80B7", "#FF9580"];
 
 /** শতাংশ পরিবর্তন, নাকি null যদি আগের সময়কালে কিছুই না থাকে —
  *  শূন্য থেকে বাড়াকে "∞% বৃদ্ধি" বলা অর্থহীন, তাই সেই ক্ষেত্রে
@@ -89,8 +107,10 @@ export default async function AdminDashboardPage({
     period?: string;
     page?: string;
     /** Revenue chart-এর নিজস্ব ছাঁকনি — `period` নয়, দেখুন
-     *  RevenueRangeSelect-এর মন্তব্য। */
+     *  RangeSelect-এর মন্তব্য। */
     revenue?: string;
+    /** Top Selling Items-এর নিজস্ব ছাঁকনি, chart-এর থেকে আলাদা। */
+    top?: string;
   }>;
 }) {
   // The dashboard shows revenue and other financial data, which is
@@ -117,6 +137,11 @@ export default async function AdminDashboardPage({
   const revenueRange: RevenueRange = isRevenueRange(params.revenue) ? params.revenue : "week";
   const revenueBuckets = buildRevenueBuckets(revenueRange, now);
   const chartStart = revenueBuckets[0].start;
+
+  // Top Selling Items-এর নিজস্ব সময়কাল। শুধু শুরুর তারিখটা লাগে —
+  // ওই কার্ডে খোপে ভাগ করার কিছু নেই, একটাই তালিকা।
+  const topRange: RevenueRange = isRevenueRange(params.top) ? params.top : "week";
+  const topStart = buildRevenueBuckets(topRange, now)[0].start;
 
   // গত ৭ দিন (আজ সহ), আর তার আগের ৭ দিন — stat card-এর "vs last week"
   // তুলনার দুই প্রান্ত।
@@ -228,10 +253,9 @@ export default async function AdminDashboardPage({
       where: { status: "RECEIVED", receivedAt: { gte: chartStart } },
       select: { receivedAt: true, totalCost: true },
     }),
-    // Top Selling Items — Figma-তে "This Week", তাই সপ্তাহেই সীমাবদ্ধ
-    // (আগে সর্বকালের ছিল)।
+    // Top Selling Items — কার্ডের নিজের ছাঁকনি অনুযায়ী (?top=)।
     prisma.orderItem.findMany({
-      where: { order: { ...notCancelled, createdAt: { gte: weekStart } } },
+      where: { order: { ...notCancelled, createdAt: { gte: topStart } } },
       select: { menuItemId: true, quantity: true, price: true },
     }),
     prisma.inventoryItem.findMany({
@@ -513,12 +537,34 @@ export default async function AdminDashboardPage({
   return (
     <div className="space-y-4">
       {/* --- Welcome header --- */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Figma Typography: Sora, 600 SemiBold, 30px, line-height 100%,
-            letter-spacing 0%। রঙ Black/70 — #000000 @ 70% opacity, তাই
-            `text-black/70`; একটা কঠিন hex দিলে cream background-এ
-            (#F9F6F3) অন্যরকম বসত, কারণ opacity নিচের রঙটা মিশতে দেয়। */}
-        <h1 className="font-sora text-[26px] font-semibold leading-none tracking-normal text-black/70 md:text-[30px]">
+      {/**
+       * ফোনে stack, md (৭৬৮px) থেকে পাশাপাশি।
+       *
+       * ⚠️ ভাঙার বিন্দুটা `sm` (৬৪০) নয়, আর সেটাই মূল কথা। ৬৪০–৭৬৮
+       * এর মাঝে দুটো পাশাপাশি রাখলে শিরোনামের জন্য পড়ে থাকে ~৩৫০px —
+       * "Welcome Back, Md. Neaz Morshed!" ওখানে তিন লাইনে ভাঙে আর
+       * Export বোতামটা কিনারা ছাড়িয়ে যায়। নামগুলো লম্বা হতে পারে,
+       * তাই জায়গাটা উদারভাবে দেওয়াই নিরাপদ।
+       *
+       * `items-stretch` ফোনে: তারিখ আর Export একসাথে পুরো প্রস্থ
+       * নেয়, ফলে বাঁ কিনারায় শিরোনামের সাথে সারিবদ্ধ থাকে।
+       */}
+      <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
+        {/**
+         * Figma Typography: Sora, 600 SemiBold, 30px, line-height 100%,
+         * letter-spacing 0%। রঙ Black/70 — #000000 @ 70% opacity, তাই
+         * `text-black/70`; একটা কঠিন hex দিলে cream background-এ
+         * (#F9F6F3) অন্যরকম বসত, কারণ opacity নিচের রঙটা মিশতে দেয়।
+         *
+         * ⚠️ `leading-none` কেবল md থেকে। Figma-র 100% line-height
+         * এক লাইনের ৩০px শিরোনামের জন্য ঠিক, কিন্তু ৩৭৫px-এ লেখাটা
+         * দু'লাইনে ভাঙে আর তখন ওই মানেই লাইন দুটো গায়ে গায়ে লেগে
+         * যায় — "Welcome Back," আর নামের মাঝে কোনো শ্বাস থাকে না।
+         * ছোট পর্দায় তাই `leading-tight`, আর মাপটাও ৩৭৫px-এ ২২।
+         */}
+        {/* min-w-0 — নাহলে লম্বা নাম flex item-টাকে তার পাত্রের চেয়েও
+            চওড়া করে ফেলে আর ডান পাশের বোতাম বাইরে বেরিয়ে যায়। */}
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[30px] md:leading-none">
           Welcome Back,{" "}
           {/* গ্রেডিয়েন্ট লেখা: background-টা লেখার আকারে কেটে নেওয়া হয়।
               `text-transparent` না দিলে লেখাটাই gradient-কে ঢেকে দিত।
@@ -532,9 +578,17 @@ export default async function AdminDashboardPage({
           </span>
         </h1>
 
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-2 rounded-full bg-white px-4 py-3 font-sora text-[14px] text-[#121212]">
-            <Calendar className="h-4 w-4 text-gray-500" strokeWidth={1.8} aria-hidden="true" />
+        {/**
+         * ফোনে পুরো প্রস্থ আর দুই প্রান্তে ছড়ানো, md থেকে নিজের মাপে।
+         *
+         * ⚠️ তারিখের pill-এ আগে `flex-1` ছিল — বাকি জায়গা নিতে গিয়ে
+         * ওটা নিজের লেখার চেয়েও সরু হয়ে যেত আর "Aug 28, 2026" দু'লাইনে
+         * ভেঙে pill-টা উপচে পড়ত। এখন দুটোই নিজের মাপে (`shrink-0`),
+         * আর ফাঁকটা `justify-between` সামলায়।
+         */}
+        <div className="flex w-full shrink-0 items-center justify-between gap-2 md:w-auto md:justify-start">
+          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+            <Calendar className="h-4 w-4 text-black/70" strokeWidth={1.5} aria-hidden="true" />
             {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </span>
           <ExportReportButton />
@@ -628,24 +682,38 @@ export default async function AdminDashboardPage({
       <BusinessSummaryCard />
 
       {/* --- Recent Orders --- */}
-      <div className="rounded-[20px] bg-white p-5 md:p-6">
+      {/* Figma card: Vertical, 1059×398, radius 20, padding 30, gap 20. */}
+      <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-frank-ruhl text-[24px] font-bold text-[#121212]">Recent Orders</h2>
+          {/* Figma card title: Frank Ruhl Libre, 600 SemiBold, 30px,
+              line-height 100%, #000000. তিনটে কার্ডেই একই। */}
+          <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
+            Recent Orders
+          </h2>
           <DashboardFilters period={period} />
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] border-separate border-spacing-0">
+        {/**
+         * ⚠️ পুরো table-টা একটা cream বাক্সের ভেতরে — Figma:
+         * BG #F9F6F3, radius 12, padding 16।
+         *
+         * আগে cream রঙটা কেবল header সারিতে ছিল আর কার্ডের প্রান্ত
+         * থেকে প্রান্ত ছড়ানো, ফলে table-টা কার্ডের গায়ে সেঁটে থাকত।
+         * বাক্সটা থাকলে table নিজেই একটা আলাদা তল হয়ে ওঠে, আর ১৬px
+         * padding তাকে কিনারা থেকে সরিয়ে রাখে।
+         */}
+        <div className="overflow-x-auto rounded-[12px] bg-[#F9F6F3] p-4">
+          <table className="w-full min-w-[720px] border-collapse">
             <thead>
-              <tr className="bg-[#F9F6F3]">
+              <tr>
                 {["No", "Order ID", "Customer Name", "Date & Time", "Order Status", "Amount"].map(
-                  (heading, index, all) => (
+                  (heading) => (
+                    /* Figma: Frank Ruhl Libre, 500 Medium, 20px, LH 100%,
+                       #000000। শিরোনাম আর প্রথম সারির মাঝে 20px। */
                     <th
                       key={heading}
                       scope="col"
-                      className={`px-4 py-3 text-left font-frank-ruhl text-[16px] font-semibold text-[#121212] ${
-                        index === 0 ? "rounded-l-2xl" : ""
-                      } ${index === all.length - 1 ? "rounded-r-2xl text-right" : ""}`}
+                      className="pb-5 pr-6 text-left font-frank-ruhl text-[20px] font-medium leading-none text-black last:pr-0"
                     >
                       {heading}
                     </th>
@@ -656,7 +724,7 @@ export default async function AdminDashboardPage({
             <tbody>
               {listOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center font-sora text-[14px] text-gray-500">
+                  <td colSpan={6} className="py-10 text-center font-sora text-[14px] text-black/70">
                     {q || period !== "all"
                       ? `No orders match this filter (${PERIOD_LABELS[period]}).`
                       : "No orders yet."}
@@ -664,31 +732,38 @@ export default async function AdminDashboardPage({
                 </tr>
               ) : (
                 listOrders.map((order, index) => (
-                  <tr key={order.id}>
-                    <td className="px-4 py-4 font-sora text-[14px] text-gray-500">
+                  /* Figma: সারিতে সারিতে 18px ফাঁক, শেষেরটার নিচে কিছু নেই। */
+                  <tr key={order.id} className="align-middle [&>td]:pb-[18px] last:[&>td]:pb-0">
+                    {/* Figma: No কলামের সংখ্যা Frank Ruhl 400, 18px, Black/70। */}
+                    <td className="pr-6 font-frank-ruhl text-[18px] font-normal leading-none text-black/70">
                       {rangeStart + index}
                     </td>
-                    <td className="px-4 py-4 font-sora text-[14px] text-[#121212]">
+                    {/* বাকি সব ঘর: Sora 400, 16px, LH 100%, Black/70। */}
+                    <td className="pr-6 font-sora text-[16px] leading-none text-black/70">
                       <Link href={`/admin/orders/${order.id}`} className="hover:underline">
                         {formatOrderId(order.id)}
                       </Link>
                     </td>
-                    <td className="px-4 py-4 font-sora text-[14px] text-gray-600">
+                    <td className="pr-6 font-sora text-[16px] leading-none text-black/70">
                       {order.user?.name ?? `${order.firstName} ${order.lastName}`}
                     </td>
-                    <td className="px-4 py-4 font-sora text-[14px] text-gray-600">
+                    <td className="pr-6 font-sora text-[16px] leading-none text-black/70">
                       {formatDateTime(order.createdAt)}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="pr-6">
+                      {/* Figma: pill 24px উঁচু, padding 6px 10px, radius 100,
+                          লেখা Sora 400 12px। */}
                       <span
-                        className={`inline-block rounded-lg px-3 py-1 font-sora text-[12px] font-medium ${
+                        className={`inline-flex h-6 items-center rounded-full px-2.5 font-sora text-[12px] font-normal leading-none ${
                           STATUS_STYLES[order.status] ?? "bg-gray-100 text-gray-700"
                         }`}
                       >
                         {STATUS_LABELS[order.status] ?? order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right font-frank-ruhl text-[16px] font-semibold text-[#121212]">
+                    {/* Figma: Amount Frank Ruhl 500, 18px, #000000 — আর
+                        বাঁ-ঘেঁষা, ডানে নয় (column-এর align flex-start)। */}
+                    <td className="font-frank-ruhl text-[18px] font-medium leading-none text-black">
                       {formatAmount(
                         // প্রতিটা order-এর নিজের snapshot — এই তালিকায়
                         // ভিন্ন মুদ্রার order মিশে থাকতে পারে।
@@ -703,13 +778,15 @@ export default async function AdminDashboardPage({
           </table>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="flex items-center gap-2 font-sora text-[13px] text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#FF9540]" aria-hidden="true" />
-            Showing <span className="font-semibold text-[#121212]">
+        {/* Figma: row, space-between, উচ্চতা 34। */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Figma: 6px কমলা বিন্দু + Sora 400 12px Black/70, gap 6। */}
+          <p className="flex items-center gap-1.5 font-sora text-[12px] leading-[15px] text-black/70">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF9540]" aria-hidden="true" />
+            Showing <span className="font-semibold text-black">
               {rangeStart}–{rangeEnd}
             </span>{" "}
-            of <span className="font-semibold text-[#121212]">{listTotal}</span> Transactions
+            of <span className="font-semibold text-black">{listTotal}</span> Transactions
           </p>
 
           <Pagination
@@ -722,36 +799,80 @@ export default async function AdminDashboardPage({
       </div>
 
       {/* --- Kitchen Inventory --- */}
-      <div className="rounded-[20px] bg-white p-5 md:p-6">
+      {/* Figma card: Vertical, 1059×266, radius 20, padding 30, gap 24. */}
+      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-frank-ruhl text-[24px] font-bold text-[#121212]">
+          <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
             Kitchen Inventory
           </h2>
+
+          {/**
+           * ⚠️ Figma-তে এখানে একটা "Today ⌄" dropdown আঁকা, কিন্তু সেটা
+           * বসানো হয়নি — ইচ্ছাকৃতভাবে।
+           *
+           * নিচের চারটে সংখ্যার তিনটেই (Total Items, Low Stock, Out of
+           * Stock) গুদামের *এই মুহূর্তের* অবস্থা, কোনো সময়কালের হিসাব
+           * নয়। "This Year" বাছলে সংখ্যা এক চুলও বদলাত না, অথচ
+           * ব্যবহারকারী ভাবতেন বদলেছে — একটা ছাঁকনি যেটা কিছুই ছাঁকে না,
+           * সেটা না থাকার চেয়েও খারাপ।
+           *
+           * Designer সম্ভবত পাশের কার্ড থেকে frame-টা copy করেছেন:
+           * CSS export-এ শিরোনামের layer-এর নাম এখনো "Resent Orders",
+           * আর hint-এর লেখা "VS last Week"।
+           *
+           * তাই কাজের link-টাই রাখা হয়েছে, শুধু pill-এর গড়নটা Figma-র:
+           * 40px উঁচু, radius 100, BG #F9F6F3, Sora 400 14px।
+           */}
           <Link
             href="/admin/inventory"
-            className="rounded-full bg-[#F9F6F3] px-4 py-2 font-sora text-[13px] text-gray-600 transition-colors hover:bg-gray-100"
+            className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06]"
           >
             Manage stock →
           </Link>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* Figma: row, gap 20, প্রতিটা card flex-grow 1। */}
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {inventoryStats.map((item) => (
-            <div key={item.label} className="rounded-[16px] bg-[#F9F6F3] p-4">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-frank-ruhl text-[18px] font-semibold text-[#121212]">
+            /* Figma card: column, 142px উঁচু, radius 16, padding 16,
+               gap 20, BG #F9F6F3।
+               উচ্চতাটা মিলিয়ে দেখার মতো:
+               16 + 40 (উপরের সারি) + 20 + 50 (নিচের ব্লক) + 16 = 142। */
+            <div
+              key={item.label}
+              className="flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4"
+            >
+              <div className="flex items-center justify-between gap-4">
+                {/* Figma: Frank Ruhl Libre, 500 Medium, 20px, #000000।
+                    আগে 18px semibold #121212 ছিল। */}
+                <h3 className="font-frank-ruhl text-[20px] font-medium leading-none text-black">
                   {item.label}
                 </h3>
-                <item.icon
-                  className="h-[18px] w-[18px] shrink-0 text-gray-500"
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
+                {/* ⚠️ Figma-তে icon-টা একটা 40×40 সাদা বৃত্তের ভেতরে,
+                    icon নিজে 18×18 কালো, stroke 1.2। আগে বৃত্তটাই ছিল
+                    না আর icon ধূসর — তাই cream পটভূমিতে ওটা মিলিয়ে
+                    যাচ্ছিল। */}
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white">
+                  <item.icon
+                    className="h-[18px] w-[18px] text-black"
+                    strokeWidth={1.2}
+                    aria-hidden="true"
+                  />
+                </span>
               </div>
-              <p className="mt-3 font-frank-ruhl text-[26px] font-bold leading-none text-[#121212]">
-                {item.value}
-              </p>
-              <p className="mt-2 font-sora text-[12px] text-gray-500">{item.hint}</p>
+
+              {/* Figma: column, gap 12। */}
+              <div className="flex flex-col gap-3">
+                {/* Figma: Frank Ruhl Libre, 600 SemiBold, 24px, #000000।
+                    আগে 26px bold #121212। */}
+                <p className="font-frank-ruhl text-[24px] font-semibold leading-none text-black">
+                  {item.value}
+                </p>
+                {/* Figma: Sora 400, 12px, Black/70। */}
+                <p className="font-sora text-[12px] font-normal leading-none text-black/70">
+                  {item.hint}
+                </p>
+              </div>
             </div>
           ))}
         </div>
@@ -771,7 +892,7 @@ export default async function AdminDashboardPage({
                 {money(rangeIncome)}
               </p>
             </div>
-            <RevenueRangeSelect range={revenueRange} />
+            <RangeSelect param="revenue" range={revenueRange} />
           </div>
 
           {/* Figma-র কার্ডে উপরের সারি আর chart-এর মাঝে 27.93px। */}
@@ -791,47 +912,76 @@ export default async function AdminDashboardPage({
           )}
         </div>
 
-        <div className="rounded-[20px] bg-white p-5 md:p-6">
+        {/* Figma card: Vertical, 517.5×356, radius 20, padding 30, gap 20. */}
+        <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
+          {/* Header — Figma: row, space-between, height 40, gap 20. */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-frank-ruhl text-[24px] font-bold text-[#121212]">
+            <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
               Top Selling Items
             </h2>
-            <span className="rounded-full bg-[#F9F6F3] px-4 py-2 font-sora text-[13px] text-gray-600">
-              This Week
-            </span>
+            <RangeSelect param="top" range={topRange} />
           </div>
 
           {topItems.length === 0 ? (
-            <p className="mt-6 font-sora text-[14px] text-gray-500">No sales this week yet.</p>
+            <p className="font-sora text-[14px] text-black/70">
+              No sales in this period yet.
+            </p>
           ) : (
-            <div className="mt-5 space-y-3">
+            /* Figma: column, gap 16। */
+            <div className="flex flex-col gap-4">
               {topItems.map((item, index) => (
-                <div key={item.title} className="flex items-center gap-3">
-                  <span className="w-4 shrink-0 font-sora text-[13px] text-gray-400">
-                    {index + 1}
-                  </span>
-                  <span className="w-20 shrink-0 font-sora text-[13px] leading-tight text-[#121212] sm:w-28 sm:text-[14px]">
-                    {item.title}
-                  </span>
+                /* Row — Figma: row, align center, gap 20, height 32
+                   (নাম দু'লাইন হলে 36)। */
+                <div key={item.title} className="flex items-center gap-3 md:gap-5">
+                  {/* Figma: বাঁ দলটার ভেতরে gap 30। */}
+                  <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-[30px]">
+                    {/* ক্রম + নাম — Figma: gap 16, মোট চওড়া 113। */}
+                    <div className="flex w-[104px] shrink-0 items-center gap-4 md:w-[113px]">
+                      <span className="font-frank-ruhl text-[14px] font-normal leading-none text-black">
+                        {index + 1}
+                      </span>
+                      {/* Figma: Sora 400, 14px, line-height 130%, চওড়া 90 —
+                          অর্থাৎ লম্বা নাম দু'লাইনে ভাঙাই নকশার অভিপ্রায়
+                          ("Crispy Fried Chicken")। truncate দিলে উল্টো
+                          মকআপের সাথে মিলত না। */}
+                      <span className="w-[90px] font-sora text-[14px] font-normal leading-[1.3] text-black">
+                        {item.title}
+                      </span>
+                    </div>
 
-                  <div className="h-8 flex-1 rounded-full bg-[#F9F6F3]">
+                    {/* Track — Figma: height 32, radius 100, BG #F9F6F3,
+                        ভেতরে সাদা তির্যক ডোরা 60%। ভরাট অংশটা এর উপরে
+                        বসে, তাই ডোরা কেবল খালি জায়গাতেই দেখা যায়। */}
                     <div
-                      className="flex h-8 items-center justify-end rounded-full pr-3"
+                      className="h-8 min-w-0 flex-1 overflow-hidden rounded-full"
                       style={{
-                        // সর্বোচ্চ আয়ের পদটা পুরো চওড়া; বাকিরা তার
-                        // অনুপাতে। ন্যূনতম ৪০% — নাহলে ছোট অঙ্কের bar-এর
-                        // ভেতরে টাকার লেখাটাই আঁটত না।
-                        width: `${Math.max((item.revenue / maxItemRevenue) * 100, 40)}%`,
-                        backgroundColor: BAR_COLORS[index % BAR_COLORS.length],
+                        backgroundColor: "#F9F6F3",
+                        backgroundImage:
+                          "repeating-linear-gradient(135deg, rgba(255,255,255,0.6) 0 2px, transparent 2px 14px)",
                       }}
                     >
-                      <span className="font-sora text-[12px] font-semibold text-white">
-                        {money(item.revenue)}
-                      </span>
+                      <div
+                        className="flex h-8 items-center justify-end rounded-full pr-2.5"
+                        style={{
+                          // অনুপাতে চওড়া, তবে ন্যূনতম ৯৬px — নাহলে ছোট
+                          // অঙ্কের bar-এর ভেতরে টাকার লেখাটাই আঁটত না।
+                          // শতাংশে ন্যূনতম দিলে সরু কার্ডে সেটা আবার
+                          // যথেষ্ট হতো না, তাই px।
+                          width: `${(item.revenue / maxItemRevenue) * 100}%`,
+                          minWidth: "96px",
+                          backgroundColor: BAR_COLORS[index % BAR_COLORS.length],
+                        }}
+                      >
+                        <span className="font-frank-ruhl text-[14px] font-medium leading-none text-white">
+                          {money(item.revenue)}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <span className="w-16 shrink-0 rounded-full bg-[#F9F6F3] px-2 py-1 text-center font-sora text-[12px] text-gray-600">
+                  {/* Figma: 83×32 pill, radius 100, BG #F9F6F3,
+                      লেখা Sora 400 12px #000000। */}
+                  <span className="flex h-8 w-[83px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[12px] font-normal leading-none text-black">
                     {item.quantity} Sold
                   </span>
                 </div>

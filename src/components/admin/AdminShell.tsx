@@ -115,17 +115,16 @@ export default function AdminShell({
 
   return (
     /**
-     * Figma-র বাইরের frame: Flow Vertical, gap 24px (`gap-6`)।
+     * Figma-র বাইরের frame: Flow Vertical, gap 24px (`xl:gap-6`)।
      *
-     * আগে `gap-[10px]` ছিল, তাই topbar-এর গোল pill আর নিচের কার্ডগুলো
-     * প্রায় গায়ে লেগে থাকত — মকআপে যে জায়গাটুকু bar-টাকে "ভাসমান"
-     * দেখায়, সেটাই হারিয়ে যাচ্ছিল।
+     * ছোট পর্দায় ২৪px বাড়াবাড়ি, কিন্তু আগের ১০px-ও কম ছিল: topbar
+     * একটা গোল pill, তার নিচেই সরাসরি বড় শিরোনাম — এত কম ফাঁকে দুটো
+     * একে অপরের গায়ে সেঁটে থাকত। ১৬px-এ pill-টা আলাদা করে "ভাসে"।
      *
-     * ছোট পর্দায় ২৪px বাড়াবাড়ি: সেখানে উল্লম্ব জায়গাই দুর্লভ, আর দুটো
-     * পূর্ণ-প্রস্থ কার্ডের মাঝে ১২px-এই সীমানা স্পষ্ট। তাই মানটা
-     * xl-scoped, ঠিক যেভাবে নিচের ৪০px-ও।
+     * প্রান্তের padding-ও ১২ থেকে ১৬: ফোনে কার্ডগুলো পর্দার কিনারা
+     * ঘেঁষে থাকলে ধরে-রাখা হাতের বুড়ো আঙুল বারবার লেগে যায়।
      */
-    <div className="mx-auto flex max-w-[1760px] flex-col gap-3 p-3 sm:p-4 xl:gap-6 xl:p-[30px]">
+    <div className="mx-auto flex max-w-[1760px] flex-col gap-4 p-4 xl:gap-6 xl:p-[30px]">
       <AdminTopbar
         name={name}
         email={email}
@@ -149,23 +148,12 @@ export default function AdminShell({
       />
 
       {/**
-       * Figma-র parent frame: Flow Horizontal, gap 40px — sidebar আর
-       * ডান পাশের content-এর মধ্যে ঠিক ততটাই ফাঁক। আগে এখানে
-       * `gap-[10px]` ছিল, তাই দুটো কার্ড প্রায় গায়ে লেগে থাকত আর
-       * মকআপের শ্বাস নেওয়ার জায়গাটা হারিয়ে যেত।
-       *
-       * `gap-10` = 2.5rem = 40px, তাই আলাদা করে `gap-[40px]` লেখার
-       * দরকার নেই।
+       * Figma-র ভেতরের frame: Flow Horizontal, gap 40px (`gap-10`,
+       * অর্থাৎ 2.5rem)।
        *
        * xl-scoped, কারণ তার নিচে এই gap-এর কোনো অস্তিত্বই নেই:
        * xl-এর নিচে AdminSidebar হয় `fixed` (drawer), নয় `md:hidden` —
-       * দুটোর কোনোটাই flex item নয়, তাই <main> একাই থাকে আর gap কিছুই
-       * করে না। তবু `gap-0` স্পষ্ট করে লেখা, যাতে পরে কেউ পড়ে না ভাবে
-       * ফোনেও ৪০px ফাঁক যাচ্ছে।
-       *
-       * হিসাবটা মিলিয়ে দেখার মতো: 256 (xl:w-64 sidebar) + 40 (gap)
-       * বাদ দিলে Figma-র ১৩৮০px frame-এ content-এর জন্য ১০৮৪px পড়ে
-       * থাকে — মকআপে ঠিক তাই।
+       * দুটোর কোনোটাই flex item নয়, তাই <main> একাই থাকে।
        */}
       <div className="flex gap-0 xl:gap-10">
         {/**
@@ -175,9 +163,8 @@ export default function AdminShell({
          * আগে এটা `xl:hidden` ছিল, কিন্তু hamburger নিজেই `md:hidden`
          * আর sidebar-ও `md:hidden` — অর্থাৎ 768px থেকে উপরে drawer বলে
          * কিছু নেই, ওখানে AdminNavRail কাজটা করে। ফলে ফোনে drawer খুলে
-         * tablet প্রস্থে ঘোরালে (বা resize করলে) drawer উধাও হয়ে যেত
-         * অথচ কালো overlay আর locked body scroll থেকে যেত — ব্যবহারকারীর
-         * কাছে page-টা নিছক জমে গেছে মনে হতো।
+         * tablet প্রস্থে ঘোরালে drawer উধাও হয়ে যেত অথচ কালো overlay
+         * আর locked body scroll থেকে যেত।
          */}
         {mobileOpen && (
           <div

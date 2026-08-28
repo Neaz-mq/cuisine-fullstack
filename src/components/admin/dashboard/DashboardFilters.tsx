@@ -63,11 +63,14 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
   }, [open]);
 
   return (
-    <div className="flex items-center gap-2">
+    // Figma: row, justify flex-end, gap 10, উচ্চতা 40।
+    <div className="flex items-center gap-2.5">
+      {/* Figma: 122×40 pill, radius 100, BG #F9F6F3, padding 12, gap 8।
+          Icon 16×16 কালো, placeholder Sora 400 14px Black/70। */}
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-          strokeWidth={1.8}
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black"
+          strokeWidth={1.2}
           aria-hidden="true"
         />
         <input
@@ -76,22 +79,30 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search"
           aria-label="Search recent orders by customer name or email"
-          className="w-32 rounded-full bg-[#F9F6F3] py-2.5 pl-9 pr-3 font-sora text-[13px] text-gray-700 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40 md:w-44"
+          /**
+           * বিশ্রামে ঠিক Figma-র ১২২px, কিন্তু focus করলে ২২০ —
+           * মকআপে ওটা নিছক একটা ছবি, বাস্তবে ওখানে গ্রাহকের নাম টাইপ
+           * করতে হয়। ১২২-এ icon আর padding বাদ দিলে লেখার জন্য ৭৪px
+           * পড়ে থাকে, অর্থাৎ "Md. Rai" পর্যন্ত দেখা যেত।
+           */
+          className="h-10 w-[122px] rounded-full bg-[#F9F6F3] pl-9 pr-3 font-sora text-[14px] leading-none text-black transition-[width] duration-200 placeholder:text-black/70 focus:w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
         />
       </div>
 
       <div className="relative" ref={dropdownRef}>
+        {/* Figma: 91×40 pill, একই BG/radius, লেখা Sora 400 14px
+            Black/100, arrow 16×16। */}
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="flex items-center gap-1.5 rounded-full bg-[#F9F6F3] px-4 py-2.5 font-sora text-[13px] text-gray-700 transition-colors hover:bg-gray-100"
+          className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
         >
           {PERIOD_LABELS[period]}
           <ChevronDown
-            className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
-            strokeWidth={1.8}
+            className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+            strokeWidth={1.2}
             aria-hidden="true"
           />
         </button>
@@ -99,7 +110,7 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
         {open && (
           <ul
             role="listbox"
-            className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl bg-white py-1 shadow-lg ring-1 ring-black/5"
+            className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5"
           >
             {DASHBOARD_PERIODS.map((option) => (
               <li key={option}>
