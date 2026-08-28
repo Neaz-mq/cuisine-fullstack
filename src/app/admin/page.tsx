@@ -585,11 +585,31 @@ export default async function AdminDashboardPage({
          * ওটা নিজের লেখার চেয়েও সরু হয়ে যেত আর "Aug 28, 2026" দু'লাইনে
          * ভেঙে pill-টা উপচে পড়ত। এখন দুটোই নিজের মাপে (`shrink-0`),
          * আর ফাঁকটা `justify-between` সামলায়।
+         *
+         * ⚠️ `flex-wrap` লাগে ৩২০px-এর জন্য। দুটো মিলে ~৩২২px, অথচ
+         * ওখানে padding বাদে থাকে ২৮৮ — `shrink-0` বলা আছে বলে কেউ
+         * ছোট হয় না, তাই Export বোতামটা কেটে পর্দার বাইরে চলে যেত।
+         * wrap থাকলে ওটা নিচের সারিতে নেমে যায়। ৩৭৫px-এ (আজকের সবচেয়ে
+         * সাধারণ ছোট মাপ) দুটো এক সারিতেই আঁটে, তাই সেখানে wrap-এর
+         * কোনো প্রভাব নেই।
+         *
+         * ছোট পর্দায় তারিখটা বছর ছাড়া ("Aug 28") — ৩২০px-এ ওটুকু
+         * বাঁচানো মানে দুটো এক সারিতেই থেকে যাওয়া, আর বছরটা এমনিতেও
+         * চলতি বছর, কেউ খোঁজে না।
          */}
-        <div className="flex w-full shrink-0 items-center justify-between gap-2 md:w-auto md:justify-start">
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
           <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
-            <Calendar className="h-4 w-4 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+            <span className="sm:hidden">
+              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+            <span className="hidden sm:inline">
+              {now.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
           </span>
           <ExportReportButton />
         </div>
