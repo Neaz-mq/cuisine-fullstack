@@ -27,9 +27,16 @@ import {
 import RevenueHeroCard from "@/components/admin/dashboard/RevenueHeroCard";
 import DashboardFilters from "@/components/admin/dashboard/DashboardFilters";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
-import RevenueBubbleChart, {
+import RevenueChart, {
   type RevenueDay,
-} from "@/components/admin/dashboard/RevenueBubbleChart";
+} from "@/components/admin/dashboard/RevenueChart";
+import RevenueRangeSelect from "@/components/admin/dashboard/RevenueRangeSelect";
+import {
+  buildRevenueBuckets,
+  bucketIndexOf,
+  isRevenueRange,
+  type RevenueRange,
+} from "@/lib/revenue-range";
 
 const ORDERS_PER_PAGE = 10;
 
@@ -77,7 +84,14 @@ function percentChange(current: number, previous: number): number | null {
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; period?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    period?: string;
+    page?: string;
+    /** Revenue chart-এর নিজস্ব ছাঁকনি — `period` নয়, দেখুন
+     *  RevenueRangeSelect-এর মন্তব্য। */
+    revenue?: string;
+  }>;
 }) {
   // The dashboard shows revenue and other financial data, which is
   // restricted to the "insights" scope. Roles without it (WAITER,
@@ -96,6 +110,13 @@ export default async function AdminDashboardPage({
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
   const now = new Date();
+
+  // Revenue chart কোন সময়কাল দেখাবে, আর সেই সময়কালটা কোন খোপে ভাগ
+  // হবে। খাঁটি হিসাব, কোনো query লাগে না — তাই নিচের Promise.all-এর
+  // আগেই তৈরি, আর chart-এর query গুলো এর প্রথম খোপ থেকে শুরু করে।
+  const revenueRange: RevenueRange = isRevenueRange(params.revenue) ? params.revenue : "week";
+  const revenueBuckets = buildRevenueBuckets(revenueRange, now);
+  const chartStart = revenueBuckets[0].start;
 
   // গত ৭ দিন (আজ সহ), আর তার আগের ৭ দিন — stat card-এর "vs last week"
   // তুলনার দুই প্রান্ত।
@@ -140,7 +161,8 @@ export default async function AdminDashboardPage({
     lastWeekRevenue,
     listTotal,
     listOrders,
-    weekOrders,
+    chartOrders,
+    chartPurchases,
     topItemsRaw,
     inventoryItems,
     todayOrderItems,
@@ -156,7 +178,7 @@ export default async function AdminDashboardPage({
       // totalAmount-এ কর আর বকশিশ দুটোই আছে। করের টাকা সরকারের, বকশিশ
       // কর্মীর — দুটোকেই "আয়" গুনলে মালিকের প্রতিটা সংখ্যা ফুলে যেতো,
       // আর VAT ১৫% এমন দেশে ঠিক ততটাই বেশি।
-      _sum: { grandTotal: true, taxAmount: true },
+      _sum: { grandTotal: true, taxAmount: true, refundedAmount: true },
       where: notCancelled,
     }),
     // দুই সপ্তাহের status-ভিত্তিক গণনা এক query-তে — তিনটে card-এর
@@ -172,11 +194,11 @@ export default async function AdminDashboardPage({
       where: { createdAt: { gte: prevWeekStart, lt: weekStart } },
     }),
     prisma.order.aggregate({
-      _sum: { grandTotal: true, taxAmount: true },
+      _sum: { grandTotal: true, taxAmount: true, refundedAmount: true },
       where: { ...notCancelled, createdAt: { gte: weekStart } },
     }),
     prisma.order.aggregate({
-      _sum: { grandTotal: true, taxAmount: true },
+      _sum: { grandTotal: true, taxAmount: true, refundedAmount: true },
       where: { ...notCancelled, createdAt: { gte: prevWeekStart, lt: weekStart } },
     }),
     prisma.order.count({ where: orderListWhere }),
@@ -188,8 +210,23 @@ export default async function AdminDashboardPage({
       include: { user: { select: { name: true } } },
     }),
     prisma.order.findMany({
-      where: { ...notCancelled, createdAt: { gte: weekStart } },
-      select: { createdAt: true, grandTotal: true, taxAmount: true },
+      where: { ...notCancelled, createdAt: { gte: chartStart } },
+      select: {
+        createdAt: true,
+        grandTotal: true,
+        taxAmount: true,
+        refundedAmount: true,
+      },
+    }),
+    // সপ্তাহের খরচ — যে সরবরাহ-অর্ডারগুলো সত্যিই এসে পৌঁছেছে।
+    //
+    // status RECEIVED আর receivedAt দেখা হচ্ছে, createdAt নয়: DRAFT
+    // মানে এখনো পাঠানোই হয়নি, ORDERED মানে পাঠানো হয়েছে কিন্তু মাল
+    // আসেনি। রেস্তোরাঁর হিসাবে খরচ ধরা হয় মাল হাতে আসার দিনে, যেদিন
+    // কাগজ কাটা হয়েছিল সেদিন নয়।
+    prisma.purchaseOrder.findMany({
+      where: { status: "RECEIVED", receivedAt: { gte: chartStart } },
+      select: { receivedAt: true, totalCost: true },
     }),
     // Top Selling Items — Figma-তে "This Week", তাই সপ্তাহেই সীমাবদ্ধ
     // (আগে সর্বকালের ছিল)।
@@ -218,10 +255,56 @@ export default async function AdminDashboardPage({
   const units = settings.currencyMinorUnits;
   const money = (value: number) => formatAmount(value.toFixed(units), settings.currency);
 
-  const netOf = (agg: { _sum: { grandTotal: Prisma.Decimal | null; taxAmount: Prisma.Decimal | null } }) =>
-    (agg._sum.grandTotal ?? new Prisma.Decimal(0)).minus(agg._sum.taxAmount ?? new Prisma.Decimal(0));
+  /**
+   * রেস্তোরাঁর "net revenue" — অর্থাৎ যেটা সত্যিই দোকানের আয়।
+   *
+   * তিনটে জিনিস বাদ যায়, তিনটেই শিল্পমানের হিসাবে:
+   *
+   *   • কর — grandTotal-এ থাকে (EXCLUSIVE মোডে যোগ হয়ে, INCLUSIVE মোডে
+   *     ভেতরে লুকিয়ে), কিন্তু ওটা সরকারের টাকা, দোকান কেবল আদায় করে।
+   *     দুই মোডেই `grandTotal − taxAmount` ঠিক উত্তর দেয় — schema-র
+   *     মন্তব্য দ্রষ্টব্য।
+   *
+   *   • বকশিশ — এমনিতেই grandTotal-এ নেই (checkout-এ ওটা যোগ হয় তার
+   *     পরে, totalAmount-এ)। বেশির ভাগ দেশে ওটা আইনত কর্মীর টাকা।
+   *
+   *   • ফেরত — ⚠️ এটাই আগে বাদ পড়ছিল, আর এটাই সবচেয়ে বড় ভুল ছিল।
+   *     পাঁচ হাজার টাকার order পুরো ফেরত দেওয়ার পরেও dashboard সেটা
+   *     আয় হিসেবেই গুনত। "Net sales" মানেই ফেরত বাদ দেওয়ার পর।
+   *
+   * ফেরতটা অনুপাতে ভাগ করা হয়: বিলের যত অংশ আয় ছিল, ফেরতেরও তত
+   * অংশ আয় থেকে যায় — বাকিটা করের ফেরত, যেটা এমনিতেই আমাদের ছিল না।
+   * বাস্তবে partial refund ঠিক এভাবেই কাজ করে।
+   *
+   * ⚠️ gift card আর loyalty point ইচ্ছাকৃতভাবে বাদ যায় না। ওগুলো
+   * ছাড় নয়, টাকা দেওয়ার মাধ্যম — আয়টা গিফট কার্ড বিক্রির দিনেই
+   * ধরা হয়ে গেছে। তাই ওগুলো grandTotal-এর বাইরে (totalAmount-এ), আর
+   * এই হিসাবেও ছোঁয়া হয় না।
+   */
+  const ZERO = new Prisma.Decimal(0);
 
-  const totalRevenue = netOf(revenueResult);
+  const netRevenueOf = (agg: {
+    _sum: {
+      grandTotal: Prisma.Decimal | null;
+      taxAmount: Prisma.Decimal | null;
+      refundedAmount: Prisma.Decimal | null;
+    };
+  }) => {
+    const gross = agg._sum.grandTotal ?? ZERO;
+    const tax = agg._sum.taxAmount ?? ZERO;
+    const refunded = agg._sum.refundedAmount ?? ZERO;
+
+    const net = gross.minus(tax);
+    if (gross.lte(0) || refunded.lte(0)) return net;
+
+    // ফেরতের যে অংশটা আয় ছিল। clamp করা, কারণ refundedAmount হিসাব হয়
+    // totalAmount-এর বিপরীতে — যাতে বকশিশও থাকে — তাই বড় বকশিশের একটা
+    // পূর্ণ ফেরত তাত্ত্বিকভাবে net-কে ছাড়িয়ে যেতে পারত।
+    const revenueRefunded = Prisma.Decimal.min(refunded.times(net).dividedBy(gross), net);
+    return net.minus(revenueRefunded);
+  };
+
+  const totalRevenue = netRevenueOf(revenueResult);
 
   const countOf = (
     rows: { status: string; _count: { _all: number } }[],
@@ -243,10 +326,14 @@ export default async function AdminDashboardPage({
     {
       label: "In Progress",
       value: pendingOrders,
-      // Figma-র ঘুরন্ত/কেন্দ্রমুখী চিহ্ন — lucide-এর LoaderCircle একটা
-      // নিছক ভাঙা বৃত্ত, যেটা "কিছু একটা চলছে" বোঝায় না, দেখতে
-      // অসম্পূর্ণ লাগে। LoaderPinwheel-এর কেন্দ্রমুখী পাপড়িগুলো
-      // মকআপের সমকেন্দ্রিক বলয়ের অনেক কাছাকাছি।
+      // Figma-র ঘুরন্ত/কেন্দ্রমুখী চিহ্ন। আগে LoaderCircle ছিল, কিন্তু
+      // ওটা একটা নিছক ভাঙা বৃত্ত — স্থির অবস্থায় "কিছু একটা চলছে" না
+      // বুঝিয়ে বরং অসম্পূর্ণ দেখায়। LoaderPinwheel-এর কেন্দ্রমুখী
+      // পাপড়িগুলো মকআপের সমকেন্দ্রিক বলয়ের অনেক কাছাকাছি।
+      //
+      // ⚠️ LoaderPinwheel lucide-react-এর তুলনামূলক নতুন icon। build-এ
+      // "has no exported member" এলে package পুরনো — তখন `Radar`
+      // ব্যবহার করো, ওটাও একটা সমকেন্দ্রিক সর্পিল আর অনেক আগের।
       icon: LoaderPinwheel,
       delta: percentChange(
         countOf(thisWeekStatuses, IN_PROGRESS),
@@ -265,54 +352,62 @@ export default async function AdminDashboardPage({
   ];
 
   const revenueDelta = percentChange(
-    netOf(thisWeekRevenue).toNumber(),
-    netOf(lastWeekRevenue).toNumber()
+    netRevenueOf(thisWeekRevenue).toNumber(),
+    netRevenueOf(lastWeekRevenue).toNumber()
   );
 
-  // --- সাপ্তাহিক আয়ের বৃত্ত-নকশা ---
-  // gross আর tax আলাদা করে জমে, কারণ Figma-র tooltip-এ তিনটে সারি —
-  // আর তিনটে সংখ্যা একে অপরের সাথে মিলতে হবে (gross − tax = revenue),
-  // নাহলে মালিক ঠিক ওখানেই আটকে যাবেন।
-  const dayTotals = Array.from({ length: 7 }, () => ({ gross: 0, tax: 0, orders: 0 }));
+  // --- Revenue chart: আয় ও খরচ, খোপ ধরে ---
+  //
+  // খোপ-ভিত্তিক হিসাবটা এখানে হাতে করা হয়, groupBy দিয়ে নয়। কারণ
+  // ফেরতের অনুপাত প্রতিটা order-এর নিজের বিলের উপর নির্ভর করে — SQL-এ
+  // যোগ করে ফেললে সেই অনুপাতটাই হারিয়ে যায়।
+  const bucketTotals = revenueBuckets.map(() => ({ income: 0, expense: 0, orders: 0 }));
 
-  const dayBuckets: RevenueDay[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
-    dayBuckets.push({
-      label: d.toLocaleDateString("en-US", { weekday: "short" }),
-      fullDate: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      revenue: 0,
-      grossLabel: money(0),
-      taxLabel: money(0),
-      revenueLabel: money(0),
-      orders: 0,
-      // weekStart থেকে ৭ দিন, আজ সহ — তাই শেষ খোপটাই আজ।
-      isToday: i === 6,
-    });
-  }
-  weekOrders.forEach((order) => {
-    const dayIndex = Math.floor(
-      (new Date(order.createdAt).setHours(0, 0, 0, 0) - weekStart.getTime()) /
-        (1000 * 60 * 60 * 24)
-    );
-    if (dayIndex >= 0 && dayIndex < 7) {
-      // Decimal -> number, কারণ এগুলো কেবল আকার আর প্রদর্শনের জন্য।
-      // কোনো চালানে যায় না, তাই এখানে float সম্পূর্ণ নিরাপদ।
-      dayTotals[dayIndex].gross += order.grandTotal.toNumber();
-      dayTotals[dayIndex].tax += order.taxAmount.toNumber();
-      dayTotals[dayIndex].orders += 1;
-    }
+  chartOrders.forEach((order) => {
+    const index = bucketIndexOf(revenueBuckets, order.createdAt);
+    if (index < 0) return;
+
+    // উপরের netRevenueOf-এর মতোই, শুধু একটা order-এর জন্য।
+    const gross = order.grandTotal;
+    const net = gross.minus(order.taxAmount);
+    const refunded = order.refundedAmount;
+    const revenue =
+      gross.lte(0) || refunded.lte(0)
+        ? net
+        : net.minus(Prisma.Decimal.min(refunded.times(net).dividedBy(gross), net));
+
+    // Decimal -> number, কারণ এখান থেকে এগুলো কেবল আকার আর প্রদর্শনের
+    // কাজে যায়, কোনো চালানে নয়।
+    bucketTotals[index].income += revenue.toNumber();
+    bucketTotals[index].orders += 1;
   });
-  dayBuckets.forEach((day, index) => {
-    const totals = dayTotals[index];
-    day.revenue = totals.gross - totals.tax;
-    day.grossLabel = money(totals.gross);
-    day.taxLabel = money(totals.tax);
-    day.revenueLabel = money(day.revenue);
-    day.orders = totals.orders;
+
+  chartPurchases.forEach((po) => {
+    if (!po.receivedAt) return;
+    const index = bucketIndexOf(revenueBuckets, po.receivedAt);
+    if (index < 0) return;
+    bucketTotals[index].expense += po.totalCost.toNumber();
   });
-  const weekTotal = dayBuckets.reduce((sum, d) => sum + d.revenue, 0);
+
+  const dayBuckets: RevenueDay[] = revenueBuckets.map((bucket, index) => {
+    const totals = bucketTotals[index];
+    return {
+      label: bucket.label,
+      fullDate: bucket.fullLabel,
+      income: totals.income,
+      expense: totals.expense,
+      profit: totals.income - totals.expense,
+      incomeLabel: money(totals.income),
+      expenseLabel: money(totals.expense),
+      profitLabel: money(totals.income - totals.expense),
+      orders: totals.orders,
+      // শেষ খোপটাই সবসময় চলতি খোপ — buildRevenueBuckets তাই বানায়।
+      isToday: index === revenueBuckets.length - 1,
+    };
+  });
+
+  const rangeIncome = dayBuckets.reduce((sum, d) => sum + d.income, 0);
+  const rangeExpense = dayBuckets.reduce((sum, d) => sum + d.expense, 0);
 
   // --- Top-selling items ---
   // OrderItem.price is a UNIT price (confirmed by every other place in the
@@ -419,10 +514,19 @@ export default async function AdminDashboardPage({
     <div className="space-y-4">
       {/* --- Welcome header --- */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-            
+        {/* Figma Typography: Sora, 600 SemiBold, 30px, line-height 100%,
+            letter-spacing 0%। রঙ Black/70 — #000000 @ 70% opacity, তাই
+            `text-black/70`; একটা কঠিন hex দিলে cream background-এ
+            (#F9F6F3) অন্যরকম বসত, কারণ opacity নিচের রঙটা মিশতে দেয়। */}
         <h1 className="font-sora text-[26px] font-semibold leading-none tracking-normal text-black/70 md:text-[30px]">
           Welcome Back,{" "}
-         
+          {/* গ্রেডিয়েন্ট লেখা: background-টা লেখার আকারে কেটে নেওয়া হয়।
+              `text-transparent` না দিলে লেখাটাই gradient-কে ঢেকে দিত।
+
+              ⚠️ এই দুটো hex sidebar/hero card-এর gradient নয়। ওটা
+              #FF9540 → #FF70C6 — ইচ্ছাকৃতভাবে হালকা, কারণ তার উপরে
+              সাদা লেখা পড়তে হয়। এখানে gradient-টাই লেখা, তাই Figma-তে
+              অনেক বেশি saturated: #FF7100 → #FF1CA4। */}
           <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
             {session.user.name ?? "there"}!
           </span>
@@ -472,13 +576,13 @@ export default async function AdminDashboardPage({
                * করে বার করা — card-এর Hug height 142 থেকে:
                *
                *   142 − 16 − 16 (padding)      = 110
-               *   110 − 20 − 20 (দুটো gap)     = 70  ← তিন সারির মোট
+               *   110 − 20 − 20 (দুটো gap)     = 70   ← তিন সারির মোট
                *   70 − 12 ("VS last Week")     = 58
-               *   58 − 24 (সংখ্যা)             = 34  ← প্রথম সারির উচ্চতা
+               *   58 − 24 (সংখ্যা)             = 34   ← প্রথম সারির উচ্চতা
                *
                * প্রথম সারিতে সবচেয়ে লম্বা জিনিসটাই উচ্চতা ঠিক করে, আর
                * শিরোনামটা মাত্র 20px — কাজেই ওই ৩৪ বৃত্তটারই।
-               * Figma-তে বৃত্তটা select করে মিলিয়ে নিও।
+               * Figma-তে বৃত্তটা select করে মিলিয়ে নিলে নিশ্চিত হওয়া যাবে।
                */}
               <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3]">
                 <stat.icon
@@ -510,7 +614,7 @@ export default async function AdminDashboardPage({
             </div>
 
             {/* Figma Typography: Sora, 400 Regular, 12px, line-height
-                100%, letter-spacing 0%, Black/70。
+                100%, letter-spacing 0%, Black/70।
                 আগে text-gray-500 ছিল — একটা কঠিন ধূসর, যেটা সাদা ছাড়া
                 অন্য background-এ ভিন্ন রকম বসে; Black/70 নিচের রঙটা
                 মিশতে দেয়। */}
@@ -658,19 +762,33 @@ export default async function AdminDashboardPage({
         <div className="rounded-[20px] bg-white p-5 md:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-sora text-[14px] text-gray-500">Total Revenue</p>
-              <p className="mt-1 font-frank-ruhl text-[28px] font-bold leading-none text-[#121212]">
-                {money(weekTotal)}
+              {/* Figma: Sora 400, 16px, Black/70 → অঙ্ক Frank Ruhl 600,
+                  28px, #000000, মাঝে 9.58px ফাঁক। */}
+              <p className="font-sora text-[16px] font-normal leading-none tracking-normal text-black/70">
+                Total Revenue
+              </p>
+              <p className="mt-[9.58px] font-frank-ruhl text-[28px] font-semibold leading-none tracking-normal text-black">
+                {money(rangeIncome)}
               </p>
             </div>
-            <span className="rounded-full bg-[#F9F6F3] px-4 py-2 font-sora text-[13px] text-gray-600">
-              This Week
-            </span>
+            <RevenueRangeSelect range={revenueRange} />
           </div>
 
-          <div className="mt-6">
-            <RevenueBubbleChart days={dayBuckets} />
+          {/* Figma-র কার্ডে উপরের সারি আর chart-এর মাঝে 27.93px। */}
+          <div className="mt-7">
+            <RevenueChart days={dayBuckets} />
           </div>
+
+          {/* সপ্তাহের সারাংশ — মকআপে নেই, কিন্তু chart-এর নিচের কমলা
+              সারিটা কীসের সেটা লেখা না থাকলে বোঝার উপায় থাকে না, আর
+              food cost % ছাড়া রেস্তোরাঁর কোনো সপ্তাহ পড়া যায় না
+              (৩০% ধরে রাখাই সাধারণ লক্ষ্য)। */}
+          {rangeExpense > 0 && (
+            <p className="mt-4 font-sora text-[12px] leading-none text-black/70">
+              {money(rangeExpense)} in stock purchases ·{" "}
+              {Math.round((rangeExpense / (rangeIncome || 1)) * 100)}% of revenue
+            </p>
+          )}
         </div>
 
         <div className="rounded-[20px] bg-white p-5 md:p-6">
