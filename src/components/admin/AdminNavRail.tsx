@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ICONS, isActivePath, type SidebarItem, type SidebarSection } from "./AdminSidebar";
+import {
+  ICONS,
+  iconStateProps,
+  isActivePath,
+  type SidebarItem,
+  type SidebarSection,
+} from "./AdminSidebar";
 
 /**
  * src/components/admin/AdminNavRail.tsx
@@ -69,7 +75,10 @@ export default function AdminNavRail({
                 : "text-[#121212] hover:bg-gray-100"
             }`}
           >
-            <Icon className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
+            {/* সক্রিয় হলে icon ভরাট — AdminSidebar-এর একই নিয়ম, একই
+                ব্যতিক্রম তালিকা। এখানে আলাদা করে লিখলে একদিন দুই
+                জায়গায় দুই রকম হয়ে যেত। */}
+            <Icon className="h-6 w-6" {...iconStateProps(item.icon, active)} aria-hidden="true" />
 
             {/* সংখ্যাটা ৫০px বৃত্তের কোণে পড়া যেত না, তাই শুধু একটা
                 বিন্দু — "এখানে কিছু জমে আছে" ইঙ্গিতটুকু থাকে, আর

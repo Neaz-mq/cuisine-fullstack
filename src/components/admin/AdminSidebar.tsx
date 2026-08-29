@@ -102,6 +102,44 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
   settings: Settings,
 };
 
+/**
+ * সক্রিয় item-এর icon ভরাট হয়ে যায় — Figma-তে vuesax-এর "linear"
+ * থেকে "bold" রূপে বদলে যাওয়াটাই যা বোঝায়।
+ *
+ * lucide-এ আলাদা ভরাট সংস্করণ নেই; প্রতিটা icon stroke দিয়ে আঁকা আর
+ * root <svg>-এ `fill="none"` বসানো। ওই একটা attribute পাল্টে দিলে
+ * ভেতরের বদ্ধ পথগুলো ভরে ওঠে, আর stroke-টা তার উপরেই থাকে — ফলে
+ * silhouette-টা bold রূপের খুব কাছাকাছি দাঁড়ায়।
+ *
+ * ⚠️ একটা সীমা আছে, আর সেটা জেনে রাখা ভালো: vuesax-এর bold রূপে
+ * ভেতরের রেখাগুলো পটভূমির রঙে "কেটে" রাখা থাকে (knock-out), lucide-এ
+ * সেটা নেই। তাই যে icon-গুলোর মানেই ভেতরের রেখায় — ক্লিপবোর্ডের
+ * তালিকা-দাগ, বইয়ের মাঝের ভাঁজ, টেবিলের ঘর — সেগুলো ভরাট করলে
+ * নিরাকার একটা চাকতি হয়ে যায়।
+ *
+ * সেগুলোর জন্য নিচের ব্যতিক্রম তালিকা: ভরাট না করে stroke মোটা করা
+ * হয়, তাতেও "এটা বাছাই করা" সংকেতটা থাকে অথচ icon-টা চেনা যায়।
+ *
+ * নতুন কোনো icon ভরাট করলে বিশ্রী দেখালে শুধু এখানে তার নামটা যোগ
+ * করলেই হবে — অন্য কোথাও কিছু বদলাতে হবে না।
+ */
+const NO_FILL_WHEN_ACTIVE = new Set<NavIcon>(["orders", "menu", "tables"]);
+
+/**
+ * Icon-এ যে props গুলো active অবস্থা অনুযায়ী বদলায়।
+ *
+ * AdminNavRail-ও এটাই ব্যবহার করে — নাহলে tablet-এর rail-এ সক্রিয়
+ * icon ফাঁপা থাকত আর desktop-এ ভরাট, একই page-এ দুই চেহারা।
+ */
+export function iconStateProps(icon: NavIcon, active: boolean) {
+  if (!active) return { fill: "none", strokeWidth: 1.5 };
+  if (NO_FILL_WHEN_ACTIVE.has(icon)) return { fill: "none", strokeWidth: 2.2 };
+  // stroke-টা রেখে দেওয়া হয়, সরানো হয় না: ভরাটের কিনারায় ওটা
+  // থাকলে আকৃতিটা একটু মোটা আর স্পষ্ট হয় — bold রূপের মূল বৈশিষ্ট্যই
+  // তাই।
+  return { fill: "currentColor", strokeWidth: 1.5 };
+}
+
 export interface SidebarItem {
   label: string;
   href: string;
@@ -120,7 +158,20 @@ export interface SidebarItem {
  * উপরে-নিচে সরে যাবে।
  */
 const ITEM_BASE =
-  "flex h-12 flex-1 items-center gap-2 rounded-[12px] p-3 transition-colors";
+  "flex h-12 flex-1 items-center gap-2 p-3 transition-colors";
+
+/**
+ * ⚠️ radius ইচ্ছাকৃতভাবে ITEM_BASE-এ নেই, যদিও Figma-র খোলা sidebar-এ
+ * সেটা ১২px।
+ *
+ * খোলা আর গোটানো অবস্থায় দুটো আলাদা মান (১২ বনাম সম্পূর্ণ গোল), আর
+ * দুটোই এক className-এ লিখলে কোনটা জিতবে তার কোনো নিশ্চয়তা নেই —
+ * Tailwind-এ `rounded-full rounded-[12px]` লিখলে ফলাফল নির্ভর করে
+ * generated CSS-এ কোনটা পরে বসেছে তার উপর, className-এর ক্রমে নয়।
+ * তাই radius-টা প্রতিবার শর্ত অনুযায়ী আলাদা করে দেওয়া হয়।
+ */
+const ITEM_RADIUS = (collapsed: boolean) =>
+  collapsed ? "justify-center rounded-full" : "rounded-[12px]";
 
 /**
  * Typography panel থেকে: Frank Ruhl Libre, weight 600, 20px,
@@ -337,13 +388,29 @@ export default function AdminSidebar({
           onClick={onNavigate}
           title={titleFor(item.label)}
           aria-current={active ? "page" : undefined}
-          className={`${ITEM_BASE} ${collapsed ? "justify-center" : ""} ${
+          /**
+           * গোটানো অবস্থায় প্রতিটা icon একটা ৪৮px বৃত্তে বসে — Figma-র
+           * rail-এ ওটাই মূল গড়ন।
+           *
+           * ⚠️ নিষ্ক্রিয় item-এও পটভূমি থাকে, শুধু hover-এ নয়। ৮০px
+           * চওড়া সাদা স্তম্ভে খালি icon গুলো ভেসে থাকত — কোনটা কোথায়
+           * শেষ বোঝা যেত না, আর সক্রিয় item-টা একা রঙিন হয়ে বেমানান
+           * লাগত। cream বৃত্তগুলো একটা ছন্দ তৈরি করে, আর তার উপর
+           * gradient বৃত্তটা স্বাভাবিকভাবেই আলাদা হয়ে ওঠে।
+           */
+          className={`${ITEM_BASE} ${ITEM_RADIUS(collapsed)} ${
             active
               ? `${ACTIVE_GRADIENT} font-semibold text-white`
-              : "font-normal text-black hover:bg-[#F9F6F3]"
+              : `font-normal text-black ${
+                  collapsed ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : "hover:bg-[#F9F6F3]"
+                }`
           }`}
         >
-          <Icon className="h-6 w-6 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+          <Icon
+            className="h-6 w-6 shrink-0"
+            {...iconStateProps(item.icon, active)}
+            aria-hidden="true"
+          />
 
           {!collapsed && (
             <>
@@ -413,9 +480,29 @@ export default function AdminSidebar({
        * `invisible`-ও লাগে, নাহলে বন্ধ drawer-এর ১৭টা link-এ Tab করে
        * পৌঁছানো যেত অথচ পর্দায় কিছুই দেখা যেত না।
        */
-      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] md:hidden xl:visible xl:flex xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start xl:rounded-[20px] [&::-webkit-scrollbar]:hidden ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col overflow-y-auto bg-white transition-transform duration-200 [scrollbar-width:none] md:hidden xl:visible xl:flex xl:sticky xl:inset-y-auto xl:top-[30px] xl:z-auto xl:max-h-[calc(100vh-60px)] xl:shrink-0 xl:translate-x-0 xl:self-start [&::-webkit-scrollbar]:hidden ${
         mobileOpen ? "translate-x-0" : "invisible -translate-x-full"
-      } ${collapsed ? "xl:w-[88px]" : "xl:w-[281px]"}`}
+      } ${
+        /**
+         * Figma Layout panel (গোটানো rail): Width Hug 80px,
+         * Radius 100000px, Padding 20 / 16 / 20 / 16।
+         *
+         * ⚠️ ১০০০০০ কোনো সত্যিকারের মাপ নয় — Figma-তে "সম্পূর্ণ গোল"
+         * বোঝানোর প্রচলিত কায়দা। CSS-এ তার সমতুল্য `rounded-full`,
+         * যেটা উচ্চতার অর্ধেক ব্যাসার্ধ ধরে; একটা লম্বা স্তম্ভে সেটা
+         * উপরে-নিচে দুটো অর্ধবৃত্ত হয়ে দাঁড়ায়, ঠিক মকআপের মতো।
+         *
+         * প্রস্থ ৮৮ থেকে ৮০: বাঁ-ডান padding ১৬ করে, ভেতরে পড়ে থাকে
+         * ঠিক ৪৮ — অর্থাৎ icon বৃত্তের মাপ। আগের ৮৮-তে ওটা ৪৮ হতো না।
+         *
+         * ⚠️ বৃত্তাকার কিনারা আর ভেতরের জিনিস কেটে যাওয়া নিয়ে একবার
+         * হিসাব করে দেখা দরকার ছিল: ৮০px চওড়া মানে কোণের ব্যাসার্ধ ৪০,
+         * আর উপর থেকে ২০px নিচে (যেখানে প্রথম chip শুরু) বক্ররেখাটা
+         * ভেতরের দিকে ঢুকে আসে মাত্র ৫.৪px। আমাদের জিনিস শুরু হয় ১৬px-এ,
+         * অর্থাৎ ১০px-এর বেশি ফাঁক — কিছুই কাটে না।
+         */
+        collapsed ? "xl:w-[80px] xl:rounded-full" : "xl:w-[281px] xl:rounded-[20px]"
+      }`}
     >
       {/* User card — Figma-তে sidebar-এর মাথায়। topbar-এও নাম/email আছে
           ঠিকই, কিন্তু ওটা সরু হলে (md-এর নিচে) লুকিয়ে যায়, তাই এখানে
@@ -423,10 +510,18 @@ export default function AdminSidebar({
       {/* Figma: card 241×57, BG #F9F6F3, radius 8, padding 8, আর
           তার নিচে একটা 1px #D9D9D9 রেখা। কার্ডটার নিজের কোনো border
           নেই — আগে `border-gray-200` ছিল, তাই দুটো রেখা দেখা যেত। */}
-      <div className={`sticky top-0 z-10 bg-white p-5 ${collapsed ? "px-5" : ""}`}>
+      {/* Figma: গোটানো অবস্থায় বাঁ-ডান padding ১৬ (খোলা অবস্থায় ২০),
+          উপরে-নিচে ২০ — দুটোতেই। */}
+      <div className={`sticky top-0 z-10 bg-white ${collapsed ? "px-4 py-5" : "p-5"}`}>
         <div
-          className={`flex items-center gap-5 rounded-lg bg-[#F9F6F3] p-2 ${
-            collapsed ? "justify-center" : "h-[57px] justify-between"
+          /* গোটানো অবস্থায় এটা আর "user card" নয়, নিছক একটা ৪৮×৪৮
+             বোতাম-চিহ্ন — মকআপে rail-এর মাথায় ওটাই। নিচের icon
+             বৃত্তগুলোর সমান মাপ, কিন্তু গোল নয় বরং নরম চৌকো, যাতে
+             ওটা navigation-এর অংশ বলে ভুল না হয়। */
+          className={`flex items-center bg-[#F9F6F3] ${
+            collapsed
+              ? "h-12 w-12 justify-center rounded-2xl p-0"
+              : "h-[57px] justify-between gap-5 rounded-lg p-2"
           }`}
         >
           {!collapsed && (
@@ -481,7 +576,7 @@ export default function AdminSidebar({
        *
        * Card padding 20px — Figma-র Frame 2147232808।
        */}
-      <nav ref={contentRef} className="flex flex-col gap-5 px-5 pb-5">
+      <nav ref={contentRef} className={`flex flex-col gap-5 pb-5 ${collapsed ? "px-4" : "px-5"}`}>
         {/* Figma: user card-এর নিচে একটা 1px #D9D9D9 রেখা। */}
         <div aria-hidden="true" className="h-px shrink-0 bg-[#D9D9D9]" />
 
@@ -539,8 +634,12 @@ export default function AdminSidebar({
                 type="button"
                 onClick={() => signOut({ callbackUrl: "/" })}
                 title={titleFor("Logout")}
-                className={`${ITEM_BASE} ${ITEM_TEXT} font-normal ${
-                  collapsed ? "justify-center" : ""
+                className={`${ITEM_BASE} ${ITEM_TEXT} ${ITEM_RADIUS(collapsed)} font-normal ${
+                  // বাকি item-গুলোর মতোই cream বৃত্ত — লাল রংটা কেবল
+                  // icon আর লেখায়, পটভূমিতে নয়। ভরাট লাল বৃত্ত হলে
+                  // ওটা তালিকার সবচেয়ে জোরালো জিনিস হয়ে উঠত, অথচ
+                  // এটাই সেই বোতাম যেটা ভুল করে চাপা সবচেয়ে অবাঞ্ছিত।
+                  collapsed ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : ""
                 }`}
                 style={{ color: DANGER }}
               >
@@ -558,7 +657,11 @@ export default function AdminSidebar({
       {showFade && (
         <div
           aria-hidden="true"
-          className="pointer-events-none sticky bottom-0 -mt-12 h-12 shrink-0 rounded-b-[20px] bg-gradient-to-t from-white via-white/80 to-transparent"
+          className={`pointer-events-none sticky bottom-0 -mt-12 h-12 shrink-0 bg-gradient-to-t from-white via-white/80 to-transparent ${
+            // গোটানো অবস্থায় নিচের কোণটা অর্ধবৃত্ত, তাই ছায়াটাও তাই —
+            // নাহলে ২০px-এর চৌকো কোণ পিল-এর বাইরে উঁকি দিত।
+            collapsed ? "rounded-b-full" : "rounded-b-[20px]"
+          }`}
         />
       )}
     </aside>
