@@ -213,12 +213,27 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
         )}
       </div>
 
-      {/* দিনের নাম — Figma: Sora 400, 14px, Black/70, padding 0 16px। */}
-      <div className="flex justify-between gap-1 px-4">
+      {/**
+       * দিনের নাম — Figma: Sora 400, 14px, Black/70, padding 0 16px।
+       *
+       * ⚠️ ৩২০px-এ মাপ তিনটেই ছোট, sm (৬৪০) থেকে Figma-র।
+       *
+       * span গুলো `flex-1`, কিন্তু flex item-এর ডিফল্ট
+       * `min-width: auto` মানে কেউ নিজের লেখার চেয়ে সরু হয় না। সাতটা
+       * দিনের নাম ১৪px-এ যোগ করলে ~২০৬px, তার সাথে ছ'টা gap (২৪) আর
+       * দু'পাশের ১৬px padding (৩২) — মোট ~২৬২px, অথচ ৩২০px পর্দায়
+       * কার্ডের ভেতরে পড়ে থাকে ২৪৮। অর্থাৎ "Sat" কেটে যেত।
+       *
+       * ১২px লেখা + সরু gap + কম padding-এ যোগফল ~১৯৮, দিব্যি আঁটে।
+       * padding কমানোয় নামগুলো pill-এর কেন্দ্র থেকে একটু সরে, কিন্তু
+       * ৩২০px-এ pill নিজেই ৩২px চওড়া (Figma-র ৫২ নয়), তাই
+       * ওই ১৬px padding-টা এমনিতেও আর কিছু সারিবদ্ধ করত না।
+       */}
+      <div className="flex justify-between gap-0.5 px-1 sm:gap-1 sm:px-4">
         {days.map((day) => (
           <span
             key={`label-${day.label}`}
-            className={`flex-1 text-center font-sora text-[14px] leading-none tracking-normal ${
+            className={`min-w-0 flex-1 text-center font-sora text-[12px] leading-none tracking-normal sm:text-[14px] ${
               day.isToday ? "font-semibold text-black" : "text-black/70"
             }`}
           >

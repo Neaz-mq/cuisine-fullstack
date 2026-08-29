@@ -894,10 +894,28 @@ export default async function AdminDashboardPage({
       </div>
 
       {/* --- নিচের দুই কার্ড --- */}
+      {/**
+       * ⚠️ দুটো কার্ডেই `min-w-0`, আর এটা নিছক সতর্কতা নয় — ৩২০px-এ
+       * এটাই ছিল আসল রোগ।
+       *
+       * grid item-এর ডিফল্ট `min-width: auto`, অর্থাৎ কোনো item তার
+       * ভেতরের বিষয়বস্তুর চেয়ে সরু হতে পারে না। এক কলামে দুটো কার্ড
+       * থাকায় কলামের প্রস্থ ঠিক করত যেটার দাবি বেশি — Top Selling
+       * Items, যার একটা সারির ন্যূনতম প্রস্থ ছিল ~৩১১px। ফলে Total
+       * Revenue কার্ডটাও জোর করে ৩৫১px চওড়া হয়ে যেত আর পর্দার বাইরে
+       * বেরিয়ে যেত, যদিও ওর নিজের বিষয়বস্তু ২৪৮px-এ দিব্যি আঁটত।
+       *
+       * অর্থাৎ "Total Revenue কেটে যাচ্ছে" সমস্যাটা আসলে Total Revenue
+       * কার্ডের ছিলই না — ওটা পাশের কার্ডের ছায়া। নিচে Top Selling-এর
+       * ন্যূনতম মাপগুলোও কমানো হয়েছে, কিন্তু `min-w-0` ছাড়া ভবিষ্যতে
+       * আবার কেউ একটা চওড়া জিনিস বসালে ঠিক একই ভাবে দুটোই ভাঙত।
+       */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-[20px] bg-white p-5 md:p-6">
+        <div className="min-w-0 rounded-[20px] bg-white p-5 md:p-6">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            {/* min-w-0 — বড় অঙ্কে ("$1,284,905.00") নাহলে এই ব্লকটা
+                RangeSelect-কে ঠেলে কার্ডের বাইরে পাঠিয়ে দিত। */}
+            <div className="min-w-0">
               {/* Figma: Sora 400, 16px, Black/70 → অঙ্ক Frank Ruhl 600,
                   28px, #000000, মাঝে 9.58px ফাঁক। */}
               <p className="font-sora text-[16px] font-normal leading-none tracking-normal text-black/70">
@@ -928,10 +946,41 @@ export default async function AdminDashboardPage({
         </div>
 
         {/* Figma card: Vertical, 517.5×356, radius 20, padding 30, gap 20. */}
-        <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
-          {/* Header — Figma: row, space-between, height 40, gap 20. */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
+        <div className="flex min-w-0 flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
+          {/**
+           * Header — Figma: row, space-between, height 40, gap 20.
+           *
+           * ⚠️ এখানে `flex-wrap` নেই, আর সেটা ইচ্ছাকৃত — অন্য দুটো
+           * কার্ডের header-এ আছে।
+           *
+           * flex-wrap থাকলে browser আগে সারি ভাঙে, তারপর সঙ্কুচিত করে।
+           * সিদ্ধান্তটা নেয় item-এর *স্বাভাবিক* প্রস্থ দেখে, ন্যূনতম
+           * প্রস্থ দেখে নয়। শিরোনামটা ২৪px-এ ~২১৫px, pill ~১২৬ —
+           * যোগফল ৩৪১, অথচ ৩৭৫px পর্দায় কার্ডের ভেতরে পড়ে থাকে ৩০৩।
+           * তাই pill নেমে যেত দ্বিতীয় সারিতে, আর সেখানে সে একা —
+           * অর্থাৎ শিরোনামের নিচে ঝুলে থাকত, নকশার সাথে কোনো মিল নেই।
+           *
+           * wrap না থাকলে সারি একটাই, আর জায়গা কম পড়লে শিরোনামটা
+           * নিজের ভেতরে দু'লাইনে ভাঙে ("Top Selling" / "Items") —
+           * pill আগের মতোই উপরে-ডানে বসে থাকে। Figma-র বিন্যাসটা
+           * এভাবেই টিকে যায়।
+           *
+           * `items-start`, `items-center` নয়: শিরোনাম দু'লাইন হলে
+           * pill-টা তার মাঝ বরাবর না বসে উপরের লাইনের সাথে সারিবদ্ধ
+           * থাকে — চোখে সেটাই স্বাভাবিক।
+           *
+           * এর একটা পার্শ্বপ্রতিক্রিয়াও আছে, আর সেটাই dropdown-এর
+           * সমস্যাটা মিটিয়ে দেয়: pill কখনো বাঁ কিনারায় যায় না, তাই
+           * `right-0` ধরে ঝোলা তালিকাটা সবসময় কার্ডের ভেতরেই থাকে।
+           */}
+          <div className="flex items-start justify-between gap-3">
+            {/* min-w-0 — নাহলে flex item নিজের সবচেয়ে লম্বা শব্দের
+                চেয়ে সরু হতে পারে না, আর তখন লেখাটা ভাঙার বদলে pill-কে
+                ঠেলে বাইরে পাঠাত।
+                ৩২০px-এ ২০px, কারণ ওখানে শিরোনামের জন্য পড়ে থাকে মোটে
+                ~১১০px — ২৪px রাখলে "Top" / "Selling" / "Items" তিন
+                লাইন হয়ে যেত। */}
+            <h2 className="min-w-0 font-frank-ruhl text-[20px] font-semibold leading-tight text-black sm:text-[24px] sm:leading-none md:text-[30px]">
               Top Selling Items
             </h2>
             <RangeSelect param="top" range={topRange} />
@@ -947,19 +996,39 @@ export default async function AdminDashboardPage({
               {topItems.map((item, index) => (
                 /* Row — Figma: row, align center, gap 20, height 32
                    (নাম দু'লাইন হলে 36)। */
-                <div key={item.title} className="flex items-center gap-3 md:gap-5">
+                /**
+                 * ⚠️ প্রতিটা মাপ ৩২০px-এ ছোট, sm (৬৪০) থেকে Figma-র।
+                 *
+                 * ৩২০px-এ শেল (p-4) আর কার্ড (p-5) মিলে ভেতরে পড়ে
+                 * থাকে ২৪৮px। আগের মাপগুলোর যোগফল ছিল:
+                 *
+                 *   104 (নাম) + 16 + 96 (bar-এর ন্যূনতম) + 12 + 83 (pill)
+                 *   = 311px
+                 *
+                 * অর্থাৎ ৬৩px বেশি — "23 Sold" pill-টা পর্দার বাইরে
+                 * কেটে যেত। নতুন মাপে:
+                 *
+                 *   86 + 12 + 68 + 8 + 64 = 238px  ✅
+                 */
+                <div key={item.title} className="flex items-center gap-2 sm:gap-3 md:gap-5">
                   {/* Figma: বাঁ দলটার ভেতরে gap 30। */}
-                  <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-[30px]">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 md:gap-[30px]">
                     {/* ক্রম + নাম — Figma: gap 16, মোট চওড়া 113। */}
-                    <div className="flex w-[104px] shrink-0 items-center gap-4 md:w-[113px]">
+                    <div className="flex w-[86px] shrink-0 items-center gap-2 sm:w-[104px] sm:gap-4 md:w-[113px]">
                       <span className="font-frank-ruhl text-[14px] font-normal leading-none text-black">
                         {index + 1}
                       </span>
                       {/* Figma: Sora 400, 14px, line-height 130%, চওড়া 90 —
                           অর্থাৎ লম্বা নাম দু'লাইনে ভাঙাই নকশার অভিপ্রায়
                           ("Crispy Fried Chicken")। truncate দিলে উল্টো
-                          মকআপের সাথে মিলত না। */}
-                      <span className="w-[90px] font-sora text-[14px] font-normal leading-[1.3] text-black">
+                          মকআপের সাথে মিলত না।
+
+                          ⚠️ চওড়াটা এখন `flex-1`, স্থির 90px নয় — বাইরের
+                          বাক্সটাই তো ভাঙার বিন্দু ধরে বদলায়, ভেতরে একটা
+                          স্থির মাপ থাকলে ৩২০px-এ ওটা বাক্স ছাপিয়ে যেত।
+                          md-তে 113 − 10 (ক্রম) − 16 (gap) = 87, অর্থাৎ
+                          Figma-র 90-এর কার্যত সমান। */}
+                      <span className="min-w-0 flex-1 font-sora text-[14px] font-normal leading-[1.3] text-black">
                         {item.title}
                       </span>
                     </div>
@@ -975,19 +1044,27 @@ export default async function AdminDashboardPage({
                           "repeating-linear-gradient(135deg, rgba(255,255,255,0.6) 0 2px, transparent 2px 14px)",
                       }}
                     >
+                      {/**
+                       * ন্যূনতম প্রস্থটা এখন class-এ, inline style-এ নয়।
+                       *
+                       * কারণটা নিছক পরিচ্ছন্নতা নয় — inline style-এ
+                       * breakpoint লেখা যায় না, আর ঠিক সেটাই দরকার:
+                       * ৯৬px ছিল ৩২০px পর্দায় অতিরিক্ত। ৬৮px-এ "$432.99"
+                       * পর্যন্ত আঁটে, আর তার চেয়ে বড় অঙ্ক এলে bar এমনিতেই
+                       * চওড়া (বেশি টাকা = লম্বা bar), তাই সমস্যা হয় না।
+                       * শতাংশে ন্যূনতম দিলে সরু কার্ডে সেটা যথেষ্ট হতো না,
+                       * তাই px-ই।
+                       */}
                       <div
-                        className="flex h-8 items-center justify-end rounded-full pr-2.5"
+                        className="flex h-8 min-w-[68px] items-center justify-end rounded-full pr-2 sm:min-w-[96px] sm:pr-2.5"
                         style={{
-                          // অনুপাতে চওড়া, তবে ন্যূনতম ৯৬px — নাহলে ছোট
-                          // অঙ্কের bar-এর ভেতরে টাকার লেখাটাই আঁটত না।
-                          // শতাংশে ন্যূনতম দিলে সরু কার্ডে সেটা আবার
-                          // যথেষ্ট হতো না, তাই px।
+                          // অনুপাতে চওড়া — এটুকুই inline থাকতে হয়, কারণ
+                          // মানটা প্রতিটা সারিতে আলাদা।
                           width: `${(item.revenue / maxItemRevenue) * 100}%`,
-                          minWidth: "96px",
                           backgroundColor: BAR_COLORS[index % BAR_COLORS.length],
                         }}
                       >
-                        <span className="font-frank-ruhl text-[14px] font-medium leading-none text-white">
+                        <span className="whitespace-nowrap font-frank-ruhl text-[13px] font-medium leading-none text-white sm:text-[14px]">
                           {money(item.revenue)}
                         </span>
                       </div>
@@ -995,8 +1072,9 @@ export default async function AdminDashboardPage({
                   </div>
 
                   {/* Figma: 83×32 pill, radius 100, BG #F9F6F3,
-                      লেখা Sora 400 12px #000000। */}
-                  <span className="flex h-8 w-[83px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[12px] font-normal leading-none text-black">
+                      লেখা Sora 400 12px #000000।
+                      ৩২০px-এ ৬৪ — "999 Sold" পর্যন্ত এতেও আঁটে। */}
+                  <span className="flex h-8 w-[64px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[11px] font-normal leading-none text-black sm:w-[83px] sm:text-[12px]">
                     {item.quantity} Sold
                   </span>
                 </div>

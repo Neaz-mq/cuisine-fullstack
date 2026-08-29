@@ -66,7 +66,27 @@ export default function RangeSelect({
   };
 
   return (
-    <div className="relative shrink-0" ref={dropdownRef}>
+    /**
+     * ⚠️ `ml-auto` — ৩২০px-এ dropdown-টা পর্দার বাঁ দিকে কেটে যাওয়ার
+     * আসল সমাধান এটাই, তালিকাটার নিজের কোনো class নয়।
+     *
+     * তালিকাটা `right-0` ধরে ঝোলে, অর্থাৎ ওর ডান কিনারা pill-এর ডান
+     * কিনারায় মেলে আর ১৬০px বাঁ দিকে ছড়ায়। pill যতক্ষণ ডানে,
+     * ততক্ষণ ওটা কার্ডের ভেতরেই থাকে।
+     *
+     * কিন্তু Top Selling Items-এর শিরোনামটা ২৪px-এ ~২০০px চওড়া, আর
+     * pill ১২০ — ৩২০px পর্দায় দুটো এক সারিতে আঁটে না, তাই pill
+     * দ্বিতীয় সারিতে নেমে যায়। `justify-between` একা থাকা item-কে
+     * শুরুতে বসায়, অর্থাৎ pill চলে যায় একেবারে বাঁ কিনারায় — আর
+     * তখন ওর ডান কিনারা থেকে ১৬০px বাঁয়ে গেলে সেটা কার্ডেরও বাইরে,
+     * পর্দারও বাইরে।
+     *
+     * `ml-auto` থাকলে নিজের সারিতে নামলেও pill ডানেই থাকে, তাই
+     * `right-0`-এর হিসাবটা আর ভাঙে না। এক সারিতে থাকা অবস্থায়
+     * `justify-between` এমনিতেই যা করত, ml-auto তার সাথে সংঘাত
+     * বাধায় না — Total Revenue কার্ডে (যেখানে wrap হয় না) কিছুই বদলায় না।
+     */
+    <div className="relative ml-auto shrink-0" ref={dropdownRef}>
       {/* Figma Layout: Hug 120×40, radius 100, padding 12, gap 8,
           BG #F9F6F3। লেখা Sora 400 14px #000000, icon 16×16। */}
       <button
@@ -88,7 +108,11 @@ export default function RangeSelect({
       {open && (
         <ul
           role="listbox"
-          className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5"
+          /* max-w — শেষ রক্ষাকবচ। ৩২০px-এ কার্ডের ভেতরে ২৪৮px পড়ে
+             থাকে, তাই ১৬০px দিব্যি আঁটে; কিন্তু ভবিষ্যতে কেউ এই
+             pill-টা আরও সরু কোনো জায়গায় বসালে তালিকাটা যেন নীরবে
+             উপচে না পড়ে। */
+          className="absolute right-0 z-20 mt-2 w-40 max-w-[calc(100vw-48px)] overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5"
         >
           {REVENUE_RANGES.map((option) => (
             <li key={option}>

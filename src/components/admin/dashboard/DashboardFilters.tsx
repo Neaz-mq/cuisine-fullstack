@@ -19,6 +19,20 @@ import {
  * সবচেয়ে জরুরি — Export button ঠিক ওই একই URL parameter গুলো API-তে
  * পাঠাতে পারে, অর্থাৎ যা দেখা যাচ্ছে ঠিক তা-ই নামে।
  */
+/**
+ * Recent Orders কার্ড নিজে যে দুটো URL parameter চালায়।
+ *
+ * বাকি দুটো — `revenue` (Revenue chart) আর `top` (Top Selling Items) —
+ * অন্য কার্ডের, তাই এখান থেকে কিছু বদলালে ওগুলো URL-এ থাকে না।
+ *
+ * ⚠️ `period` কিন্তু রাখতেই হবে, বাদ দেওয়া চলবে না। ওটাও এই কার্ডেরই
+ * ছাঁকনি, আর "All time" অবস্থায় কেউ কোনো পুরনো গ্রাহকের নাম খুঁজলে
+ * period যদি নীরবে "Today"-তে ফিরে যেত, তাহলে যে অর্ডারটা খুঁজছেন
+ * ঠিক সেটাই তালিকা থেকে ছেঁকে বাদ পড়ত — খোঁজার ফল শূন্য, অথচ
+ * কারণটা পর্দায় কোথাও লেখা নেই।
+ */
+const OWN_PARAMS = ["q", "period"] as const;
+
 export default function DashboardFilters({ period }: { period: DashboardPeriod }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -61,14 +75,27 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
   const pendingRef = useRef(false);
 
   const pushParams = (changes: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
+    /**
+     * ⚠️ পুরনো URL-টা হুবহু কপি করা হয় না — কেবল এই কার্ডের নিজের
+     * parameter গুলোই রাখা হয় (OWN_PARAMS), বাকি সব ঝেড়ে ফেলা হয়।
+     *
+     * ফলে "This Month" অবস্থায় খুঁজলে URL হয় `/admin?q=naim`,
+     * `/admin?revenue=month&q=naim` নয় — অর্থাৎ খোঁজা শুরু করলেই
+     * পাতাটা তার ডিফল্ট চেহারায় ফেরে।
+     *
+     * `page`-ও এই কারণেই বাদ পড়ে: ৬ নম্বর page-এ থাকা অবস্থায় নতুন
+     * ছাঁকনি বসালে ফলাফল যদি ৩ page হয়, তাহলে খালি পর্দা আসত।
+     */
+    const params = new URLSearchParams();
+    OWN_PARAMS.forEach((key) => {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    });
+
     Object.entries(changes).forEach(([key, value]) => {
       if (value) params.set(key, value);
       else params.delete(key);
     });
-    // ছাঁকনি বদলালে সবসময় প্রথম page — নাহলে ৬ নম্বর page-এ থাকা অবস্থায়
-    // "Today" বেছে নিলে ফলাফল ৩ page হলে খালি পর্দা আসত।
-    params.delete("page");
 
     /**
      * `{ scroll: false }` — Pagination আর RangeSelect-এর মতোই।
