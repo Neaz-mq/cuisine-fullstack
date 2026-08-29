@@ -24,9 +24,41 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  /** URL এই মুহূর্তে যা ধরে আছে। */
+  const urlQuery = searchParams.get("q") ?? "";
+
+  const [query, setQuery] = useState(urlQuery);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * ⚠️ শেষবার আমরা URL-কে যে মানটা ধরতে *বলেছি* — URL এই মুহূর্তে যা
+   * ধরে আছে তা নয়। এই পার্থক্যটাই এখানকার আসল কথা।
+   *
+   * আগে তুলনাটা হতো সরাসরি `searchParams`-এর সাথে, আর তাতেই একটা
+   * নীরব বাগ ছিল:
+   *
+   *   ০ms    "naim" টাইপ করা হলো
+   *   ৪০০ms  ?q=naim push করা হলো — কিন্তু navigation সাথে সাথে শেষ
+   *          হয় না, এই পাতাটা প্রায় পনেরোটা Prisma query চালায়
+   *   ৫০০ms  ব্যবহারকারী ✕ চেপে বাক্সটা খালি করলেন
+   *   ৯০০ms  debounce জাগল। searchParams এখনো পুরনো (q নেই), আর
+   *          query-ও খালি — অর্থাৎ "কোনো পরিবর্তন নেই" মনে করে
+   *          push-টা বাদ দেওয়া হলো
+   *   ১২০০ms আগের navigation এসে পৌঁছল, URL হয়ে গেল ?q=naim
+   *
+   * ফল: বাক্স খালি, অথচ তালিকা ছাঁকা, আর URL-এ q আটকে আছে। তারপর
+   * refresh করলে বাক্সে আবার "naim" ফিরে আসত — কারণ URL কখনো
+   * পরিষ্কারই হয়নি। "বাতিল করলেও থেকে যায়" আর "refresh করলে
+   * ডিফল্টে ফেরে না" — দুটোই আসলে এই একটাই ঘটনা।
+   *
+   * নিজের অনুরোধের সাথে তুলনা করলে navigation কতক্ষণ নিচ্ছে তাতে
+   * কিছু আসে যায় না।
+   */
+  const requestedRef = useRef(urlQuery);
+
+  /** আমাদের শেষ অনুরোধটা এখনো পথে আছে কিনা। */
+  const pendingRef = useRef(false);
 
   const pushParams = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -37,21 +69,59 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
     // ছাঁকনি বদলালে সবসময় প্রথম page — নাহলে ৬ নম্বর page-এ থাকা অবস্থায়
     // "Today" বেছে নিলে ফলাফল ৩ page হলে খালি পর্দা আসত।
     params.delete("page");
-    router.push(params.toString() ? `${pathname}?${params}` : pathname);
+
+    /**
+     * `{ scroll: false }` — Pagination আর RangeSelect-এর মতোই।
+     * এটা ছাড়া প্রতিটা URL বদলের পরে পাতাটা একেবারে উপরে লাফ দিত,
+     * অর্থাৎ টাইপ করতে করতেই যে table-টা দেখছিলেন সেটা পর্দা থেকে
+     * হারিয়ে যেত।
+     */
+    router.push(params.toString() ? `${pathname}?${params}` : pathname, {
+      scroll: false,
+    });
   };
 
   // প্রতিটা keystroke-এ নতুন URL push করলে server component প্রতিবার
   // নতুন করে render হতো। ৪০০ms থামলে তবেই — /admin/orders-এর
   // OrdersToolbar-এ একই আচরণ।
   useEffect(() => {
+    // যা চাওয়া হয়েছিল তা-ই লেখা আছে — কিছু করার নেই। মনে রাখতে হবে,
+    // এখানে খালি করাটাও একটা পরিবর্তন: "" ≠ "naim", তাই ✕ চাপলে
+    // push হবেই।
+    if (query === requestedRef.current) return;
+
     const timer = setTimeout(() => {
-      if (query !== (searchParams.get("q") ?? "")) {
-        pushParams({ q: query || null });
-      }
+      requestedRef.current = query;
+      pendingRef.current = true;
+      pushParams({ q: query || null });
     }, 400);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+
+  /**
+   * উল্টো দিক: URL বাইরে থেকে বদলালে বাক্সটাও যেন বদলায়।
+   *
+   * সবচেয়ে সাধারণ ঘটনা back/forward button — ছাঁকা অবস্থা থেকে পিছিয়ে
+   * এলে তালিকা তো ভরে যেত, কিন্তু বাক্সে পুরনো লেখাটা বসে থাকত, কারণ
+   * `useState`-এর প্রাথমিক মানটা কেবল mount-এর সময় একবারই পড়া হয়।
+   *
+   * ⚠️ নিজের অনুরোধ পথে থাকলে URL-কে বিশ্বাস করা যাবে না — উপরের
+   * দৃশ্যে ১২০০ms-এ URL সাময়িকভাবে "naim" হয়, অথচ ব্যবহারকারী ততক্ষণে
+   * বাক্সটা খালি করে ফেলেছেন। ওই মুহূর্তে সিঙ্ক করলে "naim" আবার
+   * বাক্সে ফিরে আসত।
+   */
+  useEffect(() => {
+    if (urlQuery === requestedRef.current) {
+      // আমাদের অনুরোধ পৌঁছে গেছে, এখন থেকে URL-ই সত্য।
+      pendingRef.current = false;
+      return;
+    }
+    if (pendingRef.current) return;
+
+    requestedRef.current = urlQuery;
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,7 +148,7 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search"
-          aria-label="Search recent orders by customer name or email"
+          aria-label="Search recent orders by name, email or order ID"
           /**
            * বিশ্রামে ঠিক Figma-র ১২২px, কিন্তু focus করলে ২২০ —
            * মকআপে ওটা নিছক একটা ছবি, বাস্তবে ওখানে গ্রাহকের নাম টাইপ

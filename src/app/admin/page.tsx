@@ -15,6 +15,8 @@ import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
 import BusinessSummaryCard from "@/components/admin/BusinessSummaryCard";
 import Pagination from "@/app/admin/orders/Pagination";
+import { formatOrderId } from "@/lib/format-order-id";
+import { orderSearchFilter } from "@/lib/order-search";
 import { Prisma } from "@/generated/prisma/client";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
@@ -39,10 +41,6 @@ import {
 } from "@/lib/revenue-range";
 
 const ORDERS_PER_PAGE = 10;
-
-function formatOrderId(id: string) {
-  return `#ORD-${id.slice(-6).toUpperCase()}`;
-}
 
 /** "12 Jul, 02:00 am" — Figma-র Date & Time কলামের গড়ন। */
 function formatDateTime(date: Date) {
@@ -157,20 +155,17 @@ export default async function AdminDashboardPage({
 
   const listSince = periodStart(period, now);
 
-  /** Recent Orders তালিকার শর্ত — এই একই শর্ত export route-ও বানায়। */
+  /**
+   * Recent Orders তালিকার শর্ত — এই একই শর্ত export route-ও বানায়।
+   *
+   * ⚠️ খোঁজার অংশটা আর এখানে লেখা নেই, lib/order-search.ts-এ।
+   * /admin/orders-এও হুবহু এই শর্তই দরকার, আর দুটো কপি থাকায় এতদিন
+   * দুটোতেই অর্ডার আইডি খোঁজা যেত না — সংজ্ঞাটা এক জায়গায় থাকলে
+   * এরকম আর হবে না।
+   */
   const orderListWhere: Prisma.OrderWhereInput = {
     ...(listSince ? { createdAt: { gte: listSince } } : {}),
-    ...(q
-      ? {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { email: { contains: q, mode: "insensitive" } },
-            { user: { name: { contains: q, mode: "insensitive" } } },
-            { user: { email: { contains: q, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
+    ...(orderSearchFilter(q) ?? {}),
   };
 
   const notCancelled = { status: { not: "CANCELLED" as const } };

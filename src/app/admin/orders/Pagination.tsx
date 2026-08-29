@@ -18,6 +18,27 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  */
 
 /**
+ * ⚠️ প্রতিটা Link-এ `scroll={false}` — এটা নিছক একটা সাজসজ্জার prop
+ * নয়, pagination-এর আচরণের মূল কথা।
+ *
+ * next/link ডিফল্টে প্রতিটা navigation-এর পরে পাতাটাকে একেবারে উপরে
+ * নিয়ে যায়। নতুন পাতায় যাওয়ার জন্য ওটা ঠিক আচরণ — কিন্তু এখানে
+ * ব্যবহারকারী পাতা বদলাচ্ছেন না, একটা table-এর ভেতরে সরছেন। "২"
+ * চাপার পরে তাঁর চোখ যেখানে ছিল ঠিক সেখানেই থাকা উচিত।
+ *
+ * ছুঁড়ে উপরে নিয়ে গেলে যা হয়: dashboard-এ Recent Orders কার্ডটা
+ * অনেক নিচে, তাই প্রতিটা page বদলের পরে আবার scroll করে নেমে এসে
+ * table-টা খুঁজতে হয় — ২ থেকে ৩, ৩ থেকে ৪, প্রতিবার। তালিকা ঘেঁটে
+ * দেখাটাই যেখানে কাজ, সেখানে এটা কাজটাকেই অসম্ভব করে তোলে।
+ *
+ * RangeSelect-এ ঠিক এই সিদ্ধান্তই আগে নেওয়া হয়েছে — ওখানে
+ * `router.push(..., { scroll: false })`। এটা সেই একই আচরণ, শুধু
+ * Link-এর ভাষায় লেখা। দুই জায়গায় দু'রকম হলে পাতাটা কখনো লাফাত,
+ * কখনো লাফাত না — সেটাই সবচেয়ে বিভ্রান্তিকর।
+ */
+const NO_JUMP = false;
+
+/**
  * কোন page-সংখ্যাগুলো দেখানো হবে — `null` মানে "…"।
  *
  * চলতি page-এর দু'পাশে একটা করে, সাথে সবসময় প্রথম আর শেষ। প্রান্তে
@@ -80,6 +101,7 @@ export default function Pagination({
     <nav aria-label="Pagination" className="flex items-center gap-3">
       <Link
         href={buildHref(currentPage - 1)}
+        scroll={NO_JUMP}
         aria-label="Previous page"
         // প্রথম page-এ তীরটা থাকে কিন্তু নিষ্ক্রিয় — সরিয়ে দিলে বাকি
         // বোতামগুলো লাফ দিয়ে সরে যেত।
@@ -105,6 +127,7 @@ export default function Pagination({
           <Link
             key={page}
             href={buildHref(page)}
+            scroll={NO_JUMP}
             aria-label={`Page ${page}`}
             aria-current={page === currentPage ? "page" : undefined}
             className={`${CELL} ${
@@ -120,6 +143,7 @@ export default function Pagination({
 
       <Link
         href={buildHref(currentPage + 1)}
+        scroll={NO_JUMP}
         aria-label="Next page"
         aria-disabled={atEnd}
         tabIndex={atEnd ? -1 : undefined}

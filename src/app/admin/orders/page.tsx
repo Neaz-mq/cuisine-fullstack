@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
+import { orderSearchFilter } from "@/lib/order-search";
 import OrderStatusSelect from "./OrderStatusSelect";
 import OrdersToolbar from "./OrdersToolbar";
 import Pagination from "./Pagination";
@@ -53,19 +54,11 @@ export default async function AdminOrdersPage({
   const status = params.status;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
+  // খোঁজার শর্তটা /admin-এর dashboard-এর সাথে ভাগ করা — দেখুন
+  // lib/order-search.ts। এখানেও এখন অর্ডার আইডি দিয়ে খোঁজা যায়।
   const where: Prisma.OrderWhereInput = {
     ...(status && status !== "ALL" ? { status: status as Prisma.OrderWhereInput["status"] } : {}),
-    ...(q
-      ? {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { email: { contains: q, mode: "insensitive" } },
-            { user: { name: { contains: q, mode: "insensitive" } } },
-            { user: { email: { contains: q, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
+    ...(orderSearchFilter(q) ?? {}),
   };
 
   const [orders, totalCount] = await Promise.all([
