@@ -209,14 +209,37 @@ export default function UsersToolbar({
         </button>
 
         {open && (
+          /**
+           * Figma "popup": column, padding 16, gap 6, চওড়া 224,
+           * radius 16, BG #FFFFFF, shadow 0 4px 30px rgba(0,0,0,0.06)।
+           *
+           * ছায়াটা আগের চেয়ে অনেক নরম — ৩০px ছড়ানো কিন্তু মাত্র ৬%
+           * ঘন। আগে ছিল ৩২px/১৪%, তাই তালিকাটা পাতার উপরে ভেসে না
+           * থেকে যেন চেপে বসত। `ring`-টাও সরানো হলো: Figma-তে কোনো
+           * পাড় নেই, ছায়াই আলাদা করার কাজটা করে।
+           */
           <ul
             role="listbox"
-            className="absolute right-0 z-20 mt-2 w-full min-w-[190px] max-w-[calc(100vw-48px)] overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5 sm:w-auto"
+            className="absolute right-0 z-20 mt-2 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]"
           >
             {[ALL, ...CUSTOMER_CATEGORIES].map((option) => {
               const selected = option === ALL ? category === null : option === category;
               return (
-                <li key={option}>
+                <li key={option} className="w-full">
+                  {/**
+                   * Figma item: row, padding 10, উচ্চতা 34, লেখা
+                   * Sora 400 14px LH 100% #121212।
+                   *
+                   * ⚠️ বাছাই করা item-টা কমলা নয় — লেখার রঙ সবার
+                   * এক (#121212), শুধু তার পেছনে একটা cream (#F9F6F3)
+                   * pill বসে। আমার আগের কমলা-গাঢ় লেখাটা নকশায় নেই।
+                   *
+                   * আর radius দুটো আলাদা, আর সেটাও ইচ্ছাকৃত:
+                   * বাছাই করাটা 100 (পুরো pill), বাকিরা 12। বাকিদের
+                   * তো কোনো পটভূমিই নেই, তাই ওই ১২ কেবল hover-এর
+                   * সময় চোখে পড়ে — designer সেই অবস্থাটার জন্যই
+                   * মাপটা দিয়ে রেখেছেন।
+                   */}
                   <button
                     type="button"
                     role="option"
@@ -225,8 +248,8 @@ export default function UsersToolbar({
                       setOpen(false);
                       push({ category: option === ALL ? null : option });
                     }}
-                    className={`w-full whitespace-nowrap px-4 py-2 text-left font-sora text-[13px] transition-colors hover:bg-gray-50 ${
-                      selected ? "font-semibold text-[#FF4C15]" : "text-gray-700"
+                    className={`flex h-[34px] w-full items-center gap-2 whitespace-nowrap p-2.5 text-left font-sora text-[14px] font-normal leading-none text-[#121212] transition-colors ${
+                      selected ? "rounded-full bg-[#F9F6F3]" : "rounded-[12px] hover:bg-black/[0.04]"
                     }`}
                   >
                     {option === ALL ? "All Statuses" : CATEGORY_LABELS[option as CustomerCategory]}

@@ -18,6 +18,16 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
+  /// Google প্রোফাইল ছবির URL — শুধু Google দিয়ে login করলে ভরে।
+  /// Credentials দিয়ে তৈরি account-এ null থাকে, আর admin panel তখন
+  /// একটা নিরপেক্ষ silhouette দেখায় (দেখুন /admin/users)।
+  ///
+  /// ⚠️ URL সংরক্ষণ করা হয়, ফাইল নয়। Google-এর CDN-ই ছবিটা পরিবেশন
+  /// করে, তাই আমাদের কোনো storage bucket বা upload route লাগে না।
+  /// এর দাম: ব্যবহারকারী Google-এ ছবি বদলালে বা মুছলে পুরনো URL অচল
+  /// হয়ে যেতে পারে — তাই প্রতিবার login-এ মানটা মিলিয়ে নেওয়া হয়
+  /// (auth.ts-এর signIn callback)।
+  image     String?
   password  String?
 
   // E.164 format (+8801785286936) — normalised client-side at signup so the
@@ -101,6 +111,12 @@ enum Role {
   CASHIER
   DELIVERY
   KITCHEN
+  // Cleaning staff. Unlike every other staff role, CLEANER carries no
+  // admin scopes at all (lib/permissions.ts) — it exists so a cleaner
+  // can hold a StaffProfile (employee id, salary, shift, hire date),
+  // not so they can open the panel. Added for the Users page's
+  // "Cleaners" card, which the design calls for.
+  CLEANER
 }
 
 enum EmploymentType {

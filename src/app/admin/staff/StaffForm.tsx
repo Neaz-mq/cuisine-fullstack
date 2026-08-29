@@ -3,7 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const ROLE_OPTIONS = ["OWNER", "MANAGER", "WAITER", "CASHIER", "DELIVERY", "KITCHEN"] as const;
+const ROLE_OPTIONS = [
+  "OWNER",
+  "MANAGER",
+  "WAITER",
+  "CASHIER",
+  "DELIVERY",
+  "KITCHEN",
+  // CLEANER-এর কোনো admin scope নেই, কিন্তু তালিকায় থাকতেই হবে —
+  // নাহলে পরিচ্ছন্নতাকর্মীর staff record বানানোই যেত না, আর Users
+  // পাতার "Cleaners" সংখ্যাটা চিরকাল শূন্য থাকত।
+  "CLEANER",
+] as const;
 const EMPLOYMENT_OPTIONS = ["FULL_TIME", "PART_TIME", "CONTRACT"] as const;
 
 type StaffMember = {

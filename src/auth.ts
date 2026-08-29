@@ -68,6 +68,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          // ⚠️ এটা না থাকলে ছবিটা কেবল Google-লগইনে দেখা যেত।
+          // যিনি একবার Google দিয়ে ঢুকে পরে পাসওয়ার্ড বসিয়েছেন,
+          // তাঁর ছবি DB-তে আছে — কিন্তু credentials পথে সেটা কখনো
+          // session-এ পৌঁছাত না, কারণ এখান থেকে যা ফেরানো হয়
+          // কেবল সেটাই যায়।
+          image: user.image,
         };
       },
     }),
@@ -88,6 +94,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return false;
         }
 
+        /**
+         * Google-এর প্রোফাইল ছবি।
+         *
+         * NextAuth `user.image`-এ ওটা বসায় (Google-এর নিজের নাম
+         * `picture`), কিন্তু আমরা PrismaAdapter ব্যবহার করি না — JWT
+         * strategy দিয়ে হাতে সামলাই — তাই সংরক্ষণ করার দায়িত্বও
+         * আমাদের। না করলে মানটা শুধু session-এ থাকত, আর admin panel
+         * (যেটা DB থেকে পড়ে) কোনো ছবিই দেখতে পেত না।
+         *
+         * ⚠️ `?? null`, `?? undefined` নয়। Google থেকে ছবি না এলে
+         * আগের মানটা মুছে ফেলাই ঠিক — কেউ Google-এ ছবি সরিয়ে দিলে
+         * আমাদের কাছে একটা অচল URL পড়ে থাকা উচিত নয়।
+         */
+        const picture = user.image ?? null;
+
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email as string },
         });
@@ -96,6 +117,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             data: {
               email: user.email as string,
               name: user.name,
+              image: picture,
               role: "CUSTOMER",
               // password null থাকবে — এই user শুধু Google দিয়েই login করতে পারবে
             },
@@ -105,6 +127,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } else {
           user.id = existingUser.id;
           (user as { role?: string }).role = existingUser.role;
+
+          // ছবিটা বদলে থাকলে তবেই লেখা হয়। প্রতিটা login-এ শর্তহীন
+          // update করলে প্রতিবার একটা অপ্রয়োজনীয় write হতো, অথচ
+          // মানটা বছরে হয়তো একবার বদলায়।
+          if (existingUser.image !== picture) {
+            await prisma.user.update({
+              where: { id: existingUser.id },
+              data: { image: picture },
+            });
+          }
         }
       }
       return true;

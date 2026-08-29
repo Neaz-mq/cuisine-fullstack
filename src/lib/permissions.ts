@@ -15,6 +15,7 @@ export const STAFF_ROLES = [
   "CASHIER",
   "DELIVERY",
   "KITCHEN",
+  "CLEANER",
 ] as const;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -99,6 +100,19 @@ const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
   CASHIER: ["orders", "tables", "loyalty"],
   DELIVERY: ["myDeliveries"],
   KITCHEN: ["kitchen"],
+  // CLEANER holds nothing, and that is the whole point of the role.
+  //
+  // Every other staff role exists partly so its holder can do something
+  // in this panel. A cleaner's work leaves no trace here: no orders to
+  // move, no stock to count, no tables to seat. What they need is a
+  // StaffProfile — employee id, salary, employment type, hire date —
+  // so payroll and the Users page's "Cleaners" count are correct.
+  //
+  // An empty scope list is therefore deliberate, not an oversight, and
+  // firstAllowedPath() below has a branch for exactly this case. Giving
+  // them a scope "so the login goes somewhere" would hand a cleaner the
+  // restaurant's order book to solve a routing problem.
+  CLEANER: [],
 };
 
 /** The admin path each scope's section lives at — used to bounce a staff
@@ -181,9 +195,27 @@ export function getScopesForRole(role?: string | null): Scope[] {
  * Dashboard" text for these two roles. */
 export function firstAllowedPath(role?: string | null): string {
   if (role === "OWNER" || role === "MANAGER") return "/admin";
+
   const scopes = getScopesForRole(role);
   const first = SCOPE_PRIORITY.find((scope) => scopes.includes(scope));
-  return first ? SCOPE_PATH[first] : "/admin";
+  if (first) return SCOPE_PATH[first];
+
+  /**
+   * ⚠️ Zero-scope roles (CLEANER) must NOT fall back to "/admin".
+   *
+   * The old fallback did, and with CLEANER that turns into an infinite
+   * redirect: /admin checks hasPermission(role, "insights"), fails, and
+   * redirects to firstAllowedPath(role) — which was "/admin" again.
+   *
+   * That was latent before this role existed, because every role had at
+   * least one scope and the branch was unreachable. Adding a role with
+   * none is what makes it reachable, so it is fixed here rather than
+   * left as a trap for the next role someone adds.
+   *
+   * The storefront is the honest destination: a cleaner has a login
+   * (payroll, profile) but nothing to do in this panel.
+   */
+  return "/";
 }
 
 /** Human-facing label for each role's "home" link in the storefront
@@ -200,6 +232,8 @@ const STAFF_MENU_LABEL: Record<StaffRole, string> = {
   CASHIER: "Orders",
   DELIVERY: "My Deliveries",
   KITCHEN: "Kitchen Display",
+  // No panel to link to — the storefront is where they land.
+  CLEANER: "Home",
 };
 
 export function staffMenuLabel(role?: string | null): string {
@@ -219,6 +253,11 @@ const PANEL_LABEL: Record<StaffRole, string> = {
   CASHIER: "Staff Panel",
   DELIVERY: "Rider Panel",
   KITCHEN: "Kitchen Panel",
+  // Never actually rendered — a CLEANER can't reach any admin page —
+  // but Record<StaffRole, …> is exhaustive, and a placeholder here is
+  // better than loosening the type and losing the compile-time check
+  // that every future role gets a label.
+  CLEANER: "Staff Panel",
 };
 
 export function panelLabel(role?: string | null): string {

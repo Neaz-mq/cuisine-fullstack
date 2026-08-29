@@ -1,0 +1,16 @@
+-- Adds CLEANER to the staff Role enum.
+--
+-- The Users page's Overview row (Figma) counts five staff groups, the
+-- last of which is "Cleaners". Until now there was no such role, so the
+-- card was either a permanent zero or had to be relabelled. Adding the
+-- role makes the card count real people, and lets cleaning staff be
+-- created from /admin/staff like any other role.
+--
+-- CLEANER holds no admin scopes on purpose (see lib/permissions.ts).
+-- It exists so a cleaner can have a StaffProfile — employee id, salary,
+-- employment type, hire date — not so they can open the admin panel.
+--
+-- Note: ALTER TYPE ... ADD VALUE cannot be used in the same transaction
+-- that adds it on PostgreSQL, but adding it alone is fine from PG12
+-- onward. Supabase runs PG15+, so this migration applies cleanly.
+ALTER TYPE "Role" ADD VALUE 'CLEANER';

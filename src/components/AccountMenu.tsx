@@ -90,9 +90,34 @@ const AccountMenu = () => {
         aria-haspopup="true"
         type="button"
       >
-        <div className="w-7 h-7 3xl:w-9 3xl:h-9 rounded-full bg-[#2C6252] flex items-center justify-center flex-shrink-0">
-          <User className="w-4 h-4 3xl:w-5 3xl:h-5 text-white" />
-        </div>
+        {/**
+         * Google দিয়ে login করলে তাঁর প্রোফাইল ছবি, নাহলে আগের সেই
+         * সবুজ বৃত্ত আর icon।
+         *
+         * ⚠️ এখানে আগে শুধু icon-টাই ছিল — ছবি দেখানোর কোনো কোডই
+         * লেখা হয়নি। অর্থাৎ Google ছবিটা পাঠাত, session-এ থাকতও,
+         * কিন্তু কেউ কখনো পড়ত না।
+         *
+         * next/image নয়, সাধারণ <img> — /admin/users-এ একই কারণে
+         * (next.config-এ Google-এর CDN যোগ না থাকলে runtime-এ error,
+         * আর ২৮px avatar-এ optimization-এর লাভ সামান্য)।
+         * referrerPolicy — Google মাঝে মাঝে referrer দেখে ছবি আটকায়।
+         */}
+        {session.user?.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={session.user.image}
+            alt=""
+            width={36}
+            height={36}
+            referrerPolicy="no-referrer"
+            className="w-7 h-7 3xl:w-9 3xl:h-9 rounded-full object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="w-7 h-7 3xl:w-9 3xl:h-9 rounded-full bg-[#2C6252] flex items-center justify-center flex-shrink-0">
+            <User className="w-4 h-4 3xl:w-5 3xl:h-5 text-white" />
+          </div>
+        )}
         <span className="font-semibold whitespace-nowrap 3xl:text-[15px] 2xl:text-[14px] xl:text-[13px] lg:text-[12px] md:text-[12px] text-[10px] hidden sm:inline max-w-[80px] truncate">
           {displayName}
         </span>

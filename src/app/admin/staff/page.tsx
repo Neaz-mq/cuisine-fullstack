@@ -13,6 +13,7 @@ const ROLE_STYLES: Record<string, string> = {
   CASHIER: "bg-amber-100 text-amber-700",
   DELIVERY: "bg-orange-100 text-orange-700",
   KITCHEN: "bg-rose-100 text-rose-700",
+  CLEANER: "bg-slate-100 text-slate-700",
 };
 
 export default async function AdminStaffPage() {

@@ -57,6 +57,19 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         token.role = (user as { role?: string }).role;
         token.id = user.id;
+
+        /**
+         * প্রোফাইল ছবি। `picture` নামটা JWT-র প্রচলিত ক্ষেত্র, তাই
+         * Auth.js নিজেও ওটাই ব্যবহার করে।
+         *
+         * role আর id-র মতো এটাও স্পষ্ট করে লেখা হয়, যদিও Auth.js
+         * সাধারণত নিজে থেকেই বসিয়ে দেয়। কারণ credentials দিয়ে login
+         * করলে ওই স্বয়ংক্রিয় পথটা কিছুই দেয় না — authorize() যা
+         * ফেরায় কেবল সেটাই আসে (auth.ts দ্রষ্টব্য)। দুটো পথে দুই রকম
+         * আচরণ থাকলে "Google-এ ছবি আসে, ইমেইল-লগইনে আসে না" জাতীয়
+         * ধাঁধা তৈরি হয়।
+         */
+        token.picture = user.image ?? null;
       }
       return token;
     },
@@ -64,6 +77,7 @@ export const authConfig: NextAuthConfig = {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as { role?: string }).role = token.role as string;
+        session.user.image = (token.picture as string | null) ?? null;
       }
       return session;
     },
