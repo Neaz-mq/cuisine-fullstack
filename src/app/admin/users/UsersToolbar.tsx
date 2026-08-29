@@ -6,6 +6,7 @@ import { ChevronDown, Search } from "lucide-react";
 import {
   CUSTOMER_CATEGORIES,
   CATEGORY_LABELS,
+  CATEGORY_SHORT_LABELS,
   type CustomerCategory,
 } from "@/lib/customer-category";
 
@@ -19,6 +20,26 @@ import {
  */
 
 const ALL = "all";
+
+/**
+ * Focus রিং — search box আর dropdown দুটোতেই এক।
+ *
+ * ⚠️ আগে ছিল `ring-[#FF9540]/40`, অর্থাৎ ৪০% অস্বচ্ছ কমলা। সাদা
+ * pill-এর ঠিক বাইরে, cream পটভূমির (#F9F6F3) উপরে ওই ৪০% মিশে গিয়ে
+ * একটা ফ্যাকাশে, প্রায় সাদাটে বলয় তৈরি করত — দেখে মনে হতো pill আর
+ * কমলা রেখার মাঝে একটা ফাঁক আছে। ফাঁকটা আসলে ছিল না, রঙটাই দুর্বল ছিল।
+ *
+ * `ring-offset-0` স্পষ্ট করে লেখা: Tailwind-এর ring-offset-color
+ * ডিফল্টে সাদা, আর কোথাও offset-width বসে গেলে ওখানে সত্যিকারের একটা
+ * সাদা ফাঁক তৈরি হতো — ঠিক যেটা এখানে ভুল করে দেখা যাচ্ছিল বলে মনে
+ * হচ্ছিল। শূন্য লিখে রাখলে সেই সম্ভাবনাটাই আর থাকে না।
+ *
+ * ⚠️ এটা সাজসজ্জা নয়, keyboard দিয়ে চালানোর একমাত্র সূত্র — `focus`
+ * নয়, `focus-visible`, তাই mouse দিয়ে click করলে রিং আসে না, কেবল
+ * Tab চাপলে।
+ */
+const FOCUS_RING =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0";
 
 export default function UsersToolbar({
   category,
@@ -103,17 +124,28 @@ export default function UsersToolbar({
 
   return (
     /**
-     * Figma: row, gap 20, উচ্চতা 56 — search box বাকি জায়গা নেয়,
-     * dropdown নিজের মাপে।
+     * Figma (Frame 2147236295): row, gap 24, উচ্চতা 50,
+     * align-items flex-start। search box `flex-grow: 1`, pill
+     * `flex: none` — অর্থাৎ বাক্সটাই বাকি জায়গা নেয়।
      *
-     * ৩২০px-এ দুটো এক সারিতে আঁটে না (search-এর ন্যূনতম প্রস্থই
-     * ~২০০), তাই sm-এর নিচে উপর-নিচে।
+     * ৩২০px-এ দুটো এক সারিতে আঁটে না (শুধু pill-ই ১৫৬), তাই sm-এর
+     * নিচে উপর-নিচে — ওখানে gap 24 বাড়াবাড়ি, তাই 12।
      */
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
-      <div className="relative min-w-0 flex-1">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
+      {/**
+       * Figma: padding 16, gap 8, radius 100, BG #FFFFFF, উচ্চতা 50।
+       *
+       * icon-টা flex-এর ভেতরের প্রথম item, তাই লেখা শুরু হয়
+       * 16 (padding) + 20 (icon) + 8 (gap) = 44px-এ → `pl-11`।
+       * এখানে icon-টা absolute, কারণ <input>-এর ভেতরে সত্যিকারের
+       * flex child বসানো যায় না — কিন্তু মাপটা এক।
+       */}
+      <div className="relative h-[50px] min-w-0 flex-1">
+        {/* vuesax/linear/search-normal — 20×20, stroke 1.5,
+            Black/100 (#000000)। */}
         <Search
           className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-black"
-          strokeWidth={1.2}
+          strokeWidth={1.5}
           aria-hidden="true"
         />
         <input
@@ -122,24 +154,45 @@ export default function UsersToolbar({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search by Customer Name, Email…"
           aria-label="Search customers by name, email or phone"
-          className="h-14 w-full rounded-full bg-white pl-12 pr-4 font-sora text-[14px] leading-none text-black placeholder:text-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
+          /* Figma type: Sora 400, 16px, line-height 100%, Black/70।
+             লেখা আর placeholder দুটোরই — তাই `text-black/70`, আর
+             একটা কঠিন ধূসর নয় (cream পটভূমিতে ওটা অন্যরকম বসত)। */
+          className={`h-[50px] w-full rounded-full bg-white pl-11 pr-4 font-sora text-[16px] font-normal leading-none text-black/70 placeholder:text-black/70 ${FOCUS_RING}`}
         />
       </div>
 
       <div className="relative shrink-0" ref={dropdownRef}>
-        {/* Figma: pill 56 উঁচু, radius 100, BG #FFFFFF, লেখা Sora 400
-            16px #000000। */}
+        {/**
+         * Figma: 156×50, padding 16, gap 8, justify space-between,
+         * radius 100, BG #FFFFFF।
+         *
+         * ১৫৬-টা স্থির মাপ, hug নয় — ভেতরের লেখার জন্য বরাদ্দ ৯৬px
+         * (156 − 16 − 16 − 8 − 20)। তাই pill-এ ছোট নাম দেখানো হয়
+         * ("Platinum"), পুরোটা নয় — দেখুন CATEGORY_SHORT_LABELS।
+         *
+         * ৩২০px-এ পুরো প্রস্থ, কারণ ওখানে pill-টা নিজের সারিতে একা।
+         */}
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="flex h-14 w-full items-center justify-between gap-2 rounded-full bg-white px-5 font-sora text-[15px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40 sm:w-auto"
+          className={`flex h-[50px] w-full items-center justify-between gap-2 rounded-full bg-white p-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] sm:w-[156px] ${FOCUS_RING}`}
         >
-          {category ? CATEGORY_LABELS[category] : "All Statuses"}
+          {/* Figma: Sora 400 16px, Black/100 — search-এর লেখা Black/70,
+              এটা নয়। বাছাই করা মান আর placeholder এক নয়, তাই পার্থক্যটা
+              ইচ্ছাকৃত। */}
+          <span className="truncate">
+            {category ? CATEGORY_SHORT_LABELS[category] : "All Statuses"}
+          </span>
+          {/* vuesax/linear/arrow-down — 20×20, stroke 1.5, Black/70।
+              ⚠️ search icon-টা Black/100, এটা Black/70। export-এ দুটো
+              আলাদা, তাই একই রঙ দেওয়া চলবে না। */}
           <ChevronDown
-            className={`h-5 w-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-            strokeWidth={1.4}
+            className={`h-5 w-5 shrink-0 text-black/70 transition-transform ${
+              open ? "rotate-180" : ""
+            }`}
+            strokeWidth={1.5}
             aria-hidden="true"
           />
         </button>

@@ -182,7 +182,7 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
            * করতে হয়। ১২২-এ icon আর padding বাদ দিলে লেখার জন্য ৭৪px
            * পড়ে থাকে, অর্থাৎ "Md. Rai" পর্যন্ত দেখা যেত।
            */
-          className="h-10 w-[122px] rounded-full bg-[#F9F6F3] pl-9 pr-3 font-sora text-[14px] leading-none text-black transition-[width] duration-200 placeholder:text-black/70 focus:w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
+          className="h-10 w-[122px] rounded-full bg-[#F9F6F3] pl-9 pr-3 font-sora text-[14px] leading-none text-black transition-[width] duration-200 placeholder:text-black/70 focus:w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0"
         />
       </div>
 
@@ -194,7 +194,7 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
+          className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0"
         >
           {PERIOD_LABELS[period]}
           <ChevronDown

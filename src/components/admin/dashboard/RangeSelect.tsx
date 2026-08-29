@@ -95,7 +95,7 @@ export default function RangeSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Period: ${REVENUE_RANGE_LABELS[range]}`}
-        className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540]/40"
+        className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0"
       >
         {REVENUE_RANGE_LABELS[range]}
         <ChevronDown

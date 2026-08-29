@@ -45,6 +45,26 @@ export const CATEGORY_LABELS: Record<CustomerCategory, string> = {
   platinum: "Platinum Customer",
 };
 
+/**
+ * ছাঁকনির pill-এ যেটা দেখা যায়।
+ *
+ * ⚠️ Figma-র pill ঠিক ১৫৬px চওড়া, আর ভেতরের লেখার জন্য বরাদ্দ ৯৬
+ * (১৫৬ − ১৬ − ১৬ padding − ৮ gap − ২০ icon)। "All Statuses" ঠিক ওই
+ * ৯৬px-ই নেয় — অর্থাৎ নকশাটা মাপা হয়েছে ওই একটা লেখা ধরে।
+ *
+ * কিন্তু বাছাই করার পরে লেখাটা বদলায়, আর "Platinum Customer" ওখানে
+ * কোনোভাবেই আঁটে না। তাই pill-এ ছোট নাম, আর তালিকার ভেতরে পুরোটা —
+ * ওখানে জায়গার টান নেই, আর "Platinum Customer" পড়তে বেশি স্পষ্ট।
+ * সবচেয়ে লম্বাটা "Platinum", ~৬২px, দিব্যি আঁটে।
+ */
+export const CATEGORY_SHORT_LABELS: Record<CustomerCategory, string> = {
+  new: "New",
+  bronze: "Bronze",
+  silver: "Silver",
+  gold: "Gold",
+  platinum: "Platinum",
+};
+
 export function isCustomerCategory(value: unknown): value is CustomerCategory {
   return typeof value === "string" && CUSTOMER_CATEGORIES.includes(value as CustomerCategory);
 }
