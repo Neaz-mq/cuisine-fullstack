@@ -3,6 +3,7 @@ import { requireApiScope } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { periodStart, type DashboardPeriod, isDashboardPeriod } from "@/lib/dashboard-period";
+import { toCsv } from "@/lib/csv";
 
 /**
  * GET /api/admin/insights/export?period=&q=
@@ -16,25 +17,6 @@ import { periodStart, type DashboardPeriod, isDashboardPeriod } from "@/lib/dash
  * আজকের order দেখা দরকার, কিন্তু সব গ্রাহকের তালিকা নামিয়ে নেওয়ার
  * ক্ষমতা নয় — dashboard নিজেও ঠিক এই scope দিয়েই পাহারা দেওয়া।
  */
-
-/**
- * CSV-তে একটা ঘর নিরাপদে বসানো।
- *
- * দুটো আলাদা সমস্যা একসাথে সামলায়:
- *
- * ১। সাধারণ CSV escaping — কমা, উদ্ধৃতি বা newline থাকলে পুরোটা
- *    উদ্ধৃতিতে মুড়ে ভেতরের " কে "" করা।
- *
- * ২। CSV injection। Excel/Sheets `=`, `+`, `-`, `@` (এবং tab/CR) দিয়ে
- *    শুরু হওয়া ঘরকে সূত্র ধরে চালায়। কোনো গ্রাহক নিজের নাম
- *    `=HYPERLINK(...)` দিয়ে রাখলে সেটা মালিকের Excel-এ গিয়ে চলত।
- *    সামনে একটা `'` বসালে Excel ওটাকে লেখা হিসেবেই দেখে।
- */
-function csvCell(value: string | number | null | undefined): string {
-  const raw = value === null || value === undefined ? "" : String(value);
-  const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  return `"${guarded.replace(/"/g, '""')}"`;
-}
 
 export async function GET(request: Request) {
   const authResult = await requireApiScope("insights");
@@ -109,12 +91,10 @@ export async function GET(request: Request) {
     ];
   });
 
-  // \uFEFF (BOM) — এটা ছাড়া Excel UTF-8 ধরে না, আর বাংলা নাম বা ৳
-  // চিহ্ন খোলার পর দুর্বোধ্য অক্ষরে ভরে যায়। \r\n কারণ CSV-র
-  // নির্দিষ্টকরণে (RFC 4180) সেটাই line break.
-  const csv =
-    "\uFEFF" +
-    [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  // ⚠️ csvCell আর BOM-এর হিসাবটা এখন lib/csv.ts-এ — /admin/users-এর
+  // export route-ও ঠিক একই escaping চায়, আর CSV injection ঠেকানোর
+  // কোডের দুটো কপি রাখা মানে একদিন একটা সারানো হবে, অন্যটা নয়।
+  const csv = toCsv(header, rows);
 
   const stamp = new Date().toISOString().slice(0, 10);
 

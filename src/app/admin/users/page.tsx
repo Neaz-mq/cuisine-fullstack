@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { Prisma } from "@/generated/prisma/client";
 import Pagination from "@/app/admin/orders/Pagination";
+import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import UsersToolbar from "./UsersToolbar";
 import {
   CATEGORY_LABELS,
@@ -183,22 +184,42 @@ export default async function UsersPage({
         </h1>
 
         {/**
-         * ⚠️ Figma-তে এখানে একটা "Export Report" বোতামও আঁকা, বসানো
-         * হয়নি — ইচ্ছাকৃতভাবে।
-         *
-         * Dashboard-এর ওই বোতামটা /api/admin/insights/export-এ যায়,
-         * অর্থাৎ order-এর হিসাব নামায়। এই পাতায় সেটা চাপলে গ্রাহকের
-         * তালিকার বদলে order-এর CSV আসত — নাম এক, ফল ভুল।
-         *
-         * গ্রাহক-তালিকা export করার নিজস্ব route এখনো নেই, আর সেটা
-         * নিছক UI-র কাজও নয়: কোন কলাম যাবে, ফোন নম্বর যাবে কিনা, কে
-         * নামাতে পারবেন — সবই আলাদা সিদ্ধান্ত। কাজ না করা বোতামের
-         * চেয়ে না থাকা ভালো।
+         * তারিখ + Export — dashboard-এর হুবহু একই গড়ন, একই breakpoint
+         * আচরণ। ৩২০px-এ `flex-wrap` লাগে: দুটো মিলে ~৩২২px, অথচ
+         * ওখানে padding বাদে থাকে ২৮৮।
          */}
-        <span className="flex h-11 shrink-0 items-center gap-2 self-start whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black md:self-auto">
-          <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-          {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-        </span>
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
+          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+            <span className="sm:hidden">
+              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+            <span className="hidden sm:inline">
+              {now.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          </span>
+
+          {/**
+           * ⚠️ একই বোতাম, ভিন্ন গন্তব্য।
+           *
+           * ডিফল্টে এটা /api/admin/insights/export-এ যায় — অর্থাৎ
+           * order-এর হিসাব। এই পাতায় সেটা নামলে নাম এক হতো, ফল ভুল:
+           * গ্রাহকের তালিকা চেয়ে order-এর CSV পাওয়া যেত। তাই route-টা
+           * prop, আর এখানে গ্রাহক-তালিকার নিজের route।
+           *
+           * forwardParams-এ `page` নেই, ইচ্ছাকৃতভাবে — export মানে
+           * পুরো ছাঁকা তালিকা, পর্দায় দেখা দশটা সারি নয়।
+           */}
+          <ExportReportButton
+            endpoint="/api/admin/users/export"
+            forwardParams={["q", "category"]}
+            fallbackFilename="cuisine-customers.csv"
+          />
+        </div>
       </div>
 
       <UsersToolbar category={category} />
@@ -386,4 +407,4 @@ function Field({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
-}  
+}
