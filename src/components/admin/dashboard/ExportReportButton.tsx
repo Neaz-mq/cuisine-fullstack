@@ -7,15 +7,34 @@ import { LoaderCircle, Upload } from "lucide-react";
 /**
  * src/components/admin/dashboard/ExportReportButton.tsx
  *
- * পর্দায় যে ছাঁকনি বসানো আছে (?q= / ?period=), হুবহু সেটাই API-তে
- * পাঠিয়ে CSV নামায়।
+ * পর্দায় যে ছাঁকনি বসানো আছে, হুবহু সেটাই API-তে পাঠিয়ে CSV নামায়।
  *
  * সাধারণ <a download> হলে সহজ হতো, কিন্তু তাতে দুটো জিনিস হারাত: API
  * error (429 rate limit, 403 scope) নীরবে একটা ভাঙা ফাইল হয়ে নামত, আর
  * বড় export-এ কোনো "চলছে" ইঙ্গিত থাকত না। তাই fetch → blob → অস্থায়ী
  * link।
+ *
+ * ⚠️ কোন route, আর কোন parameter গুলো সাথে যাবে — দুটোই এখন prop,
+ * হার্ডকোড নয়। Dashboard আর /admin/users দুই পাতাতেই বোতামটা একই
+ * দেখতে, কিন্তু একটা order-এর হিসাব নামায় আর অন্যটা গ্রাহকের তালিকা।
+ * ডিফল্ট মানগুলো dashboard-এর, তাই সেখানে `<ExportReportButton />`
+ * আগের মতোই কাজ করে।
+ *
+ * parameter-এর তালিকাটা ইচ্ছাকৃতভাবে সাদা-তালিকা — পুরো URL তুলে
+ * পাঠানো হয় না। নাহলে এক পাতার `?page=3` বা `?revenue=month` API-তে
+ * চলে যেত, আর route সেগুলো চেনে না বলে নীরবে অগ্রাহ্য করত — কিন্তু
+ * সেই নীরবতাটাই বিপদ: কেউ ধরে নিতেন page ৩-এর দশটা সারি নামছে।
  */
-export default function ExportReportButton() {
+export default function ExportReportButton({
+  endpoint = "/api/admin/insights/export",
+  forwardParams = ["q", "period"],
+  fallbackFilename = "cuisine-orders.csv",
+}: {
+  endpoint?: string;
+  forwardParams?: string[];
+  /** Server যদি Content-Disposition না পাঠায় তবেই ব্যবহার হয়। */
+  fallbackFilename?: string;
+}) {
   const searchParams = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +46,12 @@ export default function ExportReportButton() {
     let objectUrl: string | null = null;
     try {
       const params = new URLSearchParams();
-      const q = searchParams.get("q");
-      const period = searchParams.get("period");
-      if (q) params.set("q", q);
-      if (period) params.set("period", period);
+      forwardParams.forEach((key) => {
+        const value = searchParams.get(key);
+        if (value) params.set(key, value);
+      });
 
-      const res = await fetch(`/api/admin/insights/export?${params}`);
+      const res = await fetch(`${endpoint}?${params}`);
 
       if (!res.ok) {
         // Error গুলো JSON, সফল উত্তরটা CSV — তাই এখানেই আলাদা করে পড়া।
@@ -50,7 +69,7 @@ export default function ExportReportButton() {
 
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = match?.[1] ?? "cuisine-orders.csv";
+      link.download = match?.[1] ?? fallbackFilename;
       document.body.appendChild(link);
       link.click();
       link.remove();
