@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import FilterMenu, {
+  FILTER_FOCUS_RING,
+  type FilterMenuOption,
+} from "@/components/admin/FilterMenu";
 import {
   DASHBOARD_PERIODS,
   PERIOD_LABELS,
@@ -18,6 +22,9 @@ import {
  * ফলে ছাঁকা অবস্থার একটা link শেয়ার করা যায়, back button কাজ করে, আর —
  * সবচেয়ে জরুরি — Export button ঠিক ওই একই URL parameter গুলো API-তে
  * পাঠাতে পারে, অর্থাৎ যা দেখা যাচ্ছে ঠিক তা-ই নামে।
+ *
+ * ⚠️ dropdown-টা আগে এখানেই হাতে লেখা ছিল, RangeSelect-এর কপি হিসেবে।
+ * এখন দুটোই FilterMenu ব্যবহার করে, তাই popup-এর চেহারা এক জায়গায়।
  */
 /**
  * Recent Orders কার্ড নিজে যে দুটো URL parameter চালায়।
@@ -33,6 +40,9 @@ import {
  */
 const OWN_PARAMS = ["q", "period"] as const;
 
+const PERIOD_OPTIONS: readonly FilterMenuOption<DashboardPeriod>[] =
+  DASHBOARD_PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }));
+
 export default function DashboardFilters({ period }: { period: DashboardPeriod }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,8 +52,6 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
   const urlQuery = searchParams.get("q") ?? "";
 
   const [query, setQuery] = useState(urlQuery);
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   /**
    * ⚠️ শেষবার আমরা URL-কে যে মানটা ধরতে *বলেছি* — URL এই মুহূর্তে যা
@@ -150,15 +158,6 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
     setQuery(urlQuery);
   }, [urlQuery]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!dropdownRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
-
   return (
     // Figma: row, justify flex-end, gap 10, উচ্চতা 40।
     <div className="flex items-center gap-2.5">
@@ -181,57 +180,24 @@ export default function DashboardFilters({ period }: { period: DashboardPeriod }
            * মকআপে ওটা নিছক একটা ছবি, বাস্তবে ওখানে গ্রাহকের নাম টাইপ
            * করতে হয়। ১২২-এ icon আর padding বাদ দিলে লেখার জন্য ৭৪px
            * পড়ে থাকে, অর্থাৎ "Md. Rai" পর্যন্ত দেখা যেত।
+           *
+           * ⚠️ focus চিহ্নটা এখন FilterMenu-র সাথে ভাগ করা
+           * (FILTER_FOCUS_RING) — আগে এখানে `ring-2` ছিল, dropdown-এও
+           * তাই। outline-ভিত্তিক হওয়ায় cream pill-এর কিনারায় সাদা
+           * ফাঁক আর তৈরি হয় না; ব্যাখ্যাটা FilterMenu.tsx-এ।
            */
-          className="h-10 w-[122px] rounded-full bg-[#F9F6F3] pl-9 pr-3 font-sora text-[14px] leading-none text-black transition-[width] duration-200 placeholder:text-black/70 focus:w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0"
+          className={`h-10 w-[122px] rounded-full bg-[#F9F6F3] pl-9 pr-3 font-sora text-[14px] leading-none text-black transition-[width] duration-200 placeholder:text-black/70 focus:w-[220px] ${FILTER_FOCUS_RING}`}
         />
       </div>
 
-      <div className="relative" ref={dropdownRef}>
-        {/* Figma: 91×40 pill, একই BG/radius, লেখা Sora 400 14px
-            Black/100, arrow 16×16। */}
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          className="flex h-10 items-center gap-2 rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9540] focus-visible:ring-offset-0"
-        >
-          {PERIOD_LABELS[period]}
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-            strokeWidth={1.2}
-            aria-hidden="true"
-          />
-        </button>
-
-        {open && (
-          <ul
-            role="listbox"
-            className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-black/5"
-          >
-            {DASHBOARD_PERIODS.map((option) => (
-              <li key={option}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={option === period}
-                  onClick={() => {
-                    setOpen(false);
-                    // "all" ডিফল্ট নয় — ডিফল্ট "today", তাই সেটাকেই URL
-                    // থেকে বাদ দেওয়া হয়, বাকিগুলো লেখা হয়।
-                    pushParams({ period: option === "today" ? null : option });
-                  }}
-                  className={`w-full px-4 py-2 text-left font-sora text-[13px] transition-colors hover:bg-gray-50 ${
-                    option === period ? "font-semibold text-[#FF4C15]" : "text-gray-700"
-                  }`}
-                >
-                  {PERIOD_LABELS[option]}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <FilterMenu
+        value={period}
+        options={PERIOD_OPTIONS}
+        // "all" ডিফল্ট নয় — ডিফল্ট "today", তাই সেটাকেই URL থেকে
+        // বাদ দেওয়া হয়, বাকিগুলো লেখা হয়।
+        onSelect={(option) => pushParams({ period: option === "today" ? null : option })}
+        ariaLabel="Period"
+      />
     </div>
   );
 }

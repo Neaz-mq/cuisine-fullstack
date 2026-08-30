@@ -630,8 +630,33 @@ export default async function AdminDashboardPage({
            * ভেতরের দূরত্বটা flex column + gap দিয়ে, mt-* দিয়ে নয়:
            * আগে ছিল mt-4 (16px) আর mt-2 (8px), অর্থাৎ Figma-র সমান
            * ২০/২০-এর বদলে দুটো আলাদা মান।
+           *
+           * ⚠️ ইচ্ছাকৃত deviation, কেবল ১২৮০px-এর উপরে (xl/2xl)।
+           *
+           * Figma-র frame ১০৫৯px চওড়া, তাতে প্রতিটা card ৩৩৯.৬৭ × ১৪২ —
+           * অনুপাত প্রায় ২.৪:১। বড় মনিটরে container আরও চওড়া হয়, card
+           * ৪৫০px ছাড়িয়ে যায়, অথচ উচ্চতা ১৪২-এই আটকে থাকে; অনুপাতটা
+           * তখন ৩.২:১ হয়ে যায় আর card গুলো চ্যাপ্টা ফিতের মতো দেখায়।
+           * নকশাটা ওই মাপে কখনো আঁকাই হয়নি, তাই এখানে Figma অনুসরণ
+           * করার মতো কিছু নেই — মূল অনুপাতটা ধরে রাখাই বরং designer-এর
+           * উদ্দেশ্যের কাছাকাছি।
+           *
+           *   xl  (≥1280) → min 164px, padding 20
+           *   2xl (≥1536) → min 188px, padding 24
+           *
+           * `min-h`, `h` নয় — সংখ্যা বড় হলে বা delta badge দুই সারিতে
+           * ভাঙলে card যেন নিজে থেকেই বাড়তে পারে।
+           *
+           * `justify-between` যোগ করা হলো, কারণ min-height-এর বাড়তি
+           * জায়গাটা নাহলে পুরোটাই নিচে জমত আর লেখা তিনটে উপরে চেপে
+           * থাকত। gap-5 এখন সর্বনিম্ন দূরত্ব, বাড়তিটুকু তিন সারির
+           * মধ্যে ভাগ হয়। ১২৮০-এর নিচে min-height নেই, তাই সেখানে
+           * justify-between-এরও কোনো প্রভাব নেই — Figma-র মাপ অবিকৃত।
            */
-          <div key={stat.label} className="flex flex-col gap-5 rounded-[16px] bg-white p-4">
+          <div
+            key={stat.label}
+            className="flex flex-col justify-between gap-5 rounded-[16px] bg-white p-4 xl:min-h-[164px] xl:p-5 2xl:min-h-[188px] 2xl:p-6"
+          >
             <div className="flex items-center justify-between gap-2">
               {/* Figma Typography: Frank Ruhl Libre, 500 Medium, 20px,
                   line-height 100%, letter-spacing 0%, Black/100 #000000।

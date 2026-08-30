@@ -48,7 +48,19 @@ export default function BusinessSummaryCard() {
   }
 
   return (
-    <div className="rounded-[20px] bg-white p-5 md:p-6">
+    /**
+     * ⚠️ xl/2xl-এর min-height ইচ্ছাকৃত deviation — stat card গুলোর
+     * সাথে একই কারণে (দেখুন admin/page.tsx-এর ব্যাখ্যা)। এই কার্ডে
+     * সমস্যাটা আরও প্রকট, কারণ এটা পুরো প্রস্থ জুড়ে একা দাঁড়ায়:
+     * ১৫০০px চওড়া অথচ ৯০px উঁচু হলে সেটা কার্ড নয়, একটা ফিতে।
+     *
+     * `flex-col justify-between` — বাড়তি জায়গাটা যাতে শিরোনাম আর
+     * নিচের সারির মধ্যে ছড়িয়ে যায়, পুরোটা নিচে না জমে।
+     *
+     * summary তৈরি হয়ে গেলে লেখাটা নিজেই এর চেয়ে লম্বা হয়ে যায়,
+     * তাই তখন min-height-এর আর কোনো ভূমিকা থাকে না — সেটাই চাওয়া।
+     */
+    <div className="flex flex-col justify-between rounded-[20px] bg-white p-5 md:p-6 xl:min-h-[140px] xl:p-7 2xl:min-h-[160px] 2xl:p-8">
       <div className="mb-1 flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 font-sora text-[12px] font-semibold uppercase tracking-wide text-gray-500">
           <Sparkles className="h-4 w-4 text-[#FF9540]" aria-hidden="true" />

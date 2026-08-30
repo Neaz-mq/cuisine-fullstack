@@ -52,7 +52,12 @@ export default function AdminDashboardLoading() {
         {/* --- তিনটে stat card — Figma: gap 20, radius 16, উচ্চতা 142 --- */}
         <div className="grid gap-5 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="flex h-[142px] flex-col gap-5 rounded-[16px] bg-white p-4">
+            <div
+              key={i}
+              /* মাপগুলো page.tsx-এর আসল card-এর সাথে হুবহু মিলতে হবে —
+                 নাহলে ডেটা এসে পৌঁছালে পাতাটা লাফ দেয়। */
+              className="flex h-[142px] flex-col justify-between gap-5 rounded-[16px] bg-white p-4 xl:h-[164px] xl:p-5 2xl:h-[188px] 2xl:p-6"
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="h-5 w-[140px] rounded-full bg-black/[0.06]" />
                 <div className="h-[34px] w-[34px] shrink-0 rounded-full bg-[#F9F6F3]" />
@@ -67,7 +72,7 @@ export default function AdminDashboardLoading() {
         </div>
 
         {/* --- AI Business Summary --- */}
-        <div className="flex items-center justify-between gap-4 rounded-[20px] bg-white p-5 md:p-6">
+        <div className="flex items-center justify-between gap-4 rounded-[20px] bg-white p-5 md:p-6 xl:min-h-[140px] xl:p-7 2xl:min-h-[160px] 2xl:p-8">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="h-3 w-[170px] rounded-full bg-black/[0.06]" />
             <div className="h-4 w-full max-w-[340px] rounded-full bg-black/[0.05]" />
