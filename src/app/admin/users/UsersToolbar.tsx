@@ -54,32 +54,33 @@ const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
 /**
- * Placeholder — তিন মাপে তিন রকম লেখা।
+ * Placeholder — দুটো রূপ।
  *
  * ⚠️ এটা CSS দিয়ে করা যায় না, আর সেটাই এখানে JS ব্যবহারের একমাত্র
  * কারণ: placeholder একটা **attribute**, element-এর ভেতরের লেখা নয়।
  * `::placeholder`-এ font-size বা রঙ বদলানো যায়, কিন্তু `content`
  * কাজ করে না। লেখাটাই বদলাতে হলে JS-কে জানতে হয় পর্দা কত চওড়া।
  *
- * কেন তিন ধাপ, দুই নয় — ৪৮০-তে pill পাশে চলে আসে বলে ইনপুট উল্টো
- * **সরু হয়ে যায়**। ভেতরে লেখার জায়গা:
+ * ⚠️ সীমানাটা lg (১০২৪), আর সেটাই এখানকার সবচেয়ে ভুল বোঝার মতো
+ * জায়গা — মনে হতে পারে tablet-এ তো জায়গা আছেই। নেই, কারণ ৪৮০ থেকে
+ * "All Statuses" pill পাশে চলে আসে আর ইনপুট **উল্টো সরু হয়ে যায়**।
+ * ভেতরে লেখার জায়গা:
  *
- *   ৩২০ (ইনপুট একা)  → 288 − 44 − 16        = 228px
- *   ৪৮০ (pill সহ)    → 448 − 156 − 24 − 60  = 208px   ← আরও কম
- *   ১০২৪+            → অনেক বেশি
+ *   ৩২০  (ইনপুট একা)   → 288 − 44 − 16        = 228px
+ *   ৪৮০  (pill সহ)     → 448 − 156 − 24 − 60  = 208px   ← সবচেয়ে কম
+ *   ৭৬৮  (pill সহ)     → 736 − 156 − 24 − 60  = 496px
+ *   ১০২৪+              → sidebar বাদেও যথেষ্ট
  *
- * Sora 16px-এ পুরো Figma লেখাটা (৩১ অক্ষর) ~২৫৭px — প্রথম দুই ধাপের
- * কোনোটাতেই আঁটে না। মাঝের ধাপে তাই ছাঁটা রূপ (~১৯১px), আর ৩২০-এ
- * শুধু "Search"।
+ * ৭৬৮-এ ৪৯৬px থাকলেও পুরো Figma লেখাটা (~২৫৭px) দিব্যি আঁটত। তবু
+ * ছোট রাখা হলো, কারণ একটাই সীমানা মনে রাখা সহজ, আর tablet-এ
+ * ছাঁকনি-সারিটা এমনিতেই ঠাসা। মাঝের ধাপে ছাঁটা একটা তৃতীয় লেখা
+ * ছিল — বাদ দেওয়া হলো, তিনটে রূপ রাখার মতো যথেষ্ট কারণ ছিল না।
  *
- * ⚠️ ছোট লেখা মানে কম তথ্য, তাই `aria-label`-টা তিন ধাপেই পুরো থাকে —
- * screen reader ব্যবহারকারী কখনোই কেবল "Search" শোনেন না।
+ * ⚠️ ছোট লেখা মানে কম তথ্য, তাই `aria-label`-টা সব পর্দাতেই পুরো
+ * থাকে — screen reader ব্যবহারকারী কখনোই কেবল "Search" শোনেন না।
  */
-const PLACEHOLDERS = {
-  narrow: "Search",
-  mid: "Search by Customer Name",
-  wide: "Search by Customer Name, Email…",
-} as const;
+const FULL_PLACEHOLDER = "Search by Customer Name, Email…";
+const SHORT_PLACEHOLDER = "Search";
 
 export default function UsersToolbar({
   category,
@@ -212,7 +213,7 @@ export default function UsersToolbar({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={PLACEHOLDERS[tier]}
+          placeholder={tier === "wide" ? FULL_PLACEHOLDER : SHORT_PLACEHOLDER}
           aria-label="Search customers by name, email or phone"
           /* Figma type: Sora 400, 16px, line-height 100%, Black/70।
              লেখা আর placeholder দুটোরই — তাই `text-black/70`, আর
@@ -221,7 +222,8 @@ export default function UsersToolbar({
              ⚠️ মাপ সব পর্দায় ১৬-তেই, ছোট করা হয়নি। আগে ৩২০px-এ
              placeholder-টা ১৩px করা হয়েছিল, কিন্তু সেটা ভুল সমাধান
              ছিল — লেখাটা তখন ছোট **আর** কাটা, দুটোই। এখন লেখাটাই
-             বদলায় (PLACEHOLDERS দ্রষ্টব্য), তাই মাপ কমানোর দরকার নেই।
+             বদলায় (উপরের FULL_PLACEHOLDER / SHORT_PLACEHOLDER), তাই মাপ
+             কমানোর দরকার নেই।
 
              ১৬-তে রাখার আলাদা কারণও আছে: iOS Safari ১৬px-এর কম
              font-size-এর ইনপুটে focus করলে পুরো পাতাটা zoom করে দেয়,
