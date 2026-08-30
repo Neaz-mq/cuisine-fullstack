@@ -8,7 +8,7 @@ import {
   canViewSensitiveStaffFields,
   type StaffRole,
 } from "@/lib/permissions";
-import type { EmploymentType } from "@/generated/prisma/client";
+import type { EmploymentType, Shift } from "@/generated/prisma/client";
 import { updateStaffSchema } from "@/lib/validations/staff";
 import { parseBody } from "@/lib/validations/parse";
 import { type MoneyInput, toMoney } from "@/lib/money";
@@ -26,6 +26,9 @@ function serialize(
       employmentType: string;
       phone: string | null;
       hireDate: Date;
+      // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
+      // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
+      shift: Shift | null;
       isActive: boolean;
       nid: string | null;
       // ⚠️ Decimal, number নয় — Prisma এখন এটাই দেয়। JSON-এ যাওয়ার
@@ -45,6 +48,7 @@ function serialize(
           employmentType: staffProfile.employmentType,
           phone: staffProfile.phone,
           hireDate: staffProfile.hireDate,
+          shift: staffProfile.shift,
           isActive: staffProfile.isActive,
           ...(includeSensitive
             ? {
@@ -87,6 +91,7 @@ export async function GET(
           employmentType: true,
           phone: true,
           hireDate: true,
+          shift: true,
           isActive: true,
           nid: true,
           salary: true,
@@ -105,8 +110,9 @@ export async function GET(
 /**
  * PATCH /api/admin/staff/[id]
  *
- * Editable: name, department, employmentType, phone, hireDate, isActive,
- * password (optional reset), role, and — OWNER only — nid/salary.
+ * Editable: name, department, employmentType, phone, hireDate, shift,
+ * isActive, password (optional reset), role, and — OWNER only —
+ * nid/salary.
  *
  * Guardrails:
  *  - Can't deactivate your own account (would lock you out with no one
@@ -194,6 +200,7 @@ export async function PATCH(
     employmentType?: EmploymentType;
     phone?: string | null;
     hireDate?: Date;
+    shift?: Shift | null;
     isActive?: boolean;
     nid?: string | null;
     salary?: number | null;
@@ -204,6 +211,11 @@ export async function PATCH(
   }
   if (body.phone !== undefined) profileData.phone = body.phone?.trim() || null;
   if (body.hireDate) profileData.hireDate = new Date(body.hireDate);
+  // ⚠️ `!== undefined`, `if (body.shift)` নয় — শিফট আবার null করে ফাঁকা
+  // করার request-টাও একটা বৈধ আপডেট (updateStaffSchema-র মন্তব্য দ্রষ্টব্য),
+  // আর `null` falsy বলে `if (body.shift)` সেটাকে "কিছু পাঠানো হয়নি"-র
+  // সাথে গুলিয়ে ফেলত।
+  if (body.shift !== undefined) profileData.shift = body.shift;
   if (typeof body.isActive === "boolean") profileData.isActive = body.isActive;
   // nid/salary are silently ignored (not rejected) for non-owner requesters
   // — a MANAGER's edit form simply doesn't send these fields at all.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { SHIFTS, SHIFT_LABELS, type StaffShift } from "@/lib/staff-shift";
 
 const ROLE_OPTIONS = [
   "OWNER",
@@ -17,6 +18,11 @@ const ROLE_OPTIONS = [
 ] as const;
 const EMPLOYMENT_OPTIONS = ["FULL_TIME", "PART_TIME", "CONTRACT"] as const;
 
+// "" মানে "কোনো শিফট বাছা হয়নি" — schema.prisma-র `Shift?`-এর সাথে মেলে।
+// <select>-এর value কখনো null হতে পারে না, তাই ফাঁকা string-ই সেই
+// অবস্থাটা বহন করে; submit করার সময় "" -> null-এ বদলায়।
+const SHIFT_SELECT_OPTIONS = ["", ...SHIFTS] as const;
+
 type StaffMember = {
   id: string;
   name: string | null;
@@ -27,6 +33,7 @@ type StaffMember = {
     employmentType: string;
     phone: string | null;
     hireDate: string;
+    shift: string | null;
     isActive: boolean;
     nid?: string | null;
     salary?: number | null;
@@ -59,6 +66,7 @@ export default function StaffForm({
   const [hireDate, setHireDate] = useState(
     existing?.staffProfile?.hireDate ? existing.staffProfile.hireDate.slice(0, 10) : ""
   );
+  const [shift, setShift] = useState<string>(existing?.staffProfile?.shift ?? "");
   const [nid, setNid] = useState(existing?.staffProfile?.nid ?? "");
   const [salary, setSalary] = useState(
     existing?.staffProfile?.salary != null ? String(existing.staffProfile.salary) : ""
@@ -98,6 +106,7 @@ export default function StaffForm({
       employmentType,
       phone: phone.trim() || null,
       hireDate: hireDate || undefined,
+      shift: shift ? (shift as StaffShift) : null,
     };
     if (password) payload.password = password;
     if (canSeeSensitive) {
@@ -237,6 +246,24 @@ export default function StaffForm({
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
+      </div>
+
+      <div>
+        {/* Figma-র নতুn Staff Information design-এর "Shift" কলামের উৎস —
+            src/lib/staff-shift.ts দ্রষ্টব্য। ঐচ্ছিক, তাই একটা ফাঁকা
+            "— Not set —" অপশন প্রথমে। */}
+        <label className="block text-sm font-medium text-gray-700 mb-1">Shift</label>
+        <select
+          value={shift}
+          onChange={(e) => setShift(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+        >
+          {SHIFT_SELECT_OPTIONS.map((s) => (
+            <option key={s || "none"} value={s}>
+              {s ? SHIFT_LABELS[s] : "— Not set —"}
+            </option>
+          ))}
+        </select>
       </div>
 
       {canSeeSensitive && (

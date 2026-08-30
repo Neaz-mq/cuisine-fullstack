@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { emailSchema, nonEmptyString } from "@/lib/validations/common";
 import { STAFF_ROLES } from "@/lib/permissions";
+import { SHIFTS } from "@/lib/staff-shift";
 
 /**
  * src/lib/validations/staff.ts
@@ -19,6 +20,11 @@ import { STAFF_ROLES } from "@/lib/permissions";
 
 export const staffRoleSchema = z.enum(STAFF_ROLES);
 
+// shift-এর জন্য কোনো RBAC নেই (nid/salary-র মতো নয়) — যেকোনো staff creator
+// এটা সেট করতে পারেন, তাই এটা এখানেই সরাসরি zod-এ, route-এর হাতে-লেখা
+// গার্ডরেইলে নয়।
+const staffShiftSchema = z.enum(SHIFTS);
+
 export const createStaffSchema = z.object({
   name: nonEmptyString("Name"),
   email: emailSchema,
@@ -28,6 +34,9 @@ export const createStaffSchema = z.object({
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT"]).default("FULL_TIME"),
   phone: z.string().trim().optional().or(z.literal("")),
   hireDate: z.iso.datetime({ offset: true }).optional().or(z.string().trim().min(1).optional()),
+  // ঐচ্ছিক — schema.prisma-র `Shift?`-এর মতোই, নতুন staff-এর শিফট এখনই
+  // ঠিক না হয়ে থাকলে ফাঁকা রাখা যায়।
+  shift: staffShiftSchema.optional(),
   nid: z.string().trim().optional().or(z.literal("")),
   salary: z.number().nonnegative().optional(),
 });
@@ -44,6 +53,9 @@ export const updateStaffSchema = z
     employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT"]).optional(),
     phone: z.string().trim().nullable().optional(),
     hireDate: z.string().trim().min(1).optional(),
+    // nullable — একবার সেট করা শিফট আবার ফাঁকা করে দেওয়ার সুযোগ রাখতে
+    // হয়েছে (যেমন কেউ শিফট ব্যবস্থার বাইরে গেলে)।
+    shift: staffShiftSchema.nullable().optional(),
     isActive: z.boolean().optional(),
     nid: z.string().trim().nullable().optional(),
     salary: z.number().nonnegative().nullable().optional(),

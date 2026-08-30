@@ -146,6 +146,18 @@ enum EmploymentType {
   CONTRACT
 }
 
+// নতুন admin/staff redesign (Figma)-এ প্রতিটা সারিতে একটা "Shift" কলাম
+// আছে, যেমন "Evening (02:00 PM – 10:00 PM)"। সময়সীমাটা প্রতিটা শিফটের
+// জন্য fixed — কর্মী নিজে ঘণ্টা ঠিক করেন না, তাই এটা free-text নয়,
+// department/role-এর মতোই একটা বাঁধা enum। আসল লেবেল (সময়সীমাসহ) থাকে
+// lib/staff-shift.ts-এর SHIFT_LABELS map-এ, schema-তে শুধু নামগুলো।
+enum Shift {
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+}
+
 // One row per staff User (role != CUSTOMER), created together with the User
 // row when an OWNER/MANAGER adds a new staff member via /admin/staff.
 model StaffProfile {
@@ -160,6 +172,12 @@ model StaffProfile {
   employmentType EmploymentType @default(FULL_TIME)
   phone          String?
   hireDate       DateTime       @default(now())
+
+  // ঐচ্ছিক (`?`) রাখা হয়েছে — না হলে migration-এ পুরনো সব staff row-এর
+  // জন্য একটা default শিফট বসাতে হতো, যেটা মিথ্যা ডেটা তৈরি করত (কেউ
+  // আসলে কোন শিফটে আছেন সেটা না জেনে ধরে নেওয়া)। UI-তে ফাঁকা থাকলে "—"
+  // দেখানো হয়, নতুন staff যোগ করার সময় StaffForm-এ বাছাই করা যায়।
+  shift Shift?
 
   // Deactivating a staff member (instead of deleting) keeps their name on
   // historical orders/audit trails intact, while blocking further login.

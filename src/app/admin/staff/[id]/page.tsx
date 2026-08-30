@@ -46,6 +46,7 @@ export default async function EditStaffPage({
                 employmentType: member.staffProfile.employmentType,
                 phone: member.staffProfile.phone,
                 hireDate: member.staffProfile.hireDate.toISOString(),
+                shift: member.staffProfile.shift,
                 isActive: member.staffProfile.isActive,
                 nid: member.staffProfile.nid,
                 // Decimal -> number: form input string-এ কাজ করে, আর

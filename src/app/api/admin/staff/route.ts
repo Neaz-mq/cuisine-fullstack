@@ -11,6 +11,7 @@ import { nextEmployeeId } from "@/lib/staff";
 import { createStaffSchema } from "@/lib/validations/staff";
 import { parseBody } from "@/lib/validations/parse";
 import { type MoneyInput, toMoney } from "@/lib/money";
+import type { Shift } from "@/generated/prisma/client";
 
 /**
  * src/app/api/admin/staff/route.ts
@@ -38,6 +39,9 @@ function serializeStaff(
       employmentType: string;
       phone: string | null;
       hireDate: Date;
+      // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
+      // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
+      shift: Shift | null;
       isActive: boolean;
       nid: string | null;
       // ⚠️ Decimal, number নয় — Prisma এখন এটাই দেয়। JSON-এ যাওয়ার
@@ -57,6 +61,7 @@ function serializeStaff(
           employmentType: staffProfile.employmentType,
           phone: staffProfile.phone,
           hireDate: staffProfile.hireDate,
+          shift: staffProfile.shift,
           isActive: staffProfile.isActive,
           ...(includeSensitive
             ? {
@@ -97,6 +102,7 @@ export async function GET() {
           employmentType: true,
           phone: true,
           hireDate: true,
+          shift: true,
           isActive: true,
           nid: true,
           salary: true,
@@ -125,6 +131,7 @@ export async function POST(req: NextRequest) {
     employmentType,
     phone,
     hireDate,
+    shift,
     nid,
     salary,
   } = parsed;
@@ -169,6 +176,7 @@ export async function POST(req: NextRequest) {
               : "FULL_TIME",
             phone: typeof phone === "string" ? phone.trim() || null : null,
             hireDate: hireDate ? new Date(hireDate) : new Date(),
+            shift: shift ?? null,
             nid: includeSensitive && typeof nid === "string" ? nid.trim() || null : null,
             salary: includeSensitive && typeof salary === "number" ? salary : null,
           },
