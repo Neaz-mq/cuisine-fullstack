@@ -84,7 +84,15 @@ describe("hasPermission — the core access-control matrix", () => {
   });
 
   it("marketing is OWNER/MANAGER-only — never given to operational staff", () => {
-    const nonManagement: StaffRole[] = ["WAITER", "CASHIER", "DELIVERY", "KITCHEN"];
+    // ⚠️ নতুন role এলে এখানেও যোগ করতে হয়। তালিকাটা হাতে লেখা, তাই
+    // ভুলে গেলে test সবুজই থাকে অথচ নতুন role-টা অরক্ষিত থেকে যায়।
+    const nonManagement: StaffRole[] = [
+      "WAITER",
+      "CASHIER",
+      "DELIVERY",
+      "KITCHEN",
+      "CLEANER",
+    ];
     for (const role of nonManagement) {
       expect(hasPermission(role, "marketing")).toBe(false);
       expect(hasPermission(role, "staff")).toBe(false);
@@ -122,9 +130,35 @@ describe("firstAllowedPath — where a staff member lands after login", () => {
     expect(firstAllowedPath("KITCHEN")).toBe("/admin/kitchen");
   });
 
-  it("falls back to /admin for a non-staff role", () => {
-    expect(firstAllowedPath("CUSTOMER")).toBe("/admin");
-    expect(firstAllowedPath(undefined)).toBe("/admin");
+  it("sends CLEANER to the storefront — the role has no admin scopes at all", () => {
+    expect(getScopesForRole("CLEANER")).toEqual([]);
+    expect(firstAllowedPath("CLEANER")).toBe("/");
+  });
+
+  /**
+   * ⚠️ এই test-টা আগে "/admin" আশা করত, আর সেটাই ভুল ছিল।
+   *
+   * scope নেই এমন কাউকে /admin-এ পাঠানো একটা অসীম চক্র তৈরি করে:
+   * /admin দেখে hasPermission(role, "insights") — ব্যর্থ হয় — তারপর
+   * firstAllowedPath(role)-এ পাঠায়, যেটা আবার "/admin" ফেরাত।
+   *
+   * এতদিন ধরা পড়েনি কারণ প্রতিটা role-এর অন্তত একটা scope ছিল, তাই
+   * শাখাটায় কখনো পৌঁছানোই যেত না। CLEANER (scope শূন্য) যোগ করার পর
+   * ওটা সত্যিই পৌঁছনো সম্ভব হলো — তাই fallback এখন "/"।
+   *
+   * বাস্তবে CUSTOMER এখানে আসেই না (proxy.ts আগেই "/"-এ পাঠিয়ে দেয়,
+   * আর AccountMenu কেবল isStaffRole হলে ডাকে), কিন্তু fallback-টা
+   * সব ক্ষেত্রেই নিরাপদ হওয়া উচিত — গ্রাহককে admin panel-এর দিকে
+   * ঠেলে দেওয়াটা কোনো অবস্থাতেই ঠিক উত্তর নয়।
+   */
+  it("falls back to the storefront for a non-staff or unknown role", () => {
+    expect(firstAllowedPath("CUSTOMER")).toBe("/");
+    expect(firstAllowedPath(undefined)).toBe("/");
+  });
+
+  it("still sends OWNER and MANAGER straight to /admin", () => {
+    expect(firstAllowedPath("OWNER")).toBe("/admin");
+    expect(firstAllowedPath("MANAGER")).toBe("/admin");
   });
 });
 
