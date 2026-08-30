@@ -559,7 +559,33 @@ export default async function AdminDashboardPage({
          */}
         {/* min-w-0 — নাহলে লম্বা নাম flex item-টাকে তার পাত্রের চেয়েও
             চওড়া করে ফেলে আর ডান পাশের বোতাম বাইরে বেরিয়ে যায়। */}
-        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[30px] md:leading-none">
+        {/**
+         * ⚠️ md-তে মাপটা ৩০ থেকে ২২-এ **নেমে** যায়, আর সেটাই এখানকার
+         * আসল কথা।
+         *
+         * md-এর নিচে শিরোনাম নিজের সারিতে একা থাকে (উপরে flex-col),
+         * তাই পুরো প্রস্থ তার — ৬৪০px-এ ২৬ দিব্যি আঁটে। md থেকে
+         * layout সারিতে বদলায়, আর তখনই তাকে date + Export-এর সাথে
+         * জায়গা ভাগ করতে হয়: ওই দুটো মিলে ~৩৫০px, অর্থাৎ ৭৬৮px পর্দায়
+         * শিরোনামের জন্য পড়ে থাকে ~৩৮০।
+         *
+         * "Welcome Back, Md. Neaz Morshed!" ৩০px-এ ~৫০০px চওড়া — তাই
+         * নামের মাঝখানে ভেঙে দু'লাইন হয়ে যেত। designer-এর tablet
+         * frame-এও ঠিক এই কারণেই মাপটা ২২ (CSS export: Sora 600 22px,
+         * LH 100%), ৩০ নয়।
+         *
+         * ৩০-এ ফেরা হয় xl (১২৮০) থেকে, যেখানে সারিতে সত্যিই জায়গা
+         * আছে। মাঝের ধাপ lg-তে ২৬।
+         *
+         * ⚠️ তবু নিশ্চয়তা নয়, আর সেটা মেনে নেওয়া হয়েছে: নামটা
+         * ব্যবহারকারীর ডেটা, দৈর্ঘ্যের কোনো সীমা নেই। designer মেপেছেন
+         * "Ridoy Ahmed" দিয়ে (১১ অক্ষর), বাস্তবে "Md. Neaz Morshed"
+         * (১৬)। যথেষ্ট লম্বা নামে ২২px-এও দু'লাইন হবে — কিন্তু
+         * `min-w-0` থাকায় সেটা কেবল লাইন সংখ্যা বাড়ায়, বোতামকে
+         * কিনারার বাইরে ঠেলে দেয় না। ভাঙা layout আর দু'লাইনের শিরোনাম
+         * এক জিনিস নয়।
+         */}
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[22px] md:leading-none lg:text-[26px] xl:text-[30px]">
           Welcome Back,{" "}
           {/* গ্রেডিয়েন্ট লেখা: background-টা লেখার আকারে কেটে নেওয়া হয়।
               `text-transparent` না দিলে লেখাটাই gradient-কে ঢেকে দিত।

@@ -223,7 +223,33 @@ export default async function UsersPage({
     <div className="space-y-4">
       {/* --- Welcome header — dashboard-এর হুবহু একই গড়ন --- */}
       <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
-        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[30px] md:leading-none">
+        {/**
+         * ⚠️ md-তে মাপটা ৩০ থেকে ২২-এ **নেমে** যায়, আর সেটাই এখানকার
+         * আসল কথা।
+         *
+         * md-এর নিচে শিরোনাম নিজের সারিতে একা থাকে (উপরে flex-col),
+         * তাই পুরো প্রস্থ তার — ৬৪০px-এ ২৬ দিব্যি আঁটে। md থেকে
+         * layout সারিতে বদলায়, আর তখনই তাকে date + Export-এর সাথে
+         * জায়গা ভাগ করতে হয়: ওই দুটো মিলে ~৩৫০px, অর্থাৎ ৭৬৮px পর্দায়
+         * শিরোনামের জন্য পড়ে থাকে ~৩৮০।
+         *
+         * "Welcome Back, Md. Neaz Morshed!" ৩০px-এ ~৫০০px চওড়া — তাই
+         * নামের মাঝখানে ভেঙে দু'লাইন হয়ে যেত। designer-এর tablet
+         * frame-এও ঠিক এই কারণেই মাপটা ২২ (CSS export: Sora 600 22px,
+         * LH 100%), ৩০ নয়।
+         *
+         * ৩০-এ ফেরা হয় xl (১২৮০) থেকে, যেখানে সারিতে সত্যিই জায়গা
+         * আছে। মাঝের ধাপ lg-তে ২৬।
+         *
+         * ⚠️ তবু নিশ্চয়তা নয়, আর সেটা মেনে নেওয়া হয়েছে: নামটা
+         * ব্যবহারকারীর ডেটা, দৈর্ঘ্যের কোনো সীমা নেই। designer মেপেছেন
+         * "Ridoy Ahmed" দিয়ে (১১ অক্ষর), বাস্তবে "Md. Neaz Morshed"
+         * (১৬)। যথেষ্ট লম্বা নামে ২২px-এও দু'লাইন হবে — কিন্তু
+         * `min-w-0` থাকায় সেটা কেবল লাইন সংখ্যা বাড়ায়, বোতামকে
+         * কিনারার বাইরে ঠেলে দেয় না। ভাঙা layout আর দু'লাইনের শিরোনাম
+         * এক জিনিস নয়।
+         */}
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[22px] md:leading-none lg:text-[26px] xl:text-[30px]">
           Welcome Back,{" "}
           <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
             {session.user.name ?? "there"}!
@@ -298,14 +324,39 @@ export default async function UsersPage({
        */}
       <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
         {/* Figma: Frank Ruhl Libre 600, 30px, LH 100%, #000000। */}
-        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
+        {/**
+         * Figma desktop frame-এ ৩০px, কিন্তু tablet frame-এ (708px)
+         * ২৪ — heading-এর মতোই। md-এ ৩০ রাখলে "Overview" শব্দটা তো
+         * আঁটত, কিন্তু নিচের "Users" কার্ডের শিরোনামের সাথে মাপ মিলত
+         * না, আর দুই কার্ডের শিরোনাম একই পাতায় দুই মাপে বসলে সেটা
+         * ভুল দেখায়। তাই ৩০-এ ফেরা xl থেকে, দুই জায়গাতেই।
+         */}
+        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
           Overview
         </h2>
 
-        {/* Figma Frame 2147236226: row, gap 20, উচ্চতা 140, পাঁচটা
-            কার্ড `flex-grow: 1` — অর্থাৎ সমান ভাগে। */}
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-          {STAFF_GROUPS.map((group) => (
+        {/**
+         * Figma Frame 2147236226: column, gap 20 — ভেতরে **দুটো সারি**,
+         * সমান একটা grid নয়:
+         *
+         *   Frame 2147236588 → তিনটে কার্ড, প্রতিটা 202.67px
+         *   Frame 2147236589 → দুটো কার্ড, প্রতিটা 314px
+         *
+         * দুটো সারিই `flex-grow: 1`, অর্থাৎ যে যতগুলোই থাক, নিজেদের
+         * মধ্যে পুরো প্রস্থ সমান ভাগ করে নেয়। ৬৪৮px-এ সেটাই মেলে:
+         * (648 − 2×20)/3 = 202.67, আর (648 − 20)/2 = 314।
+         *
+         * ⚠️ md-তে ৬ কলামের grid, কারণ ৫টা কার্ডকে ৩+২ ভাগ করতে হলে
+         * ৫ বা ৩ কলাম দিয়ে হয় না — ৩ কলামে শেষ সারির দুটো কার্ড এক
+         * কলাম করে নিত আর ডানদিকে একটা ফাঁকা ঘর পড়ে থাকত, অথচ Figma-তে
+         * ওরা জায়গাটা ভাগ করে নেয়। ৬ হলো ৩ আর ২ — দুটোরই গুণিতক, তাই
+         * উপরের তিনটে ২ কলাম করে (2+2+2) আর নিচের দুটো ৩ করে (3+3),
+         * দুই সারিই ঠিক ৬-এ পূর্ণ হয়।
+         *
+         * xl-এ পাঁচটাই এক সারিতে, তাই span আবার ১-এ ফেরে।
+         */}
+        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-6 xl:grid-cols-5">
+          {STAFF_GROUPS.map((group, index) => (
             /**
              * Figma Card: column, padding 16, gap 20, radius 16,
              * BG #F9F6F3, উচ্চতা 140।
@@ -318,7 +369,13 @@ export default async function UsersPage({
              */
             <div
               key={group.label}
-              className="flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4"
+              /* উপরের সারির তিনটে ২ কলাম, নিচের দুটো ৩ — উপরের
+                 ব্যাখ্যা দ্রষ্টব্য। ক্লাসগুলো আস্ত লেখা, `md:col-span-${n}`
+                 নয়: Tailwind source-এ আক্ষরিক নাম না পেলে class-টা
+                 তৈরিই করে না। */
+              className={`flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4 xl:col-span-1 ${
+                index < 3 ? "md:col-span-2" : "md:col-span-3"
+              }`}
             >
               {/* Frame 2147232365: row, space-between, উচ্চতা 40 —
                   উচ্চতাটা icon-বৃত্তেরই, শিরোনাম মাত্র 20px। */}
@@ -358,7 +415,8 @@ export default async function UsersPage({
       {/* --- Users --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black md:text-[30px]">
+          {/* Overview-এর শিরোনামের সাথে মাপ মেলানো — ব্যাখ্যা ওখানে। */}
+          <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
             Users
           </h2>
 
