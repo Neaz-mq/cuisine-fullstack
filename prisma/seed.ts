@@ -1,6 +1,21 @@
+import "dotenv/config";
+
+import { PrismaPg } from "@prisma/adapter-pg";
+
 import { PrismaClient } from "../src/generated/prisma/client";
 
-const prisma = new PrismaClient();
+// engineType = "client" (দেখুন schema.prisma) হওয়ায় PrismaClient-কে
+// adapter ছাড়া তৈরি করা যায় না — ব্যাখ্যা src/lib/prisma.ts-এ।
+//
+// seed আলাদা প্রসেসে চলে (tsx prisma/seed.ts), তাই prisma.config.ts-এর
+// "dotenv/config" এখানে পৌঁছায় না — নিজেরই .env পড়তে হয়।
+// বাকি CLI কাজের মতোই DIRECT_URL (session pooler) কে অগ্রাধিকার —
+// seed একটা লম্বা, বহু-statement কাজ, transaction pooler-এর জন্য নয়।
+const adapter = new PrismaPg({
+  connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL!,
+});
+
+const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
 // Category list 

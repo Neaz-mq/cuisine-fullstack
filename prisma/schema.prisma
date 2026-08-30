@@ -7,29 +7,26 @@ generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 
-  /// ⚠️ Vercel-এ deploy করার জন্য এটা বাধ্যতামূলক।
+  /// ⚠️ engineType = "client" — Rust query engine পুরোপুরি বাদ।
   ///
-  /// "native" মানে যে মেশিনে `prisma generate` চলছে তার engine —
-  /// লোকালে Windows (`query_engine-windows.dll.node`)। Vercel-এর build
-  /// container Linux, তাই সেখানে generate করলে native মানে Linux-ই —
-  /// কিন্তু সেই "Linux" ঠিক কোনটা তা নিশ্চিত নয়, আর build machine ও
-  /// runtime (serverless function) দুটো আলাদা image।
+  /// আগে এখানে binaryTargets = ["native", "rhel-openssl-3.0.x"] ছিল।
+  /// binary ঠিকই তৈরি হতো, কিন্তু Vercel-এর serverless bundle-এ
+  /// libquery_engine-rhel-openssl-3.0.x.so.node কখনো কপি হতো না, কারণ
+  /// custom output (src/-এর ভেতরে) মানে generated client টা Next.js-এর
+  /// bundler-এর ভেতরে ঢুকে যায় — আর bundler .so.node ফাইল trace করে না।
+  /// outputFileTracingIncludes দিয়েও হয়নি (Turbopack ওটা মানে না)।
   ///
-  /// runtime-টা `rhel-openssl-3.0.x` (Amazon Linux 2023 ভিত্তিক), আর
-  /// ওই engine তৈরি না হলে চলার সময় error আসে:
+  /// Prisma 6.16 থেকে "Rust-free" client GA। engineType = "client" দিলে
+  /// কোনো native binary-ই তৈরি হয় না — query compile হয় WASM + TypeScript
+  /// দিয়ে, আর ডাটাবেসে কানেকশন যায় একটা JS driver adapter দিয়ে
+  /// (@prisma/adapter-pg, দেখুন src/lib/prisma.ts)।
   ///
-  ///   PrismaClientInitializationError:
-  ///   Prisma Client could not locate the Query Engine for runtime
-  ///   "rhel-openssl-3.0.x"
+  /// অর্থাৎ "binary bundle-এ পৌঁছাল কি না" প্রশ্নটাই আর থাকে না।
   ///
-  /// স্পষ্ট করে লিখে দিলে `prisma generate` দুটোই বানায় — Windows-এর
-  /// (লোকাল dev-এর জন্য) আর RHEL-এর (Vercel-এর জন্য)।
-  ///
-  /// ⚠️ এটা একা যথেষ্ট নাও হতে পারে: binary তৈরি হওয়া আর সেটা
-  /// serverless bundle-এ পৌঁছানো আলাদা দুটো জিনিস। কপি হওয়ার
-  /// দায়িত্ব next.config.ts-এর `outputFileTracingIncludes`-এর —
-  /// সেখানকার মন্তব্য দ্রষ্টব্য।
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  /// ⚠️ এর শর্ত: PrismaClient কখনোই খালি হাতে (`new PrismaClient()`)
+  /// তৈরি করা যাবে না — adapter পাঠাতেই হবে। দুই জায়গায় তৈরি হয়:
+  /// src/lib/prisma.ts আর prisma/seed.ts।
+  engineType = "client"
 }
 
 datasource db {
