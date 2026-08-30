@@ -213,6 +213,44 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
+
+  /**
+   * ⚠️ Prisma-র query engine binary হাতে ধরে serverless bundle-এ পাঠানো।
+   *
+   * এটা ছাড়া Vercel-এ build দিব্যি সফল হয়, অথচ প্রতিটা DB query
+   * runtime-এ ভেঙে পড়ে:
+   *
+   *   PrismaClientInitializationError:
+   *   Prisma Client could not locate the Query Engine for runtime
+   *   "rhel-openssl-3.0.x"
+   *
+   * কারণটা সূক্ষ্ম। Next.js ঠিক করে কোন ফাইলগুলো function-এ যাবে, আর
+   * সেটা করে import-এর শিকড় ধরে ধরে (file tracing)। কিন্তু Prisma-র
+   * engine একটা native binary — `libquery_engine-rhel-openssl-3.0.x.so.node`
+   * — যেটা কোনো `import` statement-এ নেই, generated client সেটাকে
+   * চলার সময় path বানিয়ে খোঁজে। তাই tracer ওটাকে দেখতেই পায় না, আর
+   * bundle-এ পাঠায় না।
+   *
+   * Log-এ পার্থক্যটা স্পষ্ট ছিল:
+   *   /vercel/path0/src/generated/prisma  ← build-এ ফাইলটা এখানে ছিল
+   *   /var/task/src/generated             ← runtime এখানে খুঁজেছে
+   *
+   * `output = "../src/generated/prisma"` (schema.prisma) একটা অপ্রচলিত
+   * জায়গা বলে সমস্যাটা এখানে নিশ্চিতভাবেই হয় — ডিফল্ট
+   * node_modules/.prisma-এ Next.js-এর নিজস্ব বিশেষ ব্যবস্থা আছে,
+   * custom output-এ নেই।
+   *
+   * ⚠️ `experimental`-এর ভেতরে নয়। Next 15 থেকে এটা top-level option;
+   * পুরনো টিউটোরিয়াল দেখে `experimental.outputFileTracingIncludes`
+   * লিখলে Next সেটা নীরবে অগ্রাহ্য করে আর একই error ফিরে আসে।
+   *
+   * key `"/**\/*"` মানে প্রতিটা route — শুধু `/api/menu` নয়, কারণ
+   * Prisma সব server component আর route handler-এই ব্যবহৃত হয়।
+   */
+  outputFileTracingIncludes: {
+    "/**/*": ["./src/generated/prisma/**/*"],
+  },
+
   async headers() {
     return [
       {
