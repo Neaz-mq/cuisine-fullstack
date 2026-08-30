@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, Search, X } from "lucide-react";
+import { useScreenTier } from "@/components/admin/useScreenTier";
 
 export interface PanelLink {
   label: string;
@@ -138,6 +139,24 @@ export default function AdminTopbar({
    * ব্যবহারকারীর কাছে এটা শেখার মতো নতুন কিছু নয়।
    */
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  /**
+   * ⚠️ icon-মোড থাকা সত্ত্বেও placeholder-টা ৩২০px-এ কাটে, আর সেটাই
+   * এখানকার সূক্ষ্ম জায়গা। খোলার পর input পুরো bar জুড়ে ছড়ায় ঠিকই,
+   * কিন্তু পাশে বন্ধ করার ✕ বোতামটা থেকে যায় — আর সেটা ছাড়া keyboard
+   * ব্যবহারকারীর বেরোনোর পথ থাকে না, তাই ওটা সরানোও যায় না।
+   *
+   *   ২৮৮ (৩২০ − shell padding) − ৪৪ (✕ + gap) − ৪৮ (pl-12) − ১৬ (pr-4)
+   *   = ১৮০px
+   *
+   * "Search everything..." Sora 16px-এ ~১৬৬ — কাগজে আঁটে, কিন্তু
+   * ফাঁকটা এত সরু যে ফন্ট লোড হওয়ার আগে fallback ফন্টে মাপা হলেই
+   * কেটে যায়। তাই ফোনে ছোট লেখা।
+   *
+   * ⚠️ `aria-label` বদলায় না — screen reader ব্যবহারকারী সব পর্দাতেই
+   * পুরো বিবরণ শোনেন।
+   */
+  const tier = useScreenTier();
 
   /**
    * বাইরে click করলে menu বন্ধ। `mousedown`, `click` নয় — click-এ করলে
@@ -421,7 +440,7 @@ export default function AdminTopbar({
             }}
             onFocus={() => setSearchOpen(true)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="Search everything..."
+            placeholder={tier === "narrow" ? "Search" : "Search everything..."}
             aria-label="Search pages"
             role="combobox"
             aria-expanded={showResults}

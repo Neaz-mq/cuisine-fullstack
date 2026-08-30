@@ -249,7 +249,7 @@ export default async function UsersPage({
          * কিনারার বাইরে ঠেলে দেয় না। ভাঙা layout আর দু'লাইনের শিরোনাম
          * এক জিনিস নয়।
          */}
-        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[22px] md:leading-none lg:text-[26px] xl:text-[30px]">
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 md:leading-none lg:text-[26px] xl:text-[30px]">
           Welcome Back,{" "}
           <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
             {session.user.name ?? "there"}!
@@ -264,10 +264,14 @@ export default async function UsersPage({
         <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
           <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
             <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            <span className="sm:hidden">
+            {/* ⚠️ `sm:` নয় — globals.css-এ sm = 320px, তাই `sm:hidden`
+                মানে কার্যত সবসময় লুকানো, আর ৩২০px-এ সংক্ষিপ্ত তারিখটা
+                কখনো দেখাই যেত না; উল্টে পুরো "Aug 30, 2026" বসত, যেটা
+                বাঁচানোর জন্যই এটা লেখা হয়েছিল। */}
+            <span className="min-[480px]:hidden">
               {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
-            <span className="hidden sm:inline">
+            <span className="hidden min-[480px]:inline">
               {now.toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -355,7 +359,13 @@ export default async function UsersPage({
          *
          * xl-এ পাঁচটাই এক সারিতে, তাই span আবার ১-এ ফেরে।
          */}
-        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-6 xl:grid-cols-5">
+        {/* ⚠️ `sm:grid-cols-2` ছিল, আর globals.css-এ sm = 320px বলে সেটা
+             ৩২০px-এই দুই কলাম বানাত। তখন প্রতিটা কার্ড ~১৩০px, অথচ
+             ভেতরে লাগে ৩২ (padding) + ~৯৫ ("Managers", Frank Ruhl 20px)
+             + ১২ (gap) + ৪০ (icon বৃত্ত) = ১৭৯ — তাই শিরোনামটা
+             icon-এর নিচ দিয়ে বেরিয়ে যেত আর দুটো একে অন্যের উপর
+             বসত। ৪৮০ থেকে দুই কলাম দিলে কার্ড ~২০৬px, তখন আঁটে। */}
+        <div className="grid gap-5 min-[480px]:grid-cols-2 md:grid-cols-6 xl:grid-cols-5">
           {STAFF_GROUPS.map((group, index) => (
             /**
              * Figma Card: column, padding 16, gap 20, radius 16,
@@ -381,7 +391,12 @@ export default async function UsersPage({
                   উচ্চতাটা icon-বৃত্তেরই, শিরোনাম মাত্র 20px। */}
               <div className="flex items-center justify-between gap-3">
                 {/* Figma: Frank Ruhl Libre 500, 20px, LH 100%, #000000। */}
-                <h3 className="min-w-0 font-frank-ruhl text-[20px] font-medium leading-none text-black">
+                {/* `truncate` — শেষ রক্ষাকবচ। "Managers" একটাই শব্দ, তাই
+                    জায়গা কম পড়লে সে ভাঙতে পারে না; `min-w-0` তাকে
+                    সংকুচিত হতে দেয় বটে, কিন্তু লেখাটা তখন বাক্সের বাইরে
+                    উপচে icon-এর উপর গিয়ে পড়ে। কাটা "Manag…" সুন্দর নয়,
+                    তবু দুটো জিনিস একে অন্যের উপর বসার চেয়ে ভালো। */}
+                <h3 className="min-w-0 truncate font-frank-ruhl text-[20px] font-medium leading-none text-black">
                   {group.label}
                 </h3>
                 {/* Frame 2147232069: 40×40, BG #FFFFFF, radius 79.8
@@ -490,7 +505,13 @@ export default async function UsersPage({
 
                   {/* Frame 2147236376: row, space-between, gap 30,
                       উচ্চতা 42, flex-grow 1। */}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
+                  {/* ⚠️ `sm:grid-cols-3` ছিল — sm = 320px হওয়ায় ৩২০px-এই তিন
+                      কলাম হয়ে যেত, প্রতিটা ~৭৫px। তাতে "Customer Category"
+                      শিরোনামটা দু'লাইনে ভাঙত আর মানগুলো "Aug 3…" / "New C…"
+                      হয়ে কাটা পড়ত — অর্থাৎ সংখ্যা দেখা গেলেও পড়া যেত না।
+                      ৫৬০ থেকে তিন কলাম: তখন প্রতিটা ~১৬৫px, "Customer
+                      Category" এক লাইনে আঁটে। */}
+                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
                     <Field label="Member Since" value={formatJoinDate(user.createdAt)} />
                     {/* ফোন নম্বর ঐচ্ছিক — Google দিয়ে sign in করলে কখনোই
                         আসে না (schema-র মন্তব্য দ্রষ্টব্য)। */}

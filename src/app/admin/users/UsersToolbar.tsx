@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Search } from "lucide-react";
+import { useScreenTier } from "@/components/admin/useScreenTier";
 import {
   CUSTOMER_CATEGORIES,
   CATEGORY_LABELS,
@@ -52,6 +53,34 @@ const ALL = "all";
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
+/**
+ * Placeholder — তিন মাপে তিন রকম লেখা।
+ *
+ * ⚠️ এটা CSS দিয়ে করা যায় না, আর সেটাই এখানে JS ব্যবহারের একমাত্র
+ * কারণ: placeholder একটা **attribute**, element-এর ভেতরের লেখা নয়।
+ * `::placeholder`-এ font-size বা রঙ বদলানো যায়, কিন্তু `content`
+ * কাজ করে না। লেখাটাই বদলাতে হলে JS-কে জানতে হয় পর্দা কত চওড়া।
+ *
+ * কেন তিন ধাপ, দুই নয় — ৪৮০-তে pill পাশে চলে আসে বলে ইনপুট উল্টো
+ * **সরু হয়ে যায়**। ভেতরে লেখার জায়গা:
+ *
+ *   ৩২০ (ইনপুট একা)  → 288 − 44 − 16        = 228px
+ *   ৪৮০ (pill সহ)    → 448 − 156 − 24 − 60  = 208px   ← আরও কম
+ *   ১০২৪+            → অনেক বেশি
+ *
+ * Sora 16px-এ পুরো Figma লেখাটা (৩১ অক্ষর) ~২৫৭px — প্রথম দুই ধাপের
+ * কোনোটাতেই আঁটে না। মাঝের ধাপে তাই ছাঁটা রূপ (~১৯১px), আর ৩২০-এ
+ * শুধু "Search"।
+ *
+ * ⚠️ ছোট লেখা মানে কম তথ্য, তাই `aria-label`-টা তিন ধাপেই পুরো থাকে —
+ * screen reader ব্যবহারকারী কখনোই কেবল "Search" শোনেন না।
+ */
+const PLACEHOLDERS = {
+  narrow: "Search",
+  mid: "Search by Customer Name",
+  wide: "Search by Customer Name, Email…",
+} as const;
+
 export default function UsersToolbar({
   category,
 }: {
@@ -76,6 +105,13 @@ export default function UsersToolbar({
    */
   const requestedRef = useRef(urlQuery);
   const pendingRef = useRef(false);
+
+  /**
+   * ধাপটা এখানে হিসাব করা হয় না — useScreenTier-এ। AdminTopbar-এও
+   * ঠিক একই মাপ লাগে, আর দুই জায়গায় দুটো matchMedia রাখলে একদিন
+   * একটার সীমানা বদলে অন্যটা পিছিয়ে থাকত।
+   */
+  const tier = useScreenTier();
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
@@ -139,10 +175,23 @@ export default function UsersToolbar({
      * align-items flex-start। search box `flex-grow: 1`, pill
      * `flex: none` — অর্থাৎ বাক্সটাই বাকি জায়গা নেয়।
      *
-     * ৩২০px-এ দুটো এক সারিতে আঁটে না (শুধু pill-ই ১৫৬), তাই sm-এর
-     * নিচে উপর-নিচে — ওখানে gap 24 বাড়াবাড়ি, তাই 12।
+     * ৩২০px-এ দুটো এক সারিতে আঁটে না (শুধু pill-ই ১৫৬), তাই ছোট
+     * পর্দায় উপর-নিচে — ওখানে gap 24 বাড়াবাড়ি, তাই 12।
+     *
+     * ⚠️ এখানে `sm:` ব্যবহার করা যায় না, আর সেটাই এই ফাইলের সবচেয়ে
+     * সহজে ভুল হওয়ার মতো জায়গা। globals.css-এ
+     * `--breakpoint-sm: 320px` — Tailwind-এর ডিফল্ট ৬৪০ নয়। অর্থাৎ
+     * `sm:` মানে "৩২০ থেকে", আর ৩২০-এর চেয়ে সরু পর্দা বাস্তবে নেই,
+     * তাই `sm:` কার্যত **সবসময়ই** চালু। আগে এখানে `sm:flex-row` ছিল
+     * আর সেই কারণেই ৩২০px-এ দুটো পাশাপাশি বসত: search box চেপে গিয়ে
+     * "Sear…" হয়ে যেত আর pill-টা কিনারা ছাড়িয়ে যেত।
+     *
+     * তাই স্পষ্ট করে ৪৮০ লেখা। হিসাবটা: ৪৮০ − ৩২ (shell-এর padding)
+     * = ৪৪৮, তার থেকে pill ১৫৬ আর gap ২৪ বাদ দিলে search পায় ২৬৮ —
+     * placeholder-টা কাটলেও টাইপ করার মতো যথেষ্ট। ৩২০-এ ওটাই দাঁড়াত
+     * ১০৮।
      */
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
+    <div className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-start min-[480px]:gap-6">
       {/**
        * Figma: padding 16, gap 8, radius 100, BG #FFFFFF, উচ্চতা 50।
        *
@@ -163,11 +212,20 @@ export default function UsersToolbar({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by Customer Name, Email…"
+          placeholder={PLACEHOLDERS[tier]}
           aria-label="Search customers by name, email or phone"
           /* Figma type: Sora 400, 16px, line-height 100%, Black/70।
              লেখা আর placeholder দুটোরই — তাই `text-black/70`, আর
-             একটা কঠিন ধূসর নয় (cream পটভূমিতে ওটা অন্যরকম বসত)। */
+             একটা কঠিন ধূসর নয় (cream পটভূমিতে ওটা অন্যরকম বসত)।
+
+             ⚠️ মাপ সব পর্দায় ১৬-তেই, ছোট করা হয়নি। আগে ৩২০px-এ
+             placeholder-টা ১৩px করা হয়েছিল, কিন্তু সেটা ভুল সমাধান
+             ছিল — লেখাটা তখন ছোট **আর** কাটা, দুটোই। এখন লেখাটাই
+             বদলায় (PLACEHOLDERS দ্রষ্টব্য), তাই মাপ কমানোর দরকার নেই।
+
+             ১৬-তে রাখার আলাদা কারণও আছে: iOS Safari ১৬px-এর কম
+             font-size-এর ইনপুটে focus করলে পুরো পাতাটা zoom করে দেয়,
+             আর সেই zoom নিজে থেকে ফেরে না। */
           className={`h-[50px] w-full rounded-full bg-white pl-11 pr-4 font-sora text-[16px] font-normal leading-none text-black/70 placeholder:text-black/70 ${FOCUS_RING}`}
         />
       </div>
@@ -181,14 +239,17 @@ export default function UsersToolbar({
          * (156 − 16 − 16 − 8 − 20)। তাই pill-এ ছোট নাম দেখানো হয়
          * ("Platinum"), পুরোটা নয় — দেখুন CATEGORY_SHORT_LABELS।
          *
-         * ৩২০px-এ পুরো প্রস্থ, কারণ ওখানে pill-টা নিজের সারিতে একা।
+         * ছোট পর্দায় পুরো প্রস্থ, কারণ ওখানে pill-টা নিজের সারিতে একা।
+         * ৪৮০ থেকে স্থির ১৫৬ — উপরের wrapper-এর সাথে একই সীমা, দুটো
+         * আলাদা হলে একটা সরু ফাঁকে pill নিজের সারিতে অথচ ১৫৬px চওড়া
+         * হয়ে বসত।
          */}
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className={`flex h-[50px] w-full items-center justify-between gap-2 rounded-full bg-white p-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] sm:w-[156px] ${FOCUS_RING}`}
+          className={`flex h-[50px] w-full items-center justify-between gap-2 rounded-full bg-white p-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] min-[480px]:w-[156px] ${FOCUS_RING}`}
         >
           {/* Figma: Sora 400 16px, Black/100 — search-এর লেখা Black/70,
               এটা নয়। বাছাই করা মান আর placeholder এক নয়, তাই পার্থক্যটা

@@ -585,7 +585,7 @@ export default async function AdminDashboardPage({
          * কিনারার বাইরে ঠেলে দেয় না। ভাঙা layout আর দু'লাইনের শিরোনাম
          * এক জিনিস নয়।
          */}
-        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 sm:text-[26px] md:text-[22px] md:leading-none lg:text-[26px] xl:text-[30px]">
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 md:leading-none lg:text-[26px] xl:text-[30px]">
           Welcome Back,{" "}
           {/* গ্রেডিয়েন্ট লেখা: background-টা লেখার আকারে কেটে নেওয়া হয়।
               `text-transparent` না দিলে লেখাটাই gradient-কে ঢেকে দিত।
@@ -621,10 +621,14 @@ export default async function AdminDashboardPage({
         <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
           <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
             <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            <span className="sm:hidden">
+            {/* ⚠️ `sm:` নয় — globals.css-এ sm = 320px, তাই `sm:hidden`
+                মানে কার্যত সবসময় লুকানো, আর ৩২০px-এ সংক্ষিপ্ত তারিখটা
+                কখনো দেখাই যেত না; উল্টে পুরো "Aug 30, 2026" বসত, যেটা
+                বাঁচানোর জন্যই এটা লেখা হয়েছিল। */}
+            <span className="min-[480px]:hidden">
               {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
-            <span className="hidden sm:inline">
+            <span className="hidden min-[480px]:inline">
               {now.toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
