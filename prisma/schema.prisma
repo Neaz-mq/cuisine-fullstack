@@ -6,6 +6,30 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+
+  /// ⚠️ Vercel-এ deploy করার জন্য এটা বাধ্যতামূলক।
+  ///
+  /// "native" মানে যে মেশিনে `prisma generate` চলছে তার engine —
+  /// লোকালে Windows (`query_engine-windows.dll.node`)। Vercel-এর build
+  /// container Linux, তাই সেখানে generate করলে native মানে Linux-ই —
+  /// কিন্তু সেই "Linux" ঠিক কোনটা তা নিশ্চিত নয়, আর build machine ও
+  /// runtime (serverless function) দুটো আলাদা image।
+  ///
+  /// runtime-টা `rhel-openssl-3.0.x` (Amazon Linux 2023 ভিত্তিক), আর
+  /// ওই engine তৈরি না হলে চলার সময় error আসে:
+  ///
+  ///   PrismaClientInitializationError:
+  ///   Prisma Client could not locate the Query Engine for runtime
+  ///   "rhel-openssl-3.0.x"
+  ///
+  /// স্পষ্ট করে লিখে দিলে `prisma generate` দুটোই বানায় — Windows-এর
+  /// (লোকাল dev-এর জন্য) আর RHEL-এর (Vercel-এর জন্য)।
+  ///
+  /// ⚠️ এটা একা যথেষ্ট নাও হতে পারে: binary তৈরি হওয়া আর সেটা
+  /// serverless bundle-এ পৌঁছানো আলাদা দুটো জিনিস। কপি হওয়ার
+  /// দায়িত্ব next.config.ts-এর `outputFileTracingIncludes`-এর —
+  /// সেখানকার মন্তব্য দ্রষ্টব্য।
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
