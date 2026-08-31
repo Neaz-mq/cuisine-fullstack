@@ -1,120 +1,245 @@
 import Link from "next/link";
+import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/require-admin";
-import { canViewSensitiveStaffFields } from "@/lib/permissions";
+import { requireStaff } from "@/lib/require-admin";
+import { Prisma } from "@/generated/prisma/client";
+import { canManageStaffRole, type StaffRole } from "@/lib/permissions";
+import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
+import { ALL_ROLES, ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
+import Pagination from "@/app/admin/orders/Pagination";
+import StaffOverviewCards from "@/components/admin/StaffOverviewCards";
+import UserAvatar from "@/components/admin/UserAvatar";
+import InfoField from "@/components/admin/InfoField";
+import { formatJoinDate } from "@/lib/format-date";
+import StaffToolbar from "./StaffToolbar";
+import RoleFilter from "./RoleFilter";
 import DeactivateStaffButton from "./DeactivateStaffButton";
-import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount } from "@/lib/currency-format";
 
-const ROLE_STYLES: Record<string, string> = {
-  OWNER: "bg-purple-100 text-purple-700",
-  MANAGER: "bg-blue-100 text-blue-700",
-  WAITER: "bg-teal-100 text-teal-700",
-  CASHIER: "bg-amber-100 text-amber-700",
-  DELIVERY: "bg-orange-100 text-orange-700",
-  KITCHEN: "bg-rose-100 text-rose-700",
-  CLEANER: "bg-slate-100 text-slate-700",
-};
+export const metadata = { title: "Staff" };
 
-export default async function AdminStaffPage() {
-  const settings = await getRestaurantSettings();
-  const units = settings.currencyMinorUnits;
-  const session = await requireAdmin();
+const STAFF_PER_PAGE = 10;
+
+export default async function StaffPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; role?: string; page?: string }>;
+}) {
+  // requireAdmin() নয় — এটা যেকোনো staff role-কেই পাশ করিয়ে দিত, অথচ
+  // "staff" scope-টা মূলত OWNER/MANAGER-এর জন্য (permissions.ts-এর
+  // ALL_SCOPES মন্তব্য দ্রষ্টব্য)। requireStaff("staff") সঠিক scope
+  // যাচাই করে — Users page-এও একই scope, একই কারণে।
+  const session = await requireStaff("staff");
   const viewerId = session.user.id;
   const viewerRole = (session.user as { role?: string }).role;
-  const canSeeSensitive = canViewSensitiveStaffFields(viewerRole);
 
-  const staff = await prisma.user.findMany({
-    where: { role: { not: "CUSTOMER" } },
-    orderBy: { createdAt: "asc" },
-    include: { staffProfile: true },
-  });
+  const params = await searchParams;
+  const q = params.q?.trim();
+  const roleFilter: StaffRole | null = isStaffRoleFilter(params.role) ? params.role : null;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+
+  const now = new Date();
+
+  const where: Prisma.UserWhereInput = {
+    role: roleFilter ?? { not: "CUSTOMER" },
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
+            // employeeId একটা সম্পর্কিত ফিল্ড (StaffProfile), তাই
+            // relation-filter — name/email-এর মতো সরাসরি column নয়।
+            { staffProfile: { employeeId: { contains: q, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, staff] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * STAFF_PER_PAGE,
+      take: STAFF_PER_PAGE,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+        staffProfile: {
+          select: {
+            employeeId: true,
+            phone: true,
+            hireDate: true,
+            shift: true,
+            isActive: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / STAFF_PER_PAGE));
+  const rangeStart = total === 0 ? 0 : (page - 1) * STAFF_PER_PAGE + 1;
+  const rangeEnd = Math.min(page * STAFF_PER_PAGE, total);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Staff</h1>
-        <Link
-          href="/admin/staff/new"
-          className="bg-[#FF4C15] text-white text-sm font-semibold px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
-        >
-          + Add Staff
-        </Link>
+    <div className="space-y-4">
+      {/* --- Welcome header — Users page-এর হুবহু একই গড়ন --- */}
+      <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 md:leading-none lg:text-[26px] xl:text-[30px]">
+          Welcome Back,{" "}
+          <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
+            {session.user.name ?? "there"}!
+          </span>
+        </h1>
+
+        {/**
+         * ⚠️ Users/dashboard-এ এখানে ExportReportButton-ও থাকে, কিন্তু
+         * staff তালিকার নিজের কোনো export route এখনো নেই
+         * (/api/admin/users/export-এর staff-সংস্করণ বানানো হয়নি — সেটা
+         * এই redesign-এর আওতার বাইরে, আলাদা কাজ)। ভুল route-এ (যেমন
+         * ডিফল্ট insights export) পাঠিয়ে ভুল CSV দেওয়ার চেয়ে বোতামটাই
+         * বাদ রাখা হলো, যতক্ষণ না staff export সত্যিই লাগে।
+         */}
+        <span className="flex h-11 w-fit shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+          <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+          <span className="min-[480px]:hidden">
+            {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </span>
+          <span className="hidden min-[480px]:inline">
+            {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </span>
+        </span>
       </div>
 
-      {staff.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-gray-300 rounded-md text-gray-500">
-          No staff members yet.
+      <StaffToolbar />
+
+      <StaffOverviewCards />
+
+      {/* --- Staff Information --- */}
+      <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+            Staff Information
+          </h2>
+
+          {/**
+           * এই "All ⌄"-টাই role-ছাঁকনির সত্যিকারের জায়গা — StaffToolbar.tsx-এর
+           * শীর্ষ মন্তব্য দ্রষ্টব্য। FilterMenu সরাসরি ব্যবহার করা হচ্ছে,
+           * নতুন কোনো inline popup না লিখে। এটা client-side নেভিগেশন
+           * (URL বদলায়), তাই একটা ছোট client wrapper (RoleFilter.tsx)
+           * লাগে — এই ফাইলটা server component, onSelect-এ সরাসরি router
+           * কল করা যায় না।
+           */}
+          <RoleFilter value={roleFilter ?? ALL_ROLES} />
         </div>
-      ) : (
-        <div className="border border-gray-200 rounded-md divide-y divide-gray-100 bg-white">
-          {staff.map((member) => {
-            const isSelf = member.id === viewerId;
-            return (
-              <div
-                key={member.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              >
-                <div className="min-w-[180px]">
-                  <p className="text-sm font-medium text-gray-800">
-                    {member.name ?? "—"}
-                    {isSelf && <span className="text-xs text-gray-400 ml-1">(you)</span>}
-                  </p>
-                  <p className="text-xs text-gray-400">{member.email}</p>
-                </div>
 
-                <span className="text-xs font-mono text-gray-500">
-                  {member.staffProfile?.employeeId ?? "—"}
-                </span>
+        {staff.length === 0 ? (
+          <p className="py-10 text-center font-sora text-[14px] text-black/70">
+            {q || roleFilter ? "No staff match this filter." : "No staff members yet."}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {staff.map((member) => {
+              const isSelf = member.id === viewerId;
+              // MANAGER একটা OWNER-কে দেখতে পারেন (তালিকায় থাকেন),
+              // কিন্তু তাঁকে deactivate করতে পারেন না — API route-এর
+              // canManageStaffRole guard-এর সাথে মেলানো, নাহলে বোতাম
+              // দেখা যেত অথচ চাপলে 403 আসত।
+              const canManage = canManageStaffRole(viewerRole, member.role);
+              const shiftLabel =
+                member.staffProfile?.shift && isStaffShift(member.staffProfile.shift)
+                  ? SHIFT_LABELS[member.staffProfile.shift]
+                  : "—";
+              const isActive = member.staffProfile?.isActive ?? true;
 
-                <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    ROLE_STYLES[member.role] ?? "bg-gray-100 text-gray-700"
-                  }`}
+              return (
+                <div
+                  key={member.id}
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-[30px]"
                 >
-                  {member.role}
-                </span>
+                  <div className="flex min-w-0 items-center gap-4 xl:w-[203px] xl:shrink-0">
+                    <UserAvatar src={member.image} name={member.name ?? member.email} />
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
+                        {member.name ?? "Unnamed"}
+                        {isSelf && (
+                          <span className="ml-1.5 font-sora text-[12px] font-normal text-black/40">
+                            (you)
+                          </span>
+                        )}
+                      </p>
+                      <p className="truncate font-sora text-[12px] leading-[1.7] text-black/70">
+                        {member.email}
+                      </p>
+                    </div>
+                  </div>
 
-                {member.staffProfile?.department && (
-                  <span className="text-sm text-gray-600">{member.staffProfile.department}</span>
-                )}
-
-                {canSeeSensitive && member.staffProfile?.salary != null && (
-                  <span className="text-sm text-gray-600">
-                    {formatAmount(member.staffProfile.salary.toFixed(units), settings.currency)}/mo
-                  </span>
-                )}
-
-                <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                    member.staffProfile?.isActive
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {member.staffProfile?.isActive ? "Active" : "Inactive"}
-                </span>
-
-                <div className="flex items-center gap-3 ml-auto">
-                  <Link
-                    href={`/admin/staff/${member.id}`}
-                    className="text-sm text-[#2C6252] font-medium hover:underline"
-                  >
-                    Edit
-                  </Link>
-                  {!isSelf && member.staffProfile && (
-                    <DeactivateStaffButton
-                      userId={member.id}
-                      isActive={member.staffProfile.isActive}
-                      name={member.name ?? member.email}
+                  {/* Users page-এর একই breakpoint যুক্তি — পাঁচটা মাঠ,
+                      একই grid math (InfoField.tsx-এর মন্তব্য দ্রষ্টব্য)। */}
+                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
+                    <InfoField
+                      label="Join Date"
+                      value={
+                        member.staffProfile ? formatJoinDate(member.staffProfile.hireDate) : "—"
+                      }
                     />
-                  )}
+                    <InfoField label="Phone Number" value={member.staffProfile?.phone ?? "—"} />
+                    <InfoField label="Role" value={ROLE_LABELS[member.role as StaffRole]} />
+                    <InfoField label="Shift" value={shiftLabel} />
+                    <InfoField
+                      label="Status"
+                      value={isActive ? "Active" : "Inactive"}
+                      tone={isActive ? "positive" : "negative"}
+                    />
+                  </div>
+
+                  {/* Figma-র Edit/View — এখানে Edit (সম্পাদনা পাতায়)
+                      আর Deactivate/Reactivate (নিজের role/self বাদে)।
+                      আলাদা "View" নেই, কারণ edit পাতাই সব তথ্য দেখায় —
+                      দুটো আলাদা পাতা বানালে একই ডেটার দুই কপি রাখতে হতো। */}
+                  <div className="flex shrink-0 items-center gap-4 xl:flex-col xl:items-end xl:gap-2">
+                    <Link
+                      href={`/admin/staff/${member.id}`}
+                      className="font-sora text-[14px] font-medium text-black underline-offset-2 hover:underline"
+                    >
+                      Edit
+                    </Link>
+                    {!isSelf && canManage && member.staffProfile && (
+                      <DeactivateStaffButton
+                        userId={member.id}
+                        isActive={isActive}
+                        name={member.name ?? member.email}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="flex items-center gap-1.5 font-sora text-[12px] leading-[15px] text-[#121212]/60">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF9540]" aria-hidden="true" />
+            Showing{" "}
+            <span className="font-semibold text-black">
+              {rangeStart}–{rangeEnd}
+            </span>{" "}
+            of <span className="font-semibold text-black">{total}</span>{" "}
+            Staff
+          </p>
+
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            searchParams={params}
+            basePath="/admin/staff"
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }

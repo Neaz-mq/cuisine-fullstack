@@ -6,6 +6,8 @@ import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import StaffOverviewCards from "@/components/admin/StaffOverviewCards";
 import UserAvatar from "@/components/admin/UserAvatar";
+import InfoField from "@/components/admin/InfoField";
+import { formatJoinDate } from "@/lib/format-date";
 import UsersToolbar from "./UsersToolbar";
 import {
   CATEGORY_LABELS,
@@ -18,11 +20,6 @@ import {
 export const metadata = { title: "Users" };
 
 const USERS_PER_PAGE = 10;
-
-/** "Jul 3, 2026" — Figma-র Member Since কলামের গড়ন। */
-function formatJoinDate(date: Date) {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 export default async function UsersPage({
   searchParams,
@@ -274,13 +271,13 @@ export default async function UsersPage({
                       ৫৬০ থেকে তিন কলাম: তখন প্রতিটা ~১৬৫px, "Customer
                       Category" এক লাইনে আঁটে। */}
                   <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
-                    <Field label="Member Since" value={formatJoinDate(user.createdAt)} />
+                    <InfoField label="Member Since" value={formatJoinDate(user.createdAt)} />
                     {/* ফোন নম্বর ঐচ্ছিক — Google দিয়ে sign in করলে কখনোই
                         আসে না (schema-র মন্তব্য দ্রষ্টব্য)। */}
-                    <Field label="Phone Number" value={user.phone ?? "—"} />
-                    <Field label="Customer Category" value={CATEGORY_LABELS[userCategory]} />
-                    <Field label="Reward Points" value={`${user.loyaltyPoints} Points`} />
-                    <Field
+                    <InfoField label="Phone Number" value={user.phone ?? "—"} />
+                    <InfoField label="Customer Category" value={CATEGORY_LABELS[userCategory]} />
+                    <InfoField label="Reward Points" value={`${user.loyaltyPoints} Points`} />
+                    <InfoField
                       label="Total Orders"
                       value={`${orderCount} ${orderCount === 1 ? "Order" : "Orders"}`}
                     />
@@ -315,42 +312,6 @@ export default async function UsersPage({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * সারির একটা মাঠ — উপরে শিরোনাম, নিচে মান।
- *
- * Figma: শিরোনাম Sora 400 14px Black/70, মান Frank Ruhl 500 16px
- * #000000, মাঝে 8px।
- */
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    // Figma Frame 2147236290: column, gap 12, উচ্চতা 42।
-    <div className="flex min-w-0 flex-col gap-3 xl:flex-1">
-      {/**
-       * Figma: Sora 400, 14px, LH 100%, Black/70।
-       *
-       * ⚠️ xl-এ `whitespace-nowrap`, truncate নয় — আগে "Customer
-       * Category" কেটে গিয়ে "Customer Catego…" দেখাচ্ছিল।
-       *
-       * কারণটা জায়গার অভাব ছিল না, হিসাবের: Figma-তে মাঠগুলোর জন্য
-       * বরাদ্দ ৭৩৪px, চারটে ৩০px gap বাদ দিলে পাঁচ ভাগে ~১২৩px করে,
-       * আর "Customer Category" ১৪px Sora-তে ~১২৫। অর্থাৎ শিরোনামটাই
-       * সবচেয়ে চওড়া, আর ওটাই কলামের প্রস্থ ঠিক করার কথা। truncate
-       * সেটা হতে দিচ্ছিল না — সে বরং চুপচাপ কেটে দিচ্ছিল।
-       *
-       * xl-এর নিচে wrap করতে দেওয়া হয়, কারণ সেখানে সারি ভেঙে
-       * দুই/তিন কলামের grid হয়ে যায় আর প্রস্থ অনেক কম।
-       */}
-      <p className="font-sora text-[13px] font-normal leading-none text-black/70 xl:whitespace-nowrap xl:text-[14px]">
-        {label}
-      </p>
-      {/* Figma: Frank Ruhl Libre 500, 16px, LH 100%, #000000। */}
-      <p className="truncate font-frank-ruhl text-[15px] font-medium leading-none text-black xl:text-[16px]">
-        {value}
-      </p>
     </div>
   );
 }
