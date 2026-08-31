@@ -67,14 +67,7 @@ type StaffDetails = {
   } | null;
 };
 
-export default function ViewStaffModal({
-  open,
-  onClose,
-  staffId,
-  canManage,
-  isSelf,
-  onEdit,
-}: {
+type Props = {
   open: boolean;
   onClose: () => void;
   staffId: string;
@@ -83,22 +76,41 @@ export default function ViewStaffModal({
   isSelf: boolean;
   /** "Edit" চাপলে — এই modal বন্ধ করে form modal খোলে। */
   onEdit: () => void;
-}) {
+};
+
+/**
+ * ⚠️ বন্ধ থাকলে কিছুই mount হয় না।
+ *
+ * আগে component-টা mount থাকত আর একটা effect খোলার সময় state পরিষ্কার
+ * করত (`setStaff(null); setLoading(true); …`)। lint ঠিকই ধরেছে
+ * (`react-hooks/set-state-in-effect`): effect-এর শরীরে সরাসরি setState
+ * মানে React একবার পুরনো state নিয়ে render করে, তারপর আবার। এখানে
+ * সেটা কেবল কর্মক্ষমতার প্রশ্ন ছিল না — এক ফ্রেমের জন্য **আগের**
+ * কর্মীর তথ্য নতুন modal-এ দেখা যেতে পারত।
+ *
+ * mount/unmount-এ ওই পরিষ্কার করার ধাপটার দরকারই নেই: `useState`-এর
+ * প্রাথমিক মানই একমাত্র সত্য।
+ */
+export default function ViewStaffModal(props: Props) {
+  if (!props.open) return null;
+  return <ViewStaffModalContent {...props} />;
+}
+
+function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEdit }: Props) {
   const router = useRouter();
   const [staff, setStaff] = useState<StaffDetails | null>(null);
-  const [loading, setLoading] = useState(false);
+  // শুরুতেই `true` — ডেটা আসার আগে কিছু দেখানোর নেই, তাই effect-এ
+  // `setLoading(true)` ডাকতে হয় না।
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-
-    setError(null);
-    setStaff(null);
-    setLoading(true);
-
     let cancelled = false;
+
+    // ⚠️ effect-এর শরীরে সরাসরি কোনো setState নেই — সবগুলো এই async
+    // function-এর ভেতরে, প্রথম `await`-এর পরে।
     (async () => {
       try {
         const res = await fetch(`/api/admin/staff/${staffId}`);
@@ -114,12 +126,12 @@ export default function ViewStaffModal({
       }
     })();
 
-    // দ্রুত খুলে-বন্ধ করলে আগের fetch পরে ফিরে এসে ভুল কর্মীর তথ্য
+    // অন্য একজনের View চাপলে আগের fetch পরে ফিরে এসে ভুল কর্মীর তথ্য
     // বসিয়ে দিত — এই পতাকাটা সেটাই আটকায়।
     return () => {
       cancelled = true;
     };
-  }, [open, staffId]);
+  }, [staffId]);
 
   const profile = staff?.staffProfile ?? null;
   const isActive = profile?.isActive ?? true;

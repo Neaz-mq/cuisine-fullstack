@@ -95,7 +95,27 @@ function splitPhone(e164: string | null): { country: Country; national: string }
   return { country: best, national: e164.slice(best.dial.length) };
 }
 
-export default function StaffFormModal({
+/**
+ * ⚠️ বন্ধ থাকলে কিছুই mount হয় না — আর এটা নিছক optimisation নয়।
+ *
+ * আগে component-টা সবসময় mount থাকত আর একটা `useEffect` খোলার সময়
+ * সব ঘর reset করত (`setName("")`, `setError(null)`, …)। দুটো সমস্যা।
+ *
+ * এক, lint ঠিকই ধরেছে (`react-hooks/set-state-in-effect`): effect-এর
+ * শরীরে সরাসরি setState মানে React একবার পুরনো state নিয়ে render করে,
+ * তারপর আবার — একটা অপ্রয়োজনীয় cascading render।
+ *
+ * দুই, আর এটাই আসল: ওই reset তালিকাটা হাতে লেখা। নতুন একটা ঘর যোগ
+ * করে reset-এ যোগ করতে ভুলে গেলে আগের কর্মীর মান পরের modal-এ রয়ে
+ * যেত — একটা নীরব, খুঁজে বের করা কঠিন bug। mount/unmount-এ সেই
+ * তালিকাটার দরকারই নেই: `useState`-এর প্রাথমিক মানই একমাত্র সত্য।
+ */
+export default function StaffFormModal(props: Props) {
+  if (!props.open) return null;
+  return <StaffFormModalContent {...props} />;
+}
+
+function StaffFormModalContent({
   open,
   onClose,
   mode,
@@ -124,7 +144,9 @@ export default function StaffFormModal({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // edit mode-এ ডেটা আসা পর্যন্ত ঘরগুলো দেখানো হয় না, তাই শুরুতেই
+  // `true` — নিচের effect-এ `setLoading(true)` ডাকতে হয় না।
+  const [loading, setLoading] = useState(isEdit && Boolean(staffId));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -138,35 +160,13 @@ export default function StaffFormModal({
    * যেত। তাই ডেটা আসা পর্যন্ত ঘরগুলো দেখানোই হয় না।
    */
   useEffect(() => {
-    if (!open) return;
-
-    // প্রতিবার খোলার সময় পরিষ্কার শুরু — নাহলে আগেরবারের ভুল-বার্তা
-    // বা অন্য কারও ডেটা রয়ে যেত।
-    setError(null);
-    setSubmitting(false);
-
-    if (!isEdit || !staffId) {
-      setName("");
-      setEmail("");
-      setCountry(DEFAULT_COUNTRY);
-      setPhone("");
-      setAddress("");
-      setNid("");
-      setSalary("");
-      setDepartment("");
-      setEmploymentType("FULL_TIME");
-      setPassword("");
-      setRole("MANAGER");
-      setHireDate(toISODate(new Date()));
-      setShift("EVENING");
-      setIsActive(true);
-      setImageUrl(null);
-      return;
-    }
+    if (!isEdit || !staffId) return;
 
     let cancelled = false;
-    setLoading(true);
 
+    // ⚠️ effect-এর শরীরে সরাসরি কোনো setState নেই — সবগুলো এই async
+    // function-এর ভেতরে, প্রথম `await`-এর পরে। তাই render চলাকালীন
+    // কোনো cascading update হয় না, আর lint-ও সন্তুষ্ট।
     (async () => {
       try {
         const res = await fetch(`/api/admin/staff/${staffId}`);
@@ -199,13 +199,12 @@ export default function StaffFormModal({
       }
     })();
 
-    // ⚠️ modal দ্রুত খুলে-বন্ধ করলে (বা অন্য একজনের Edit চাপলে) আগের
-    // fetch পরে ফিরে এসে নতুন form-টা পুরনো ডেটায় ভরে দিত। এই পতাকাটা
-    // সেটাই আটকায়।
+    // ⚠️ অন্য একজনের Edit চাপলে আগের fetch পরে ফিরে এসে নতুন form-টা
+    // পুরনো ডেটায় ভরে দিত। এই পতাকাটা সেটাই আটকায়।
     return () => {
       cancelled = true;
     };
-  }, [open, isEdit, staffId]);
+  }, [isEdit, staffId]);
 
   /**
    * MANAGER-কে OWNER বানানো যায় না (canManageStaffRole), তাই তালিকাতেই

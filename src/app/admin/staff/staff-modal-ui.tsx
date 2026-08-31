@@ -496,13 +496,26 @@ export function DateField({
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
 
-  // প্রতিবার খোলার সময় বাছাই করা মাসে ফিরে আসা — নাহলে কেউ একবার
-  // ২০২৪-এ গিয়ে বন্ধ করলে পরেরবার খুলেও সেখানেই পড়ে থাকত।
-  useEffect(() => {
-    if (!open) return;
-    const base = parseISODate(value) ?? new Date();
-    setViewMonth(new Date(base.getFullYear(), base.getMonth(), 1));
-  }, [open, value]);
+  /**
+   * প্রতিবার খোলার সময় বাছাই করা মাসে ফিরে আসা — নাহলে কেউ একবার
+   * ২০২৪-এ গিয়ে বন্ধ করলে পরেরবার খুলেও সেখানেই পড়ে থাকত।
+   *
+   * ⚠️ এটা আগে একটা `useEffect`-এ ছিল (`if (!open) return; setViewMonth(…)`),
+   * আর সেটা ভুল জায়গা — `react-hooks/set-state-in-effect` ঠিকই ধরেছে।
+   * effect-এর কাজ React-এর বাইরের জগতের সাথে তাল মেলানো; এখানে বাইরের
+   * কিছু নেই, শুধু একটা **ঘটনার** প্রতিক্রিয়া (ব্যবহারকারী ঘরটায় click
+   * করলেন)। effect-এ রাখলে React আগে popup-টা পুরনো মাস নিয়ে render
+   * করত, তারপর setState দেখে আবার render করত — একটা অপ্রয়োজনীয়
+   * cascading render, আর তাত্ত্বিকভাবে এক ফ্রেমের জন্য ভুল মাস।
+   * handler-এ রাখলে দুটোই একই render-এ মিটে যায়।
+   */
+  const handleToggle = () => {
+    if (!open) {
+      const base = parseISODate(value) ?? new Date();
+      setViewMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    }
+    toggle();
+  };
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
@@ -523,7 +536,7 @@ export function DateField({
         <button
           id={id}
           type="button"
-          onClick={toggle}
+          onClick={handleToggle}
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-labelledby={`${id}-label`}
