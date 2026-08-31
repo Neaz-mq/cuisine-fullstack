@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import UserAvatar from "@/components/admin/UserAvatar";
+import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import { ROLE_LABELS } from "@/lib/staff-roles";
 import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
 import { formatJoinDate } from "@/lib/format-date";
@@ -88,6 +89,7 @@ export default function ViewStaffModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -122,11 +124,20 @@ export default function ViewStaffModal({
   const profile = staff?.staffProfile ?? null;
   const isActive = profile?.isActive ?? true;
 
+  /**
+   * ⚠️ browser-এর `confirm()` নয় — ConfirmDialog।
+   *
+   * তিনটে কারণ, বিস্তারিত components/admin/ConfirmDialog.tsx-এ। সবচেয়ে
+   * বড়টা: `confirm()`-এ প্রাথমিক focus থাকে **OK**-তে, অর্থাৎ
+   * Deactivate চেপে অভ্যাসবশত Enter চাপলেই কাজটা হয়ে যেত। একটা
+   * ধ্বংসাত্মক কাজের জন্য সেটা ঠিক উল্টো আচরণ।
+   *
+   * সেই সাথে `confirm()` blocking বলে "চলছে" অবস্থাটা দেখানোই যেত না;
+   * এখন dialog-টা নিজেই spinner ধরে রাখে যতক্ষণ PATCH চলে।
+   */
   async function toggleActive() {
     if (!staff) return;
     const next = !isActive;
-    const verb = next ? "Reactivate" : "Deactivate";
-    if (!confirm(`${verb} ${staff.name ?? staff.email}?`)) return;
 
     setError(null);
     setPending(true);
@@ -138,7 +149,13 @@ export default function ViewStaffModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? `Couldn't ${verb.toLowerCase()} this staff member.`);
+        setError(
+          data.error ?? `Couldn't ${next ? "reactivate" : "deactivate"} this staff member.`
+        );
+        // dialog বন্ধ করে ভুলটা modal-এর ভেতরে দেখানো হয় — dialog-এর
+        // ভেতরে দেখালে ব্যবহারকারী "আবার চেষ্টা করব না বাতিল করব"
+        // সিদ্ধান্তে আটকে থাকতেন, আর পেছনের তথ্যটাও ঢাকা পড়ত।
+        setConfirmOpen(false);
         setPending(false);
         return;
       }
@@ -146,6 +163,7 @@ export default function ViewStaffModal({
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
+      setConfirmOpen(false);
       setPending(false);
     }
   }
@@ -154,7 +172,8 @@ export default function ViewStaffModal({
     profile?.shift && isStaffShift(profile.shift) ? SHIFT_LABELS[profile.shift] : "—";
 
   return (
-    <StaffModalShell
+    <>
+      <StaffModalShell
       open={open}
       onClose={onClose}
       titleId="staff-view-title"
@@ -172,11 +191,10 @@ export default function ViewStaffModal({
           {canManage && !isSelf && profile && (
             <button
               type="button"
-              onClick={toggleActive}
+              onClick={() => setConfirmOpen(true)}
               disabled={pending || loading}
               className={`${isActive ? DANGER_BUTTON : OUTLINE_BUTTON} sm:mr-auto`}
             >
-              {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {isActive ? "Deactivate" : "Reactivate"}
             </button>
           )}
@@ -280,6 +298,26 @@ export default function ViewStaffModal({
           )}
         </>
       )}
-    </StaffModalShell>
+      </StaffModalShell>
+
+      {/* ⚠️ StaffModalShell-এর **বাইরে**, ভেতরে নয়। ভেতরে বসালে এটা
+          modal কার্ডের DOM-এর অংশ হতো, আর কার্ডের `overflow`/stacking
+          এটাকে ভেতরে আটকে রাখত — dialog-টা পর্দার মাঝখানে না বসে
+          কার্ডের ভেতরে কোথাও ভেসে উঠত। */}
+      <ConfirmDialog
+        open={confirmOpen}
+        tone={isActive ? "danger" : "primary"}
+        title={isActive ? "Deactivate this staff member?" : "Reactivate this staff member?"}
+        message={
+          isActive
+            ? `${staff?.name ?? "They"} will no longer be able to sign in. Their record and history stay intact, and you can reactivate them any time.`
+            : `${staff?.name ?? "They"} will be able to sign in again straight away.`
+        }
+        confirmLabel={isActive ? "Yes, deactivate" : "Yes, reactivate"}
+        pending={pending}
+        onConfirm={toggleActive}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   );
 }
