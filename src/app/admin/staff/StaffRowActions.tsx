@@ -40,8 +40,18 @@ export default function StaffRowActions({
   canEdit: boolean;
 }) {
   return (
-    /* Figma Frame 2147236374: row, justify flex-end, gap 8, উচ্চতা 40। */
-    <div className="flex shrink-0 items-center justify-end gap-2">
+    /**
+     * Figma Frame 2147236374: row, justify flex-end, gap 8, উচ্চতা 40,
+     * চওড়া 120।
+     *
+     * ⚠️ xl-এ প্রস্থটা স্থির (১২০), hug নয় — আর এটা সারিবদ্ধতার জন্য
+     * জরুরি। MANAGER একজন OWNER-কে edit করতে পারেন না, তাই সেই সারিতে
+     * "Edit" বোতামটা থাকে না; hug হলে ওই ব্লকটা সংকুচিত হয়ে যেত আর
+     * তার বাঁ পাশের পাঁচটা কলাম ডান দিকে সরে যেত। ফলে এক সারির
+     * "Shift" আরেক সারির "Shift"-এর সাথে মিলত না। স্থির প্রস্থে
+     * বোতাম থাকুক বা না থাকুক, কলামগুলো একই জায়গায় থাকে।
+     */
+    <div className="flex shrink-0 items-center justify-end gap-2 xl:w-[120px]">
       {canEdit && (
         /* Figma: 53×40, radius 100, padding 13px 12px, পাড় 1px #000000,
            BG স্বচ্ছ, লেখা Sora 400 14px #000000।

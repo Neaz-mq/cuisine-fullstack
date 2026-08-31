@@ -185,7 +185,7 @@ export default async function StaffPage({
                      gap 52, উচ্চতা 94, radius 16, BG #F9F6F3।
                      ৯৪ = 16 + 62 + 16 — Status কলামটাই (label + ৩৬px pill)
                      উচ্চতা ঠিক করে, ছবিটা নয় (৬০)। */
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-8 2xl:gap-[52px]"
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-6 2xl:gap-[52px]"
                 >
                   <div className="flex min-w-0 items-center gap-4 xl:w-[203px] xl:shrink-0">
                     <UserAvatar src={member.image} name={member.name ?? member.email} />
@@ -201,6 +201,38 @@ export default async function StaffPage({
                       <p className="truncate font-sora text-[12px] leading-[1.7] text-black/70">
                         {member.email}
                       </p>
+                      {/**
+                       * Employee ID — Figma-র সারিতে নেই, তবু যোগ করা হলো।
+                       *
+                       * কারণটা নকশার নয়, একটা ভাঙা loop-এর: উপরের search
+                       * বাক্সে স্পষ্ট লেখা "Search by Name, Email or
+                       * Employee ID", আর API-ও employeeId ধরে খোঁজে —
+                       * অথচ ID-টা তালিকার কোথাও দেখা যেত না। ফলে কেউ
+                       * "EMP-0004" লিখে একটা সারি পেতেন, কিন্তু সেটা
+                       * সত্যিই ওই ID কি না যাচাই করার কোনো উপায় ছিল না।
+                       * যেটা দিয়ে খোঁজা যায় সেটা দেখাও যাওয়া উচিত।
+                       *
+                       * ⚠️ আলাদা কলাম নয়, পরিচয়-ব্লকের তৃতীয় লাইন — আর
+                       * এটা ইচ্ছাকৃত। কলাম করলে "Employee ID" label-টাই
+                       * (~95px) মানটার (~72px) চেয়ে চওড়া হতো, অর্থাৎ
+                       * সবচেয়ে ছোট তথ্যটা সবচেয়ে বেশি অনুভূমিক জায়গা
+                       * খেত। তাছাড়া এটা shift/status-এর মতো কোনো
+                       * বৈশিষ্ট্য নয় — এটা মানুষটাকেই চিহ্নিত করে, ঠিক
+                       * নাম আর ইমেইলের মতো, তাই ওদের সাথেই থাকা উচিত।
+                       * label লাগে না: "EMP-0004" নিজেই নিজের পরিচয়।
+                       *
+                       * সারির উচ্চতা এতে ~৯৪ থেকে ~৯৫ হয় (leading-none
+                       * ১১px), অর্থাৎ Status কলামই এখনো উচ্চতা ঠিক করে।
+                       *
+                       * staffProfile না থাকলে (পুরনো OWNER row) কিছুই
+                       * দেখানো হয় না — "—" বসালে সেটা একটা মান বলে মনে
+                       * হতো।
+                       */}
+                      {member.staffProfile?.employeeId && (
+                        <p className="truncate font-sora text-[11px] font-normal leading-none tracking-[0.04em] text-black/40">
+                          {member.staffProfile.employeeId}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -208,51 +240,71 @@ export default async function StaffPage({
                    * Figma Frame 2147236445: row, gap 20, উচ্চতা 62,
                    * align-items center।
                    *
-                   * ⚠️ মাঠগুলো সমান চওড়া নয়, আর এটাই আগের সবচেয়ে বড়
-                   * অমিল ছিল। ডিফল্ট `xl:flex-1` পাঁচটাকে সমান ভাগ করে
-                   * দিচ্ছিল, ফলে "Role" (Manager — ছোট) পেত ততটাই জায়গা
-                   * যতটা "Shift" (Evening (02-10 PM) — বড়): Role-এর
-                   * চারপাশে বিশাল ফাঁক, আর কলামগুলো পুরো সারিতে ছড়িয়ে
-                   * নকশার ঠাসা গড়নটা হারিয়ে যাচ্ছিল।
+                   * ── কেন flex থেকে grid-এ সরানো হলো ──────────────────
                    *
-                   * এখন প্রতিটা মাঠ Figma-র নিজের প্রস্থটাই flex-grow
-                   * হিসেবে পায় (79 / 134 / 64 / 142 / 64) — অর্থাৎ
-                   * বাড়তি জায়গাটা নকশার অনুপাতেই ভাগ হয়, স্থির px
-                   * বসানো ছাড়া।
+                   * flex দিয়ে দু'বার চেষ্টা হয়েছিল, দু'বারই একটা করে
+                   * সমস্যা রয়ে গিয়েছিল।
                    *
-                   * ⚠️ basis `auto`, `0` নয় (`flex-[79_1_auto]`)। এটাই
-                   * এখানকার আসল কৌশল। basis 0 হলে কলামের প্রস্থ কেবল
-                   * অনুপাত থেকে আসত, ভেতরে কী আছে তা থেকে নয় — আর
-                   * designer-এর মাপগুলো তাঁর নমুনা লেখার ("Jul 3, 2026")
-                   * জন্য, আমাদের বাস্তব ডেটার ("Aug 30, 2026") জন্য নয়।
-                   * ফলে ৭৯px-এ তারিখটা চুপচাপ কেটে যেত। basis auto-তে
-                   * প্রতিটা কলাম আগে নিজের লেখাটুকুর জায়গা নেয়, তারপর
-                   * যা বাকি থাকে সেটা অনুপাতে ভাগ হয়।
+                   * প্রথমে সবাই `flex-1` — পাঁচটা কলাম সমান, ফলে "Role"
+                   * (Manager) পেত ততটাই জায়গা যতটা "Shift" (Afternoon
+                   * (10 AM-06 PM))। Role-এর চারপাশে বিশাল ফাঁক।
                    *
-                   * xl-এর নিচে আগের মতোই grid — সেখানে সারি ভেঙে
-                   * দুই/তিন কলাম হয়, তাই প্রস্থের অনুপাত অর্থহীন।
+                   * তারপর `flex-[N_1_auto]` — অনুপাত ঠিক হলো, কিন্তু
+                   * `auto` মানে প্রতিটা কলাম **আগে নিজের লেখাটুকুর**
+                   * জায়গা নেয়। আর প্রতিটা সারিতে লেখা আলাদা: এক সারিতে
+                   * "Cleaner", আরেকটায় "Owner"; এক সারিতে "Evening
+                   * (02-10 PM)", আরেকটায় "Afternoon (10 AM-06 PM)"।
+                   * ফলে প্রতিটা সারির কলাম একটু একটু সরে গিয়ে বসত —
+                   * টেবিল বলে আর মনেই হতো না। প্রতিটা সারি একটা আলাদা
+                   * flex container, তাই ওরা একে অন্যের প্রস্থ জানত না।
+                   *
+                   * grid-এ `minmax(0, Nfr)` সেটাই ঠিক করে: `fr` ভাগ হয়
+                   * কেবল **উপলব্ধ জায়গা** আর অনুপাত থেকে, ভেতরের লেখা
+                   * থেকে নয়। সব সারির উপলব্ধ জায়গা সমান (ছবি-ব্লক ২০৩,
+                   * বোতাম-ব্লক ১২০ — দুটোই স্থির), তাই কলামগুলোও সব
+                   * সারিতে হুবহু এক জায়গায় পড়ে।
+                   *
+                   * ⚠️ `minmax(0, …)`, খালি `Nfr` নয়। `fr`-এর ডিফল্ট
+                   * ন্যূনতম `auto`, অর্থাৎ content-এর প্রস্থ — সেটা
+                   * রাখলে ঠিক আগের সমস্যাটাই grid-এ ফিরে আসত।
+                   *
+                   * অনুপাতগুলো Figma-র (79/134/64/142/64) নয়, বাস্তব
+                   * ডেটার প্রয়োজন অনুযায়ী (100/125/62/190/82) —
+                   * designer মেপেছেন তাঁর নমুনা লেখা দিয়ে ("Jul 3,
+                   * 2026", "Evening (02-10 PM)"), আমাদের সবচেয়ে চওড়া
+                   * মানগুলো তার চেয়ে বড় ("Aug 31, 2026",
+                   * "+8801303660451", "Afternoon (10 AM-06 PM)")।
+                   * অনুপাতের **ভাবটা** এক — Role সবচেয়ে সরু, Shift
+                   * সবচেয়ে চওড়া — শুধু মাপগুলো সত্যিকারের লেখার।
+                   *
+                   * সরু xl পর্দায় জায়গা কম পড়লে সবচেয়ে লম্বা মানটা
+                   * (Shift) ellipsis-এ কাটে — কিন্তু সব সারিতে একই
+                   * জায়গায় কাটে, তাই সারিবদ্ধতা তখনও অটুট।
+                   *
+                   * xl-এর নিচে আগের মতোই দুই/তিন কলামের grid — সেখানে
+                   * সারি ভেঙে যায়, তাই অনুপাত অর্থহীন।
                    */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5">
+                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5 xl:grid-cols-[minmax(0,100fr)_minmax(0,125fr)_minmax(0,62fr)_minmax(0,190fr)_minmax(0,82fr)]">
                     <InfoField
-                      className="xl:flex-[79_1_auto]"
+                      className=""
                       label="Join Date"
                       value={
                         member.staffProfile ? formatJoinDate(member.staffProfile.hireDate) : "—"
                       }
                     />
                     <InfoField
-                      className="xl:flex-[134_1_auto]"
+                      className=""
                       label="Phone Number"
                       value={member.staffProfile?.phone ?? "—"}
                     />
                     <InfoField
-                      className="xl:flex-[64_1_auto]"
+                      className=""
                       label="Role"
                       value={ROLE_LABELS[member.role as StaffRole]}
                     />
-                    <InfoField className="xl:flex-[142_1_auto]" label="Shift" value={shiftLabel} />
+                    <InfoField className="" label="Shift" value={shiftLabel} />
                     <InfoField
-                      className="xl:flex-[64_1_auto]"
+                      className=""
                       label="Status"
                       value={isActive ? "Active" : "Inactive"}
                       tone={isActive ? "positive" : "negative"}
