@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/require-admin";
 import { Prisma } from "@/generated/prisma/client";
 import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
-import StaffOverviewCards from "@/components/admin/StaffOverviewCards";
+import UsersOverviewCards from "@/components/admin/UsersOverviewCards";
 import UserAvatar from "@/components/admin/UserAvatar";
 import InfoField from "@/components/admin/InfoField";
 import { formatJoinDate } from "@/lib/format-date";
@@ -184,7 +184,12 @@ export default async function UsersPage({
 
       <UsersToolbar category={category} />
 
-      <StaffOverviewCards />
+      {/* ⚠️ এটা আগে `<StaffOverviewCards />` ছিল — অর্থাৎ গ্রাহকের
+          পাতার মাথায় কর্মীর হিসাব বসত। কারণটা component-টার নিজের
+          মন্তব্যে লেখা আছে (দুই পাতায় একই ব্লক কপি না রাখা), কিন্তু
+          দুই পাতার Figma আসলে আলাদা: staff-এ পাঁচটা role-কার্ড,
+          users-এ চারটে গ্রাহক-কার্ড। বিস্তারিত UsersOverviewCards-এ। */}
+      <UsersOverviewCards />
 
       {/* --- Users --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
