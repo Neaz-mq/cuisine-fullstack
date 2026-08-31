@@ -7,7 +7,7 @@ import {
   canViewSensitiveStaffFields,
   type StaffRole,
 } from "@/lib/permissions";
-import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
+import { SHIFT_TABLE_LABELS, isStaffShift } from "@/lib/staff-shift";
 import { ALL_ROLES, ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
 import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
@@ -169,16 +169,23 @@ export default async function StaffPage({
               // মেলানো, নাহলে "Edit" বোতামটা দেখা যেত অথচ চাপলে 404।
               // "View" এই শর্তের বাইরে: দেখা আর বদলানো এক নয়।
               const canManage = canManageStaffRole(viewerRole, member.role);
+              // ⚠️ SHIFT_TABLE_LABELS, SHIFT_LABELS নয় — সারির কলামটা
+              // Figma-তে ১৪২px, আর পুরো লেবেলটা ওতে আঁটে না। কারণটা
+              // বিস্তারিত lib/staff-shift.ts-এ।
               const shiftLabel =
                 member.staffProfile?.shift && isStaffShift(member.staffProfile.shift)
-                  ? SHIFT_LABELS[member.staffProfile.shift]
+                  ? SHIFT_TABLE_LABELS[member.staffProfile.shift]
                   : "—";
               const isActive = member.staffProfile?.isActive ?? true;
 
               return (
                 <div
                   key={member.id}
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-[30px]"
+                  /* Figma Frame 2147236316: row, space-between, padding 16,
+                     gap 52, উচ্চতা 94, radius 16, BG #F9F6F3।
+                     ৯৪ = 16 + 62 + 16 — Status কলামটাই (label + ৩৬px pill)
+                     উচ্চতা ঠিক করে, ছবিটা নয় (৬০)। */
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-8 2xl:gap-[52px]"
                 >
                   <div className="flex min-w-0 items-center gap-4 xl:w-[203px] xl:shrink-0">
                     <UserAvatar src={member.image} name={member.name ?? member.email} />
@@ -197,19 +204,55 @@ export default async function StaffPage({
                     </div>
                   </div>
 
-                  {/* Users page-এর একই breakpoint যুক্তি — পাঁচটা মাঠ,
-                      একই grid math (InfoField.tsx-এর মন্তব্য দ্রষ্টব্য)। */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
+                  {/**
+                   * Figma Frame 2147236445: row, gap 20, উচ্চতা 62,
+                   * align-items center।
+                   *
+                   * ⚠️ মাঠগুলো সমান চওড়া নয়, আর এটাই আগের সবচেয়ে বড়
+                   * অমিল ছিল। ডিফল্ট `xl:flex-1` পাঁচটাকে সমান ভাগ করে
+                   * দিচ্ছিল, ফলে "Role" (Manager — ছোট) পেত ততটাই জায়গা
+                   * যতটা "Shift" (Evening (02-10 PM) — বড়): Role-এর
+                   * চারপাশে বিশাল ফাঁক, আর কলামগুলো পুরো সারিতে ছড়িয়ে
+                   * নকশার ঠাসা গড়নটা হারিয়ে যাচ্ছিল।
+                   *
+                   * এখন প্রতিটা মাঠ Figma-র নিজের প্রস্থটাই flex-grow
+                   * হিসেবে পায় (79 / 134 / 64 / 142 / 64) — অর্থাৎ
+                   * বাড়তি জায়গাটা নকশার অনুপাতেই ভাগ হয়, স্থির px
+                   * বসানো ছাড়া।
+                   *
+                   * ⚠️ basis `auto`, `0` নয় (`flex-[79_1_auto]`)। এটাই
+                   * এখানকার আসল কৌশল। basis 0 হলে কলামের প্রস্থ কেবল
+                   * অনুপাত থেকে আসত, ভেতরে কী আছে তা থেকে নয় — আর
+                   * designer-এর মাপগুলো তাঁর নমুনা লেখার ("Jul 3, 2026")
+                   * জন্য, আমাদের বাস্তব ডেটার ("Aug 30, 2026") জন্য নয়।
+                   * ফলে ৭৯px-এ তারিখটা চুপচাপ কেটে যেত। basis auto-তে
+                   * প্রতিটা কলাম আগে নিজের লেখাটুকুর জায়গা নেয়, তারপর
+                   * যা বাকি থাকে সেটা অনুপাতে ভাগ হয়।
+                   *
+                   * xl-এর নিচে আগের মতোই grid — সেখানে সারি ভেঙে
+                   * দুই/তিন কলাম হয়, তাই প্রস্থের অনুপাত অর্থহীন।
+                   */}
+                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5">
                     <InfoField
+                      className="xl:flex-[79_1_auto]"
                       label="Join Date"
                       value={
                         member.staffProfile ? formatJoinDate(member.staffProfile.hireDate) : "—"
                       }
                     />
-                    <InfoField label="Phone Number" value={member.staffProfile?.phone ?? "—"} />
-                    <InfoField label="Role" value={ROLE_LABELS[member.role as StaffRole]} />
-                    <InfoField label="Shift" value={shiftLabel} />
                     <InfoField
+                      className="xl:flex-[134_1_auto]"
+                      label="Phone Number"
+                      value={member.staffProfile?.phone ?? "—"}
+                    />
+                    <InfoField
+                      className="xl:flex-[64_1_auto]"
+                      label="Role"
+                      value={ROLE_LABELS[member.role as StaffRole]}
+                    />
+                    <InfoField className="xl:flex-[142_1_auto]" label="Shift" value={shiftLabel} />
+                    <InfoField
+                      className="xl:flex-[64_1_auto]"
                       label="Status"
                       value={isActive ? "Active" : "Inactive"}
                       tone={isActive ? "positive" : "negative"}

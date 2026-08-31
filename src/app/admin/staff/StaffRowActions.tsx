@@ -40,27 +40,40 @@ export default function StaffRowActions({
   canEdit: boolean;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2.5">
+    /* Figma Frame 2147236374: row, justify flex-end, gap 8, উচ্চতা 40। */
+    <div className="flex shrink-0 items-center justify-end gap-2">
       {canEdit && (
-        /* Figma: Hug ×36, radius 100, padding 10×16, পাড় 1px #000000,
-           BG স্বচ্ছ, লেখা Sora 500 14px #000000। */
+        /* Figma: 53×40, radius 100, padding 13px 12px, পাড় 1px #000000,
+           BG স্বচ্ছ, লেখা Sora 400 14px #000000।
+
+           ⚠️ font-medium নয়, font-normal — Figma-র দুটো বোতামের লেখাই
+           Sora 400। medium-এ বোতামজোড়া সারির নাম-লেখার (Frank Ruhl 500)
+           সাথে ওজনে প্রতিযোগিতা করছিল। */
         <Link
           href={`/admin/staff/${userId}`}
           aria-label={`Edit ${name}`}
-          className="flex h-9 items-center justify-center rounded-full border border-black px-4 font-sora text-[14px] font-medium leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+          className="flex h-10 items-center justify-center rounded-full border border-black px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
         >
           Edit
         </Link>
       )}
 
-      {/* Figma: একই মাপ, কিন্তু পাড় নেই — কমলা→গোলাপি gradient, সাদা লেখা।
-          Gradient-টা প্রজেক্টের নিজের (AdminNavRail-এর active item,
-          BusinessSummaryCard, auth পাতার primary বোতাম — সবখানে
-          #FF9540 → #FF70C6), নতুন কোনো রঙ যোগ করা হয়নি। */}
+      {/**
+       * Figma: 59×40, পাড় নেই, সাদা লেখা,
+       * `linear-gradient(93.36deg, #FF9540 0%, #FF70C6 145.78%)`।
+       *
+       * ⚠️ `bg-gradient-to-r` দিয়ে এটা হয় না, আর পার্থক্যটা চোখে পড়ে।
+       * ওই utility মানে ঠিক 90deg আর দ্বিতীয় রঙটা 100%-এ — অর্থাৎ
+       * বোতামের ডান কিনারাতেই পুরো গোলাপি। Figma-তে গোলাপিটা 145.78%-এ,
+       * অর্থাৎ বোতামের **বাইরে**; ভেতরে যেটুকু দেখা যায় সেটা কমলা থেকে
+       * একটা নরম মাঝামাঝি রঙ পর্যন্ত। তাই utility ব্যবহার করলে বোতামটা
+       * নকশার চেয়ে অনেক বেশি গোলাপি দেখাত (আপনার screenshot-এ ঠিক
+       * সেটাই হচ্ছিল)। কোণটাও 93.36deg — সামান্য হেলানো।
+       */}
       <Link
         href={`/admin/staff/${userId}/view`}
         aria-label={`View ${name}`}
-        className="flex h-9 items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] px-4 font-sora text-[14px] font-medium leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+        className="flex h-10 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-3 font-sora text-[14px] font-normal leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
       >
         View
       </Link>

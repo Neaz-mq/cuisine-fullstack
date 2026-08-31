@@ -20,14 +20,30 @@ export default function InfoField({
   label,
   value,
   tone,
+  className = "xl:flex-1",
 }: {
   label: string;
   value: string;
   tone?: "positive" | "negative";
+  /**
+   * xl-এ এই মাঠটা কতটা জায়গা নেবে।
+   *
+   * ⚠️ ডিফল্ট `xl:flex-1` — অর্থাৎ সব মাঠ সমান, আর Users page-এর
+   * পাঁচটা ব্যবহার আগের মতোই থাকে।
+   *
+   * কিন্তু Figma-তে মাঠগুলো সমান নয়, আর সমান করলে সারিটা ভুল দেখায়:
+   * designer "Role"-কে ৬৪px আর "Shift"-কে ১৪২px দিয়েছেন, কারণ
+   * "Manager" ছোট আর "Evening (02-10 PM)" বড়। সমান ভাগ করলে Role-এর
+   * চারপাশে বিরাট ফাঁক পড়ে আর Shift কেটে যায়। তাই Staff page প্রতিটা
+   * মাঠে Figma-র প্রস্থটাই flex-grow হিসেবে পাঠায়
+   * (`xl:flex-[142_1_auto]`), স্থির px নয় — বিস্তারিত ব্যাখ্যা
+   * admin/staff/page.tsx-এ সেই তালিকাটার পাশে।
+   */
+  className?: string;
 }) {
   return (
     // Figma Frame 2147236290: column, gap 12, উচ্চতা 42।
-    <div className="flex min-w-0 flex-col gap-3 xl:flex-1">
+    <div className={`flex min-w-0 flex-col gap-3 ${className}`}>
       {/**
        * Figma: Sora 400, 14px, LH 100%, Black/70।
        *
@@ -49,15 +65,22 @@ export default function InfoField({
         {label}
       </p>
       {tone ? (
-        // Figma "Status" pill: padding 10×6-এর কাছাকাছি, radius 100,
-        // Active সবুজ (BG #E7F6EC / টেক্সট #1E8E3E গড়নের), Inactive
-        // লাল। প্রজেক্টের বাকি জায়গার badge রঙের সাথে মিলিয়ে (dashboard
-        // status badge দ্রষ্টব্য) হুবহু hex না বসিয়ে Tailwind-এর
-        // green/red-100-700 জোড়া ব্যবহার করা হলো — নতুন কোনো custom
-        // রঙ যোগ না করে যা আছে তার সাথে সামঞ্জস্য রাখতে।
+        /**
+         * Figma "Status" pill: উচ্চতা 36, padding 12, radius 100,
+         * লেখা Sora 400 12px।
+         *
+         * ⚠️ রঙগুলো Figma-র নিজের hex, Tailwind-এর green/red-100-700
+         * জোড়া নয়। আগে ওই জোড়াই ব্যবহার হচ্ছিল ("নতুন custom রঙ যোগ
+         * করব না" যুক্তিতে), কিন্তু পাশাপাশি রাখলে পার্থক্যটা স্পষ্ট:
+         * Tailwind-এর green-100 (#DCFCE7) ঘোলাটে আর green-700
+         * (#15803D) গাঢ়-বনজ, অথচ নকশার সবুজটা প্রায় সাদা পটভূমিতে
+         * উজ্জ্বল #0ECF00। cream সারির উপরে বসলে দুটো একেবারেই আলাদা
+         * দেখায়। এগুলো designer-এর বেছে দেওয়া badge রঙ, তাই এখানে
+         * সেগুলোই।
+         */
         <span
-          className={`inline-flex w-fit items-center rounded-full px-3 py-1 font-sora text-[13px] font-medium leading-none xl:text-[14px] ${
-            tone === "positive" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+          className={`inline-flex h-9 w-fit items-center rounded-full px-3 font-sora text-[12px] font-normal leading-none ${
+            tone === "positive" ? "bg-[#E8FFEC] text-[#0ECF00]" : "bg-[#FAE7EC] text-[#D72A37]"
           }`}
         >
           {value}
