@@ -41,16 +41,30 @@ import {
  * নকশা বদলালে অন্যটা পিছিয়ে পড়ত। তাই একটাই component, `mode` prop
  * দিয়ে পার্থক্যটুকু:
  *
- *   create  ইমেইল সম্পাদনাযোগ্য, password নেই (নিচের ব্যাখ্যা দ্রষ্টব্য)
- *   edit    ইমেইল পড়া-মাত্র, বাড়তি ঘর: department, employment type,
- *           salary (owner), আর ঐচ্ছিক password reset
+ *   create  ইমেইল সম্পাদনাযোগ্য, POST /api/admin/staff
+ *   edit    ইমেইল পড়া-মাত্র, PATCH /api/admin/staff/[id]
+ *
+ * ── ঘরের তালিকা দুটোতেই হুবহু এক ───────────────────────────────────
+ *
+ * এক পর্যায়ে edit-এ কয়েকটা বাড়তি ঘর ছিল — department, employment
+ * type, salary, password reset — এই যুক্তিতে যে পুরনো
+ * /admin/staff/[id] পাতায় ওগুলো ছিল। কিন্তু নকশার সিদ্ধান্ত হলো দুটো
+ * modal একই দেখাবে, তাই ওগুলো সরানো হয়েছে।
+ *
+ * ⚠️ যা এর ফলে হয়েছে, জেনে রাখা দরকার: `department`, `employmentType`
+ * আর `salary` এখন UI-র কোথাও থেকে **সম্পাদনা করা যায় না**। মানগুলো
+ * নিরাপদ — PATCH ক্ষেত্রগুলো না পেলে ছোঁয়ও না, তাই আগে বসানো মান
+ * অক্ষত থাকে এবং View modal-এ দেখাও যায়। শুধু বদলানোর পথ নেই। পরে
+ * দরকার হলে হয় এখানে ঘর ফিরিয়ে আনতে হবে, নয়তো /admin/staff/[id]
+ * পাতাটা।
  *
  * ── password ─────────────────────────────────────────────────────────
  *
- * create-এ password-এর ঘর নেই (নকশাতেও নেই)। route তখন একটা random
- * password বসিয়ে কর্মীকে "নিজের password ঠিক করুন" link পাঠায় —
- * বিস্তারিত ব্যাখ্যা POST /api/admin/staff-এ। edit-এ ঘরটা আছে, কারণ
- * কর্মী password ভুলে গেলে admin-কে একটা পথ দিতেই হয়।
+ * কোনো mode-এই password-এর ঘর নেই (নকশাতেও নেই)। নতুন কর্মীর ক্ষেত্রে
+ * route একটা random password বসিয়ে তাঁকে "নিজের password ঠিক করুন"
+ * link পাঠায় — বিস্তারিত POST /api/admin/staff-এ। পুরনো কর্মী password
+ * ভুলে গেলে login পাতার "Forgot password" একই কাজ করে, আর সেটা
+ * ভালোও: তখন নতুন password কেবল তিনিই জানেন, admin নন।
  */
 
 type Mode = "create" | "edit";
@@ -67,12 +81,6 @@ type Props = {
   /** সম্পাদিত ব্যক্তি নিজেই কি না — Status ঘরটা তখন নিষ্ক্রিয়। */
   isSelf?: boolean;
 };
-
-const EMPLOYMENT_TYPES = [
-  { value: "FULL_TIME", label: "Full time" },
-  { value: "PART_TIME", label: "Part time" },
-  { value: "CONTRACT", label: "Contract" },
-] as const;
 
 /**
  * সংরক্ষিত E.164 নম্বর ("+8801303660451") থেকে country + জাতীয় অংশ।
@@ -133,10 +141,6 @@ function StaffFormModalContent({
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [nid, setNid] = useState("");
-  const [salary, setSalary] = useState("");
-  const [department, setDepartment] = useState("");
-  const [employmentType, setEmploymentType] = useState<string>("FULL_TIME");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<StaffRole>("MANAGER");
   const [hireDate, setHireDate] = useState(() => toISODate(new Date()));
   const [shift, setShift] = useState<string>("EVENING");
@@ -154,10 +158,10 @@ function StaffFormModalContent({
    * edit mode-এ খোলার সময় পুরো record টেনে আনা।
    *
    * ⚠️ তালিকার সারিতে যা আছে (নাম, ইমেইল, ফোন, role, shift, status)
-   * তা দিয়ে prefill করা হয় না — সেখানে address, nid, salary,
-   * department, employment type নেই। অর্ধেক prefill করা form বিপজ্জনক:
-   * ফাঁকা ঘরগুলো "মান নেই" বলে মনে হতো, আর save করলে সত্যিই মুছে
-   * যেত। তাই ডেটা আসা পর্যন্ত ঘরগুলো দেখানোই হয় না।
+   * তা দিয়ে prefill করা হয় না — সেখানে ঠিকানা আর NID নেই। অর্ধেক
+   * prefill করা form বিপজ্জনক: ফাঁকা ঘরদুটো "মান নেই" বলে মনে হতো,
+   * আর save করলে সত্যিই মুছে যেত। তাই ডেটা আসা পর্যন্ত ঘরগুলো
+   * দেখানোই হয় না।
    */
   useEffect(() => {
     if (!isEdit || !staffId) return;
@@ -183,10 +187,6 @@ function StaffFormModalContent({
         setPhone(split.national);
         setAddress(profile.address ?? "");
         setNid(profile.nid ?? "");
-        setSalary(profile.salary != null ? String(profile.salary) : "");
-        setDepartment(profile.department ?? "");
-        setEmploymentType(profile.employmentType ?? "FULL_TIME");
-        setPassword("");
         setRole((data.role as StaffRole) ?? "MANAGER");
         setHireDate(profile.hireDate ? profile.hireDate.slice(0, 10) : toISODate(new Date()));
         setShift(profile.shift ?? "");
@@ -224,11 +224,6 @@ function StaffFormModalContent({
       setError("Email address is required.");
       return;
     }
-    if (isEdit && password && password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
     // ফোন ঐচ্ছিক, কিন্তু দিলে সেটা বৈধ হতে হবে — অর্ধেক নম্বর রাখার
     // চেয়ে ফাঁকা রাখা ভালো, কারণ পরে কেউ ওটায় ফোন করার চেষ্টা করবেন।
     let e164 = "";
@@ -260,13 +255,13 @@ function StaffFormModalContent({
     const body = isEdit
       ? {
           ...shared,
-          department: department.trim() || null,
-          employmentType,
+          // ⚠️ department/employmentType/salary ইচ্ছাকৃতভাবে পাঠানো হয়
+          // না — ঘরগুলো নেই, আর না পাঠালে PATCH ওগুলো ছোঁয় না।
+          // `null` পাঠালে আগে বসানো মানগুলো নীরবে মুছে যেত।
+          //
           // নিজেকে নিষ্ক্রিয় করা API-তেও আটকানো (নিজেকে তালাবন্ধ করে
-          // ফেলা), তাই নিজের ক্ষেত্রে ক্ষেত্রটা পাঠানোই হয় না।
+          // ফেলা), তাই নিজের ক্ষেত্রে isActive পাঠানোই হয় না।
           ...(isSelf ? {} : { isActive }),
-          ...(canSeeSensitive ? { salary: salary.trim() ? Number(salary) : null } : {}),
-          ...(password ? { password } : {}),
         }
       : {
           ...shared,
@@ -512,80 +507,6 @@ function StaffFormModalContent({
               />
             )}
 
-            {/* ── কেবল edit-এ ──────────────────────────────────────────
-                এই ঘরগুলো Figma-র modal-এ নেই, কিন্তু StaffProfile-এ
-                আছে আর আগে /admin/staff/[id] পাতা থেকে সম্পাদনা করা
-                যেত। সেই পাতাটা এখন তালিকা থেকে আর খোলে না, তাই
-                ঘরগুলো এখানে না রাখলে মানগুলো কার্যত অসম্পাদনযোগ্য
-                হয়ে যেত। যোগ করার সময় এগুলো দরকার হয় না (department
-                আর employment type-এর যুক্তিসঙ্গত default আছে), তাই
-                create-এ দেখানো হয় না — নকশাটাও তখন হুবহু Figma। */}
-            {isEdit && (
-              <>
-                <div>
-                  <label htmlFor="staff-department" className={LABEL}>
-                    Department
-                  </label>
-                  <input
-                    id="staff-department"
-                    type="text"
-                    value={department}
-                    onChange={(event) => setDepartment(event.target.value)}
-                    placeholder="e.g. Kitchen"
-                    className={FIELD}
-                  />
-                </div>
-
-                <SelectField
-                  id="staff-employment-type"
-                  label="Employment Type"
-                  value={employmentType}
-                  onChange={setEmploymentType}
-                  options={EMPLOYMENT_TYPES}
-                />
-
-                {canSeeSensitive && (
-                  <div>
-                    <label htmlFor="staff-salary" className={LABEL}>
-                      Salary{" "}
-                      <span className="font-sora text-[11px] font-normal text-black/40">
-                        (owner only)
-                      </span>
-                    </label>
-                    <input
-                      id="staff-salary"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={salary}
-                      onChange={(event) => setSalary(event.target.value)}
-                      placeholder="e.g. 25000"
-                      className={FIELD}
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="staff-password" className={LABEL}>
-                    Reset Password{" "}
-                    <span className="font-sora text-[11px] font-normal text-black/40">
-                      (optional)
-                    </span>
-                  </label>
-                  {/* ফাঁকা রাখলে কিছুই বদলায় না — PATCH route ফাঁকা
-                      string-কে "password বদলাও" হিসেবে ধরে না। */}
-                  <input
-                    id="staff-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Leave blank to keep current password"
-                    className={FIELD}
-                  />
-                </div>
-              </>
-            )}
           </div>
         </>
       )}
