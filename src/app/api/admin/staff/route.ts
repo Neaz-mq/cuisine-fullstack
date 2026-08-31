@@ -51,10 +51,10 @@ function serializeStaff(
       phone: string | null;
       hireDate: Date;
       // nid/salary-র মতো OWNER-only নয় — ঠিকানাটা modal-এর সাধারণ
-      // ঘরগুলোর একটা, তাই includeSensitive-এর বাইরে।
+      // ঘরগুলোর একটা, তাই includeSalary-এর বাইরে।
       address: string | null;
       // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
-      // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
+      // কিছু নেই, তাই সবসময় serialize হয়, includeSalary-এর বাইরে।
       shift: Shift | null;
       isActive: boolean;
       nid: string | null;
@@ -63,7 +63,7 @@ function serializeStaff(
       salary: MoneyInput | null;
     } | null;
   },
-  includeSensitive: boolean
+  includeSalary: boolean
 ) {
   const { staffProfile, ...rest } = user;
   return {
@@ -78,11 +78,17 @@ function serializeStaff(
           address: staffProfile.address,
           shift: staffProfile.shift,
           isActive: staffProfile.isActive,
-          ...(includeSensitive
+          // ⚠️ nid এখন আর OWNER-only নয় — যে কেউ staff scope নিয়ে
+          // এখানে পৌঁছেছেন (OWNER বা MANAGER) সে-ই এটা দেখেন।
+          // ব্যবসায়িক সিদ্ধান্ত: কর্মী নিয়োগের কাগজপত্র MANAGER-রাই
+          // তোলেন, তাই NID ঘরটা তাঁদের কাছে না থাকলে নতুন কর্মীর
+          // record অসম্পূর্ণ থেকে যেত। salary আগের মতোই OWNER-only —
+          // সেটা নিয়োগের তথ্য নয়, ক্ষতিপূরণের তথ্য।
+          nid: staffProfile.nid,
+          ...(includeSalary
             ? {
-                nid: staffProfile.nid,
                 // JSON.stringify একটা Decimal-কে string বানায় ("45000"),
-                // আর StaffForm সেটাকে number ধরে নেয়। তাই boundary-তেই
+                // আর form সেটাকে number ধরে নেয়। তাই boundary-তেই
                 // রূপান্তর। বেতন কোনো order-এর হিসাবে ঢোকে না, শুধু
                 // দেখানো ও সম্পাদনা — তাই float এখানে নিরাপদ।
                 salary:
@@ -99,7 +105,7 @@ export async function GET() {
   if (authResult instanceof NextResponse) return authResult;
 
   const role = (authResult.user as { role?: string }).role;
-  const includeSensitive = canViewSensitiveStaffFields(role);
+  const includeSalary = canViewSensitiveStaffFields(role);
 
   const staff = await prisma.user.findMany({
     where: { role: { not: "CUSTOMER" } },
@@ -128,7 +134,7 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(staff.map((s) => serializeStaff(s, includeSensitive)));
+  return NextResponse.json(staff.map((s) => serializeStaff(s, includeSalary)));
 }
 
 export async function POST(req: NextRequest) {
@@ -168,7 +174,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
   }
 
-  const includeSensitive = canViewSensitiveStaffFields(actingRole);
+  const includeSalary = canViewSensitiveStaffFields(actingRole);
 
   /**
    * password না পাঠালে কী হয় — এবং কেন সেটাই ডিফল্ট।
@@ -223,8 +229,8 @@ export async function POST(req: NextRequest) {
             // (true) — পুরনো StaffForm এটা পাঠায় না, তাই আচরণ অপরিবর্তিত।
             ...(typeof isActive === "boolean" ? { isActive } : {}),
             shift: shift ?? null,
-            nid: includeSensitive && typeof nid === "string" ? nid.trim() || null : null,
-            salary: includeSensitive && typeof salary === "number" ? salary : null,
+            nid: typeof nid === "string" ? nid.trim() || null : null,
+            salary: includeSalary && typeof salary === "number" ? salary : null,
           },
         });
         return { user, profile };
@@ -274,7 +280,7 @@ export async function POST(req: NextRequest) {
             image: createdImage,
             staffProfile: created.profile,
           },
-          includeSensitive
+          includeSalary
         ),
         { status: 201 }
       );

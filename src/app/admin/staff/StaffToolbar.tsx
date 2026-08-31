@@ -39,12 +39,9 @@ const SHORT_PLACEHOLDER = "Search";
 
 export default function StaffToolbar({
   viewerRole,
-  canSeeSensitive,
 }: {
   /** OWNER/MANAGER — modal-এর role তালিকা ছাঁকতে লাগে। */
   viewerRole?: string;
-  /** OWNER কি না — modal-এ NID ঘরটা দেখানো হবে কি না। */
-  canSeeSensitive: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -116,9 +113,22 @@ export default function StaffToolbar({
       </div>
 
       {/**
-       * Figma-র "+ Add New" — প্রজেক্টের বাকি সব primary CTA বোতামের
-       * মতোই #FF4C15 solid (StaffForm submit বোতাম, TableForm, ইত্যাদি
-       * দ্রষ্টব্য) — নতুন কোনো gradient না বসিয়ে যা আছে তার সাথে মেলানো।
+       * Figma-র "+ Add New": 137×50, padding 16, gap 8, radius 100,
+       * `linear-gradient(93.36deg, #FF9540 0%, #FF70C6 145.78%)`,
+       * আইকন 20×20 stroke 1.5, লেখা Sora 600 16px সাদা।
+       *
+       * ⚠️ এটা আগে solid #FF4C15 ছিল, এই যুক্তিতে যে প্রজেক্টের বাকি
+       * primary CTA-গুলো ওই রঙেই (StaffForm-এর submit, TableForm,
+       * ইত্যাদি) — "নতুন gradient না বসিয়ে যা আছে তার সাথে মেলাই"।
+       * যুক্তিটা ভুল ছিল: এই পাতায় ওই gradient-টা আর নতুন কিছু নয়।
+       * সারির "View" বোতাম, modal-এর "Save Change", sidebar-এর active
+       * item — সবই ওই একই gradient। ফলে solid কমলাটাই এখানে বেমানান
+       * একমাত্র জিনিস হয়ে দাঁড়িয়েছিল।
+       *
+       * gradient-টা `bg-gradient-to-r` দিয়ে হয় না: ওই utility মানে ঠিক
+       * 90deg আর দ্বিতীয় রঙ 100%-এ, অর্থাৎ ডান কিনারাতেই পুরো গোলাপি।
+       * Figma-তে গোলাপিটা 145.78%-এ — বোতামের **বাইরে** — তাই ভেতরে
+       * শুধু কমলা থেকে একটা নরম মাঝামাঝি রঙ দেখা যায়।
        *
        * ⚠️ আগে এটা /admin/staff/new-এ যাওয়ার একটা <Link> ছিল। নকশায়
        * এটা একটা modal খোলে, তাই এখন <button>। ওই পাতাটা (আর তার
@@ -129,9 +139,9 @@ export default function StaffToolbar({
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className={`flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#FF4C15] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-colors hover:bg-orange-600 ${FOCUS_RING}`}
+        className={`flex h-[50px] shrink-0 items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[16px] font-semibold leading-none text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
       >
-        <Plus className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+        <Plus className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
         Add New
       </button>
 
@@ -140,7 +150,6 @@ export default function StaffToolbar({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         viewerRole={viewerRole}
-        canSeeSensitive={canSeeSensitive}
       />
     </div>
   );

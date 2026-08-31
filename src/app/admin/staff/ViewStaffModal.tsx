@@ -281,17 +281,23 @@ function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEd
               value={profile ? profile.employmentType.replace("_", " ") : "—"}
             />
             <ReadOnlyField label="Permanent Address" value={profile?.address ?? "—"} />
+            {/* ⚠️ NID এখন এখানে, নিচের "Owner-only" অংশে নয় — MANAGER-রাও
+                নিয়োগের কাগজপত্র তোলেন, তাই ক্ষেত্রটা তাঁদেরও দেখা দরকার।
+                নিয়মটা API-তেও বদলানো (lib/permissions.ts দ্রষ্টব্য)। */}
+            <ReadOnlyField label="NID Number" value={profile?.nid ?? "—"} />
           </div>
 
           {/**
-           * ⚠️ NID আর salary — কেবল OWNER-এর জন্য, আর সেই সিদ্ধান্তটা
-           * এখানে নয়, **API-তে**: GET /api/admin/staff/[id] ক্ষেত্র
-           * দুটো response-এ ঢোকায়ই না যদি না ডাকা ব্যক্তি OWNER হন
+           * ⚠️ salary — কেবল OWNER-এর জন্য, আর সেই সিদ্ধান্তটা এখানে
+           * নয়, **API-তে**: GET /api/admin/staff/[id] ক্ষেত্রটা
+           * response-এ ঢোকায়ই না যদি না ডাকা ব্যক্তি OWNER হন
            * (canViewSensitiveStaffFields)। তাই এখানে `in` দিয়ে
-           * উপস্থিতি দেখা যথেষ্ট — MANAGER-এর browser-এ মানগুলো
-           * কখনো পৌঁছয়ই না, লুকোনো অবস্থাতেও নয়।
+           * উপস্থিতি দেখা যথেষ্ট — MANAGER-এর browser-এ মানটা কখনো
+           * পৌঁছয়ই না, লুকোনো অবস্থাতেও নয়।
+           *
+           * NID এই শর্তের বাইরে চলে গেছে — উপরের grid-এ।
            */}
-          {profile && "nid" in profile && (
+          {profile && "salary" in profile && (
             <>
               <div className="h-px bg-black/[0.06]" aria-hidden="true" />
               <div className="flex flex-col gap-4">
@@ -299,7 +305,6 @@ function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEd
                   Owner-only details
                 </p>
                 <div className="grid grid-cols-2 gap-5 min-[560px]:grid-cols-3">
-                  <ReadOnlyField label="NID Number" value={profile.nid ?? "—"} />
                   <ReadOnlyField
                     label="Salary"
                     value={profile.salary != null ? `৳ ${profile.salary.toLocaleString()}` : "—"}

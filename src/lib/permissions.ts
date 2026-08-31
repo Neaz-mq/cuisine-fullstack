@@ -276,8 +276,23 @@ export function canManageStaffRole(
   return false;
 }
 
-/** Sensitive StaffProfile fields (nid, salary) are OWNER-only, both to
- * read and to write — MANAGER sees/edit everything else on the profile. */
+/**
+ * `StaffProfile.salary` is OWNER-only, both to read and to write.
+ *
+ * ⚠️ এটা আগে `nid`-ও ঢাকত। এখন আর নয়: NID কর্মী নিয়োগের কাগজপত্রের
+ * অংশ, আর সেই কাজটা MANAGER-রাই করেন — ঘরটা তাঁদের কাছে না থাকলে নতুন
+ * কর্মীর record অসম্পূর্ণ থেকে যেত। salary আলাদা: সেটা নিয়োগের তথ্য
+ * নয়, ক্ষতিপূরণের তথ্য, আর একজন MANAGER-এর অন্য MANAGER-এর বেতন
+ * জানার কোনো কাজ নেই।
+ *
+ * নামটা তবু `…SensitiveStaffFields` — কারণ salary সত্যিই একটা
+ * সংবেদনশীল ক্ষেত্র, আর নাম বদলালে পুরনো staff পাতাগুলোর import-ও
+ * ভাঙত। কী কী ঢাকে সেটা এই মন্তব্যই বলে দেয়।
+ *
+ * ⚠️ NID এখনো CSV export-এ **নেই** (দেখুন /api/admin/staff/export)।
+ * অ্যাপের ভেতরে দেখা আর একটা ফাইলে সবার NID এক জায়গায় জমা করে
+ * Downloads ফোল্ডারে পাঠানো — দুটো এক ঝুঁকি নয়।
+ */
 export function canViewSensitiveStaffFields(role?: string | null): boolean {
   return role === "OWNER";
 }

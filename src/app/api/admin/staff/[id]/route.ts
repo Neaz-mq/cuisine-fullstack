@@ -29,7 +29,7 @@ function serialize(
       hireDate: Date;
       address: string | null;
       // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
-      // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
+      // কিছু নেই, তাই সবসময় serialize হয়, includeSalary-এর বাইরে।
       shift: Shift | null;
       isActive: boolean;
       nid: string | null;
@@ -38,7 +38,7 @@ function serialize(
       salary: MoneyInput | null;
     } | null;
   },
-  includeSensitive: boolean
+  includeSalary: boolean
 ) {
   const { staffProfile, ...rest } = user;
   return {
@@ -53,9 +53,11 @@ function serialize(
           address: staffProfile.address,
           shift: staffProfile.shift,
           isActive: staffProfile.isActive,
-          ...(includeSensitive
+          // ⚠️ nid এখন আর OWNER-only নয় — বিস্তারিত ব্যাখ্যা
+          // /api/admin/staff/route.ts-এর serializeStaff-এ।
+          nid: staffProfile.nid,
+          ...(includeSalary
             ? {
-                nid: staffProfile.nid,
                 // JSON.stringify একটা Decimal-কে string বানায় ("45000"),
                 // আর StaffForm সেটাকে number ধরে নেয়। তাই boundary-তেই
                 // রূপান্তর। বেতন কোনো order-এর হিসাবে ঢোকে না, শুধু
@@ -185,7 +187,7 @@ export async function PATCH(
     }
   }
 
-  const includeSensitive = canViewSensitiveStaffFields(actingRole);
+  const includeSalary = canViewSensitiveStaffFields(actingRole);
 
   const userData: {
     name?: string;
@@ -233,11 +235,12 @@ export async function PATCH(
   // সাথে গুলিয়ে ফেলত।
   if (body.shift !== undefined) profileData.shift = body.shift;
   if (typeof body.isActive === "boolean") profileData.isActive = body.isActive;
-  // nid/salary are silently ignored (not rejected) for non-owner requesters
-  // — a MANAGER's edit form simply doesn't send these fields at all.
-  if (includeSensitive) {
-    if (body.nid !== undefined) profileData.nid = body.nid?.trim() || null;
-    if (typeof body.salary === "number") profileData.salary = body.salary;
+  // nid — যে কেউ staff scope নিয়ে এখানে পৌঁছেছেন তিনিই লিখতে পারেন।
+  if (body.nid !== undefined) profileData.nid = body.nid?.trim() || null;
+  // salary আগের মতোই OWNER-only, আর non-owner পাঠালে সেটা চুপচাপ
+  // অগ্রাহ্য হয় (reject নয়) — MANAGER-এর form ক্ষেত্রটা পাঠায়ই না।
+  if (includeSalary && typeof body.salary === "number") {
+    profileData.salary = body.salary;
   }
 
   try {
@@ -264,7 +267,7 @@ export async function PATCH(
           image: updated.user.image,
           staffProfile: updated.profile,
         },
-        includeSensitive
+        includeSalary
       )
     );
   } catch (err) {

@@ -18,8 +18,11 @@ import type { StaffRole } from "@/lib/permissions";
  *
  * ⚠️ nid আর salary ইচ্ছাকৃতভাবে CSV-তে নেই — OWNER-এর জন্যও নয়।
  *
- * ওই দুটো field-এর OWNER-only নিয়মটা (canViewSensitiveStaffFields)
- * application code-এ, আর সেটা কাজ করে যতক্ষণ ডেটাটা app-এর ভেতরে থাকে।
+ * salary-র OWNER-only নিয়মটা (canViewSensitiveStaffFields) application
+ * code-এ, আর NID এখন MANAGER-রাও দেখেন — কিন্তু দুটোর কোনোটাই এই
+ * ফাইলে যায় না, আর কারণটা অধিকার নয়, **স্থান**।
+ *
+ * ওই নিয়মগুলো কাজ করে যতক্ষণ ডেটা app-এর ভেতরে থাকে।
  * CSV হলো ঠিক সেই মুহূর্ত যেখানে ডেটা app ছেড়ে বেরিয়ে যায় — একটা ফাইল
  * হয়ে Downloads ফোল্ডারে, তারপর email-এ, তারপর কারও Google Drive-এ।
  * প্রত্যেক কর্মীর জাতীয় পরিচয়পত্র নম্বর আর বেতন এক ফাইলে জমা করাটা

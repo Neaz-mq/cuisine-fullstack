@@ -46,7 +46,6 @@ export default function StaffRowActions({
   canEdit,
   isSelf,
   viewerRole,
-  canSeeSensitive,
 }: {
   userId: string;
   /** aria-label-এর জন্য — সারিতে দশটা "Edit" থাকলে screen reader
@@ -55,7 +54,6 @@ export default function StaffRowActions({
   canEdit: boolean;
   isSelf: boolean;
   viewerRole?: string;
-  canSeeSensitive: boolean;
 }) {
   const [mode, setMode] = useState<null | "view" | "edit">(null);
 
@@ -128,7 +126,6 @@ export default function StaffRowActions({
           staffId={userId}
           onClose={() => setMode(null)}
           viewerRole={viewerRole}
-          canSeeSensitive={canSeeSensitive}
           isSelf={isSelf}
         />
       )}

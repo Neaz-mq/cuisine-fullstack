@@ -76,8 +76,6 @@ type Props = {
   /** edit mode-এ যাঁকে সম্পাদনা করা হচ্ছে। */
   staffId?: string;
   viewerRole?: string;
-  /** OWNER কি না — NID/Salary ঘর দুটো কেবল তখনই। */
-  canSeeSensitive: boolean;
   /** সম্পাদিত ব্যক্তি নিজেই কি না — Status ঘরটা তখন নিষ্ক্রিয়। */
   isSelf?: boolean;
 };
@@ -129,7 +127,6 @@ function StaffFormModalContent({
   mode,
   staffId,
   viewerRole,
-  canSeeSensitive,
   isSelf = false,
 }: Props) {
   const router = useRouter();
@@ -246,10 +243,11 @@ function StaffFormModalContent({
       hireDate: hireDate || undefined,
       shift: shift || null,
       ...(imageUrl ? { image: imageUrl } : { image: null }),
-      // NID/Salary শুধু OWNER পাঠায়। MANAGER পাঠালে route এমনিতেই
-      // চুপচাপ অগ্রাহ্য করত, কিন্তু তখন ঘরটা দেখা যেত অথচ কাজ করত
-      // না — সেটা "ভাঙা" মনে হয়। তাই ঘরগুলোই দেখানো হয় না।
-      ...(canSeeSensitive ? { nid: nid.trim() || null } : {}),
+      // ⚠️ NID এখন সব staff-এর জন্য, OWNER-only নয় — MANAGER-রাও
+      // নিয়োগের কাগজপত্র তোলেন, তাই ঘরটা তাঁদেরও লাগে। নিয়মটা
+      // API-তেও বদলানো (দেখুন lib/permissions.ts)। salary অবশ্য
+      // এখনো OWNER-only, আর সেই ঘরটা এই modal-এ নেই।
+      nid: nid.trim() || null,
     };
 
     const body = isEdit
@@ -267,9 +265,10 @@ function StaffFormModalContent({
           ...shared,
           email: email.trim().toLowerCase(),
           isActive,
-          // create-এ `nid: null` পাঠানোর মানে নেই — schema-য় ওটা
-          // ঐচ্ছিক string, nullable নয়।
-          ...(canSeeSensitive && nid.trim() ? { nid: nid.trim() } : { nid: undefined }),
+          // create-এ `nid: null` পাঠানোর মানে নেই — createStaffSchema-য়
+          // ওটা ঐচ্ছিক string, nullable নয়। তাই ফাঁকা হলে ক্ষেত্রটাই
+          // বাদ (`shared`-এর `nid`-কে চাপা দিয়ে)।
+          nid: nid.trim() || undefined,
         };
 
     setSubmitting(true);
@@ -435,25 +434,24 @@ function StaffFormModalContent({
               />
             </div>
 
-            {canSeeSensitive && (
-              <div>
-                <label htmlFor="staff-nid" className={LABEL}>
-                  NID Number{" "}
-                  <span className="font-sora text-[11px] font-normal text-black/40">
-                    (owner only)
-                  </span>
-                </label>
-                <input
-                  id="staff-nid"
-                  type="text"
-                  inputMode="numeric"
-                  value={nid}
-                  onChange={(event) => setNid(event.target.value)}
-                  placeholder="5674 8765 9875"
-                  className={FIELD}
-                />
-              </div>
-            )}
+            {/* ⚠️ এটা আগে `canSeeSensitive &&` দিয়ে ঢাকা ছিল — কেবল
+                OWNER দেখতেন, আর label-এ "(owner only)" লেখা থাকত।
+                দুটোই সরানো হয়েছে: Figma-র modal-এ ঘরটা শর্তহীন, আর
+                বাস্তবেও নতুন কর্মীর NID তোলেন MANAGER-রাই। */}
+            <div>
+              <label htmlFor="staff-nid" className={LABEL}>
+                NID Number
+              </label>
+              <input
+                id="staff-nid"
+                type="text"
+                inputMode="numeric"
+                value={nid}
+                onChange={(event) => setNid(event.target.value)}
+                placeholder="5674 8765 9875"
+                className={FIELD}
+              />
+            </div>
 
             <SelectField
               id="staff-role"

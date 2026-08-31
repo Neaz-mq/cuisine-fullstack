@@ -2,11 +2,7 @@ import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { Prisma } from "@/generated/prisma/client";
-import {
-  canManageStaffRole,
-  canViewSensitiveStaffFields,
-  type StaffRole,
-} from "@/lib/permissions";
+import { canManageStaffRole, type StaffRole } from "@/lib/permissions";
 import { SHIFT_TABLE_LABELS, isStaffShift } from "@/lib/staff-shift";
 import { ALL_ROLES, ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
 import Pagination from "@/app/admin/orders/Pagination";
@@ -35,9 +31,6 @@ export default async function StaffPage({
   const session = await requireStaff("staff");
   const viewerId = session.user.id;
   const viewerRole = (session.user as { role?: string }).role;
-  // OWNER কি না — NID/salary ঘরগুলো modal-এ দেখানো হবে কি না। একবার
-  // হিসাব করে toolbar আর প্রতিটা সারিতে পাঠানো হয়।
-  const canSeeSensitive = canViewSensitiveStaffFields(viewerRole);
 
   const params = await searchParams;
   const q = params.q?.trim();
@@ -133,7 +126,7 @@ export default async function StaffPage({
         </div>
       </div>
 
-      <StaffToolbar viewerRole={viewerRole} canSeeSensitive={canSeeSensitive} />
+      <StaffToolbar viewerRole={viewerRole} />
 
       <StaffOverviewCards />
 
@@ -320,7 +313,6 @@ export default async function StaffPage({
                     canEdit={canManage}
                     isSelf={isSelf}
                     viewerRole={viewerRole}
-                    canSeeSensitive={canSeeSensitive}
                   />
                 </div>
               );

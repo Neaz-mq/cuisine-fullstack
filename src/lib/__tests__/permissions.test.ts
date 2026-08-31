@@ -181,7 +181,7 @@ describe("canManageStaffRole — OWNER vs MANAGER staff-editing limits", () => {
   });
 });
 
-describe("canViewSensitiveStaffFields — nid/salary gate", () => {
+describe("canViewSensitiveStaffFields — salary gate (nid is no longer gated)", () => {
   it("only OWNER can view sensitive staff fields", () => {
     expect(canViewSensitiveStaffFields("OWNER")).toBe(true);
     expect(canViewSensitiveStaffFields("MANAGER")).toBe(false);
