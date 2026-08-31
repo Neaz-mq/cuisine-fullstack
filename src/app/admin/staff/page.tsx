@@ -35,6 +35,9 @@ export default async function StaffPage({
   const session = await requireStaff("staff");
   const viewerId = session.user.id;
   const viewerRole = (session.user as { role?: string }).role;
+  // OWNER কি না — NID/salary ঘরগুলো modal-এ দেখানো হবে কি না। একবার
+  // হিসাব করে toolbar আর প্রতিটা সারিতে পাঠানো হয়।
+  const canSeeSensitive = canViewSensitiveStaffFields(viewerRole);
 
   const params = await searchParams;
   const q = params.q?.trim();
@@ -130,10 +133,7 @@ export default async function StaffPage({
         </div>
       </div>
 
-      <StaffToolbar
-        viewerRole={viewerRole}
-        canSeeSensitive={canViewSensitiveStaffFields(viewerRole)}
-      />
+      <StaffToolbar viewerRole={viewerRole} canSeeSensitive={canSeeSensitive} />
 
       <StaffOverviewCards />
 
@@ -318,6 +318,9 @@ export default async function StaffPage({
                     userId={member.id}
                     name={member.name ?? member.email}
                     canEdit={canManage}
+                    isSelf={isSelf}
+                    viewerRole={viewerRole}
+                    canSeeSensitive={canSeeSensitive}
                   />
                 </div>
               );

@@ -1,0 +1,285 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import UserAvatar from "@/components/admin/UserAvatar";
+import { ROLE_LABELS } from "@/lib/staff-roles";
+import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
+import { formatJoinDate } from "@/lib/format-date";
+import type { StaffRole } from "@/lib/permissions";
+import {
+  DANGER_BUTTON,
+  ModalError,
+  OUTLINE_BUTTON,
+  PRIMARY_BUTTON,
+  ReadOnlyField,
+  StaffModalShell,
+} from "./staff-modal-ui";
+
+/**
+ * src/app/admin/staff/ViewStaffModal.tsx
+ *
+ * সারির "View" বোতামের গন্তব্য — একজন কর্মীর পুরো record, কেবল পড়ার
+ * জন্য।
+ *
+ * ── কেন modal, পাতা নয় ──────────────────────────────────────────────
+ *
+ * আগে এটা /admin/staff/[id]/view ছিল — একটা আলাদা পাতা। কাজ করত,
+ * কিন্তু তালিকা থেকে বেরিয়ে যেতে হতো: দশজনের শিফট দেখতে দশবার
+ * পাতা বদল, প্রতিবার ফিরে এসে ছাঁকনি আর page নম্বর আবার খুঁজে নেওয়া।
+ * modal-এ পেছনের তালিকাটা যেখানে ছিল সেখানেই থাকে।
+ *
+ * ⚠️ পাতাটা এখন আর কোথাও থেকে খোলে না। `src/app/admin/staff/[id]/view/`
+ * ফোল্ডারটা মুছে ফেলা যায়।
+ *
+ * ── কেন edit modal-ই যথেষ্ট নয় ──────────────────────────────────────
+ *
+ * দুটো কারণে।
+ *
+ * এক, অধিকার: একজন MANAGER একজন OWNER-কে **দেখতে** পারেন (তিনি
+ * তালিকায় আছেন), কিন্তু তাঁকে সম্পাদনা করতে পারেন না — PATCH route
+ * 403 দেয়। edit-ই একমাত্র পথ হলে কিছু কর্মীর তথ্য কেউ কেউ কখনো
+ * দেখতেই পেতেন না।
+ *
+ * দুই, উদ্দেশ্য: "রিদয়ের শিফট কী" জানতে form খোলার মানে প্রতিটা ঘর
+ * সম্পাদনাযোগ্য অবস্থায় থাকা, আর একটা ভুল keystroke-ই যথেষ্ট।
+ */
+
+type StaffDetails = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+  image: string | null;
+  staffProfile: {
+    employeeId: string;
+    department: string | null;
+    employmentType: string;
+    phone: string | null;
+    hireDate: string;
+    address: string | null;
+    shift: string | null;
+    isActive: boolean;
+    nid?: string | null;
+    salary?: number | null;
+  } | null;
+};
+
+export default function ViewStaffModal({
+  open,
+  onClose,
+  staffId,
+  canManage,
+  isSelf,
+  onEdit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  staffId: string;
+  /** সম্পাদনা/নিষ্ক্রিয় করার অধিকার আছে কি না। */
+  canManage: boolean;
+  isSelf: boolean;
+  /** "Edit" চাপলে — এই modal বন্ধ করে form modal খোলে। */
+  onEdit: () => void;
+}) {
+  const router = useRouter();
+  const [staff, setStaff] = useState<StaffDetails | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setError(null);
+    setStaff(null);
+    setLoading(true);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/staff/${staffId}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Couldn't load this staff member.");
+        if (!cancelled) setStaff(data);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Couldn't load this staff member.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    // দ্রুত খুলে-বন্ধ করলে আগের fetch পরে ফিরে এসে ভুল কর্মীর তথ্য
+    // বসিয়ে দিত — এই পতাকাটা সেটাই আটকায়।
+    return () => {
+      cancelled = true;
+    };
+  }, [open, staffId]);
+
+  const profile = staff?.staffProfile ?? null;
+  const isActive = profile?.isActive ?? true;
+
+  async function toggleActive() {
+    if (!staff) return;
+    const next = !isActive;
+    const verb = next ? "Reactivate" : "Deactivate";
+    if (!confirm(`${verb} ${staff.name ?? staff.email}?`)) return;
+
+    setError(null);
+    setPending(true);
+    try {
+      const res = await fetch(`/api/admin/staff/${staffId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? `Couldn't ${verb.toLowerCase()} this staff member.`);
+        setPending(false);
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setPending(false);
+    }
+  }
+
+  const shiftLabel =
+    profile?.shift && isStaffShift(profile.shift) ? SHIFT_LABELS[profile.shift] : "—";
+
+  return (
+    <StaffModalShell
+      open={open}
+      onClose={onClose}
+      titleId="staff-view-title"
+      title="Staff Details"
+      footer={
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {/* নিজেকে নিষ্ক্রিয় করা API-তেও আটকানো (নিজেকে তালাবন্ধ করে
+              ফেলা), তাই বোতামটাও দেখানো হয় না।
+
+              ⚠️ এটা একটা ধ্বংসাত্মক কাজ, তাই এটা এখানে — View-এর
+              ভেতরে — সারির মধ্যে নয়। তালিকার প্রতিটা সারিতে
+              "Deactivate" থাকলে ভুল সারিতে click হওয়া কেবল সময়ের
+              ব্যাপার; এখানে পৌঁছতে হলে আগে ওই নির্দিষ্ট কর্মীর
+              তথ্যটা চোখের সামনে আসে। */}
+          {canManage && !isSelf && profile && (
+            <button
+              type="button"
+              onClick={toggleActive}
+              disabled={pending || loading}
+              className={`${isActive ? DANGER_BUTTON : OUTLINE_BUTTON} sm:mr-auto`}
+            >
+              {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {isActive ? "Deactivate" : "Reactivate"}
+            </button>
+          )}
+
+          <button type="button" onClick={onClose} className={`${OUTLINE_BUTTON} flex-1 sm:flex-none`}>
+            Close
+          </button>
+
+          {canManage && (
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={loading}
+              className={`${PRIMARY_BUTTON} flex-1 sm:flex-none`}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      }
+    >
+      {error && <ModalError message={error} />}
+
+      {loading || !staff ? (
+        <div className="flex min-h-[240px] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-black/40" aria-hidden="true" />
+        </div>
+      ) : (
+        <>
+          {/* তালিকার সারির হুবহু একই পরিচয়-ব্লক (avatar + নাম + ইমেইল
+              + employee ID), যাতে View খুললে "এটাই তো ওই সারিটা" বোঝা
+              যায়। */}
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[16px] bg-[#F9F6F3] p-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <UserAvatar src={staff.image} name={staff.name ?? staff.email} />
+              <div className="flex min-w-0 flex-col gap-1">
+                <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
+                  {staff.name ?? "Unnamed"}
+                  {isSelf && (
+                    <span className="ml-1.5 font-sora text-[12px] font-normal text-black/40">
+                      (you)
+                    </span>
+                  )}
+                </p>
+                <p className="truncate font-sora text-[12px] leading-[1.7] text-black/70">
+                  {staff.email}
+                </p>
+              </div>
+            </div>
+
+            <span className="flex h-9 shrink-0 items-center rounded-full bg-white px-4 font-sora text-[13px] leading-none text-black">
+              {profile?.employeeId ?? "No employee ID"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5 min-[560px]:grid-cols-3">
+            <ReadOnlyField label="Role" value={ROLE_LABELS[staff.role as StaffRole] ?? staff.role} />
+            <ReadOnlyField
+              label="Join Date"
+              value={profile ? formatJoinDate(new Date(profile.hireDate)) : "—"}
+            />
+            <ReadOnlyField label="Phone Number" value={profile?.phone ?? "—"} />
+            <ReadOnlyField
+              label="Status"
+              value={isActive ? "Active" : "Inactive"}
+              tone={isActive ? "positive" : "negative"}
+            />
+            <ReadOnlyField label="Shift" value={shiftLabel} />
+            <ReadOnlyField label="Department" value={profile?.department ?? "—"} />
+            <ReadOnlyField
+              label="Employment Type"
+              value={profile ? profile.employmentType.replace("_", " ") : "—"}
+            />
+            <ReadOnlyField label="Permanent Address" value={profile?.address ?? "—"} />
+          </div>
+
+          {/**
+           * ⚠️ NID আর salary — কেবল OWNER-এর জন্য, আর সেই সিদ্ধান্তটা
+           * এখানে নয়, **API-তে**: GET /api/admin/staff/[id] ক্ষেত্র
+           * দুটো response-এ ঢোকায়ই না যদি না ডাকা ব্যক্তি OWNER হন
+           * (canViewSensitiveStaffFields)। তাই এখানে `in` দিয়ে
+           * উপস্থিতি দেখা যথেষ্ট — MANAGER-এর browser-এ মানগুলো
+           * কখনো পৌঁছয়ই না, লুকোনো অবস্থাতেও নয়।
+           */}
+          {profile && "nid" in profile && (
+            <>
+              <div className="h-px bg-black/[0.06]" aria-hidden="true" />
+              <div className="flex flex-col gap-4">
+                <p className="font-sora text-[13px] font-medium leading-none text-black/50">
+                  Owner-only details
+                </p>
+                <div className="grid grid-cols-2 gap-5 min-[560px]:grid-cols-3">
+                  <ReadOnlyField label="NID Number" value={profile.nid ?? "—"} />
+                  <ReadOnlyField
+                    label="Salary"
+                    value={profile.salary != null ? `৳ ${profile.salary.toLocaleString()}` : "—"}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </StaffModalShell>
+  );
+}

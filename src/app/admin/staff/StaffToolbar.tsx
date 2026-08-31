@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { useScreenTier } from "@/components/admin/useScreenTier";
-import AddStaffModal from "./AddStaffModal";
+import StaffFormModal from "./StaffFormModal";
 
 /**
  * src/app/admin/staff/StaffToolbar.tsx
@@ -121,10 +121,10 @@ export default function StaffToolbar({
        * দ্রষ্টব্য) — নতুন কোনো gradient না বসিয়ে যা আছে তার সাথে মেলানো।
        *
        * ⚠️ আগে এটা /admin/staff/new-এ যাওয়ার একটা <Link> ছিল। নকশায়
-       * এটা একটা modal খোলে, তাই এখন <button>। পাতাটা মুছে ফেলা হয়নি —
-       * ওখানে department, employment type, salary, password-এর মতো
-       * ক্ষেত্রগুলো আছে যেগুলো modal-এ নেই (AddStaffModal.tsx-এর
-       * শীর্ষ মন্তব্য দ্রষ্টব্য); URL জানা থাকলে এখনো ব্যবহার করা যায়।
+       * এটা একটা modal খোলে, তাই এখন <button>। ওই পাতাটা (আর তার
+       * StaffForm) এখন আর কোথাও থেকে খোলে না — সম্পাদনার সব ঘর
+       * StaffFormModal-এর edit mode-এ চলে এসেছে, তাই ফোল্ডারটা মুছে
+       * ফেলা যায়।
        */}
       <button
         type="button"
@@ -135,7 +135,8 @@ export default function StaffToolbar({
         Add New
       </button>
 
-      <AddStaffModal
+      <StaffFormModal
+        mode="create"
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         viewerRole={viewerRole}
