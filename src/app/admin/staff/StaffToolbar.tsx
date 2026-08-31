@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { useScreenTier } from "@/components/admin/useScreenTier";
+import AddStaffModal from "./AddStaffModal";
 
 /**
  * src/app/admin/staff/StaffToolbar.tsx
@@ -37,13 +37,22 @@ const FOCUS_RING =
 const FULL_PLACEHOLDER = "Search by Name, Email or Employee ID…";
 const SHORT_PLACEHOLDER = "Search";
 
-export default function StaffToolbar() {
+export default function StaffToolbar({
+  viewerRole,
+  canSeeSensitive,
+}: {
+  /** OWNER/MANAGER — modal-এর role তালিকা ছাঁকতে লাগে। */
+  viewerRole?: string;
+  /** OWNER কি না — modal-এ NID ঘরটা দেখানো হবে কি না। */
+  canSeeSensitive: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const urlQuery = searchParams.get("q") ?? "";
   const [query, setQuery] = useState(urlQuery);
+  const [modalOpen, setModalOpen] = useState(false);
 
   // UsersToolbar-এর debounce/ref প্যাটার্ন হুবহু — বিস্তারিত ব্যাখ্যা
   // ওখানে, এখানে পুনরাবৃত্তি করা হয়নি।
@@ -110,14 +119,28 @@ export default function StaffToolbar() {
        * Figma-র "+ Add New" — প্রজেক্টের বাকি সব primary CTA বোতামের
        * মতোই #FF4C15 solid (StaffForm submit বোতাম, TableForm, ইত্যাদি
        * দ্রষ্টব্য) — নতুন কোনো gradient না বসিয়ে যা আছে তার সাথে মেলানো।
+       *
+       * ⚠️ আগে এটা /admin/staff/new-এ যাওয়ার একটা <Link> ছিল। নকশায়
+       * এটা একটা modal খোলে, তাই এখন <button>। পাতাটা মুছে ফেলা হয়নি —
+       * ওখানে department, employment type, salary, password-এর মতো
+       * ক্ষেত্রগুলো আছে যেগুলো modal-এ নেই (AddStaffModal.tsx-এর
+       * শীর্ষ মন্তব্য দ্রষ্টব্য); URL জানা থাকলে এখনো ব্যবহার করা যায়।
        */}
-      <Link
-        href="/admin/staff/new"
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
         className={`flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#FF4C15] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-colors hover:bg-orange-600 ${FOCUS_RING}`}
       >
         <Plus className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
         Add New
-      </Link>
+      </button>
+
+      <AddStaffModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        viewerRole={viewerRole}
+        canSeeSensitive={canSeeSensitive}
+      />
     </div>
   );
 }

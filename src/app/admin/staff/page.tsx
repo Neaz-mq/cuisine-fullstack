@@ -1,19 +1,23 @@
-import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { Prisma } from "@/generated/prisma/client";
-import { canManageStaffRole, type StaffRole } from "@/lib/permissions";
+import {
+  canManageStaffRole,
+  canViewSensitiveStaffFields,
+  type StaffRole,
+} from "@/lib/permissions";
 import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
 import { ALL_ROLES, ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
 import Pagination from "@/app/admin/orders/Pagination";
+import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import StaffOverviewCards from "@/components/admin/StaffOverviewCards";
 import UserAvatar from "@/components/admin/UserAvatar";
 import InfoField from "@/components/admin/InfoField";
 import { formatJoinDate } from "@/lib/format-date";
 import StaffToolbar from "./StaffToolbar";
 import RoleFilter from "./RoleFilter";
-import DeactivateStaffButton from "./DeactivateStaffButton";
+import StaffRowActions from "./StaffRowActions";
 
 export const metadata = { title: "Staff" };
 
@@ -96,25 +100,40 @@ export default async function StaffPage({
         </h1>
 
         {/**
-         * ⚠️ Users/dashboard-এ এখানে ExportReportButton-ও থাকে, কিন্তু
-         * staff তালিকার নিজের কোনো export route এখনো নেই
-         * (/api/admin/users/export-এর staff-সংস্করণ বানানো হয়নি — সেটা
-         * এই redesign-এর আওতার বাইরে, আলাদা কাজ)। ভুল route-এ (যেমন
-         * ডিফল্ট insights export) পাঠিয়ে ভুল CSV দেওয়ার চেয়ে বোতামটাই
-         * বাদ রাখা হলো, যতক্ষণ না staff export সত্যিই লাগে।
+         * তারিখ + Export — Users page/dashboard-এর হুবহু একই গড়ন, একই
+         * breakpoint আচরণ (ব্যাখ্যা admin/users/page.tsx-এ)।
+         *
+         * ⚠️ আগে এখানে শুধু তারিখটা ছিল, কারণ staff তালিকার নিজের কোনো
+         * export route ছিল না — আর ডিফল্ট insights export-এ পাঠালে নাম
+         * এক হতো, ফল ভুল: কর্মীর তালিকা চেয়ে order-এর CSV নামত। route-টা
+         * এখন আছে (/api/admin/staff/export), তাই বোতামটাও ফিরল।
+         *
+         * forwardParams-এ `page` নেই, ইচ্ছাকৃতভাবে — export মানে পুরো
+         * ছাঁকা তালিকা, পর্দায় দেখা দশটা সারি নয়।
          */}
-        <span className="flex h-11 w-fit shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
-          <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-          <span className="min-[480px]:hidden">
-            {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
+          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+            <span className="min-[480px]:hidden">
+              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+            <span className="hidden min-[480px]:inline">
+              {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
           </span>
-          <span className="hidden min-[480px]:inline">
-            {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-        </span>
+
+          <ExportReportButton
+            endpoint="/api/admin/staff/export"
+            forwardParams={["q", "role"]}
+            fallbackFilename="cuisine-staff.csv"
+          />
+        </div>
       </div>
 
-      <StaffToolbar />
+      <StaffToolbar
+        viewerRole={viewerRole}
+        canSeeSensitive={canViewSensitiveStaffFields(viewerRole)}
+      />
 
       <StaffOverviewCards />
 
@@ -145,9 +164,10 @@ export default async function StaffPage({
             {staff.map((member) => {
               const isSelf = member.id === viewerId;
               // MANAGER একটা OWNER-কে দেখতে পারেন (তালিকায় থাকেন),
-              // কিন্তু তাঁকে deactivate করতে পারেন না — API route-এর
-              // canManageStaffRole guard-এর সাথে মেলানো, নাহলে বোতাম
-              // দেখা যেত অথচ চাপলে 403 আসত।
+              // কিন্তু তাঁর record বদলাতে পারেন না — staff/[id]/page.tsx
+              // আর API route দুটোরই canManageStaffRole guard-এর সাথে
+              // মেলানো, নাহলে "Edit" বোতামটা দেখা যেত অথচ চাপলে 404।
+              // "View" এই শর্তের বাইরে: দেখা আর বদলানো এক নয়।
               const canManage = canManageStaffRole(viewerRole, member.role);
               const shiftLabel =
                 member.staffProfile?.shift && isStaffShift(member.staffProfile.shift)
@@ -196,25 +216,14 @@ export default async function StaffPage({
                     />
                   </div>
 
-                  {/* Figma-র Edit/View — এখানে Edit (সম্পাদনা পাতায়)
-                      আর Deactivate/Reactivate (নিজের role/self বাদে)।
-                      আলাদা "View" নেই, কারণ edit পাতাই সব তথ্য দেখায় —
-                      দুটো আলাদা পাতা বানালে একই ডেটার দুই কপি রাখতে হতো। */}
-                  <div className="flex shrink-0 items-center gap-4 xl:flex-col xl:items-end xl:gap-2">
-                    <Link
-                      href={`/admin/staff/${member.id}`}
-                      className="font-sora text-[14px] font-medium text-black underline-offset-2 hover:underline"
-                    >
-                      Edit
-                    </Link>
-                    {!isSelf && canManage && member.staffProfile && (
-                      <DeactivateStaffButton
-                        userId={member.id}
-                        isActive={isActive}
-                        name={member.name ?? member.email}
-                      />
-                    )}
-                  </div>
+                  {/* Figma-র Edit (সাদা outline pill) + View (gradient
+                      pill)। Deactivate/Reactivate আর এখানে নেই — সেটা
+                      সরে গেছে View পাতায়; কারণ StaffRowActions.tsx-এ। */}
+                  <StaffRowActions
+                    userId={member.id}
+                    name={member.name ?? member.email}
+                    canEdit={canManage}
+                  />
                 </div>
               );
             })}

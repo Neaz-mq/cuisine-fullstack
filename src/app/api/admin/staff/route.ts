@@ -11,6 +11,14 @@ import { nextEmployeeId } from "@/lib/staff";
 import { createStaffSchema } from "@/lib/validations/staff";
 import { parseBody } from "@/lib/validations/parse";
 import { type MoneyInput, toMoney } from "@/lib/money";
+import {
+  RESET_TOKEN_TTL_MS,
+  generateResetToken,
+  hashResetToken,
+  resetPasswordUrl,
+} from "@/lib/password-reset";
+import { sendPasswordResetEmail } from "@/lib/send-password-reset-email";
+import { randomBytes } from "crypto";
 import type { Shift } from "@/generated/prisma/client";
 
 /**
@@ -33,12 +41,18 @@ function serializeStaff(
     email: string;
     role: string;
     createdAt: Date;
+    // Figma-র সারিতে avatar — Google login-এ আসা ছবি, নয়তো "Add New
+    // Staff" modal থেকে upload করা ছবির Supabase URL।
+    image: string | null;
     staffProfile: {
       employeeId: string;
       department: string | null;
       employmentType: string;
       phone: string | null;
       hireDate: Date;
+      // nid/salary-র মতো OWNER-only নয় — ঠিকানাটা modal-এর সাধারণ
+      // ঘরগুলোর একটা, তাই includeSensitive-এর বাইরে।
+      address: string | null;
       // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
       // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
       shift: Shift | null;
@@ -61,6 +75,7 @@ function serializeStaff(
           employmentType: staffProfile.employmentType,
           phone: staffProfile.phone,
           hireDate: staffProfile.hireDate,
+          address: staffProfile.address,
           shift: staffProfile.shift,
           isActive: staffProfile.isActive,
           ...(includeSensitive
@@ -95,6 +110,7 @@ export async function GET() {
       email: true,
       role: true,
       createdAt: true,
+      image: true,
       staffProfile: {
         select: {
           employeeId: true,
@@ -102,6 +118,7 @@ export async function GET() {
           employmentType: true,
           phone: true,
           hireDate: true,
+          address: true,
           shift: true,
           isActive: true,
           nid: true,
@@ -134,6 +151,9 @@ export async function POST(req: NextRequest) {
     shift,
     nid,
     salary,
+    address,
+    image,
+    isActive,
   } = parsed;
 
   if (!canManageStaffRole(actingRole, role as StaffRole)) {
@@ -149,7 +169,25 @@ export async function POST(req: NextRequest) {
   }
 
   const includeSensitive = canViewSensitiveStaffFields(actingRole);
-  const hashedPassword = await bcrypt.hash(password, 10);
+
+  /**
+   * password না পাঠালে কী হয় — এবং কেন সেটাই ডিফল্ট।
+   *
+   * Figma-র "Add New Staff" modal-এ password-এর কোনো ঘর নেই। তাই এখানে
+   * একটা ৩২-byte random password বসানো হয়, যেটা কেউ কখনো দেখে না, আর
+   * তারপর কর্মীকে একটা "নিজের password ঠিক করুন" link পাঠানো হয় —
+   * forgot-password-এর ঠিক সেই একই token ব্যবস্থা (lib/password-reset.ts)।
+   *
+   * ⚠️ column-টা nullable নয়, তাই "password ছাড়া user" বানানো যেত না।
+   * আর ফাঁকা/অনুমেয় কিছু (যেমন "changeme123") বসানো অনেক খারাপ হতো:
+   * link আসার আগেই যে কেউ ওটা দিয়ে ঢুকে পড়তে পারত। random মানে
+   * কার্যত কোনো password নেই, অথচ schema-র শর্তও ভাঙে না।
+   */
+  const shouldInvite = !password;
+  const hashedPassword = await bcrypt.hash(
+    password ?? randomBytes(32).toString("base64url"),
+    10
+  );
 
   // Retry once on an employeeId collision (rare race between two
   // simultaneous staff creations) rather than wrapping the whole thing in
@@ -164,6 +202,10 @@ export async function POST(req: NextRequest) {
             email,
             password: hashedPassword,
             role,
+            // modal-এর drop-zone থেকে আসা Supabase URL। ফাঁকা string
+            // এলে null — নাহলে UserAvatar `src` কে truthy ধরে একটা
+            // ফাঁকা <img> বসাত, আর silhouette fallback-টা হারাত।
+            image: image?.trim() || null,
           },
         });
         const profile = await tx.staffProfile.create({
@@ -176,6 +218,10 @@ export async function POST(req: NextRequest) {
               : "FULL_TIME",
             phone: typeof phone === "string" ? phone.trim() || null : null,
             hireDate: hireDate ? new Date(hireDate) : new Date(),
+            address: typeof address === "string" ? address.trim() || null : null,
+            // modal-এর "Status" dropdown। না পাঠালে schema-র default
+            // (true) — পুরনো StaffForm এটা পাঠায় না, তাই আচরণ অপরিবর্তিত।
+            ...(typeof isActive === "boolean" ? { isActive } : {}),
             shift: shift ?? null,
             nid: includeSensitive && typeof nid === "string" ? nid.trim() || null : null,
             salary: includeSensitive && typeof salary === "number" ? salary : null,
@@ -184,7 +230,39 @@ export async function POST(req: NextRequest) {
         return { user, profile };
       });
 
-      const { id, name: createdName, email: createdEmail, role: createdRole, createdAt } = created.user;
+      /**
+       * Invite email — transaction-এর বাইরে, ইচ্ছাকৃতভাবে।
+       *
+       * ভেতরে রাখলে Resend ধীর হলে DB transaction ততক্ষণ খোলা থাকত, আর
+       * email ব্যর্থ হলে সদ্য তৈরি staff record-টাই rollback হয়ে যেত —
+       * অর্থাৎ "mail গেল না" সমস্যা "কর্মীই তৈরি হলো না" সমস্যা হয়ে
+       * দাঁড়াত। helper নিজে কখনো throw করে না (দেখুন
+       * send-password-reset-email.ts), তাই `void` এখানে নিরাপদ।
+       */
+      if (shouldInvite) {
+        const token = generateResetToken();
+        await prisma.passwordResetToken.create({
+          data: {
+            tokenHash: hashResetToken(token),
+            userId: created.user.id,
+            expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+          },
+        });
+        void sendPasswordResetEmail({
+          to: created.user.email,
+          firstName: created.user.name?.trim().split(/\s+/)[0] || "there",
+          resetUrl: resetPasswordUrl(token),
+        });
+      }
+
+      const {
+        id,
+        name: createdName,
+        email: createdEmail,
+        role: createdRole,
+        createdAt,
+        image: createdImage,
+      } = created.user;
       return NextResponse.json(
         serializeStaff(
           {
@@ -193,6 +271,7 @@ export async function POST(req: NextRequest) {
             email: createdEmail,
             role: createdRole,
             createdAt,
+            image: createdImage,
             staffProfile: created.profile,
           },
           includeSensitive

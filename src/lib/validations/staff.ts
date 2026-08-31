@@ -28,7 +28,19 @@ const staffShiftSchema = z.enum(SHIFTS);
 export const createStaffSchema = z.object({
   name: nonEmptyString("Name"),
   email: emailSchema,
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  /**
+   * ⚠️ ঐচ্ছিক — আগে বাধ্যতামূলক ছিল।
+   *
+   * Figma-র "Add New Staff" modal-এ কোনো password ঘর নেই, আর সেটা
+   * ভুল নয়, বরং ভালো: admin একজন কর্মীর password বেছে দিলে সেটা
+   * অন্তত দু'জন জানে, আর বাস্তবে সেটা WhatsApp-এ পাঠানো হয়। তার
+   * বদলে route একটা random password বসিয়ে কর্মীকে "নিজের password
+   * ঠিক করুন" link পাঠায় (দেখুন POST /api/admin/staff)।
+   *
+   * পুরনো StaffForm এখনো password পাঠায়, তাই ক্ষেত্রটা বাদ দেওয়া
+   * হয়নি — শুধু ঐচ্ছিক করা হয়েছে। পাঠালে সেটাই ব্যবহার হয়।
+   */
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
   role: staffRoleSchema,
   department: z.string().trim().optional().or(z.literal("")),
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT"]).default("FULL_TIME"),
@@ -39,6 +51,22 @@ export const createStaffSchema = z.object({
   shift: staffShiftSchema.optional(),
   nid: z.string().trim().optional().or(z.literal("")),
   salary: z.number().nonnegative().optional(),
+  // Figma modal-এর "Permanent Address" — schema.prisma-র
+  // StaffProfile.address-এর মতোই ঐচ্ছিক।
+  address: z.string().trim().optional().or(z.literal("")),
+  /**
+   * প্রোফাইল ছবি — modal-এর উপরের drop-zone থেকে।
+   *
+   * এখানে যা আসে সেটা ইতিমধ্যেই /api/admin/upload-image-এ upload হয়ে
+   * যাওয়া ফাইলের public URL, কোনো base64 বা file নয়। তাই `.url()`
+   * যাচাই: হাতে লেখা যা-খুশি string User.image-এ বসে গেলে প্রতিটা
+   * staff সারিতে ভাঙা ছবির চিহ্ন আসত।
+   */
+  image: z.url("Image must be a valid URL").optional().or(z.literal("")),
+  // modal-এর "Status" dropdown। ডিফল্ট true, কারণ নতুন কর্মী স্বাভাবিকভাবেই
+  // active — কিন্তু কেউ আগে থেকে record বানিয়ে রাখলে (যেমন যিনি পরের মাসে
+  // যোগ দেবেন) inactive হিসেবেও যোগ করা যায়।
+  isActive: z.boolean().optional(),
 });
 
 /** All optional — PATCH only touches whatever fields are sent. Role and
@@ -59,6 +87,11 @@ export const updateStaffSchema = z
     isActive: z.boolean().optional(),
     nid: z.string().trim().nullable().optional(),
     salary: z.number().nonnegative().nullable().optional(),
+    // createStaffSchema-র একই দুটো ক্ষেত্র, তবে nullable — একবার সেট
+    // করা ঠিকানা বা ছবি আবার মুছে ফেলাটাও একটা বৈধ আপডেট (shift-এর
+    // একই যুক্তি, উপরের মন্তব্য দ্রষ্টব্য)।
+    address: z.string().trim().nullable().optional(),
+    image: z.url("Image must be a valid URL").nullable().optional().or(z.literal("")),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "Provide at least one field to update",

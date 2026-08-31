@@ -20,12 +20,14 @@ function serialize(
     email: string;
     role: string;
     createdAt: Date;
+    image: string | null;
     staffProfile: {
       employeeId: string;
       department: string | null;
       employmentType: string;
       phone: string | null;
       hireDate: Date;
+      address: string | null;
       // nid/salary-র মতো RBAC-গেটেড নয় — shift কার শিফট সেটা লুকানোর
       // কিছু নেই, তাই সবসময় serialize হয়, includeSensitive-এর বাইরে।
       shift: Shift | null;
@@ -48,6 +50,7 @@ function serialize(
           employmentType: staffProfile.employmentType,
           phone: staffProfile.phone,
           hireDate: staffProfile.hireDate,
+          address: staffProfile.address,
           shift: staffProfile.shift,
           isActive: staffProfile.isActive,
           ...(includeSensitive
@@ -84,6 +87,7 @@ export async function GET(
       email: true,
       role: true,
       createdAt: true,
+      image: true,
       staffProfile: {
         select: {
           employeeId: true,
@@ -91,6 +95,7 @@ export async function GET(
           employmentType: true,
           phone: true,
           hireDate: true,
+          address: true,
           shift: true,
           isActive: true,
           nid: true,
@@ -182,8 +187,17 @@ export async function PATCH(
 
   const includeSensitive = canViewSensitiveStaffFields(actingRole);
 
-  const userData: { name?: string; role?: StaffRole; password?: string } = {};
+  const userData: {
+    name?: string;
+    role?: StaffRole;
+    password?: string;
+    image?: string | null;
+  } = {};
   if (typeof body.name === "string" && body.name.trim()) userData.name = body.name.trim();
+  // `!== undefined` — ছবি মুছে ফেলাটাও (null পাঠিয়ে) একটা বৈধ আপডেট,
+  // ঠিক shift-এর মতো। ফাঁকা string-ও null-এ নামে, নাহলে UserAvatar
+  // একটা ফাঁকা <img> বসিয়ে ভাঙা ছবির চিহ্ন দেখাত।
+  if (body.image !== undefined) userData.image = body.image?.trim() || null;
   if (body.role !== undefined && body.role !== target.role) userData.role = body.role;
   if (typeof body.password === "string" && body.password) {
     if (body.password.length < 8) {
@@ -200,6 +214,7 @@ export async function PATCH(
     employmentType?: EmploymentType;
     phone?: string | null;
     hireDate?: Date;
+    address?: string | null;
     shift?: Shift | null;
     isActive?: boolean;
     nid?: string | null;
@@ -211,6 +226,7 @@ export async function PATCH(
   }
   if (body.phone !== undefined) profileData.phone = body.phone?.trim() || null;
   if (body.hireDate) profileData.hireDate = new Date(body.hireDate);
+  if (body.address !== undefined) profileData.address = body.address?.trim() || null;
   // ⚠️ `!== undefined`, `if (body.shift)` নয় — শিফট আবার null করে ফাঁকা
   // করার request-টাও একটা বৈধ আপডেট (updateStaffSchema-র মন্তব্য দ্রষ্টব্য),
   // আর `null` falsy বলে `if (body.shift)` সেটাকে "কিছু পাঠানো হয়নি"-র
@@ -245,6 +261,7 @@ export async function PATCH(
           email: updated.user.email,
           role: updated.user.role,
           createdAt: updated.user.createdAt,
+          image: updated.user.image,
           staffProfile: updated.profile,
         },
         includeSensitive
