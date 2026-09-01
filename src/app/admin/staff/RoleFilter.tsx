@@ -20,8 +20,12 @@ export default function RoleFilter({ value }: { value: RoleFilterValue }) {
 
   const handleSelect = (next: RoleFilterValue) => {
     const params = new URLSearchParams();
-    const q = searchParams.get("q");
-    if (q) params.set("q", q);
+    // ⚠️ `period` Overview কার্ডের ছাঁকনি, তালিকার নয় — কিন্তু এখানে
+    // না রাখলে role বদলালেই সেটা নীরবে "All"-এ ফিরে যেত।
+    ["q", "period"].forEach((key) => {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    });
     if (next !== ALL_ROLES) params.set("role", next);
     router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
   };

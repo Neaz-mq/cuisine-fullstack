@@ -8,6 +8,7 @@ import { ALL_ROLES, ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
 import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import StaffOverviewCards from "@/components/admin/StaffOverviewCards";
+import { DEFAULT_OVERVIEW_PERIOD, isOverviewPeriod } from "@/lib/overview-period";
 import UserAvatar from "@/components/admin/UserAvatar";
 import InfoField from "@/components/admin/InfoField";
 import { formatJoinDate } from "@/lib/format-date";
@@ -22,7 +23,7 @@ const STAFF_PER_PAGE = 10;
 export default async function StaffPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; page?: string; period?: string }>;
 }) {
   // requireAdmin() নয় — এটা যেকোনো staff role-কেই পাশ করিয়ে দিত, অথচ
   // "staff" scope-টা মূলত OWNER/MANAGER-এর জন্য (permissions.ts-এর
@@ -36,6 +37,9 @@ export default async function StaffPage({
   const q = params.q?.trim();
   const roleFilter: StaffRole | null = isStaffRoleFilter(params.role) ? params.role : null;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  // অচেনা মান চুপচাপ ডিফল্টে নামে — URL হাতে বদলে দিলে error নয়,
+  // শুধু ছাঁকনিটা "All"-এ ফেরে।
+  const period = isOverviewPeriod(params.period) ? params.period : DEFAULT_OVERVIEW_PERIOD;
 
   const now = new Date();
 
@@ -128,7 +132,7 @@ export default async function StaffPage({
 
       <StaffToolbar viewerRole={viewerRole} />
 
-      <StaffOverviewCards />
+      <StaffOverviewCards period={period} />
 
       {/* --- Staff Information --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">

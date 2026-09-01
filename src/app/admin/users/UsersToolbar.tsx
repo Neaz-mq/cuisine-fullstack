@@ -116,9 +116,13 @@ export default function UsersToolbar({
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
-    // এই পাতার নিজের parameter দুটোই — page ইচ্ছাকৃতভাবে বাদ, কারণ
-    // ছাঁকনি বদলে ফলাফল কমে গেলে ৫ নম্বর page-এ খালি পর্দা আসত।
-    ["q", "category"].forEach((key) => {
+    // এই পাতার নিজের parameter — page ইচ্ছাকৃতভাবে বাদ, কারণ ছাঁকনি
+    // বদলে ফলাফল কমে গেলে ৫ নম্বর page-এ খালি পর্দা আসত।
+    //
+    // ⚠️ `period` তালিকার ছাঁকনি নয় (ওটা উপরের Overview কার্ডের),
+    // কিন্তু এখানে না রাখলে search বা category বদলালেই সেটা নীরবে
+    // "All"-এ ফিরে যেত।
+    ["q", "category", "period"].forEach((key) => {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     });

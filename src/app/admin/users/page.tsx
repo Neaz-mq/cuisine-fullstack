@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import UsersOverviewCards from "@/components/admin/UsersOverviewCards";
+import { DEFAULT_OVERVIEW_PERIOD, isOverviewPeriod } from "@/lib/overview-period";
 import UserAvatar from "@/components/admin/UserAvatar";
 import InfoField from "@/components/admin/InfoField";
 import { formatJoinDate } from "@/lib/format-date";
@@ -24,7 +25,7 @@ const USERS_PER_PAGE = 10;
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; page?: string; period?: string }>;
 }) {
   // layout-এও গেট আছে; এখানে session লাগে শুধু শিরোনামের নামটার জন্য।
   const session = await requireStaff("staff");
@@ -35,6 +36,9 @@ export default async function UsersPage({
     ? params.category
     : null;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  // অচেনা মান চুপচাপ ডিফল্টে নামে — URL হাতে বদলে দিলে error নয়,
+  // শুধু ছাঁকনিটা "All"-এ ফেরে। বাকি ছাঁকনিগুলোরও একই আচরণ।
+  const period = isOverviewPeriod(params.period) ? params.period : DEFAULT_OVERVIEW_PERIOD;
 
   const now = new Date();
 
@@ -189,7 +193,7 @@ export default async function UsersPage({
           মন্তব্যে লেখা আছে (দুই পাতায় একই ব্লক কপি না রাখা), কিন্তু
           দুই পাতার Figma আসলে আলাদা: staff-এ পাঁচটা role-কার্ড,
           users-এ চারটে গ্রাহক-কার্ড। বিস্তারিত UsersOverviewCards-এ। */}
-      <UsersOverviewCards />
+      <UsersOverviewCards period={period} />
 
       {/* --- Users --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">

@@ -1,5 +1,7 @@
 import { Bike, Briefcase, Brush, ChefHat, UserRound } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import OverviewPeriodFilter from "@/components/admin/OverviewPeriodFilter";
+import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period";
 
 /**
  * src/components/admin/StaffOverviewCards.tsx
@@ -45,21 +47,36 @@ const STAFF_GROUPS = [
   { label: "Cleaners", roles: ["CLEANER"] as const, hint: "Cleaning Staff", icon: Brush },
 ];
 
-export default async function StaffOverviewCards() {
+export default async function StaffOverviewCards({ period }: { period: OverviewPeriod }) {
+  const range = overviewPeriodRange(period);
+
   /**
    * এক query-তে পাঁচটা কার্ডের সংখ্যা।
    *
+   * ── All ────────────────────────────────────────────────────────────
    * নিষ্ক্রিয় কর্মী বাদ, কিন্তু StaffProfile নেই এমন কেউ বাদ নয় —
    * seed-এ বানানো OWNER account-টার কোনো StaffProfile নেই, অথচ
    * তিনিই মালিক। শুধু `staffProfile.isActive` দেখলে তিনি গোনায়
    * ধরা পড়তেন না।
+   *
+   * ── This Month / Previous Month ────────────────────────────────────
+   * তখন প্রশ্নটা বদলে যায়: "এখন কতজন আছেন" নয়, "ওই মাসে কতজন যোগ
+   * দিলেন"। তাই মাপকাঠি hireDate।
+   *
+   * ⚠️ দুটো তফাত ইচ্ছাকৃত। এক, StaffProfile নেই এমন কেউ তখন গোনায়
+   * আসেন না — hireDate ছাড়া "কবে যোগ দিলেন" প্রশ্নের উত্তরই নেই।
+   * দুই, isActive দেখা হয় না: গত মাসে যিনি যোগ দিয়ে এ মাসে চলে
+   * গেছেন, তিনি গত মাসে যোগ তো দিয়েছিলেনই। নিয়োগের ইতিহাস পরে
+   * বদলায় না।
    */
   const staffCounts = await prisma.user.groupBy({
     by: ["role"],
     _count: { _all: true },
     where: {
       role: { not: "CUSTOMER" },
-      OR: [{ staffProfile: { is: null } }, { staffProfile: { isActive: true } }],
+      ...(range
+        ? { staffProfile: { hireDate: { gte: range.gte, lt: range.lt } } }
+        : { OR: [{ staffProfile: { is: null } }, { staffProfile: { isActive: true } }] }),
     },
   });
 
@@ -75,40 +92,35 @@ export default async function StaffOverviewCards() {
      * Figma Frame 2147236275: column, padding 30, gap 24, radius 20,
      * BG #FFFFFF, উচ্চতা 264 (hug)।
      *
-     * ⚠️ শিরোনামের পাশে Figma-তে একটা "This Week ⌄" pill আঁকা
-     * (Frame 2147236233 — 91×40, padding 12, gap 8, BG #F9F6F3,
-     * radius 100)। বসানো হয়নি, আর CSS export নিজেই এই সিদ্ধান্তের
-     * পক্ষে তিনটে প্রমাণ দেয়:
+     * শিরোনামের পাশে Figma Frame 2147236233 — cream pill, 40 উঁচু,
+     * radius 100। Figma-তে লেখা "This Week", কিন্তু বিকল্পগুলো
+     * All / This Month / Previous Month।
      *
-     *   ১। শিরোনামের layer-এর নাম এখনো "Resent Orders" — অর্থাৎ
-     *      পুরো frame-টা dashboard-এর Recent Orders কার্ড থেকে copy
-     *      করা, ওখানে ছাঁকনিটার মানে ছিল।
-     *   ২। প্রতিটা কার্ডের ভেতরে একটা delta pill আছে যেটা
-     *      `display: none` — ওটাও copy-র উচ্ছিষ্ট।
-     *   ৩। hint-এর layer-লেখা "VS last Week", অথচ মকআপে সত্যিকারের
-     *      লেখা "Restaurant Management"।
-     *
-     * আসল কারণটা অবশ্য উদ্দেশ্যের: নিচের পাঁচটা সংখ্যাই *এই
-     * মুহূর্তে* কতজন কর্মী আছেন — গুদামের stock-এর মতোই বর্তমান
-     * অবস্থা, কোনো সময়কালের হিসাব নয়। "This Year" বাছলে সংখ্যা এক
-     * চুলও বদলাত না, অথচ ব্যবহারকারী ভাবতেন বদলেছে। Dashboard-এর
-     * Kitchen Inventory কার্ডেও ঠিক এই যুক্তিতেই ওটা বাদ গেছে। এই
-     * একই কারণে admin/users আর admin/staff — দুই পাতাতেই dropdown
-     * নেই, কারণ দুটোতেই একই ব্লক বসে।
+     * ⚠️ এই ছাঁকনিটা একবার ইচ্ছাকৃতভাবে বাদ দেওয়া হয়েছিল, এই
+     * যুক্তিতে যে পাঁচটা সংখ্যা *এই মুহূর্তের* কর্মীসংখ্যা — গুদামের
+     * stock-এর মতো বর্তমান অবস্থা, কোনো সময়কালের হিসাব নয়, তাই
+     * period বাছলে সংখ্যা বদলাত না। যুক্তিটা তখনকার সংজ্ঞার জন্য
+     * ঠিক ছিল, কিন্তু সংজ্ঞাটাই এখন period-ভেদে বদলায়: All-এ "এখন
+     * কতজন আছেন", মাস বাছলে "ওই মাসে কতজন যোগ দিলেন"। দ্বিতীয়টা
+     * সত্যিই সময়ের হিসাব, আর নিয়োগের গতি দেখার কাজে লাগে।
      */
     <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
-      {/* Figma: Frank Ruhl Libre 600, 30px, LH 100%, #000000। */}
-      {/**
-       * Figma desktop frame-এ ৩০px, কিন্তু tablet frame-এ (708px)
-       * ২৪ — heading-এর মতোই। md-এ ৩০ রাখলে "Overview" শব্দটা তো
-       * আঁটত, কিন্তু নিচের "Users"/"Staff Information" কার্ডের
-       * শিরোনামের সাথে মাপ মিলত না, আর দুই কার্ডের শিরোনাম একই
-       * পাতায় দুই মাপে বসলে সেটা ভুল দেখায়। তাই ৩০-এ ফেরা xl থেকে,
-       * দুই জায়গাতেই।
-       */}
-      <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-        Overview
-      </h2>
+      {/* Frame 2147236238: row, space-between, উচ্চতা 40 — উচ্চতাটা
+          pill-এরই, শিরোনাম 30px। */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Figma: Frank Ruhl Libre 600, 30px, LH 100%, #000000।
+
+            Figma desktop frame-এ ৩০px, কিন্তু tablet frame-এ (708px)
+            ২৪ — heading-এর মতোই। md-এ ৩০ রাখলে "Overview" শব্দটা তো
+            আঁটত, কিন্তু নিচের "Users"/"Staff Information" কার্ডের
+            শিরোনামের সাথে মাপ মিলত না, আর দুই কার্ডের শিরোনাম একই
+            পাতায় দুই মাপে বসলে সেটা ভুল দেখায়। তাই ৩০-এ ফেরা xl
+            থেকে, দুই জায়গাতেই। */}
+        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+          Overview
+        </h2>
+        <OverviewPeriodFilter value={period} />
+      </div>
 
       {/**
        * Figma Frame 2147236226: column, gap 20 — ভেতরে **দুটো সারি**,
@@ -188,9 +200,18 @@ export default async function StaffOverviewCards() {
               <p className="font-frank-ruhl text-[24px] font-semibold leading-none text-black">
                 {countFor(group.roles)}
               </p>
-              {/* Figma: Sora 400, 12px, LH 100%, Black/70। */}
+              {/* Figma: Sora 400, 12px, LH 100%, Black/70।
+
+                  ⚠️ period বাছলে লেখাটা বদলায়, কারণ সংখ্যার মানেই
+                  বদলে যায় — "Kitchen Team 1" আর "Joined this month 1"
+                  এক জিনিস নয়। সংখ্যাটা কীসের, সেটা সংখ্যার পাশেই
+                  থাকা দরকার। */}
               <p className="font-sora text-[12px] font-normal leading-none text-black/70">
-                {group.hint}
+                {period === "all"
+                  ? group.hint
+                  : period === "this-month"
+                    ? "Joined this month"
+                    : "Joined last month"}
               </p>
             </div>
           </div>

@@ -1,5 +1,7 @@
 import { CircleCheck, CircleX, UserPlus, Users } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import OverviewPeriodFilter from "@/components/admin/OverviewPeriodFilter";
+import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period";
 
 /**
  * src/components/admin/UsersOverviewCards.tsx
@@ -41,6 +43,17 @@ import { prisma } from "@/lib/prisma";
  * staff কার্ড থেকে copy করার সময় রয়ে যাওয়া, গ্রাহকের সংখ্যার সাথে
  * ওদের কোনো সম্পর্ক নেই। তার বদলে প্রতিটা সংখ্যা কীভাবে গোনা হলো
  * সেটাই লেখা, কারণ "Active" শব্দটা নিজে থেকে কিছু বোঝায় না।
+ *
+ * ── period ছাঁকনি ────────────────────────────────────────────────────
+ *
+ * শিরোনামের পাশের pill (All / This Month / Previous Month) কেবল এই
+ * চারটে সংখ্যা বদলায়, নিচের তালিকা নয় — বিস্তারিত lib/overview-period.ts-এ।
+ *
+ * ⚠️ period বাছলে "Total Users" **ওই মাসে যোগ দেওয়া** নয়, বরং **ওই
+ * মাস শেষ হওয়া পর্যন্ত মোট কতজন**। দুটো এক করলে Total আর New Users
+ * হুবহু একই সংখ্যা দেখাত — পাশাপাশি বসা দুটো কার্ডে একই সংখ্যা,
+ * অথচ আলাদা নাম। "মোট" শব্দটার মানে সঞ্চিত, আর সেটা period বদলালেও
+ * বদলায় না; শুধু কোন মুহূর্ত পর্যন্ত গোনা হচ্ছে সেটা বদলায়।
  */
 
 /** সক্রিয় বলতে গত কত দিনে অর্ডার — উপরের ব্যাখ্যা দ্রষ্টব্য। */
@@ -50,52 +63,71 @@ const NEW_WINDOW_DAYS = 30;
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-export default async function UsersOverviewCards() {
-  const activeSince = daysAgo(ACTIVE_WINDOW_DAYS);
-  const newSince = daysAgo(NEW_WINDOW_DAYS);
+/** প্রতিটা period-এ কার্ডের নিচের ছোট লেখা — সংখ্যাটা কীসের, সেটা
+ *  সংখ্যার পাশেই থাকা দরকার (lib/overview-period.ts-এর মন্তব্য)। */
+const HINTS: Record<OverviewPeriod, [string, string, string, string]> = {
+  all: [
+    "All registered customers",
+    `Ordered in last ${ACTIVE_WINDOW_DAYS} days`,
+    `No orders in ${ACTIVE_WINDOW_DAYS} days`,
+    `Joined in last ${NEW_WINDOW_DAYS} days`,
+  ],
+  "this-month": [
+    "Registered so far",
+    "Ordered this month",
+    "No orders this month",
+    "Joined this month",
+  ],
+  "prev-month": [
+    "Registered by month end",
+    "Ordered last month",
+    "No orders last month",
+    "Joined last month",
+  ],
+};
+
+export default async function UsersOverviewCards({ period }: { period: OverviewPeriod }) {
+  const range = overviewPeriodRange(period);
+
+  // period বাছা থাকলে সেই মাসের সীমা, নাহলে কার্ডের নিজস্ব জানালা।
+  const activeWindow = range
+    ? { gte: range.gte, lt: range.lt }
+    : { gte: daysAgo(ACTIVE_WINDOW_DAYS) };
+  const newWindow = range ? { gte: range.gte, lt: range.lt } : { gte: daysAgo(NEW_WINDOW_DAYS) };
+  // "মোট" সঞ্চিত — মাস শেষ হওয়ার আগ পর্যন্ত যতজন যোগ দিয়েছেন।
+  // উপরের ⚠️ মন্তব্য দ্রষ্টব্য।
+  const registeredBy = range ? { createdAt: { lt: range.lt } } : {};
 
   // এক round-trip-এ তিনটে গণনা। `$transaction` এখানে atomicity-র
   // জন্য নয়, snapshot-এর জন্য: তিনটে আলাদা await-এর মাঝে কেউ
   // register করলে "Total" আর "Active+Inactive" এক থাকত না।
   const [total, active, newUsers] = await prisma.$transaction([
-    prisma.user.count({ where: { role: "CUSTOMER" } }),
+    prisma.user.count({ where: { role: "CUSTOMER", ...registeredBy } }),
     prisma.user.count({
       where: {
         role: "CUSTOMER",
-        orders: { some: { createdAt: { gte: activeSince } } },
+        ...registeredBy,
+        orders: { some: { createdAt: activeWindow } },
       },
     }),
     prisma.user.count({
-      where: { role: "CUSTOMER", createdAt: { gte: newSince } },
+      where: { role: "CUSTOMER", createdAt: newWindow },
     }),
   ]);
 
+  const hints = HINTS[period];
+
   const CARDS = [
-    {
-      label: "Total Users",
-      value: total,
-      hint: "All registered customers",
-      icon: Users,
-    },
-    {
-      label: "Active Users",
-      value: active,
-      hint: `Ordered in last ${ACTIVE_WINDOW_DAYS} days`,
-      icon: CircleCheck,
-    },
+    { label: "Total Users", value: total, hint: hints[0], icon: Users },
+    { label: "Active Users", value: active, hint: hints[1], icon: CircleCheck },
     {
       label: "Inactive",
       // ⚠️ বিয়োগ, আলাদা query নয় — উপরের ব্যাখ্যা দ্রষ্টব্য।
       value: total - active,
-      hint: `No orders in ${ACTIVE_WINDOW_DAYS} days`,
+      hint: hints[2],
       icon: CircleX,
     },
-    {
-      label: "New Users",
-      value: newUsers,
-      hint: `Joined in last ${NEW_WINDOW_DAYS} days`,
-      icon: UserPlus,
-    },
+    { label: "New Users", value: newUsers, hint: hints[3], icon: UserPlus },
   ];
 
   return (
@@ -103,34 +135,25 @@ export default async function UsersOverviewCards() {
      * Figma Frame 2147236275: column, padding 30, gap 24, radius 20,
      * BG #FFFFFF।
      *
-     * ⚠️ শিরোনামের পাশে Figma-তে একটা "Today ⌄" pill আঁকা
-     * (Frame 2147236233 — 91×40, padding 12, gap 8, BG #F9F6F3,
-     * radius 100)। বসানো হয়নি, আর CSS export নিজেই এই সিদ্ধান্তের
-     * পক্ষে তিনটে প্রমাণ দেয়:
-     *
-     *   ১। শিরোনামের layer-এর নাম এখনো "Resent Orders" — অর্থাৎ পুরো
-     *      frame-টা dashboard-এর Recent Orders কার্ড থেকে copy করা,
-     *      ওখানে ছাঁকনিটার মানে ছিল।
-     *   ২। প্রতিটা কার্ডের ভেতরে একটা delta pill আছে যেটা
-     *      `display: none` — ওটাও copy-র উচ্ছিষ্ট।
-     *   ৩। hint-এর layer-লেখা "VS last Week", অথচ মকআপে সত্যিকারের
-     *      লেখা "Restaurant Management"।
-     *
-     * আসল কারণটা অবশ্য উদ্দেশ্যের: চারটে সংখ্যার প্রত্যেকটার নিজের
-     * সময়সীমা ইতিমধ্যেই সংজ্ঞায় ঢোকানো (৯০ দিন / ৩০ দিন), আর সেটা
-     * কার্ডের নিচেই লেখা আছে। উপরে "Today" বাছলে "Total Users"
-     * কী বোঝাত? আজ যাঁরা register করেছেন? তাহলে সেটা আর মোট নয়।
-     * একটা control যা কিছু সংখ্যাকে বদলায় আর কিছুকে বদলায় না —
-     * সেটা ব্যাখ্যা করার চেয়ে না রাখাই পরিষ্কার। StaffOverviewCards
-     * আর dashboard-এর Kitchen Inventory কার্ডেও একই সিদ্ধান্ত।
+     * শিরোনামের পাশে Figma Frame 2147236233 — cream pill, 40 উঁচু,
+     * radius 100। Figma-তে ওটার লেখা "Today", কিন্তু বিকল্পগুলো
+     * All / This Month / Previous Month, কারণ "আজ" বাছলে "Total
+     * Users" কী বোঝাত সেটার কোনো সঙ্গত উত্তর নেই (আজ যাঁরা register
+     * করেছেন? তাহলে সেটা আর মোট নয়)। মাসের সীমা তিনটে সংখ্যার
+     * প্রত্যেকটাতেই অর্থবহ — বিস্তারিত lib/overview-period.ts-এ।
      */
     <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
-      {/* Figma: Frank Ruhl Libre 600, 30px, LH 100%, #000000 — tablet
-          frame-এ 24। নিচের "Users" কার্ডের শিরোনামের সাথে মাপ মেলানো,
-          বিস্তারিত StaffOverviewCards.tsx-এ। */}
-      <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-        Overview
-      </h2>
+      {/* Frame 2147236238: row, space-between, উচ্চতা 40 — উচ্চতাটা
+          pill-এরই, শিরোনাম 30px। */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Figma: Frank Ruhl Libre 600, 30px, LH 100%, #000000 — tablet
+            frame-এ 24। নিচের "Users" কার্ডের শিরোনামের সাথে মাপ মেলানো,
+            বিস্তারিত StaffOverviewCards.tsx-এ। */}
+        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+          Overview
+        </h2>
+        <OverviewPeriodFilter value={period} />
+      </div>
 
       {/**
        * Figma Frame 2147236226: row, gap 20, প্রতিটা কার্ড flex-grow 1

@@ -60,7 +60,9 @@ export default function StaffToolbar({
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
-    ["q", "role"].forEach((key) => {
+    // ⚠️ `period` তালিকার ছাঁকনি নয় (ওটা উপরের Overview কার্ডের),
+    // কিন্তু এখানে না রাখলে search বদলালেই সেটা নীরবে "All"-এ ফিরে যেত।
+    ["q", "role", "period"].forEach((key) => {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     });
