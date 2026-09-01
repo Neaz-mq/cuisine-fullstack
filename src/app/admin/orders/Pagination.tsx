@@ -76,20 +76,30 @@ export default function Pagination({
   totalPages,
   searchParams,
   basePath = "/admin/orders",
+  pageParam = "page",
 }: {
   currentPage: number;
   totalPages: number;
   searchParams: Record<string, string | undefined>;
   basePath?: string;
+  /**
+   * URL-এ page নম্বরটা কোন নামে বসবে।
+   *
+   * ⚠️ এটা দরকার হলো Suppliers পাতায়, যেখানে **দুটো** আলাদা তালিকা
+   * একই পর্দায় আলাদাভাবে page হয় — Recent Deliveries আর Suppliers
+   * Information। দুটোই `page` ব্যবহার করলে একটার পাতা বদলালে অন্যটাও
+   * সাথে সাথে লাফাত, আর ব্যবহারকারী বুঝতেন না কেন।
+   */
+  pageParam?: string;
 }) {
   if (totalPages <= 1) return null;
 
   function buildHref(page: number) {
     const params = new URLSearchParams();
     Object.entries(searchParams).forEach(([key, value]) => {
-      if (value && key !== "page") params.set(key, value);
+      if (value && key !== pageParam) params.set(key, value);
     });
-    params.set("page", String(page));
+    params.set(pageParam, String(page));
     return `${basePath}?${params.toString()}`;
   }
 

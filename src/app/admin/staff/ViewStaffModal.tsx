@@ -15,8 +15,8 @@ import {
   OUTLINE_BUTTON,
   PRIMARY_BUTTON,
   ReadOnlyField,
-  StaffModalShell,
-} from "./staff-modal-ui";
+  ModalShell,
+} from "@/components/admin/modal-ui";
 
 /**
  * src/app/admin/staff/ViewStaffModal.tsx
@@ -189,14 +189,14 @@ function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEd
 
   return (
     <>
-      <StaffModalShell
+      <ModalShell
       open={open}
       onClose={onClose}
       titleId="staff-view-title"
       title="Staff Details"
       footer={
         <div className="flex flex-col gap-2 sm:flex-row">
-          {/* নিজেকে নিষ্ক্রিয় করা API-তেও আটকানো (নিজেকে তালাবন্ধ করে
+          {/* নিজেকে নিষ্ক্রিয় করা API-তেও আটকানো (নিজেকে তালাবন্ধ করে 
               ফেলা), তাই বোতামটাও দেখানো হয় না।
 
               ⚠️ এটা একটা ধ্বংসাত্মক কাজ, তাই এটা এখানে — View-এর
@@ -266,32 +266,56 @@ function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEd
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-5 min-[560px]:grid-cols-3">
+          {/**
+           * Figma Frame 2147236668: row, space-between, gap 86, উচ্চতা 104 —
+           * ভেতরে **চারটে কলাম**, প্রতিটায় উপর-নিচে দুটো ঘর (gap 20)।
+           * সাতটা ঘর, তাই শেষ কলামে একটাই (Frame 2147236295)।
+           *
+           * ⚠️ ঘরের ক্রমটা বদলেছে, আর সেটা ইচ্ছাকৃত — designer সাজিয়েছেন
+           * **পড়ার ক্রমে**, কলাম ধরে নয়। বাঁ থেকে ডানে পড়লে:
+           *
+           *   Role · Phone Number · Join Date · Shift
+           *   NID Number · Permanent Address · Status
+           *
+           * অর্থাৎ উপরের সারিতে "এই লোকটা কে আর কখন কাজ করেন", নিচের
+           * সারিতে কাগজপত্র। আগের তিন-কলামের সাজে Status বসত Phone-এর
+           * নিচে, আর Shift চলে যেত দ্বিতীয় সারিতে — সম্পর্কহীন জিনিস
+           * পাশাপাশি।
+           *
+           * ৫৬০-এর নিচে দুই কলাম: চার কলামে প্রতিটা ~১৫০px, আর
+           * "Night (10:00 PM – 06:00 AM)" ওতে আঁটে না।
+           */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:grid-cols-4">
             <ReadOnlyField label="Role" value={ROLE_LABELS[staff.role as StaffRole] ?? staff.role} />
+            <ReadOnlyField label="Phone Number" value={profile?.phone ?? "—"} />
             <ReadOnlyField
               label="Join Date"
               value={profile ? formatJoinDate(new Date(profile.hireDate)) : "—"}
             />
-            <ReadOnlyField label="Phone Number" value={profile?.phone ?? "—"} />
-            <ReadOnlyField
-              label="Status"
-              value={isActive ? "Active" : "Inactive"}
-              tone={isActive ? "positive" : "negative"}
-            />
             <ReadOnlyField label="Shift" value={shiftLabel} />
-            <ReadOnlyField label="Permanent Address" value={profile?.address ?? "—"} />
             {/* ⚠️ NID আগে একটা আলাদা "Owner-only details" অংশে ছিল, salary-র
                 পাশে। এখন এটা বাকি সবার সাথে — MANAGER-রাও নিয়োগের
                 কাগজপত্র তোলেন, তাই ক্ষেত্রটা তাঁদেরও দেখা দরকার। নিয়মটা
                 API-তেও বদলানো (lib/permissions.ts দ্রষ্টব্য)। */}
             <ReadOnlyField label="NID Number" value={profile?.nid ?? "—"} />
+            <ReadOnlyField label="Permanent Address" value={profile?.address ?? "—"} />
+            {/**
+             * ⚠️ pill নয়, সাধারণ লেখা — আর এটা নতুন নকশার সিদ্ধান্ত।
+             *
+             * তালিকার সারিতে Status একটা রঙিন pill, কারণ ওখানে দশটা
+             * সারির মধ্যে চোখ বুলিয়ে "কে নিষ্ক্রিয়" খুঁজতে হয় — রঙটা
+             * সেখানে কাজ করে। এই modal-এ একটাই লোক, খোঁজার কিছু নেই,
+             * আর সাতটা ঘরের মধ্যে একটাই রঙিন হলে সেটা অকারণে চোখ টানে।
+             * তাই এখানে বাকি ঘরগুলোর মতোই — Frank Ruhl 500 16px।
+             */}
+            <ReadOnlyField label="Status" value={isActive ? "Active" : "Inactive"} />
           </div>
 
         </>
       )}
-      </StaffModalShell>
+      </ModalShell>
 
-      {/* ⚠️ StaffModalShell-এর **বাইরে**, ভেতরে নয়। ভেতরে বসালে এটা
+      {/* ⚠️ ModalShell-এর **বাইরে**, ভেতরে নয়। ভেতরে বসালে এটা
           modal কার্ডের DOM-এর অংশ হতো, আর কার্ডের `overflow`/stacking
           এটাকে ভেতরে আটকে রাখত — dialog-টা পর্দার মাঝখানে না বসে
           কার্ডের ভেতরে কোথাও ভেসে উঠত। */}

@@ -1528,6 +1528,27 @@ model Supplier {
   email   String?
   address String?
 
+  /// Figma-র "Add New Suppliers" modal-এর "Supply Category" ঘর।
+  ///
+  /// ⚠️ enum নয়, free-text — আর সেটা ইচ্ছাকৃত। রেস্তোরাঁভেদে শ্রেণির
+  /// তালিকা আলাদা (কেউ "Protein/Dairy/Produce" ভাগ করেন, কেউ
+  /// "Frozen/Dry/Fresh"), আর enum বদলাতে প্রতিবার একটা migration লাগত।
+  /// UI একটা নির্দিষ্ট তালিকা থেকে বাছতে দেয় (lib/supplier-status.ts),
+  /// অর্থাৎ শৃঙ্খলাটা সেখানে — কিন্তু তালিকা বদলালে পুরনো row-গুলো
+  /// অবৈধ হয়ে যায় না, শুধু আর বাছা যায় না।
+  category String?
+
+  /// Figma-র "Product Supplied" chips — এই সরবরাহকারী কী কী দেন।
+  ///
+  /// ⚠️ InventoryItem-এর সাথে relation নয়, শুধু নামের তালিকা। কারণ
+  /// এটা "কী কী **এসেছে**" নয় (সেটা PurchaseOrderItem-এ আছে), বরং
+  /// "কী কী **দিতে পারেন**" — অর্থাৎ সরবরাহকারী যোগ করার সময়ই লেখা
+  /// হয়, তখনো কোনো অর্ডার হয়নি আর জিনিসগুলো inventory-তে নাও
+  /// থাকতে পারে। relation করলে প্রতিটা পণ্য আগে InventoryItem
+  /// হিসেবে তৈরি করতে হতো, যেটা "একটা সরবরাহকারী যোগ করি" কাজটাকে
+  /// অনেক ভারী করে দিত।
+  products String[] @default([])
+
   // Soft-disable instead of deleting — a supplier with PurchaseOrder
   // history shouldn't disappear from past records if the restaurant
   // stops ordering from them. Same pattern as InventoryItem.isActive.

@@ -76,6 +76,7 @@ export default function FilterMenu<T extends string>({
   onSelect,
   ariaLabel,
   className = "",
+  surface = "cream",
 }: {
   value: T;
   options: readonly FilterMenuOption<T>[];
@@ -84,6 +85,19 @@ export default function FilterMenu<T extends string>({
   ariaLabel?: string;
   /** বাইরের wrapper-এ বাড়তি class — যেমন RangeSelect-এর `ml-auto`। */
   className?: string;
+  /**
+   * pill-টা **কীসের উপরে** বসছে, তার রঙ নয়।
+   *
+   * ⚠️ ফাইলের শুরুর মন্তব্যে লেখা আছে কেন এটা দরকার: cream pill বসে
+   * সাদা কার্ডে (dashboard, Overview), আর সাদা pill বসে cream পাতায়
+   * (Users/Suppliers-এর toolbar, search ঘরের পাশে)। উল্টোটা করলে
+   * pill পটভূমির সাথে মিশে গিয়ে কার্যত অদৃশ্য হয়ে যায় — ঠিক সেটাই
+   * হচ্ছিল Suppliers toolbar-এ।
+   *
+   * prop-টার নাম `surface`, `variant` নয়, কারণ সিদ্ধান্তটা "কোন
+   * চেহারা চাই" নয় — "নিচে কী আছে"। ওটা জানলে রঙ আপনাআপনি ঠিক হয়।
+   */
+  surface?: "cream" | "white";
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -112,15 +126,25 @@ export default function FilterMenu<T extends string>({
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {/* Figma Layout: Hug ×40, radius 100, padding 12, gap 8,
-          BG #F9F6F3। লেখা Sora 400 14px #000000, icon 16×16। */}
+      {/* Figma Layout: Hug ×40, radius 100, padding 12, gap 8।
+          লেখা Sora 400 14px #000000, icon 16×16।
+
+          ⚠️ সাদা pill-টা Figma-তে ৫০ উঁচু আর padding 16 (toolbar-এর
+          search ঘরের সমান), cream-টা ৪০ আর padding 12। উচ্চতাটা তাই
+          surface-এর সাথেই বদলায় — নাহলে toolbar-এ ৪০px pill বসত
+          ৫০px search ঘর আর ৫০px বোতামের মাঝখানে, আর সারিটা এবড়োখেবড়ো
+          দেখাত। */}
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel ? `${ariaLabel}: ${selected.label}` : undefined}
-        className={`flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-[#F9F6F3] px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.06] ${FILTER_FOCUS_RING}`}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full font-sora text-[14px] font-normal leading-none text-black transition-colors ${FILTER_FOCUS_RING} ${
+          surface === "white"
+            ? "h-[50px] bg-white px-4 hover:bg-black/[0.03] md:text-[16px]"
+            : "h-10 bg-[#F9F6F3] px-3 hover:bg-black/[0.06]"
+        }`}
       >
         {selected.triggerLabel ?? selected.label}
         <ChevronDown

@@ -16,7 +16,7 @@ export async function PATCH(
   const parsed = await parseBody(req, updateSupplierSchema);
   if (parsed instanceof NextResponse) return parsed;
 
-  const { phone, email, address, ...rest } = parsed;
+  const { phone, email, address, category, ...rest } = parsed;
 
   try {
     const updated = await prisma.supplier.update({
@@ -26,6 +26,11 @@ export async function PATCH(
         ...(phone !== undefined ? { phone: phone || null } : {}),
         ...(email !== undefined ? { email: email || null } : {}),
         ...(address !== undefined ? { address: address || null } : {}),
+        // ⚠️ ফাঁকা string মানে "মুছে দাও", তাই `|| null` — বাকি
+        // ঐচ্ছিক ঘরগুলোর একই আচরণ। `products` এই নিয়মের বাইরে:
+        // ওটা array, আর খালি array নিজেই একটা বৈধ মান ("কোনো পণ্য
+        // লেখা নেই"), তাই `rest`-এর মধ্য দিয়ে অবিকৃত যায়।
+        ...(category !== undefined ? { category: category || null } : {}),
       },
     });
     return NextResponse.json(updated);

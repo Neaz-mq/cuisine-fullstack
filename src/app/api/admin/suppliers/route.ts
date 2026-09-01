@@ -34,6 +34,12 @@ export async function POST(req: NextRequest) {
       phone: parsed.phone || null,
       email: parsed.email || null,
       address: parsed.address || null,
+      category: parsed.category || null,
+      // ⚠️ ফাঁকা array-ই default, তাই `?? []` — `undefined` পাঠালে
+      // Prisma column-টা বাদ দিত, আর তখন DB-র default বসত। ফল একই,
+      // কিন্তু এখানে স্পষ্ট করে লেখা যাতে পড়ে বোঝা যায়।
+      products: parsed.products ?? [],
+      ...(parsed.isActive !== undefined ? { isActive: parsed.isActive } : {}),
     },
   });
 

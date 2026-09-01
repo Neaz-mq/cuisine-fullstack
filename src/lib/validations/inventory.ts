@@ -109,6 +109,21 @@ export const createSupplierSchema = z.object({
     .optional()
     .or(z.literal("")),
   address: z.string().trim().max(500).optional().or(z.literal("")),
+  // Figma-র "Supply Category" — UI একটা নির্দিষ্ট তালিকা থেকে বাছতে
+  // দেয় (lib/supplier-status.ts), কিন্তু schema-য় এটা free-text, তাই
+  // এখানেও enum নয়। কারণ schema.prisma-র মন্তব্যে।
+  category: z.string().trim().max(60).optional().or(z.literal("")),
+  /**
+   * Figma-র "Product Supplied" chips।
+   *
+   * ⚠️ `.max(30)` — কোনো ব্যবসায়িক সীমা নয়, একটা রক্ষাকবচ। ঘরটা
+   * free-text, তাই একটা স্ক্রিপ্ট হাজারটা নাম পাঠিয়ে সারিটাকে
+   * অসীম বড় করে দিতে পারত।
+   */
+  products: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  // create-এও status পাঠানো যায়, কারণ Figma-র modal-এ ঘরটা আছে।
+  // না পাঠালে schema-র default (true)।
+  isActive: z.boolean().optional(),
 });
 
 export const updateSupplierSchema = createSupplierSchema

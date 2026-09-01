@@ -21,9 +21,9 @@ import {
   OUTLINE_BUTTON,
   PRIMARY_BUTTON,
   SelectField,
-  StaffModalShell,
+  ModalShell,
   toISODate,
-} from "./staff-modal-ui";
+} from "@/components/admin/modal-ui";
 
 /**
  * src/app/admin/staff/StaffFormModal.tsx
@@ -233,7 +233,7 @@ function StaffFormModalContent({
     }
 
     // ⚠️ hireDate একটা তারিখ-মাত্র string ("2026-07-24"), সময় নয় —
-    // DateField ইচ্ছাকৃতভাবে সেটাই দেয় (staff-modal-ui.tsx-এর তারিখ
+    // DateField ইচ্ছাকৃতভাবে সেটাই দেয় (components/admin/modal-ui.tsx-এর তারিখ
     // অংশের মন্তব্য দ্রষ্টব্য)।
     const shared = {
       name: name.trim(),
@@ -295,7 +295,7 @@ function StaffFormModalContent({
   }
 
   return (
-    <StaffModalShell
+    <ModalShell
       open={open}
       onClose={onClose}
       titleId="staff-form-title"
@@ -508,6 +508,6 @@ function StaffFormModalContent({
           </div>
         </>
       )}
-    </StaffModalShell>
+    </ModalShell>
   );
 }

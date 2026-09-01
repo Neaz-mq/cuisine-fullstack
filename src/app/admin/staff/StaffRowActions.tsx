@@ -19,7 +19,7 @@ import ViewStaffModal from "./ViewStaffModal";
  * সম্পূর্ণ আলাদা (সাদা বাক্স, চৌকো কোণ, native select) — অর্থাৎ
  * "যোগ করা" সুন্দর modal-এ, "সম্পাদনা" অন্য দশকের একটা form-এ।
  *
- * এখন দুটোই modal, একই খোলস (staff-modal-ui.tsx), আর পেছনের তালিকাটা
+ * এখন দুটোই modal, একই খোলস (components/admin/modal-ui.tsx), আর পেছনের তালিকাটা
  * যেখানে ছিল সেখানেই থাকে।
  *
  * ⚠️ /admin/staff/[id] আর /admin/staff/[id]/view পাতা দুটো এখন আর
@@ -104,7 +104,7 @@ export default function StaffRowActions({
       {/* ⚠️ modal দুটো কেবল দরকার হলে render হয় (`mode === …`), সবসময়
           নয়। তালিকায় দশটা সারি মানে দশ জোড়া modal — সবগুলো mount
           থাকলে প্রতিটা নিজের effect, listener আর state বয়ে বেড়াত।
-          `open` prop-টা তবু আছে, কারণ StaffModalShell-এর
+          `open` prop-টা তবু আছে, কারণ ModalShell-এর
           scroll-lock/Escape effect ওটার উপর নির্ভর করে। */}
       {mode === "view" && (
         <ViewStaffModal

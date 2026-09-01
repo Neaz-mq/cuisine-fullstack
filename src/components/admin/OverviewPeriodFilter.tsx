@@ -22,7 +22,23 @@ import {
  * page-এ থাকা অবস্থায় period বদলালে তাঁকে ১ নম্বরে ছুঁড়ে ফেলাটা
  * অকারণ ক্ষতি — যেটা তিনি দেখছিলেন সেটা তো বদলায়ইনি।
  */
-export default function OverviewPeriodFilter({ value }: { value: OverviewPeriod }) {
+export default function OverviewPeriodFilter({
+  value,
+  param = "period",
+  surface,
+}: {
+  value: OverviewPeriod;
+  /**
+   * URL-এ কোন নামে বসবে।
+   *
+   * ⚠️ Suppliers পাতায় **দুটো** এমন ছাঁকনি — একটা Overview কার্ডের,
+   * একটা Recent Deliveries-এর। দুটোই `period` ব্যবহার করলে একটা
+   * বদলালে অন্যটাও বদলে যেত, অথচ ওরা সম্পূর্ণ আলাদা জিনিস ছাঁকে।
+   */
+  param?: string;
+  /** pill-টা কীসের উপরে বসছে — FilterMenu-র `surface` prop দ্রষ্টব্য। */
+  surface?: "cream" | "white";
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -31,18 +47,19 @@ export default function OverviewPeriodFilter({ value }: { value: OverviewPeriod 
     const params = new URLSearchParams(searchParams.toString());
     // ডিফল্ট মানটা URL-এ লেখা হয় না — `?period=all` দেখতে এমন লাগে
     // যেন কিছু ছাঁকা হয়েছে, অথচ হয়নি। বাকি ছাঁকনিগুলোও একই নিয়মে চলে।
-    if (next === DEFAULT_OVERVIEW_PERIOD) params.delete("period");
-    else params.set("period", next);
+    if (next === DEFAULT_OVERVIEW_PERIOD) params.delete(param);
+    else params.set(param, next);
 
     router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
   };
 
   return (
     <FilterMenu
+      surface={surface}
       value={value}
       options={OVERVIEW_PERIOD_OPTIONS}
       onSelect={handleSelect}
-      ariaLabel="Filter overview by period"
+      ariaLabel="Filter by period"
     />
   );
 }
