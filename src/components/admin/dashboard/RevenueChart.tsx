@@ -84,6 +84,10 @@ function pillHeight(value: number, max: number) {
   return PILL_MIN_H + ratio * (PILL_MAX_H - PILL_MIN_H);
 }
 
+/** Figma: pill 52px চওড়া, কলামের মাঝে গ্যাপ 3px। */
+const COL_W = 52;
+const COL_GAP = 3;
+
 export default function RevenueChart({ days }: { days: RevenueDay[] }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -91,72 +95,100 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
   // টাকার আয় একই উঁচু দেখাত, আর তুলনাটাই মিথ্যে হয়ে যেত।
   const scaleMax = Math.max(...days.map((d) => Math.max(d.income, d.expense)), 1);
 
+  /**
+   * ⚠️ কলামগুলো আর `flex-1`-এ সংকুচিত হয় না — Figma নিজেই ৩২০px-এ
+   * এটা করে না।
+   *
+   * আগে `flex-1 justify-between`-এ যত কলামই থাকুক (সপ্তাহে ৭টা, মাসে
+   * ৬টা, বছরে ১২টা), সবগুলোকে জোর করে কার্ডের ভেতরে গুঁজে দেওয়া হতো।
+   * "This Year"-এ ১২টা কলাম ৩২০px পর্দায় (padding বাদে ~256px) মানে
+   * প্রতিটা কলাম ~21px — অথচ pill-এর radius 100 (পুরো গোল), ফলে ৫২px
+   * চওড়া pill ২১px-এ নামলে সেটা আর pill থাকে না, ছোট্ট রঙিন বিন্দু
+   * হয়ে যায় (ঠিক যা screenshot-এ ধরা পড়েছিল), আর নিচের মাসের নামও
+   * তিন লাইনে ভেঙে পড়ত।
+   *
+   * Figma-র নিজের মকআপ ৩২০px-এ এই সমস্যাটাই মেনে নেয়নি — কলাম আকার
+   * (52px) অক্ষত রেখে বাকিটা পাশে সরিয়ে (touch-scroll করে) দেখায়।
+   * তাই এখন কলামগুলো fixed 52px + 3px গ্যাপ, মোট প্রস্থ
+   * `contentWidth`-এ বসানো, আর পুরো ব্লকটা একটা `overflow-x-auto`
+   * wrapper-এর ভেতরে — কম কলামে (সপ্তাহ) পুরোটাই দেখা যায়, বেশি
+   * কলামে (বছর) স্লাইড করে বাকিটা দেখা যায়।
+   */
+  const contentWidth = days.length * COL_W + Math.max(days.length - 1, 0) * COL_GAP;
+
   return (
-    <div className="flex flex-col gap-5">
-      <div className="relative flex flex-col gap-[9px]">
-        {/* উপরের সারি — আয়। items-end, তাই pill গুলো ছেঁড়া রেখা থেকে
-            উপরের দিকে বাড়ে। */}
-        <div className="flex h-[84px] items-end justify-between gap-[3px]">
-          {days.map((day, index) => (
-            <button
-              key={`income-${day.label}`}
-              type="button"
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseLeave={() => setActiveIndex(null)}
-              onFocus={() => setActiveIndex(index)}
-              onBlur={() => setActiveIndex(null)}
-              // ফোনে hover বলে কিছু নেই, তাই tap-ও একই কাজ করে।
-              onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
-              aria-label={`${day.fullDate}: ${day.incomeLabel} in, ${day.expenseLabel} out, ${day.profitLabel} kept, ${day.orders} orders`}
-              className="flex flex-1 justify-center focus:outline-none"
-            >
-              <span
-                className="w-full max-w-[52px] rounded-full"
-                style={{
-                  height: pillHeight(day.income, scaleMax),
-                  backgroundColor: "#F9F6F3",
-                  backgroundImage: stripes(0.6),
-                }}
-              />
-            </button>
-          ))}
-        </div>
+    <div className="overflow-x-auto">
+      <div className="flex flex-col gap-5" style={{ width: contentWidth }}>
+        <div className="relative flex flex-col gap-[9px]">
+          {/* উপরের সারি — আয়। items-end, তাই pill গুলো ছেঁড়া রেখা থেকে
+              উপরের দিকে বাড়ে। */}
+          <div className="flex h-[84px] items-end gap-[3px]">
+            {days.map((day, index) => (
+              <button
+                key={`income-${day.label}`}
+                type="button"
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(null)}
+                onFocus={() => setActiveIndex(index)}
+                onBlur={() => setActiveIndex(null)}
+                // ফোনে hover বলে কিছু নেই, তাই tap-ও একই কাজ করে।
+                onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
+                aria-label={`${day.fullDate}: ${day.incomeLabel} in, ${day.expenseLabel} out, ${day.profitLabel} kept, ${day.orders} orders`}
+                className="flex w-[52px] shrink-0 justify-center focus:outline-none"
+              >
+                <span
+                  className="w-[52px] shrink-0 rounded-full"
+                  style={{
+                    height: pillHeight(day.income, scaleMax),
+                    backgroundColor: "#F9F6F3",
+                    backgroundImage: stripes(0.6),
+                  }}
+                />
+              </button>
+            ))}
+          </div>
 
-        {/* Figma: 1px dashed #D9D9D9, পুরো চওড়া জুড়ে। */}
-        <div aria-hidden="true" className="border-t border-dashed border-[#D9D9D9]" />
+          {/* Figma: 1px dashed #D9D9D9, পুরো চওড়া জুড়ে। */}
+          <div aria-hidden="true" className="border-t border-dashed border-[#D9D9D9]" />
 
-        {/* নিচের সারি — খরচ। items-start, তাই আয়নার মতো নিচে বাড়ে। */}
-        <div className="flex h-[84px] items-start justify-between gap-[3px]">
-          {days.map((day, index) => (
-            <button
-              key={`expense-${day.label}`}
-              type="button"
-              tabIndex={-1}
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseLeave={() => setActiveIndex(null)}
-              onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
-              aria-hidden="true"
-              className="flex flex-1 justify-center focus:outline-none"
-            >
-              <span
-                className="w-full max-w-[52px] rounded-full"
-                style={{
-                  height: pillHeight(day.expense, scaleMax),
-                  backgroundColor: "#FF9540",
-                  backgroundImage: stripes(0.15),
-                }}
-              />
-            </button>
-          ))}
-        </div>
+          {/* নিচের সারি — খরচ। items-start, তাই আয়নার মতো নিচে বাড়ে। */}
+          <div className="flex h-[84px] items-start gap-[3px]">
+            {days.map((day, index) => (
+              <button
+                key={`expense-${day.label}`}
+                type="button"
+                tabIndex={-1}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(null)}
+                onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
+                aria-hidden="true"
+                className="flex w-[52px] shrink-0 justify-center focus:outline-none"
+              >
+                <span
+                  className="w-[52px] shrink-0 rounded-full"
+                  style={{
+                    height: pillHeight(day.expense, scaleMax),
+                    backgroundColor: "#FF9540",
+                    backgroundImage: stripes(0.15),
+                  }}
+                />
+              </button>
+            ))}
+          </div>
 
         {/* খাড়া ছেঁড়া দাগ — Figma-তে 2×190, সাদা। কোন কলামটা পড়া হচ্ছে
             তা চোখে ধরিয়ে দেয়, বিশেষত যখন tooltip পাশের কলামের উপরে
-            সরে গেছে। */}
+            সরে গেছে।
+
+            ⚠️ মোবাইলে `hidden` — ৩২০-৩৭৫px পর্দায় দাগটা ৫২px চওড়া
+            pill-এর ঠিক ওপরে বসে ছোট চার্টটাকে আরও এলোমেলো দেখাচ্ছিল,
+            আর tooltip (কালো কার্ড, যেটাতে আসল তথ্য — Income/Expense/
+            Profit) থাকতেই একই কলাম বোঝানোর জন্য আলাদা করে এই দাগের
+            দরকার পড়ে না। `md:flex`-এ বড় পর্দায় আগের মতোই থাকে। */}
         {activeIndex !== null && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 flex justify-center"
+            className="pointer-events-none absolute inset-y-0 hidden justify-center md:flex"
             style={{
               left: `${(activeIndex / days.length) * 100}%`,
               width: `${(1 / days.length) * 100}%`,
@@ -213,33 +245,26 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
         )}
       </div>
 
-      {/**
-       * দিনের নাম — Figma: Sora 400, 14px, Black/70, padding 0 16px।
-       *
-       * ⚠️ ৩২০px-এ মাপ তিনটেই ছোট, sm (৬৪০) থেকে Figma-র।
-       *
-       * span গুলো `flex-1`, কিন্তু flex item-এর ডিফল্ট
-       * `min-width: auto` মানে কেউ নিজের লেখার চেয়ে সরু হয় না। সাতটা
-       * দিনের নাম ১৪px-এ যোগ করলে ~২০৬px, তার সাথে ছ'টা gap (২৪) আর
-       * দু'পাশের ১৬px padding (৩২) — মোট ~২৬২px, অথচ ৩২০px পর্দায়
-       * কার্ডের ভেতরে পড়ে থাকে ২৪৮। অর্থাৎ "Sat" কেটে যেত।
-       *
-       * ১২px লেখা + সরু gap + কম padding-এ যোগফল ~১৯৮, দিব্যি আঁটে।
-       * padding কমানোয় নামগুলো pill-এর কেন্দ্র থেকে একটু সরে, কিন্তু
-       * ৩২০px-এ pill নিজেই ৩২px চওড়া (Figma-র ৫২ নয়), তাই
-       * ওই ১৬px padding-টা এমনিতেও আর কিছু সারিবদ্ধ করত না।
-       */}
-      <div className="flex justify-between gap-0.5 px-1 sm:gap-1 sm:px-4">
-        {days.map((day) => (
-          <span
-            key={`label-${day.label}`}
-            className={`min-w-0 flex-1 text-center font-sora text-[12px] leading-none tracking-normal sm:text-[14px] ${
-              day.isToday ? "font-semibold text-black" : "text-black/70"
-            }`}
-          >
-            {day.label}
-          </span>
-        ))}
+        {/**
+         * দিনের নাম — Figma: Sora 400, 14px, Black/70।
+         *
+         * ⚠️ pill-গুলোর মতো এই কলামগুলোও এখন fixed 52px + 3px গ্যাপ —
+         * বারের ঠিক নিচেই বসে থাকে, viewport যত সরুই হোক (আগে এই
+         * সারিটা আলাদাভাবে `flex-1`-এ সংকুচিত হতো, তাই বার আর তার
+         * নামের কেন্দ্র ৩২০px-এ একে অপরের থেকে সরে যেত)।
+         */}
+        <div className="flex gap-[3px]">
+          {days.map((day) => (
+            <span
+              key={`label-${day.label}`}
+              className={`w-[52px] shrink-0 text-center font-sora text-[12px] leading-none tracking-normal sm:text-[14px] ${
+                day.isToday ? "font-semibold text-black" : "text-black/70"
+              }`}
+            >
+              {day.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
