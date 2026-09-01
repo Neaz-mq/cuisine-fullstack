@@ -36,10 +36,29 @@ const OPTIONS: readonly FilterMenuOption<RevenueRange>[] = REVENUE_RANGES.map(
 export default function RangeSelect({
   param,
   range,
+  mobileStack = false,
 }: {
   /** যে URL parameter-এ এই ছাঁকনির মান বসবে — "revenue", "top" … */
   param: string;
   range: RevenueRange;
+  /**
+   * ⚠️ Top Selling Items কার্ডের জন্য যোগ করা — মোবাইলে (৩২০–৬৩৯px)
+   * এই কার্ডের header এখন শিরোনাম আর filter আলাদা সারিতে (দেখুন
+   * admin/page.tsx), অর্থাৎ pill-টা title-এর *নিচে*, ডান পাশে নয়।
+   *
+   * `false` (ডিফল্ট) থাকলে আগের আচরণ অবিকল থাকে — `ml-auto` সবসময়
+   * সক্রিয়, popup ডান কিনারা ধরে ঝোলে। Total Revenue কার্ড এখনো এই
+   * ডিফল্ট ব্যবহার করে, কারণ ওর header সবসময় এক সারিতেই থাকে
+   * (মোবাইলেও পাশাপাশি) — সেখানে `ml-auto`/`right-0` ছাড়া pill
+   * শিরোনামের সাথে বাঁ দিকে লেগে যেত।
+   *
+   * `true` হলে মোবাইলে `ml-auto` বাদ যায় (pill title-এর মতোই বাঁ
+   * কিনারায় বসে, Figma-র মোবাইল মকআপ অনুযায়ী) আর popup বাঁ কিনারা
+   * ধরে ঝোলে যাতে পর্দার বাইরে না যায়। ≥৬৪০px-এ header আবার এক
+   * সারিতে ফেরে (sm:flex-row), তাই সেখানে `sm:ml-auto`/ডান-কিনারা
+   * popup-ও আগের মতো ফিরে আসে।
+   */
+  mobileStack?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,32 +74,23 @@ export default function RangeSelect({
 
   return (
     /**
-     * ⚠️ `ml-auto` — ৩২০px-এ popup-টা পর্দার বাঁ দিকে কেটে যাওয়ার
-     * আসল সমাধান এটাই, তালিকাটার নিজের কোনো class নয়।
+     * ⚠️ default path (`mobileStack === false`)-এর জন্য `ml-auto` +
+     * `right-0` — Total Revenue কার্ডে এখনো এভাবেই চলে, header সবসময়
+     * এক সারিতে (মোবাইলেও পাশাপাশি) বলে pill-কে জোর করে ডানে রাখতে
+     * হয়, নাহলে `justify-between` একা থাকা item-কে শুরুতে বসিয়ে
+     * দিত। popup তখন pill-এর ডান কিনারা ধরে বাঁ দিকে ২২৪px ছড়ায় —
+     * pill ডানে থাকলে সেটা সবসময় কার্ডের ভেতরেই পড়ে।
      *
-     * তালিকাটা `right-0` ধরে ঝোলে, অর্থাৎ ওর ডান কিনারা pill-এর ডান
-     * কিনারায় মেলে আর ২২৪px বাঁ দিকে ছড়ায়। pill যতক্ষণ ডানে,
-     * ততক্ষণ ওটা কার্ডের ভেতরেই থাকে।
+     * `mobileStack === true` (Top Selling Items) পথে ওপরের JSDoc
+     * দ্রষ্টব্য — মোবাইলে header নিজেই দু'সারিতে ভাগ হয়ে যায় বলে
+     * এই জোরাজুরির দরকার পড়ে না, `sm:` প্রিফিক্সে সরিয়ে দেওয়া হয়েছে।
      *
-     * কিন্তু Top Selling Items-এর শিরোনামটা ২৪px-এ ~২০০px চওড়া, আর
-     * pill ১২০ — ৩২০px পর্দায় দুটো এক সারিতে আঁটে না, তাই pill
-     * দ্বিতীয় সারিতে নেমে যায়। `justify-between` একা থাকা item-কে
-     * শুরুতে বসায়, অর্থাৎ pill চলে যায় একেবারে বাঁ কিনারায় — আর
-     * তখন ওর ডান কিনারা থেকে ২২৪px বাঁয়ে গেলে সেটা কার্ডেরও বাইরে,
-     * পর্দারও বাইরে।
-     *
-     * `ml-auto` থাকলে নিজের সারিতে নামলেও pill ডানেই থাকে, তাই
-     * `right-0`-এর হিসাবটা আর ভাঙে না। এক সারিতে থাকা অবস্থায়
-     * `justify-between` এমনিতেই যা করত, ml-auto তার সাথে সংঘাত
-     * বাধায় না — Total Revenue কার্ডে (যেখানে wrap হয় না) কিছুই বদলায় না।
-     *
-     * ⚠️ popup এখন ১৬০ নয়, ২২৪px (Users page-এর মাপ)। ৩২০px পর্দায়
-     * কার্ডের ভেতরে ২৪৮px পড়ে থাকে, তাই এখনো আঁটে — কিন্তু ফাঁকটা
-     * আগের চেয়ে অনেক কম, তাই FilterMenu-র `max-w` রক্ষাকবচটা এখন
-     * আগের চেয়ে বেশি প্রাসঙ্গিক।
+     * popup ২২৪px চওড়া (Users page-এর মাপ), FilterMenu-র `max-w`
+     * শেষ রক্ষাকবচ হিসেবে থেকেই যায়।
      */
     <FilterMenu
-      className="ml-auto shrink-0"
+      className={mobileStack ? "shrink-0 sm:ml-auto" : "ml-auto shrink-0"}
+      menuPositionClassName={mobileStack ? "left-0 sm:right-0" : "right-0"}
       value={range}
       options={OPTIONS}
       onSelect={select}

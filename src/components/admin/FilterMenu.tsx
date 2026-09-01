@@ -77,6 +77,7 @@ export default function FilterMenu<T extends string>({
   ariaLabel,
   className = "",
   surface = "cream",
+  menuPositionClassName = "right-0",
 }: {
   value: T;
   options: readonly FilterMenuOption<T>[];
@@ -98,6 +99,18 @@ export default function FilterMenu<T extends string>({
    * চেহারা চাই" নয় — "নিচে কী আছে"। ওটা জানলে রঙ আপনাআপনি ঠিক হয়।
    */
   surface?: "cream" | "white";
+  /**
+   * popup কোন কিনারা ধরে ঝুলবে — ডিফল্ট `"right-0"` (button-এর ডান
+   * কিনারার সাথে মিলিয়ে বাঁ দিকে ছড়ায়)।
+   *
+   * ⚠️ RangeSelect-এর `mobileStack` মোডে button-টা মোবাইলে বাঁ দিকে
+   * বসে (title-এর নিচে, ডানে-ঠেলা `ml-auto` ছাড়া), তাই সেখানে
+   * `"right-0"` ধরে রাখলে popup বাঁ দিকে ২২৪px ছড়িয়ে পর্দার বাইরে
+   * চলে যেত। সেই ক্ষেত্রে RangeSelect responsive ক্লাস
+   * (`"left-0 sm:right-0"`) পাঠায় — মোবাইলে বাঁ কিনারা ধরে ডানে
+   * ছড়ায়, ≥৬৪০px-এ আবার আগের ডান-কিনারা আচরণে ফেরে।
+   */
+  menuPositionClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -174,7 +187,7 @@ export default function FilterMenu<T extends string>({
          */
         <ul
           role="listbox"
-          className="absolute right-0 z-20 mt-2 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]"
+          className={`absolute ${menuPositionClassName} z-20 mt-2 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]`}
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;

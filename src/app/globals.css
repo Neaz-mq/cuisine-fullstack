@@ -11,7 +11,27 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  --breakpoint-sm: 320px;
+  /* ⚠️ আগে এখানে `--breakpoint-sm: 320px;` ছিল — এটাই ছিল ৩২০px-এ
+     "Top Selling Items" কার্ড ভাঙার আসল কারণ।
+
+     Tailwind-এ `sm:` prefix মানে "--breakpoint-sm এর বেশি প্রস্থে
+     apply হও"। ডিফল্ট মান 640px, আর অ্যাপের ১০+ ফাইলে (৯৮টারও বেশি
+     জায়গায়) কোড লেখা হয়েছে ঠিক সেই ধরে নিয়েই — base (prefix ছাড়া)
+     ক্লাস = ৩২০–৬৩৯px-এর মোবাইল মাপ, `sm:` ক্লাস = ≥৬৪০px-এর ট্যাবলেট
+     মাপ। `--breakpoint-sm`-কে 320px-এ নামিয়ে দেওয়ায় `sm:` variant-টা
+     ৩২০px থেকেই সক্রিয় হয়ে যাচ্ছিল — অর্থাৎ ৩২০px পর্দাতেই base আর
+     sm: দুটো ক্লাসই একসাথে match করত, আর ট্যাবলেটের জন্য বানানো বড়
+     মাপ (`sm:text-[24px]`, `sm:min-w-[96px]`, `sm:w-[104px]`,
+     `sm:w-[83px]` ইত্যাদি) ৩২০px-এই চেপে বসত। ফলে শিরোনাম তিন লাইনে
+     ভাঙত আর revenue bar squeeze হয়ে ছোট্ট একটা রঙিন বৃত্তে পরিণত
+     হত।
+
+     এখন `xs` নামে আলাদা রাখা হলো — ৩২০px value-টা হারাচ্ছে না, শুধু
+     Tailwind-এর builtin `sm:` prefix-এর সাথে আর সংঘর্ষ করবে না। কোথাও
+     সত্যিকারের ৩২০px+ breakpoint দরকার হলে `xs:` ব্যবহার করা যাবে;
+     আপাতত কোনো ফাইলে `xs:` ব্যবহৃত হয় না, তাই এই বদলে বিদ্যমান কোনো
+     ক্লাস ভাঙে না। */
+  --breakpoint-xs: 320px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;

@@ -990,42 +990,52 @@ export default async function AdminDashboardPage({
         {/* Figma card: Vertical, 517.5×356, radius 20, padding 30, gap 20. */}
         <div className="flex min-w-0 flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
           {/**
-           * Header — Figma: row, space-between, height 40, gap 20.
+           * Header — Figma: row, space-between, height 40, gap 20 (এটা
+           * ≥৬৪০px-এর জন্য প্রযোজ্য)।
            *
-           * ⚠️ এখানে `flex-wrap` নেই, আর সেটা ইচ্ছাকৃত — অন্য দুটো
-           * কার্ডের header-এ আছে।
+           * ⚠️ মোবাইলে (৩২০–৬৩৯px) এখন আর এক-সারির চেষ্টা নেই —
+           * `flex-col`: শিরোনাম নিজের সারিতে (এক লাইনে, পুরো কার্ডের
+           * প্রস্থ পেয়ে), filter pill তার *নিচে* বাঁ কিনারায়। Figma-র
+           * মোবাইল মকআপে এটাই দেখা যায় (rank/name/pill তালিকার আগে
+           * শিরোনাম আর "This Week" আলাদা সারিতে)।
            *
-           * flex-wrap থাকলে browser আগে সারি ভাঙে, তারপর সঙ্কুচিত করে।
-           * সিদ্ধান্তটা নেয় item-এর *স্বাভাবিক* প্রস্থ দেখে, ন্যূনতম
-           * প্রস্থ দেখে নয়। শিরোনামটা ২৪px-এ ~২১৫px, pill ~১২৬ —
-           * যোগফল ৩৪১, অথচ ৩৭৫px পর্দায় কার্ডের ভেতরে পড়ে থাকে ৩০৩।
-           * তাই pill নেমে যেত দ্বিতীয় সারিতে, আর সেখানে সে একা —
-           * অর্থাৎ শিরোনামের নিচে ঝুলে থাকত, নকশার সাথে কোনো মিল নেই।
+           * আগে এখানে `flex-wrap` ছাড়া এক-সারি জোর করে রাখা হতো,
+           * ফলে সরু পর্দায় শিরোনাম "Top Selling" / "Items" দু'লাইনে
+           * ভেঙে pill-এর সাথে গাদাগাদি করত — ডিজাইনের সাথে মিলত না়,
+           * শুধু pill-কে overflow হওয়া থেকে বাঁচাত। `flex-col` এখন
+           * গোড়াতেই সমস্যাটা সরিয়ে দেয়: pill-এর সাথে জায়গা ভাগ করার
+           * দরকারই পড়ে না।
            *
-           * wrap না থাকলে সারি একটাই, আর জায়গা কম পড়লে শিরোনামটা
-           * নিজের ভেতরে দু'লাইনে ভাঙে ("Top Selling" / "Items") —
-           * pill আগের মতোই উপরে-ডানে বসে থাকে। Figma-র বিন্যাসটা
-           * এভাবেই টিকে যায়।
+           * `sm:flex-row sm:justify-between` — ≥৬৪০px-এ Figma-র আসল
+           * পাশাপাশি বিন্যাসে ফেরে, যেখানে দুটোই এক সারিতে অনায়াসে
+           * আঁটে।
            *
-           * `items-start`, `items-center` নয়: শিরোনাম দু'লাইন হলে
-           * pill-টা তার মাঝ বরাবর না বসে উপরের লাইনের সাথে সারিবদ্ধ
-           * থাকে — চোখে সেটাই স্বাভাবিক।
-           *
-           * এর একটা পার্শ্বপ্রতিক্রিয়াও আছে, আর সেটাই dropdown-এর
-           * সমস্যাটা মিটিয়ে দেয়: pill কখনো বাঁ কিনারায় যায় না, তাই
-           * `right-0` ধরে ঝোলা তালিকাটা সবসময় কার্ডের ভেতরেই থাকে।
+           * `items-start` — উভয় মোডেই: column-এ এটা বাঁ-কিনারায়
+           * সারিবদ্ধ রাখে (stretch না করে pill-কে পুরো প্রস্থ করে
+           * দেয় না), row-এ শিরোনাম-pill-এর উচ্চতার পার্থক্য থাকলেও
+           * উপরের সাথে মেলায়।
            */}
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
             {/* min-w-0 — নাহলে flex item নিজের সবচেয়ে লম্বা শব্দের
                 চেয়ে সরু হতে পারে না, আর তখন লেখাটা ভাঙার বদলে pill-কে
-                ঠেলে বাইরে পাঠাত।
-                ৩২০px-এ ২০px, কারণ ওখানে শিরোনামের জন্য পড়ে থাকে মোটে
-                ~১১০px — ২৪px রাখলে "Top" / "Selling" / "Items" তিন
-                লাইন হয়ে যেত। */}
-            <h2 className="min-w-0 font-frank-ruhl text-[20px] font-semibold leading-tight text-black sm:text-[24px] sm:leading-none md:text-[30px]">
+                ঠেলে বাইরে পাঠাত। ≥৬৪০px-এ (sm:flex-row) এখনো প্রাসঙ্গিক।
+
+                ⚠️ `whitespace-nowrap` — মোবাইলে (base) header এখন
+                `flex-col`, তাই শিরোনামটা একাই নিজের সারিতে পুরো কার্ডের
+                প্রস্থ পায় (আগে যেমন pill-এর সাথে ভাগ করে নিতে হতো)।
+                Figma-র মোবাইল মকআপে "Top Selling Items" এক লাইনেই থাকে
+                (দেখুন screenshot) — এখন জায়গা যথেষ্ট বলে স্বাভাবিক ভাবেই
+                এক লাইনে বসে, কিন্তু `whitespace-nowrap` নিশ্চিত করে যে
+                কোনো অস্বাভাবিক সরু viewport-এও (৩২০px-এর নিচে) এটা
+                জোর করে দু'লাইনে ভাঙবে না। */}
+            <h2 className="min-w-0 whitespace-nowrap font-frank-ruhl text-[20px] font-semibold leading-tight text-black sm:text-[24px] sm:leading-none md:text-[30px]">
               Top Selling Items
             </h2>
-            <RangeSelect param="top" range={topRange} />
+            {/* mobileStack — মোবাইলে filter pill শিরোনামের *নিচে*, বাঁ
+                কিনারায় (Figma-র মোবাইল মকআপ অনুযায়ী); ≥৬৪০px-এ আবার
+                পাশাপাশি ডান কোণে। বিস্তারিত: RangeSelect.tsx-এর
+                `mobileStack` prop-এর JSDoc। */}
+            <RangeSelect param="top" range={topRange} mobileStack />
           </div>
 
           {topItems.length === 0 ? (
@@ -1041,22 +1051,34 @@ export default async function AdminDashboardPage({
                 /**
                  * ⚠️ প্রতিটা মাপ ৩২০px-এ ছোট, sm (৬৪০) থেকে Figma-র।
                  *
-                 * ৩২০px-এ শেল (p-4) আর কার্ড (p-5) মিলে ভেতরে পড়ে
-                 * থাকে ২৪৮px। আগের মাপগুলোর যোগফল ছিল:
+                 * ৩২০–৬৩৯px-এ দাম-bar (Track) সম্পূর্ণ `hidden` — Figma-র
+                 * মোবাইল মকআপে ওটা নেইই (দেখুন Track-এর নিজের কমেন্ট),
+                 * তাই ৩২০px-এ সারিতে থাকে মোটে দুটো জিনিস: rank+নাম
+                 * (flex-1, যতটা জায়গা খালি ততটাই নেয়) আর "N Sold" pill
+                 * (স্থির 64px)। ফলে ৩২০px-এ আর width-বাজেট মেলানোর
+                 * hisab-nikash লাগে না — pill-এর 64px বাদে যা থাকে
+                 * নামের জন্য, ছোট নাম এক লাইনে, লম্বা নাম দুই লাইনে।
                  *
-                 *   104 (নাম) + 16 + 96 (bar-এর ন্যূনতম) + 12 + 83 (pill)
-                 *   = 311px
-                 *
-                 * অর্থাৎ ৬৩px বেশি — "23 Sold" pill-টা পর্দার বাইরে
-                 * কেটে যেত। নতুন মাপে:
-                 *
-                 *   86 + 12 + 68 + 8 + 64 = 238px  ✅
+                 * ≥৬৪০px-এ bar ফিরে আসে, আর সেখানে Figma-র আসল মাপ
+                 * (নাম 104/113px, bar min 96px, pill 83px) প্রযোজ্য —
+                 * ট্যাবলেট/ডেস্কটপে জায়গার অভাব নেই।
                  */
                 <div key={item.title} className="flex items-center gap-2 sm:gap-3 md:gap-5">
                   {/* Figma: বাঁ দলটার ভেতরে gap 30। */}
                   <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 md:gap-[30px]">
-                    {/* ক্রম + নাম — Figma: gap 16, মোট চওড়া 113। */}
-                    <div className="flex w-[86px] shrink-0 items-center gap-2 sm:w-[104px] sm:gap-4 md:w-[113px]">
+                    {/* ক্রম + নাম — Figma: gap 16, মোট চওড়া 113।
+
+                        ⚠️ মোবাইল (base)-এ `min-w-0 flex-1`, স্থির প্রস্থ
+                        নয় — কারণ পাশের price-bar এখন `hidden` (দেখুন
+                        নিচের Track-এর কমেন্ট), তাই এই বাক্সটাই একমাত্র
+                        দৃশ্যমান flex item আর তার নিজের পুরো জায়গাটা
+                        (নাম + "N Sold" pill-এর মাঝের সবটুকু) দখল করা
+                        উচিত — Figma-র মোবাইল মকআপে ঠিক এটাই দেখা যায়।
+                        ≥৬৪০px-এ price-bar ফিরে আসে বলে সেখানে আবার
+                        স্থির প্রস্থে (`sm:w-[104px] sm:flex-none
+                        sm:shrink-0`) ফিরিয়ে নেওয়া, নাহলে bar-টা জায়গা
+                        পেত না। */}
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[104px] sm:flex-none sm:shrink-0 sm:gap-4 md:w-[113px]">
                       <span className="font-frank-ruhl text-[14px] font-normal leading-none text-black">
                         {index + 1}
                       </span>
@@ -1065,11 +1087,11 @@ export default async function AdminDashboardPage({
                           ("Crispy Fried Chicken")। truncate দিলে উল্টো
                           মকআপের সাথে মিলত না।
 
-                          ⚠️ চওড়াটা এখন `flex-1`, স্থির 90px নয় — বাইরের
-                          বাক্সটাই তো ভাঙার বিন্দু ধরে বদলায়, ভেতরে একটা
-                          স্থির মাপ থাকলে ৩২০px-এ ওটা বাক্স ছাপিয়ে যেত।
-                          md-তে 113 − 10 (ক্রম) − 16 (gap) = 87, অর্থাৎ
-                          Figma-র 90-এর কার্যত সমান। */}
+                          চওড়াটা `flex-1`, স্থির 90px নয় — বাইরের বাক্সটাই
+                          তো ভাঙার বিন্দু ধরে বদলায়, ভেতরে একটা স্থির মাপ
+                          থাকলে ৩২০px-এ ওটা বাক্স ছাপিয়ে যেত। md-তে
+                          113 − 10 (ক্রম) − 16 (gap) = 87, অর্থাৎ Figma-র
+                          90-এর কার্যত সমান। */}
                       <span className="min-w-0 flex-1 font-sora text-[14px] font-normal leading-[1.3] text-black">
                         {item.title}
                       </span>
@@ -1077,9 +1099,19 @@ export default async function AdminDashboardPage({
 
                     {/* Track — Figma: height 32, radius 100, BG #F9F6F3,
                         ভেতরে সাদা তির্যক ডোরা 60%। ভরাট অংশটা এর উপরে
-                        বসে, তাই ডোরা কেবল খালি জায়গাতেই দেখা যায়। */}
+                        বসে, তাই ডোরা কেবল খালি জায়গাতেই দেখা যায়।
+
+                        ⚠️ `hidden sm:block` — মোবাইল (৩২০–৬৩৯px)-এ এই
+                        দাম-bar-টা Figma-র মোবাইল মকআপেই নেই (দেখুন:
+                        rank + নাম + "N Sold" pill, মাঝে কোনো $ oval
+                        নেই)। শুধু ≥৬৪০px (ট্যাবলেট/ডেস্কটপ)-এ ফিরে আসে,
+                        যেখানে কার্ডের প্রস্থে জায়গা থাকে। আগে এখানে
+                        `min-w-[68px]` দিয়ে বার-টাকে ৩২০px-এ কোনোমতে
+                        আঁটানোর চেষ্টা ছিল — কিন্তু ডিজাইনের অভিপ্রায়
+                        আঁটানো নয়, লুকানো, তাই সেই মিনিমাম-প্রস্থের
+                        hack-টা আর দরকার নেই। */}
                     <div
-                      className="h-8 min-w-0 flex-1 overflow-hidden rounded-full"
+                      className="hidden h-8 min-w-0 flex-1 overflow-hidden rounded-full sm:block"
                       style={{
                         backgroundColor: "#F9F6F3",
                         backgroundImage:
@@ -1087,18 +1119,17 @@ export default async function AdminDashboardPage({
                       }}
                     >
                       {/**
-                       * ন্যূনতম প্রস্থটা এখন class-এ, inline style-এ নয়।
+                       * ন্যূনতম প্রস্থটা class-এ, inline style-এ নয় —
+                       * inline style-এ breakpoint লেখা যায় না।
                        *
-                       * কারণটা নিছক পরিচ্ছন্নতা নয় — inline style-এ
-                       * breakpoint লেখা যায় না, আর ঠিক সেটাই দরকার:
-                       * ৯৬px ছিল ৩২০px পর্দায় অতিরিক্ত। ৬৮px-এ "$432.99"
-                       * পর্যন্ত আঁটে, আর তার চেয়ে বড় অঙ্ক এলে bar এমনিতেই
-                       * চওড়া (বেশি টাকা = লম্বা bar), তাই সমস্যা হয় না।
-                       * শতাংশে ন্যূনতম দিলে সরু কার্ডে সেটা যথেষ্ট হতো না,
-                       * তাই px-ই।
+                       * বাইরের track-টাই এখন `sm:block` (মোবাইলে hidden),
+                       * তাই এই min-width-এর ৩২০px-বেস মান নিয়ে আর ভাবতে
+                       * হয় না — শুধু ≥৬৪০px-এ "$432.99"-এর মতো অঙ্কও
+                       * আঁটে এটুকু নিশ্চিত করলেই চলে। তার চেয়ে বড় অঙ্ক
+                       * এলে bar এমনিতেই চওড়া (বেশি টাকা = লম্বা bar)।
                        */}
                       <div
-                        className="flex h-8 min-w-[68px] items-center justify-end rounded-full pr-2 sm:min-w-[96px] sm:pr-2.5"
+                        className="flex h-8 min-w-[96px] items-center justify-end rounded-full pr-2.5"
                         style={{
                           // অনুপাতে চওড়া — এটুকুই inline থাকতে হয়, কারণ
                           // মানটা প্রতিটা সারিতে আলাদা।
