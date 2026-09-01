@@ -4,6 +4,73 @@ import { requireApiScope } from "@/lib/require-admin";
 import { updateSupplierSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
 
+/**
+ * GET /api/admin/suppliers/[id]
+ *
+ * "View" modal-এর জন্য — সরবরাহকারীর নিজের ঘরগুলো **আর** কয়েকটা
+ * হিসাব যা সারিতে নেই।
+ *
+ * ⚠️ হিসাবগুলো ছাড়া এই route-টার (আর modal-টারও) কোনো মানে হতো না:
+ * নাম, ইমেইল, ঠিকানা, ফোন, শ্রেণি, পণ্য, status — সবই তালিকার
+ * সারিতেই দেখা যায়। "কতগুলো অর্ডার দেওয়া হয়েছে", "শেষ মাল কবে
+ * এসেছে", "কতগুলো আলাদা পণ্য এসেছে" — এগুলোই নতুন তথ্য, আর এগুলোর
+ * জন্যই একটা modal খোলার মানে আছে।
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireApiScope("inventory");
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      category: true,
+      products: true,
+      isActive: true,
+      createdAt: true,
+      _count: { select: { purchaseOrders: true } },
+    },
+  });
+
+  if (!supplier) {
+    return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
+  }
+
+  const [lastReceived, itemGroups] = await Promise.all([
+    // শেষ কবে সত্যিই মাল এসেছে — `receivedAt`, `createdAt` নয়। একটা
+    // PO বানানো আর মাল পৌঁছনো এক জিনিস নয়, আর এখানে প্রশ্নটা
+    // দ্বিতীয়টা।
+    prisma.purchaseOrder.findFirst({
+      where: { supplierId: id, receivedAt: { not: null } },
+      orderBy: { receivedAt: "desc" },
+      select: { receivedAt: true },
+    }),
+    // কতগুলো **আলাদা** পণ্য এসেছে — count নয়, groupBy, নাহলে একই
+    // পণ্য দশবার কিনলে দশবারই গুনত।
+    prisma.purchaseOrderItem.groupBy({
+      by: ["inventoryItemId"],
+      where: { purchaseOrder: { supplierId: id } },
+      orderBy: { inventoryItemId: "asc" },
+    }),
+  ]);
+
+  return NextResponse.json({
+    ...supplier,
+    purchaseOrderCount: supplier._count.purchaseOrders,
+    lastReceivedAt: lastReceived?.receivedAt ?? null,
+    distinctItemsSupplied: itemGroups.length,
+  });
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

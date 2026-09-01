@@ -89,8 +89,12 @@ export default function RangeSelect({
      * শেষ রক্ষাকবচ হিসেবে থেকেই যায়।
      */
     <FilterMenu
-      className={mobileStack ? "shrink-0 sm:ml-auto" : "ml-auto shrink-0"}
-      menuPositionClassName={mobileStack ? "left-0 sm:right-0" : "right-0"}
+      // ⚠️ `sm:` নয়, `min-[640px]:` — globals.css-এ
+      // `--breakpoint-sm: 320px`, তাই `sm:` এই অ্যাপে ৩২০px থেকেই
+      // সক্রিয়, অথচ এই stack↔row বদলটা ৬৪০-এ হওয়ার কথা। বিস্তারিত
+      // admin/page.tsx-এর "Top Selling Items" header-এর মন্তব্যে।
+      className={mobileStack ? "shrink-0 min-[640px]:ml-auto" : "ml-auto shrink-0"}
+      menuPositionClassName={mobileStack ? "left-0 min-[640px]:right-0" : "right-0"}
       value={range}
       options={OPTIONS}
       onSelect={select}

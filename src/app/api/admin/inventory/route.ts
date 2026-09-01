@@ -42,8 +42,20 @@ export async function POST(req: NextRequest) {
   const parsed = await parseBody(req, createInventoryItemSchema);
   if (parsed instanceof NextResponse) return parsed;
 
+  // ⚠️ ফাঁকা string → null। schema-গুলো `.or(z.literal(""))` গ্রহণ করে
+  // (form ফাঁকা ঘর পাঠায়), কিন্তু DB-তে "কিছু দেওয়া হয়নি" মানে null —
+  // ফাঁকা string বসালে পরে `category IS NULL` ছাঁকনি ওগুলো মিস করত।
+  const { category, supplierId, image, ...rest } = parsed;
+
   try {
-    const item = await prisma.inventoryItem.create({ data: parsed });
+    const item = await prisma.inventoryItem.create({
+      data: {
+        ...rest,
+        category: category || null,
+        supplierId: supplierId || null,
+        image: image || null,
+      },
+    });
     return NextResponse.json(item, { status: 201 });
   } catch {
     return NextResponse.json(

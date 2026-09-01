@@ -82,23 +82,8 @@ export const DELIVERY_STATUS_STYLE: Record<string, { label: string; className: s
 };
 
 /**
- * InventoryUnit enum → পর্দায় যা দেখা যায় ("12 Kg")।
- *
- * ছোট হাতের সংক্ষিপ্ত রূপ, enum-এর নাম নয় — "12 KILOGRAM" কেউ লেখে না।
+ * ⚠️ `UNIT_LABELS` আর `formatQuantity` এখান থেকে সরে গেছে —
+ * lib/inventory-status.ts-এ। প্রথম ব্যবহারকারী ছিল এই পাতার "Recent
+ * Deliveries", কিন্তু একক-এর সংজ্ঞা সরবরাহকারীর চেয়ে উপকরণের কাছাকাছি,
+ * আর এখন Inventory পাতাও সেগুলো ব্যবহার করে।
  */
-export const UNIT_LABELS: Record<string, string> = {
-  GRAM: "g",
-  KILOGRAM: "Kg",
-  MILLILITER: "ml",
-  LITER: "L",
-  PIECE: "pcs",
-};
-
-/** "12 Kg" / "3 pcs" — সংখ্যার শেষের অপ্রয়োজনীয় শূন্য বাদ দিয়ে। */
-export function formatQuantity(quantity: number, unit: string): string {
-  // `quantityOrdered` একটা Float, তাই ১২ আসে "12" হিসেবে কিন্তু ১২.৫
-  // আসে "12.5" — `parseFloat(toFixed(2))` দুটোকেই ঠিক রাখে, আর
-  // "12.00 Kg" এড়ায়।
-  const rounded = parseFloat(quantity.toFixed(2));
-  return `${rounded} ${UNIT_LABELS[unit] ?? unit}`;
-}

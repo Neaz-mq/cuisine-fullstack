@@ -33,6 +33,14 @@ export const createInventoryItemSchema = z.object({
   currentStock: nonNegativeFloatSchema("Starting stock").default(0),
   reorderThreshold: nonNegativeFloatSchema("Reorder threshold").default(0),
   costPerUnit: nonNegativeFloatSchema("Cost per unit").default(0),
+  // ── Figma-র "Add Ingredient" modal-এর বাকি ঘরগুলো ────────────────
+  // সবগুলোই ঐচ্ছিক: একটা উপকরণ কেবল নাম আর একক দিয়েও তৈরি করা যায়,
+  // বাকিটা পরে ভরা যায়। schema.prisma-য় এদের ব্যাখ্যা।
+  category: z.string().trim().max(60).optional().or(z.literal("")),
+  maxCapacity: nonNegativeFloatSchema("Max capacity").default(0),
+  emergencyThreshold: nonNegativeFloatSchema("Emergency threshold").default(0),
+  supplierId: cuidSchema.optional().or(z.literal("")),
+  image: z.url("Image must be a valid URL").optional().or(z.literal("")),
 });
 
 export const updateInventoryItemSchema = z
@@ -41,6 +49,12 @@ export const updateInventoryItemSchema = z
     unit: inventoryUnitSchema,
     reorderThreshold: nonNegativeFloatSchema("Reorder threshold"),
     costPerUnit: nonNegativeFloatSchema("Cost per unit"),
+    category: z.string().trim().max(60).nullable(),
+    maxCapacity: nonNegativeFloatSchema("Max capacity"),
+    emergencyThreshold: nonNegativeFloatSchema("Emergency threshold"),
+    // ⚠️ nullable — ডিফল্ট সরবরাহকারী সরিয়ে দেওয়াটাও একটা বৈধ আপডেট।
+    supplierId: cuidSchema.nullable(),
+    image: z.url("Image must be a valid URL").nullable().or(z.literal("")),
     isActive: z.boolean(),
   })
   .partial()
@@ -95,6 +109,26 @@ export const recordStockMovementSchema = z.object({
   // direction is fixed by their type.
   direction: z.enum(["INCREASE", "DECREASE"]).default("DECREASE"),
   note: nonEmptyString("A note explaining this change"),
+});
+
+/**
+ * POST /api/admin/inventory/[id]/restock — Figma-র "Items Restock" modal।
+ *
+ * ⚠️ এটা recordStockMovementSchema-র সাথে মেলানো হয়নি, ইচ্ছাকৃতভাবে।
+ * ওটা WASTAGE/ADJUSTMENT/RETURN-এর জন্য, যেখানে একটা `note`
+ * **বাধ্যতামূলক** — কারণ ওগুলো ব্যাখ্যা দাবি করে ("কেন ৩ কেজি কমে
+ * গেল?")। মাল আসা তার উল্টো: সেটাই স্বাভাবিক ঘটনা, আর প্রতিবার
+ * একটা কারণ লিখতে বললে লোকে "restock" লিখে চালিয়ে দিত।
+ */
+export const restockInventoryItemSchema = z.object({
+  quantityReceived: positiveFloatSchema("Quantity received"),
+  // দিলে InventoryItem.costPerUnit-ও হালনাগাদ হয় (সবচেয়ে সাম্প্রতিক
+  // দামই জেতে — PurchaseOrder receive করার একই নিয়ম)। না দিলে পুরনো
+  // দামই থাকে; ভুল করে 0 বসিয়ে food cost শূন্য করে দেওয়ার চেয়ে ভালো।
+  costPerUnit: nonNegativeFloatSchema("Cost per unit").optional(),
+  // মাল কার কাছ থেকে এলো — দিলে উপকরণের ডিফল্ট সরবরাহকারীও এতে বদলায়।
+  supplierId: cuidSchema.optional().or(z.literal("")),
+  note: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
 // ─── Suppliers ──────────────────────────────────────────────────────────

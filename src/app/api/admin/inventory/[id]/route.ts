@@ -49,8 +49,16 @@ export async function PATCH(
   const parsed = await parseBody(req, updateInventoryItemSchema);
   if (parsed instanceof NextResponse) return parsed;
 
+  // ফাঁকা string → null, POST-এর একই কারণ (ওখানকার মন্তব্য দ্রষ্টব্য)।
+  // `!== undefined` জরুরি: "পাঠানো হয়নি" (অপরিবর্তিত) আর "ফাঁকা
+  // পাঠানো হয়েছে" (মুছে দাও) — দুটো আলাদা।
+  const data = { ...parsed } as Record<string, unknown>;
+  for (const key of ["category", "supplierId", "image"] as const) {
+    if (parsed[key] !== undefined) data[key] = parsed[key] || null;
+  }
+
   try {
-    const updated = await prisma.inventoryItem.update({ where: { id }, data: parsed });
+    const updated = await prisma.inventoryItem.update({ where: { id }, data });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json(

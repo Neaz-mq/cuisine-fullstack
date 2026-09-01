@@ -31,7 +31,8 @@
      সত্যিকারের ৩২০px+ breakpoint দরকার হলে `xs:` ব্যবহার করা যাবে;
      আপাতত কোনো ফাইলে `xs:` ব্যবহৃত হয় না, তাই এই বদলে বিদ্যমান কোনো
      ক্লাস ভাঙে না। */
-  --breakpoint-xs: 320px;
+ 
+  --breakpoint-sm: 320px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;

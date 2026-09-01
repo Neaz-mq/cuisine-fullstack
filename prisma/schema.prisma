@@ -1367,6 +1367,44 @@ model InventoryItem {
   // be set manually.
   costPerUnit Decimal @default(0) @db.Decimal(12, 3)
 
+  /// Figma-র Inventory পাতার শ্রেণি-ভাগ ("Proteins", "Dairy & Cheese",
+  /// "Produce" …)। Supplier.category-র মতোই free-text, enum নয় — কারণ
+  /// রেস্তোরাঁভেদে ভাগটা আলাদা, আর enum বদলাতে প্রতিবার migration লাগত।
+  /// UI একটা নির্দিষ্ট তালিকা থেকে বাছতে দেয় (lib/inventory-status.ts)।
+  ///
+  /// null মানে "শ্রেণি দেওয়া হয়নি" — পাতায় ওরা "Uncategorised" নামের
+  /// শেষ ভাগে জমা হয়, হারিয়ে যায় না।
+  category String?
+
+  /// সর্বোচ্চ কত ধরে (Figma-র "Max Capacity")। progress bar-টা
+  /// currentStock ÷ maxCapacity — অর্থাৎ "1.2 Kg / 15 Kg"।
+  ///
+  /// ⚠️ 0 মানে "ঠিক করা হয়নি", আর তখন bar আঁকা হয় না (শূন্য দিয়ে ভাগ
+  /// করা যায় না, আর একটা মনগড়া সীমা বসানোর চেয়ে bar না দেখানোই সৎ)।
+  maxCapacity Float @default(0)
+
+  /// reorderThreshold-এর নিচের ধাপ — এর নিচে নামলে জিনিসটা "Emergency",
+  /// শুধু "Low Stock" নয়।
+  ///
+  /// দুটো আলাদা ধাপ দরকার কারণ দুটো আলাদা কাজ ডাকে: low stock মানে
+  /// "এ সপ্তাহে অর্ডার দাও", emergency মানে "আজকের অর্ডারগুলোই আটকে
+  /// যাবে"। একটাই সীমা থাকলে রান্নাঘর দুটোর তফাত বুঝত না।
+  emergencyThreshold Float @default(0)
+
+  /// সাধারণত কার কাছ থেকে কেনা হয় — Figma-র সারিতে "Suppler
+  /// Fresh Farm CO." ঘরটা।
+  ///
+  /// ⚠️ এটা PurchaseOrder-এর ইতিহাস নয় (সেটা purchaseOrderLines-এ আছে,
+  /// আর সেখানে একই জিনিস একাধিক সরবরাহকারীর কাছ থেকে আসতে পারে)। এটা
+  /// "ডিফল্ট সরবরাহকারী" — restock করার সময় কাকে ফোন করব। onDelete
+  /// SetNull, কারণ সরবরাহকারী মুছে গেলে উপকরণটা থেকে যাবে।
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierId String?
+
+  /// উপকরণের ছবি — Figma-র "Add Ingredient" modal-এর drop-zone থেকে
+  /// (Supabase Storage-এর public URL, ফাইল নয়)।
+  image String?
+
   // Soft-disable instead of deleting — an item with StockMovement/recipe
   // history shouldn't disappear from past records if discontinued.
   isActive Boolean @default(true)
@@ -1389,6 +1427,8 @@ model InventoryItem {
   // so this index gets the query to a small isActive=true set fast and
   // leaves a cheap in-memory filter for the threshold comparison itself.
   @@index([isActive])
+  @@index([category])
+  @@index([supplierId])
 }
 
 // The recipe / Bill-of-Materials: how much of each InventoryItem one unit
@@ -1558,6 +1598,10 @@ model Supplier {
   updatedAt DateTime @updatedAt
 
   purchaseOrders PurchaseOrder[]
+
+  /// যেসব উপকরণের ডিফল্ট সরবরাহকারী ইনি — InventoryItem.supplierId-র
+  /// উল্টো দিক।
+  inventoryItems InventoryItem[]
 
   @@index([isActive])
 }

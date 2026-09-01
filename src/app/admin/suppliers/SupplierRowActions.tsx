@@ -3,38 +3,101 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import SupplierFormModal, { type SupplierDraft } from "./SupplierFormModal";
+import ViewSupplierModal from "./ViewSupplierModal";
 
 /**
  * src/app/admin/suppliers/SupplierRowActions.tsx
  *
- * Figma-র সারির ডান প্রান্তের "Edit" — কমলা→গোলাপি gradient pill।
+ * Figma-র সারির ডান প্রান্তের বোতাম — Staff-এর সারির হুবহু একই জোড়া:
+ * "Edit" (সাদা, কালো পাড়ের pill) আর "View" (কমলা→গোলাপি gradient pill)।
  *
- * ⚠️ Staff-এর সারিতে দুটো বোতাম (Edit + View), এখানে একটাই — Figma-তেও
- * একটাই। কারণটা যুক্তিসঙ্গত: একজন সরবরাহকারীর যা কিছু আছে (নাম,
- * ইমেইল, ফোন, ঠিকানা, status) তার সবই সারিতেই দেখা যাচ্ছে, তাই
- * "View" খুললে নতুন কোনো তথ্য পাওয়া যেত না। কর্মীর ক্ষেত্রে তা নয় —
- * সেখানে NID, join date, shift সারির বাইরে থাকে।
+ * ⚠️ Figma-তে এখানে একটাই বোতাম আঁকা, আর প্রথম দফায় আমিও একটাই
+ * রেখেছিলাম — এই যুক্তিতে যে সরবরাহকারীর সব ঘর সারিতেই দেখা যায়,
+ * তাই "View" খুললে নতুন কিছু পাওয়া যেত না।
+ *
+ * যুক্তিটার প্রথম অংশ এখনো ঠিক, কিন্তু উপসংহারটা ছিল ভুল। View
+ * modal-টা ওই ঘরগুলো আবার দেখানোর জন্য নয় — ওটা দেখায় **সরবরাহের
+ * ইতিহাস**: কতগুলো অর্ডার, শেষ মাল কবে এসেছে, কতগুলো আলাদা পণ্য।
+ * ওগুলো সারিতে রাখা যেত না (সারিপ্রতি আলাদা query লাগত), অথচ
+ * "এই সরবরাহকারী কেমন" প্রশ্নের উত্তর ওখানেই।
+ *
+ * সেই সাথে দুই পাতার সারি এখন একই আচরণ করে — ব্যবহারকারীকে দুটো
+ * আলাদা নিয়ম মনে রাখতে হয় না।
  */
 export default function SupplierRowActions({ supplier }: { supplier: SupplierDraft }) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<null | "view" | "edit">(null);
 
   return (
     <>
-      <div className="flex shrink-0 items-center justify-end xl:w-[60px]">
-        {/* Figma: 53×40, padding 13×12, radius 100, লেখা Sora 400 14px সাদা। */}
+      {/* Figma Frame 2147236374: row, justify flex-end, gap 8, উচ্চতা 40।
+
+          ⚠️ xl-এ প্রস্থটা স্থির (১২০), hug নয় — Staff-এর সারির একই
+          কারণ: hug হলে এই ব্লকটার প্রস্থ লেখার উপর নির্ভর করত আর
+          তার বাঁ পাশের কলামগুলো সারিভেদে সরে যেত। */}
+      <div className="flex shrink-0 items-center justify-end gap-2 xl:w-[120px]">
+        {/**
+         * Figma: 53×40, padding 13×12, radius 100।
+         *
+         * ⚠️ প্রথমে এটা gradient-এ বসানো হয়েছিল, কারণ Figma-র
+         * সরবরাহকারী-সারিতে বোতামটা gradient-এই আঁকা। কিন্তু তাতে
+         * দুই পাতার একই কাজের বোতাম দুই রকম দেখাত: Staff-এর সারিতে
+         * "Edit" সাদা-কালো পাড়ের pill, আর gradient-টা "View"-এর জন্য
+         * তোলা।
+         *
+         * এই প্রজেক্টে gradient একটা **অর্থ** বহন করে — পাতার প্রধান
+         * কাজ (Add New, View, Restock)। "Edit" প্রধান কাজ নয়, সহায়ক।
+         * দুই পাতায় একই কাজ একই চেহারায় থাকাটা designer-এর ওই
+         * একটা frame-এর সাথে মেলার চেয়ে বেশি জরুরি — নাহলে
+         * ব্যবহারকারী শেখেন "কমলা মানে প্রধান কাজ", তারপর এক পাতায়
+         * সেটা মেলে না।
+         *
+         * class-গুলো StaffRowActions-এর "Edit" বোতামের হুবহু অনুলিপি।
+         */}
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => setMode("edit")}
           aria-label={`Edit ${supplier.name}`}
-          className="flex h-10 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-3 font-sora text-[14px] font-normal leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+          className="flex h-10 items-center justify-center rounded-full border border-black px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
         >
           Edit
         </button>
+
+        {/**
+         * Figma: 59×40, পাড় নেই, সাদা লেখা,
+         * `linear-gradient(93.36deg, #FF9540 0%, #FF70C6 145.78%)` —
+         * StaffRowActions-এর "View" বোতামের হুবহু অনুলিপি।
+         *
+         * ⚠️ `bg-gradient-to-r` দিয়ে এটা হয় না: ওই utility মানে ঠিক
+         * 90deg আর দ্বিতীয় রঙ 100%-এ, অর্থাৎ ডান কিনারাতেই পুরো
+         * গোলাপি। Figma-তে গোলাপিটা 145.78%-এ — বোতামের **বাইরে**।
+         */}
+        <button
+          type="button"
+          onClick={() => setMode("view")}
+          aria-label={`View ${supplier.name}`}
+          className="flex h-10 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-3 font-sora text-[14px] font-normal leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+        >
+          View
+        </button>
       </div>
 
-      {/* কেবল দরকার হলে render — দশটা সারি মানে দশটা modal, সবগুলো
-          mount থাকলে প্রতিটা নিজের effect আর listener বয়ে বেড়াত। */}
-      {open && <SupplierFormModal open onClose={() => setOpen(false)} supplier={supplier} />}
+      {/* কেবল দরকার হলে render — দশটা সারি মানে দশ জোড়া modal,
+          সবগুলো mount থাকলে প্রতিটা নিজের effect আর listener বয়ে
+          বেড়াত। */}
+      {mode === "view" && (
+        <ViewSupplierModal
+          open
+          onClose={() => setMode(null)}
+          supplierId={supplier.id}
+          // ⚠️ View থেকে Edit-এ যাওয়া মানে আগেরটা **বন্ধ** করে পরেরটা
+          // খোলা, দুটো একসাথে নয় — নাহলে দুটো modal একের উপর আরেক
+          // বসত আর Escape চাপলে কোনটা বন্ধ হতো সেটা অনিশ্চিত থাকত।
+          onEdit={() => setMode("edit")}
+        />
+      )}
+      {mode === "edit" && (
+        <SupplierFormModal open onClose={() => setMode(null)} supplier={supplier} />
+      )}
     </>
   );
 }

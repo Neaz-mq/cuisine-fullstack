@@ -1015,10 +1015,28 @@ export default async function AdminDashboardPage({
            * দেয় না), row-এ শিরোনাম-pill-এর উচ্চতার পার্থক্য থাকলেও
            * উপরের সাথে মেলায়।
            */}
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
+          {/**
+           * ⚠️ এই কার্ডের ভেতরে `sm:` নেই, সব জায়গায় `min-[640px]:` —
+           * আর সেটা রুচির ব্যাপার নয়, বাধ্যতা।
+           *
+           * globals.css-এ `--breakpoint-sm: 320px` বসানো আছে, অর্থাৎ
+           * Tailwind-এর `sm:` prefix এই অ্যাপে ৩২০px থেকেই সক্রিয় হয়,
+           * ৬৪০ থেকে নয়। কিন্তু এই কার্ডের পুরো বিন্যাসটা লেখা হয়েছিল
+           * "sm = ৬৪০" ধরে নিয়ে — মোবাইলে stack, ট্যাবলেটে পাশাপাশি।
+           * ফলে ৩২০–৬৩৯px-এর প্রতিটা ফোনেই ট্যাবলেটের বিন্যাসটা চেপে
+           * বসত: দাম-bar ফিরে আসত, নামের ঘর ১০৪px-এ আটকে যেত, আর
+           * সব মিলে ঠিক ওই ভাঙা চেহারাটা তৈরি হতো।
+           *
+           * `--breakpoint-sm`-কে ৬৪০-এ ফেরানো যেত, কিন্তু অ্যাপের
+           * ১০+ ফাইলে ৯৮টারও বেশি জায়গায় `sm:` আছে আর সেগুলো
+           * ৩২০-ভিত্তিক আচরণ ধরেই যাচাই করা — একটা global বদল ওই সব
+           * জায়গায় নীরবে ঢুকে পড়ত। `min-[640px]:` কোনো breakpoint
+           * variable-ই ব্যবহার করে না, তাই এটা কখনো এভাবে সরে যাবে না।
+           */}
+          <div className="flex flex-col items-start gap-3 min-[640px]:flex-row min-[640px]:items-start min-[640px]:justify-between">
             {/* min-w-0 — নাহলে flex item নিজের সবচেয়ে লম্বা শব্দের
                 চেয়ে সরু হতে পারে না, আর তখন লেখাটা ভাঙার বদলে pill-কে
-                ঠেলে বাইরে পাঠাত। ≥৬৪০px-এ (sm:flex-row) এখনো প্রাসঙ্গিক।
+                ঠেলে বাইরে পাঠাত। ≥৬৪০px-এ (min-[640px]:flex-row) এখনো প্রাসঙ্গিক।
 
                 ⚠️ `whitespace-nowrap` — মোবাইলে (base) header এখন
                 `flex-col`, তাই শিরোনামটা একাই নিজের সারিতে পুরো কার্ডের
@@ -1028,7 +1046,7 @@ export default async function AdminDashboardPage({
                 এক লাইনে বসে, কিন্তু `whitespace-nowrap` নিশ্চিত করে যে
                 কোনো অস্বাভাবিক সরু viewport-এও (৩২০px-এর নিচে) এটা
                 জোর করে দু'লাইনে ভাঙবে না। */}
-            <h2 className="min-w-0 whitespace-nowrap font-frank-ruhl text-[20px] font-semibold leading-tight text-black sm:text-[24px] sm:leading-none md:text-[30px]">
+            <h2 className="min-w-0 whitespace-nowrap font-frank-ruhl text-[20px] font-semibold leading-tight text-black min-[640px]:text-[24px] min-[640px]:leading-none md:text-[30px]">
               Top Selling Items
             </h2>
             {/* mobileStack — মোবাইলে filter pill শিরোনামের *নিচে*, বাঁ
@@ -1063,9 +1081,9 @@ export default async function AdminDashboardPage({
                  * (নাম 104/113px, bar min 96px, pill 83px) প্রযোজ্য —
                  * ট্যাবলেট/ডেস্কটপে জায়গার অভাব নেই।
                  */
-                <div key={item.title} className="flex items-center gap-2 sm:gap-3 md:gap-5">
+                <div key={item.title} className="flex items-center gap-2 min-[640px]:gap-3 md:gap-5">
                   {/* Figma: বাঁ দলটার ভেতরে gap 30। */}
-                  <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 md:gap-[30px]">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 min-[640px]:gap-4 md:gap-[30px]">
                     {/* ক্রম + নাম — Figma: gap 16, মোট চওড়া 113।
 
                         ⚠️ মোবাইল (base)-এ `min-w-0 flex-1`, স্থির প্রস্থ
@@ -1075,10 +1093,10 @@ export default async function AdminDashboardPage({
                         (নাম + "N Sold" pill-এর মাঝের সবটুকু) দখল করা
                         উচিত — Figma-র মোবাইল মকআপে ঠিক এটাই দেখা যায়।
                         ≥৬৪০px-এ price-bar ফিরে আসে বলে সেখানে আবার
-                        স্থির প্রস্থে (`sm:w-[104px] sm:flex-none
-                        sm:shrink-0`) ফিরিয়ে নেওয়া, নাহলে bar-টা জায়গা
+                        স্থির প্রস্থে (`min-[640px]:w-[104px] min-[640px]:flex-none
+                        min-[640px]:shrink-0`) ফিরিয়ে নেওয়া, নাহলে bar-টা জায়গা
                         পেত না। */}
-                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[104px] sm:flex-none sm:shrink-0 sm:gap-4 md:w-[113px]">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 min-[640px]:w-[104px] min-[640px]:flex-none min-[640px]:shrink-0 min-[640px]:gap-4 md:w-[113px]">
                       <span className="font-frank-ruhl text-[14px] font-normal leading-none text-black">
                         {index + 1}
                       </span>
@@ -1101,7 +1119,7 @@ export default async function AdminDashboardPage({
                         ভেতরে সাদা তির্যক ডোরা 60%। ভরাট অংশটা এর উপরে
                         বসে, তাই ডোরা কেবল খালি জায়গাতেই দেখা যায়।
 
-                        ⚠️ `hidden sm:block` — মোবাইল (৩২০–৬৩৯px)-এ এই
+                        ⚠️ `hidden min-[640px]:block` — মোবাইল (৩২০–৬৩৯px)-এ এই
                         দাম-bar-টা Figma-র মোবাইল মকআপেই নেই (দেখুন:
                         rank + নাম + "N Sold" pill, মাঝে কোনো $ oval
                         নেই)। শুধু ≥৬৪০px (ট্যাবলেট/ডেস্কটপ)-এ ফিরে আসে,
@@ -1111,7 +1129,7 @@ export default async function AdminDashboardPage({
                         আঁটানো নয়, লুকানো, তাই সেই মিনিমাম-প্রস্থের
                         hack-টা আর দরকার নেই। */}
                     <div
-                      className="hidden h-8 min-w-0 flex-1 overflow-hidden rounded-full sm:block"
+                      className="hidden h-8 min-w-0 flex-1 overflow-hidden rounded-full min-[640px]:block"
                       style={{
                         backgroundColor: "#F9F6F3",
                         backgroundImage:
@@ -1122,7 +1140,7 @@ export default async function AdminDashboardPage({
                        * ন্যূনতম প্রস্থটা class-এ, inline style-এ নয় —
                        * inline style-এ breakpoint লেখা যায় না।
                        *
-                       * বাইরের track-টাই এখন `sm:block` (মোবাইলে hidden),
+                       * বাইরের track-টাই এখন `min-[640px]:block` (মোবাইলে hidden),
                        * তাই এই min-width-এর ৩২০px-বেস মান নিয়ে আর ভাবতে
                        * হয় না — শুধু ≥৬৪০px-এ "$432.99"-এর মতো অঙ্কও
                        * আঁটে এটুকু নিশ্চিত করলেই চলে। তার চেয়ে বড় অঙ্ক
@@ -1137,7 +1155,7 @@ export default async function AdminDashboardPage({
                           backgroundColor: BAR_COLORS[index % BAR_COLORS.length],
                         }}
                       >
-                        <span className="whitespace-nowrap font-frank-ruhl text-[13px] font-medium leading-none text-white sm:text-[14px]">
+                        <span className="whitespace-nowrap font-frank-ruhl text-[13px] font-medium leading-none text-white min-[640px]:text-[14px]">
                           {money(item.revenue)}
                         </span>
                       </div>
@@ -1147,7 +1165,7 @@ export default async function AdminDashboardPage({
                   {/* Figma: 83×32 pill, radius 100, BG #F9F6F3,
                       লেখা Sora 400 12px #000000।
                       ৩২০px-এ ৬৪ — "999 Sold" পর্যন্ত এতেও আঁটে। */}
-                  <span className="flex h-8 w-[64px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[11px] font-normal leading-none text-black sm:w-[83px] sm:text-[12px]">
+                  <span className="flex h-8 w-[64px] shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[11px] font-normal leading-none text-black min-[640px]:w-[83px] min-[640px]:text-[12px]">
                     {item.quantity} Sold
                   </span>
                 </div>

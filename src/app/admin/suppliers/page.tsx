@@ -15,9 +15,9 @@ import {
 import {
   DEFAULT_SUPPLIER_STATUS,
   DELIVERY_STATUS_STYLE,
-  formatQuantity,
   isSupplierStatusFilter,
 } from "@/lib/supplier-status";
+import { formatQuantity } from "@/lib/inventory-status";
 import SuppliersToolbar from "./SuppliersToolbar";
 import SupplierRowActions, { SupplierProductsPill } from "./SupplierRowActions";
 

@@ -116,8 +116,23 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
    */
   const contentWidth = days.length * COL_W + Math.max(days.length - 1, 0) * COL_GAP;
 
+  /**
+   * ⚠️ `overflow-y-hidden` জরুরি, যদিও উল্লম্বভাবে কিছুই উপচে পড়ার
+   * কথা নয়।
+   *
+   * CSS-এর নিয়ম: `overflow-x` যদি `visible` ছাড়া অন্য কিছু হয়, আর
+   * `overflow-y` যদি `visible` থাকে, তবে browser নিজে থেকেই
+   * `overflow-y`-কে `auto` বানিয়ে ফেলে — দুটো অক্ষ আলাদা রাখা সম্ভব
+   * নয়। ফলে শুধু `overflow-x-auto` লিখলে কার্ডের ভেতরে একটা
+   * **উল্লম্ব scrollbar-ও** জন্মায়, কারণ pill-গুলোর inline height
+   * সাব-পিক্সেলে গোল হয়ে মাঝে মাঝে এক-দু' পিক্সেল বেশি হয়ে যায়।
+   *
+   * স্পষ্ট করে `hidden` লিখলে ওই দ্বিতীয় scrollbar-টা আর আসে না, আর
+   * আড়াআড়ি scroll (যেটা আসলে দরকার — "This Year"-এ ১২টা কলাম)
+   * অক্ষত থাকে।
+   */
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-hidden">
       <div className="flex flex-col gap-5" style={{ width: contentWidth }}>
         <div className="relative flex flex-col gap-[9px]">
           {/* উপরের সারি — আয়। items-end, তাই pill গুলো ছেঁড়া রেখা থেকে

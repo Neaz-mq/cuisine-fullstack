@@ -64,6 +64,16 @@ export default async function SuppliersOverviewCards({ period }: { period: Overv
     prisma.supplier.groupBy({
       by: ["category"],
       where: { category: { not: null }, ...registeredBy },
+      // ⚠️ `orderBy` এখানে ঐচ্ছিক নয় — Prisma-র generated type
+      // `groupBy`-তে এটা **বাধ্যতামূলক** করে রাখে (না দিলে
+      // "Property 'orderBy' is missing" — টাইপ-চেকে ধরা পড়ে, runtime-এ
+      // নয়, তাই `next build`-এর আগে চোখে পড়ে না)।
+      //
+      // কারণটা যুক্তিসঙ্গত: গুচ্ছগুলো কোন ক্রমে ফিরবে সেটা নির্দিষ্ট
+      // না করলে Postgres যেকোনো ক্রমে দিতে পারে। আমরা কেবল `.length`
+      // নিই, তাই ক্রমে কিছু যায়-আসে না — তবু একটা স্থিতিশীল ক্রম
+      // দেওয়াই ভালো, কেউ পরে এই ফলাফলটা render করতে চাইলে।
+      orderBy: { category: "asc" },
     }),
     // Figma-র "Pending / Awaiting Delivery" — অর্থাৎ সরবরাহকারীকে বলা
     // হয়েছে কিন্তু মাল আসেনি। DRAFT নয়, সেটা এখনো পাঠানোই হয়নি।
