@@ -84,16 +84,21 @@ export default function ExportReportButton({
   };
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    // flex-1 min-w-0 — পাশের তারিখ-pill-এর মতোই, মোবাইলে দুটো মিলে
+    // Figma-র flex-grow:1 অনুকরণ করে সমান ভাগে ২৮৮px ভরাট করে (দেখুন
+    // admin/page.tsx-এর কনটেইনার comment)। md থেকে `md:flex-none` —
+    // ওখানে বোতাম নিজের মাপেই থাকে, h1-এর পাশে জায়গা ছাড়তে হয়।
+    <div className="flex flex-1 min-w-0 flex-col items-center gap-1 md:flex-none md:items-end">
       <button
         type="button"
         onClick={handleExport}
         disabled={busy}
-        // h-11 — পাশের তারিখ-pill-ও ৪৪px, তাই দুটোর উপর-নিচ একসারিতে
-        // পড়ে। আগে `py-3` ছিল, যেটা ~৪৬px দিত আর বোতামটা এক-দুই পিক্সেল
-        // নিচে ঝুলে থাকত। whitespace-nowrap: সরু পর্দায় "Export Report"
-        // দু'লাইনে ভাঙলে বোতামটা লম্বা হয়ে যেত।
-        className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-[#121212] px-5 font-sora text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        // h-10/px-3/text-12px মোবাইলে — Figma-র 139px pill-টা এই মাপেই
+        // "Export Report" আঁটে (12px Sora, padding 10px 12px)। md থেকে
+        // আগের h-11/px-5/text-14px ফিরে আসে, পাশের তারিখ-pill-এর h-11
+        // এর সাথে মিলিয়ে। w-full mobile-এ — flex-1 wrapper পুরোটা
+        // ভরাট করে, md:w-auto-তে আবার নিজের কনটেন্ট-মাপে।
+        className="flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#121212] px-3 font-sora text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 md:h-11 md:w-auto md:justify-start md:px-5 md:text-[14px]"
       >
         {busy ? (
           <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />

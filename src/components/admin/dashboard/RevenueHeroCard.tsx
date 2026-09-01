@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CircleDollarSign, Eye, EyeOff, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleDollarSign, Eye, EyeOff } from "lucide-react";
 
 /**
  * src/components/admin/dashboard/RevenueHeroCard.tsx
@@ -89,8 +89,21 @@ export default function RevenueHeroCard({
      *
      * ছোট পর্দায় ৫০/৩০ বাড়াবাড়ি: ৩৭৫px-এ কার্ডটা অকারণে লম্বা হয়ে
      * পুরো পর্দা খেয়ে ফেলে। তাই Figma-র মান দুটো md-scoped।
+     *
+     * ⚠️ padding মোবাইলে `p-4` (২০ নয়, ১৬px) — এটাই ৩২০px-এ badge
+     * (Frame 2147232252, width 256) ভেঙে পড়ার আসল কারণ ছিল। হিসাব:
+     * ৩২০px পর্দায় AdminShell-এর নিজের প্যাডিং (p-4, দুই পাশে ১৬)
+     * বাদ দিলে main content থাকে ঠিক ২৮৮px (দেখুন admin/page.tsx-এর
+     * date-pill মন্তব্য)। কার্ডটা সেই ২৮৮px পুরোটা নেয়, তাই কার্ডের
+     * ভেতরের প্যাডিং ১৬px (দুই পাশে ৩২) হলে ভেতরে থাকে ঠিক ২৫৬px —
+     * Figma-র badge width-এর সাথে হুবহু মেলে। আগের `p-5` (দুই পাশে
+     * ৪০) দিয়ে ভেতরে থাকত মাত্র ২৪৮px — অথচ অঙ্কের সারি ("$5,505.59"
+     * টাইপ পরিমাণ + gap 23 + ৫০px চোখ-বোতাম) নিজেই প্রায় ২৫৩-২৬৮ px
+     * চওড়া হয়ে যায়, ফলে সেই সারি (আর তার সাথে `align-self:stretch`
+     * করা badge-টাও) কার্ডের কিনারা ছাড়িয়ে যেত — badge-টা তখন
+     * বেঢপ/কাটা দেখাত। `p-4`-এ এই overflow-ই আর হয় না।
      */
-    <div className="relative flex flex-col gap-8 overflow-hidden rounded-[20px] bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] p-5 md:gap-[50px] md:p-[30px]">
+    <div className="relative flex flex-col gap-8 overflow-hidden rounded-[20px] bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] p-4 md:gap-[50px] md:p-[30px]">
       {/**
        * ভেতরের বাঁকানো শেপ — Figma: Vector 1400, 585×390,
        * left 367, top −1, #FFFFFF @ 10%।
@@ -163,34 +176,52 @@ export default function RevenueHeroCard({
           </div>
 
           {/**
-           * Figma: সাদা pill, উচ্চতা 26, radius 109.6, padding
-           * 6px 12px 6px 6px, gap 4 — আর `align-self: stretch`।
+           * Figma মোবাইল (Frame 2147232252): উচ্চতা 25, radius 109.6,
+           * padding 6px 12px 6px 6px, gap **2** — আর `align-self: stretch`
+           * (md-এ আগের পূর্ণ Figma export অনুযায়ী উচ্চতা 26, gap 4,
+           * সেখানে বদল হয়নি)।
            *
            * ওই stretch-টাই এখানে আসল: pill-টা নিজের লেখার মাপে সঙ্কুচিত
            * হয় না, উপরের অঙ্কের সারির সমান চওড়া হয়। ফলে দুটোর বাঁ আর
            * ডান প্রান্ত একসারিতে পড়ে — মকআপে যেটা দেখতে পরিপাটি লাগে।
            * আগে এটা hug ছিল (`inline-flex self-start`), তাই ছোট লেখায়
-           * pill-টা অর্ধেক হয়ে যেত।
+           * pill-টা অর্ধেক হয়ে যেত। ৩২০px-এ এই stretch-করা প্রস্থটাই
+           * ঠিক ২৫৬px-এ গিয়ে দাঁড়ায় — কিন্তু কেবল তখনই, যখন কার্ডের
+           * নিজের padding ঠিক থাকে (দেখুন উপরের কার্ড-div-এর মন্তব্য)।
            *
+           * ⚠️ `overflow-hidden` — pill-এর উচ্চতা ২৫px-এই আটকানো
+           * (`h-[25px]`, বাড়ে না), অথচ ১৩px আইকন + ১২px লেখা (leading-none
+           * সত্ত্বেও ব্রাউজারের প্রকৃত line-box ফন্টের metrics অনুযায়ী
+           * কখনো ঠিক ফন্ট-সাইজের সমান হয় না) মিলিয়ে ভেতরের সারিটা মাঝেমধ্যে
+           * ১৩px-এর সামান্য বেশি হয়ে যাচ্ছিল — ফলে তীর-আইকনটা pill-এর
+           * গোল কিনারার বাইরে উঁকি দিত (স্ক্রিনশটে যা দেখা গেছে)।
+           * `overflow-hidden` নিশ্চিত করে এমন সামান্য বাড়তি অংশ pill-এর
+           * বাইরে আর কখনো দেখা যাবে না।
            */}
-          <div className="flex h-[26px] w-full items-center justify-center gap-1 rounded-full bg-white py-1.5 pl-1.5 pr-3">
+          <div className="flex h-[25px] w-full items-center justify-center gap-0.5 overflow-hidden rounded-full bg-white py-1.5 pl-1.5 pr-3 md:h-[26px] md:gap-1">
             {deltaPercent === null ? (
-              <span className="font-sora text-[12px] leading-none text-black md:text-[14px]">
+              <span className="font-sora text-[11px] leading-none text-black md:text-[14px]">
                 No sales last week to compare
               </span>
             ) : (
               <>
-                {/* Figma: 13×13, ভরাট তীর, রঙ #0ECF00। */}
+                {/* Figma: 13×13, ভরাট তীর ("vuesax/bold/arrow-up"),
+                    রঙ #0ECF00। আগে TrendingUp/TrendingDown (চার্ট-জিগজ্যাগ
+                    আইকন) ব্যবহার হতো, যেটা Figma-র সাধারণ তীরের চেয়ে
+                    অনেক বেশি জটিল/চওড়া দেখাত — তাই সোজা ArrowUp/ArrowDown।
+                    ৩২০px-এ ১১px (`md:h-[13px]`-এ Figma-র আসল ১৩px ফেরে) —
+                    টেক্সট ছোট হওয়ার সাথে সাথে আইকনও একটু ছোট করে pill-এর
+                    ভেতরে বাড়তি breathing room রাখা হয়েছে। */}
                 {up ? (
-                  <TrendingUp
-                    className="h-[13px] w-[13px] shrink-0"
+                  <ArrowUp
+                    className="h-[11px] w-[11px] shrink-0 md:h-[13px] md:w-[13px]"
                     style={{ color: deltaColor }}
                     strokeWidth={2.5}
                     aria-hidden="true"
                   />
                 ) : (
-                  <TrendingDown
-                    className="h-[13px] w-[13px] shrink-0"
+                  <ArrowDown
+                    className="h-[11px] w-[11px] shrink-0 md:h-[13px] md:w-[13px]"
                     style={{ color: deltaColor }}
                     strokeWidth={2.5}
                     aria-hidden="true"
@@ -198,8 +229,9 @@ export default function RevenueHeroCard({
                 )}
                 {/* Figma: Sora 400, 14px, LH 100%। শতাংশটুকু রঙিন,
                     বর্ণনাটা Black/100 — উপরের deltaColor-এর মন্তব্য
-                    দ্রষ্টব্য। */}
-                <span className="whitespace-nowrap font-sora text-[12px] font-normal leading-none md:text-[14px]">
+                    দ্রষ্টব্য। ৩২০px-এ 12px থেকে 11px — pill-এর ভেতরে
+                    ফিট করার বাড়তি জায়গা, md-তে Figma-র 14px অক্ষত। */}
+                <span className="whitespace-nowrap font-sora text-[11px] font-normal leading-none md:text-[14px]">
                   <span style={{ color: deltaColor }}>
                     {up ? "+" : ""}
                     {deltaPercent}%

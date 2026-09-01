@@ -600,35 +600,22 @@ export default async function AdminDashboardPage({
         </h1>
 
         {/**
-         * ফোনে পুরো প্রস্থ আর দুই প্রান্তে ছড়ানো, md থেকে নিজের মাপে।
+         * Figma frame 2147232352: width 288, gap 10, দুই সন্তানই
+         * flex-grow:1 (সমান ভাগে ভরাট) — আর ৩২০px পর্দায় বাইরের
+         * `p-4` (AdminShell) বাদ দিলে ঠিক ২৮৮px-ই পড়ে থাকে। অর্থাৎ
+         * ডিজাইনটাই ৩২০px-এর জন্য pixel-perfect মাপা, `flex-wrap`
+         * দিয়ে দ্বিতীয় সারিতে নামানোর দরকার নেই — বরং সেটাই বাগ ছিল।
          *
-         * ⚠️ তারিখের pill-এ আগে `flex-1` ছিল — বাকি জায়গা নিতে গিয়ে
-         * ওটা নিজের লেখার চেয়েও সরু হয়ে যেত আর "Aug 28, 2026" দু'লাইনে
-         * ভেঙে pill-টা উপচে পড়ত। এখন দুটোই নিজের মাপে (`shrink-0`),
-         * আর ফাঁকটা `justify-between` সামলায়।
-         *
-         * ⚠️ `flex-wrap` লাগে ৩২০px-এর জন্য। দুটো মিলে ~৩২২px, অথচ
-         * ওখানে padding বাদে থাকে ২৮৮ — `shrink-0` বলা আছে বলে কেউ
-         * ছোট হয় না, তাই Export বোতামটা কেটে পর্দার বাইরে চলে যেত।
-         * wrap থাকলে ওটা নিচের সারিতে নেমে যায়। ৩৭৫px-এ (আজকের সবচেয়ে
-         * সাধারণ ছোট মাপ) দুটো এক সারিতেই আঁটে, তাই সেখানে wrap-এর
-         * কোনো প্রভাব নেই।
-         *
-         * ছোট পর্দায় তারিখটা বছর ছাড়া ("Aug 28") — ৩২০px-এ ওটুকু
-         * বাঁচানো মানে দুটো এক সারিতেই থেকে যাওয়া, আর বছরটা এমনিতেও
-         * চলতি বছর, কেউ খোঁজে না।
+         * তাই mobile-এ `flex-nowrap` + দুটোই `flex-1` (Figma-র
+         * flex-grow:1 হুবহু) — pill আর বোতাম মিলে সবসময় এক সারিতে,
+         * প্রস্থ ভাগ করে নেয়। md থেকে আবার আগের মতো নিজের মাপে
+         * (`md:flex-none`), কারণ ওখানে h1-এর সাথে একই সারিতে থাকতে
+         * হয় আর flex-1 করলে দুটো অহেতুক চওড়া হয়ে h1-কে চেপে ধরত।
          */}
-        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
-          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+        <div className="flex w-full shrink-0 flex-nowrap items-center gap-2.5 md:w-auto md:justify-start">
+          <span className="flex h-10 flex-1 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black md:h-11 md:flex-none md:justify-start md:px-4 md:text-[14px]">
             <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            {/* ⚠️ `sm:` নয় — globals.css-এ sm = 320px, তাই `sm:hidden`
-                মানে কার্যত সবসময় লুকানো, আর ৩২০px-এ সংক্ষিপ্ত তারিখটা
-                কখনো দেখাই যেত না; উল্টে পুরো "Aug 30, 2026" বসত, যেটা
-                বাঁচানোর জন্যই এটা লেখা হয়েছিল। */}
-            <span className="min-[480px]:hidden">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-            <span className="hidden min-[480px]:inline">
+            <span>
               {now.toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
