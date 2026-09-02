@@ -952,8 +952,40 @@ export default async function AdminDashboardPage({
        * ন্যূনতম মাপগুলোও কমানো হয়েছে, কিন্তু `min-w-0` ছাড়া ভবিষ্যতে
        * আবার কেউ একটা চওড়া জিনিস বসালে ঠিক একই ভাবে দুটোই ভাঙত।
        */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="min-w-0 rounded-[20px] bg-white p-5 md:p-6">
+      {/**
+       * ⚠️ ট্যাবলেটে (৭৬৮–১০২৩px) দুটো কার্ড **পাশাপাশি**, আর পুরো
+       * সারিটা আড়াআড়ি scroll করে — Figma-র ট্যাবলেট মকআপে ঠিক এটাই
+       * (১০৫৯px চওড়া frame-এ Top Selling Items ডান কিনারায় কেটে গেছে,
+       * অর্থাৎ designer নিজেই ওটাকে overflow হতে দিয়েছেন)।
+       *
+       * আগে `lg:grid-cols-2` মানে ছিল ১০২৪-এর নিচে দুটোই একের নিচে
+       * আরেক — অর্থাৎ ট্যাবলেটে Total Revenue পুরো প্রস্থ পেত আর
+       * তার সাতটা pill অনেকখানি ফাঁকা জায়গা নিয়ে ছড়িয়ে বসত, যেটা
+       * screenshot-এ ধরা পড়েছে।
+       *
+       * তিনটে ধাপ:
+       *   <768      grid, এক কলাম (ফোন — পাশাপাশি বসানোর জায়গাই নেই)
+       *   768–1023  flex সারি, কার্ডের প্রস্থ স্থির, বাইরে scroll
+       *   ≥1024     আগের মতোই দুই সমান কলাম, কোনো scroll নেই
+       *
+       * ⚠️ বাইরের মোড়কে `overflow-y-hidden`-ও লাগে: CSS-এ এক অক্ষ
+       * `visible` ছাড়া অন্য কিছু হলে অন্য অক্ষটাও নিজে থেকে `auto`
+       * হয়ে যায়, আর তখন একটা অপ্রয়োজনীয় উল্লম্ব scrollbar জন্মাত
+       * (RevenueChart.tsx-এ একই ফাঁদের ব্যাখ্যা আছে)।
+       */}
+      <div className="overflow-x-auto overflow-y-hidden lg:overflow-visible">
+      <div className="grid gap-4 md:flex md:w-max md:gap-5 lg:grid lg:w-auto lg:grid-cols-2 lg:gap-4">
+        {/* ট্যাবলেটে স্থির প্রস্থ, `lg:w-auto` দিয়ে ডেস্কটপে আবার
+            grid-এর ভাগে ফেরত।
+
+            ⚠️ ৬৪০ থেকে কমিয়ে ৫২০ — Figma-র ট্যাবলেট মকআপে (১০৫৯px
+            frame) Total Revenue কার্ডটা পুরো প্রস্থের অর্ধেকের একটু
+            বেশি নেয়, আর তার ডান পাশে Top Selling Items-এর **নামগুলো
+            পড়া যায়**। ৬৪০ দিলে ৭৬৮px পর্দায় ডান পাশে কেবল
+            "Cla… Roa…" টুকু উঁকি দিত — অর্থাৎ পাশাপাশি বসানোর
+            পুরো উদ্দেশ্যটাই মাঠে মারা যেত। chart নিজে সংকুচিত হয় না,
+            কারণ pill গুলো ৫২px-এ থেমে গিয়ে ভেতরে scroll করে। */}
+        <div className="min-w-0 rounded-[20px] bg-white p-5 md:w-[520px] md:shrink-0 md:p-6 lg:w-auto">
           <div className="flex items-start justify-between gap-3">
             {/* min-w-0 — বড় অঙ্কে ("$1,284,905.00") নাহলে এই ব্লকটা
                 RangeSelect-কে ঠেলে কার্ডের বাইরে পাঠিয়ে দিত। */}
@@ -987,8 +1019,14 @@ export default async function AdminDashboardPage({
           )}
         </div>
 
-        {/* Figma card: Vertical, 517.5×356, radius 20, padding 30, gap 20. */}
-        <div className="flex min-w-0 flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
+        {/* Figma card: Vertical, 517.5×356, radius 20, padding 30, gap 20.
+
+            ট্যাবলেটে স্থির ৪৬০px — Figma-র ৫১৭.৫-এর কাছাকাছি, আর
+            পদের নাম দু'লাইনে ভাঙলেও ("Crispy Fried Chicken") ঠিকঠাক
+            পড়া যায়। দুটো মিলিয়ে ৫২০+২০+৪৬০ = ১০০০, অর্থাৎ ৭৬৮px
+            পর্দায় ডান প্রান্তের সামান্য অংশ scroll করে দেখতে হয় —
+            Figma-র মকআপেও ঠিক তাই। */}
+        <div className="flex min-w-0 flex-col gap-5 rounded-[20px] bg-white p-5 md:w-[460px] md:shrink-0 md:p-[30px] lg:w-auto">
           {/**
            * Header — Figma: row, space-between, height 40, gap 20 (এটা
            * ≥৬৪০px-এর জন্য প্রযোজ্য)।
@@ -1173,6 +1211,7 @@ export default async function AdminDashboardPage({
             </div>
           )}
         </div> 
+      </div>
       </div>
     </div>
   );

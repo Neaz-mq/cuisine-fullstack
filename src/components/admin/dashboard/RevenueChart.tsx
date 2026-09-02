@@ -88,6 +88,24 @@ function pillHeight(value: number, max: number) {
 const COL_W = 52;
 const COL_GAP = 3;
 
+/**
+ * একটা কলাম সর্বোচ্চ কত চওড়া হতে পারে।
+ *
+ * ⚠️ এই সীমাটা না থাকলে pill-এর **আকৃতি** নষ্ট হয়, আর সেটাই এখানে
+ * আসল প্রশ্ন। Figma-তে pill ৫২px চওড়া আর ৫২–৮৪px উঁচু — অর্থাৎ
+ * সবচেয়ে ছোটটা নিখুঁত বৃত্ত, বাকিগুলো **খাড়া** ডিম্বাকৃতি (চওড়ার
+ * চেয়ে লম্বা)।
+ *
+ * pill-কে কলামের সাথে বাড়তে দিলে ৭২px চওড়া হয়ে যেত, অথচ উচ্চতা
+ * ন্যূনতম ৫২ — ফলে শুয়ে থাকা চ্যাপ্টা ডিম, ঠিক উল্টো চেহারা।
+ *
+ * তাই pill স্থির ৫২, আর ফাঁকটা যাতে হাস্যকর বড় না হয় সেজন্য
+ * কলামেরই একটা সীমা: ৮৮px (Figma-র ৫১৭.৫px কার্ডে সাতটা কলাম মানে
+ * ~৬৫px, আর ট্যাবলেট মকআপে ~৮০ — ৮৮ তার সামান্য উপরে, যাতে চওড়া
+ * কার্ডেও ফাঁকটা ~৩৬px-এ থামে)।
+ */
+const COL_MAX_W = 88;
+
 export default function RevenueChart({ days }: { days: RevenueDay[] }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -109,12 +127,32 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
    *
    * Figma-র নিজের মকআপ ৩২০px-এ এই সমস্যাটাই মেনে নেয়নি — কলাম আকার
    * (52px) অক্ষত রেখে বাকিটা পাশে সরিয়ে (touch-scroll করে) দেখায়।
-   * তাই এখন কলামগুলো fixed 52px + 3px গ্যাপ, মোট প্রস্থ
-   * `contentWidth`-এ বসানো, আর পুরো ব্লকটা একটা `overflow-x-auto`
-   * wrapper-এর ভেতরে — কম কলামে (সপ্তাহ) পুরোটাই দেখা যায়, বেশি
-   * কলামে (বছর) স্লাইড করে বাকিটা দেখা যায়।
+   *
+   * ⚠️ কিন্তু ৫২px একটা **ন্যূনতম**, স্থির মাপ নয় — আর এই তফাতটা
+   * প্রথমে ভুল হয়েছিল। `width: contentWidth` বসানোয় সাতটা কলাম
+   * সবসময় ৩৮২px জুড়ে বসত, এমনকি ৯০০px চওড়া কার্ডেও — ডান দিকে
+   * বিশাল ফাঁকা জায়গা পড়ে থাকত। Figma-র ডেস্কটপ মকআপে কলামগুলো
+   * কার্ডের পুরো প্রস্থ জুড়ে ছড়ানো (৫১৭.৫px কার্ডে সাতটা কলাম,
+   * প্রতিটা ~৭০px)।
+   *
+   * তাই এখন `minWidth` — জায়গা থাকলে কলামগুলো `flex-1` দিয়ে বেড়ে
+   * পুরোটা ভরাট করে, আর জায়গা কম পড়লে ৫২px-এ থেমে যায় আর বাইরের
+   * `overflow-x-auto` wrapper স্লাইড করতে দেয়। একটাই নিয়মে দুই
+   * প্রান্ত: ৩২০px-এ "This Year"-এর ১২টা কলাম scroll করে, আর
+   * ডেস্কটপে সপ্তাহের সাতটা কলাম কার্ড ভরে দেয়।
+   *
+   * ⚠️ pill নিজে স্থির ৫২px, বাড়ে শুধু **কলাম** — আর কলামও
+   * `COL_MAX_W` পর্যন্ত (ওই ধ্রুবকের মন্তব্যে কারণ)। ফলে pill-এর
+   * আকৃতি সব মাপে এক থাকে, আর দুই দিনের মাঝের ফাঁকও ~৩৬px-এর
+   * বেশি হয় না।
+   *
+   * ⚠️ কার্ড এই সর্বোচ্চ মাপের চেয়েও চওড়া হলে chart-টা **মাঝখানে**
+   * বসে (`mx-auto`), বাঁয়ে নয়। বাঁ-ঘেঁষা রাখলে ডান পাশে একটা বড়
+   * ফাঁকা জায়গা পড়ে থাকত আর মনে হতো কিছু একটা লোড হয়নি; মাঝখানে
+   * থাকলে সেটা একটা ইচ্ছাকৃত বিন্যাস বলেই দেখায়।
    */
   const contentWidth = days.length * COL_W + Math.max(days.length - 1, 0) * COL_GAP;
+  const maxContentWidth = days.length * COL_MAX_W + Math.max(days.length - 1, 0) * COL_GAP;
 
   /**
    * ⚠️ `overflow-y-hidden` জরুরি, যদিও উল্লম্বভাবে কিছুই উপচে পড়ার
@@ -130,10 +168,25 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
    * স্পষ্ট করে `hidden` লিখলে ওই দ্বিতীয় scrollbar-টা আর আসে না, আর
    * আড়াআড়ি scroll (যেটা আসলে দরকার — "This Year"-এ ১২টা কলাম)
    * অক্ষত থাকে।
+   *
+   * ⚠️ কিন্তু `overflow-y-hidden`-এর একটা পার্শ্বপ্রতিক্রিয়া আছে:
+   * tooltip-টা ইচ্ছাকৃতভাবে chart-এর মাথার ৮px উপরে উপচে পড়ে
+   * (Figma-র `top: 93px`, নিচে tooltip-এর নিজের মন্তব্য দ্রষ্টব্য),
+   * আর `hidden` সেই উপচে পড়া অংশটুকু কেটে দিত — কালো কার্ডের উপরের
+   * গোল কোনাদুটো কাটা দেখাত।
+   *
+   * তাই wrapper-এ `pt-2` (৮px) — ঠিক ততটুকু জায়গা যতটা tooltip
+   * উপরে ওঠে। scroll-এর আচরণ বদলায় না, শুধু কাটা পড়া বন্ধ হয়।
+   * tooltip-কে wrapper-এর বাইরে সরানো যেত, কিন্তু তখন সেটা আড়াআড়ি
+   * scroll-এর সাথে নড়ত না — কলাম সরে গেলেও tooltip জায়গামতোই
+   * দাঁড়িয়ে থাকত।
    */
   return (
-    <div className="overflow-x-auto overflow-y-hidden">
-      <div className="flex flex-col gap-5" style={{ width: contentWidth }}>
+    <div className="overflow-x-auto overflow-y-hidden pt-2">
+      <div
+        className="mx-auto flex flex-col gap-5"
+        style={{ minWidth: contentWidth, maxWidth: maxContentWidth }}
+      >
         <div className="relative flex flex-col gap-[9px]">
           {/* উপরের সারি — আয়। items-end, তাই pill গুলো ছেঁড়া রেখা থেকে
               উপরের দিকে বাড়ে। */}
@@ -149,7 +202,9 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
                 // ফোনে hover বলে কিছু নেই, তাই tap-ও একই কাজ করে।
                 onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
                 aria-label={`${day.fullDate}: ${day.incomeLabel} in, ${day.expenseLabel} out, ${day.profitLabel} kept, ${day.orders} orders`}
-                className="flex w-[52px] shrink-0 justify-center focus:outline-none"
+                // ⚠️ কলামটা `flex-1` (বাড়ে), ভেতরের pill স্থির ৫২px।
+                // উপরের contentWidth-এর মন্তব্য দ্রষ্টব্য।
+                className="flex min-w-[52px] flex-1 justify-center focus:outline-none"
               >
                 <span
                   className="w-[52px] shrink-0 rounded-full"
@@ -177,7 +232,7 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
                 onMouseLeave={() => setActiveIndex(null)}
                 onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
                 aria-hidden="true"
-                className="flex w-[52px] shrink-0 justify-center focus:outline-none"
+                className="flex min-w-[52px] flex-1 justify-center focus:outline-none"
               >
                 <span
                   className="w-[52px] shrink-0 rounded-full"
@@ -263,7 +318,7 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
         {/**
          * দিনের নাম — Figma: Sora 400, 14px, Black/70।
          *
-         * ⚠️ pill-গুলোর মতো এই কলামগুলোও এখন fixed 52px + 3px গ্যাপ —
+         * ⚠️ pill-গুলোর মতো এই কলামগুলোও `flex-1 min-w-[52px]` + 3px গ্যাপ —
          * বারের ঠিক নিচেই বসে থাকে, viewport যত সরুই হোক (আগে এই
          * সারিটা আলাদাভাবে `flex-1`-এ সংকুচিত হতো, তাই বার আর তার
          * নামের কেন্দ্র ৩২০px-এ একে অপরের থেকে সরে যেত)।
@@ -272,7 +327,7 @@ export default function RevenueChart({ days }: { days: RevenueDay[] }) {
           {days.map((day) => (
             <span
               key={`label-${day.label}`}
-              className={`w-[52px] shrink-0 text-center font-sora text-[12px] leading-none tracking-normal sm:text-[14px] ${
+              className={`min-w-[52px] flex-1 text-center font-sora text-[12px] leading-none tracking-normal sm:text-[14px] ${
                 day.isToday ? "font-semibold text-black" : "text-black/70"
               }`}
             >
