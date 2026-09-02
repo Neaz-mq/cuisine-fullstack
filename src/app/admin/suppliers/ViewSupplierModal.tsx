@@ -10,8 +10,10 @@ import {
   ModalShell,
   OUTLINE_BUTTON,
   PRIMARY_BUTTON,
+  READ_ONLY_LABEL,
   ReadOnlyField,
 } from "@/components/admin/modal-ui";
+import { SupplierProductsPill } from "./SupplierProductsPill";
 
 /**
  * src/app/admin/suppliers/ViewSupplierModal.tsx
@@ -173,15 +175,26 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
         open={open}
         onClose={onClose}
         titleId="supplier-view-title"
-        title="Supplier Details"
+        /* ⚠️ Figma-তে বহুবচন — "Suppliers Details"। ইংরেজিতে এটা
+           একটু কানে লাগে ("Supplier Details" হওয়ার কথা), কিন্তু
+           Figma-ই এখানে শেষ কথা। ভুল মনে হলে বলবেন, এক শব্দের বদল। */
+        title="Suppliers Details"
         footer={
-          <div className="flex flex-col gap-2 sm:flex-row">
+          /**
+           * ⚠️ `sm:` নয়, `min-[640px]:` — `--breakpoint-sm: 320px`
+           * হওয়ায় `sm:flex-row` ৩২০px-এও চালু ছিল, অর্থাৎ base
+           * `flex-col` কোথাও খাটত না। তিনটে বোতাম (Deactivate 133 +
+           * Close 99.5 + Edit 97.5 = ৩৩০px) ৩২০px-এর পর্দায় এক সারিতে
+           * ধরে না, তাই ওগুলো চেপে গিয়ে লেখা ভেঙে যেত। এখন ৬৪০-এর
+           * নিচে সত্যিই উপর-নিচে বসে।
+           */
+          <div className="flex flex-col gap-2 min-[640px]:flex-row">
             {supplier && (
               <button
                 type="button"
                 onClick={() => setConfirmOpen(true)}
                 disabled={pending || loading}
-                className={`${isActive ? DANGER_BUTTON : OUTLINE_BUTTON} sm:mr-auto`}
+                className={`${isActive ? DANGER_BUTTON : OUTLINE_BUTTON} min-[640px]:mr-auto`}
               >
                 {isActive ? "Deactivate" : "Reactivate"}
               </button>
@@ -190,7 +203,7 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
             <button
               type="button"
               onClick={onClose}
-              className={`${OUTLINE_BUTTON} flex-1 sm:flex-none`}
+              className={`${OUTLINE_BUTTON} flex-1 min-[640px]:flex-none`}
             >
               Close
             </button>
@@ -199,7 +212,7 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
               type="button"
               onClick={onEdit}
               disabled={loading}
-              className={`${PRIMARY_BUTTON} flex-1 sm:flex-none`}
+              className={`${PRIMARY_BUTTON} flex-1 min-[640px]:flex-none`}
             >
               Edit
             </button>
@@ -226,39 +239,73 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
                 </p>
               </div>
 
-              {/* Staff-এর View modal-এর একই চার-কলাম গড়ন। ৫৬০-এর নিচে
-                  দুই কলাম, কারণ চার কলামে প্রতিটা ~১৫০px আর ঠিকানা
-                  ওতে আঁটে না। */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:grid-cols-4">
-                <ReadOnlyField label="Phone Number" value={supplier.phone ?? "—"} />
-                <ReadOnlyField label="Supply Category" value={supplier.category ?? "—"} />
-                <ReadOnlyField label="Address" value={supplier.address ?? "—"} />
-                {/* ⚠️ pill নয়, সাধারণ লেখা — Staff-এর View modal-এর
-                    একই সিদ্ধান্ত। তালিকায় রঙটা কাজ করে কারণ দশটা
-                    সারির মধ্যে চোখ বুলিয়ে খুঁজতে হয়; এখানে একজনই। */}
-                <ReadOnlyField label="Status" value={isActive ? "Active" : "Inactive"} />
-              </div>
+              {/**
+               * Figma Frame 2147236668 — ঘরগুলো।
+               *
+               * ⚠️ এটা চার কলামের এক সারি নয়, **তিন কলাম আর দুই সারি**,
+               * আর কলামগুলো `justify-content: space-between` দিয়ে ছড়ানো:
+               *
+               *   Address   | Phone Number | Category
+               *   Products  | Status       |
+               *
+               * grid দিয়ে সমান তিন ভাগ করলে কলামগুলো বসত 0 / 225 / 450-এ,
+               * অথচ Figma-র নিজের মাপে (কলাম 115 · 142 · 81, মোট 675)
+               * space-between-এর ফাঁক দাঁড়ায় (675 − 338)/2 = 168.5,
+               * অর্থাৎ শুরুর বিন্দু 0 / 283.5 / 594 — "Category" প্রায়
+               * ডান কিনারায়। তাই ৫৬০ থেকে flex + space-between, আর
+               * প্রতিটা কলাম নিজের লেখার মাপে দাঁড়ায়।
+               *
+               * ⚠️ মোড়ক তিনটেয় base-এ `contents` — ৫৬০-এর নিচে ওরা
+               * নিজেরা কোনো বাক্স থাকে না, ভেতরের পাঁচটা ঘর সরাসরি
+               * দুই-কলামের grid-এ ছড়িয়ে পড়ে। কলামে-ভাগ করা গড়নটা
+               * ছোট পর্দায় অর্থহীন, অথচ মোড়ক থাকলে ওরা তিনটে ব্লকে
+               * আটকে থাকত।
+               */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-6">
+                <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
+                  <ReadOnlyField label="Address" value={supplier.address ?? "—"} />
 
-              <div>
-                <span className="font-sora text-[13px] font-normal leading-none text-black/70">
-                  Product Supplied
-                </span>
-                {/* সারির pill-টা জায়গা বাঁচাতে গুটিয়ে রাখা ("Chicken +1")।
-                    এখানে জায়গার টান নেই, তাই পুরো তালিকাটাই দেখানো হয় —
-                    এটাই modal-এ আসার একটা কারণ। */}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {supplier.products.length === 0 ? (
-                    <span className="font-frank-ruhl text-[16px] font-medium text-black">—</span>
-                  ) : (
-                    supplier.products.map((product) => (
-                      <span
-                        key={product}
-                        className="flex h-9 items-center rounded-full bg-[#F9F6F3] px-3 font-sora text-[12px] leading-none text-black/70"
-                      >
-                        {product}
-                      </span>
-                    ))
-                  )}
+                  {/**
+                   * ⚠️ ReadOnlyField ব্যবহার করা গেল না, কারণ ওটার মান
+                   * একটা string — এখানে মানটা একটা গুটিয়ে রাখা pill।
+                   * শিরোনামটা তবু হুবহু একই দেখাতে হয়, তাই ক্লাসগুলো
+                   * দুবার না লিখে READ_ONLY_LABEL থেকে আসছে।
+                   *
+                   * ⚠️ আগে এখানে প্রতিটা পণ্যের জন্য আলাদা cream pill
+                   * সাজানো ছিল ("Chicken", "Beef" পাশাপাশি), এই যুক্তিতে
+                   * যে modal-এ জায়গার টান নেই তাই পুরো তালিকা দেখানো
+                   * যায়। যুক্তিটা মন্দ ছিল না, কিন্তু Figma-তে ঘরটা
+                   * সারির মতোই একটাই pill + chevron (Frame 2147236298),
+                   * আর তাতে দুটো জায়গায় একই জিনিস একইরকম দেখায় —
+                   * chevron চাপলে পুরো তালিকাটা এমনিতেই খোলে।
+                   */}
+                  <div className="flex min-w-0 flex-col gap-2 min-[560px]:gap-3">
+                    <span className={READ_ONLY_LABEL}>Products</span>
+                    <SupplierProductsPill products={supplier.products} surface="cream" />
+                  </div>
+                </div>
+
+                <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
+                  <ReadOnlyField label="Phone Number" value={supplier.phone ?? "—"} />
+                  {/**
+                   * ⚠️ এখন pill, সাধারণ লেখা নয় — আগের সিদ্ধান্তটা উল্টে।
+                   * তখনকার যুক্তি ছিল "তালিকায় রঙটা কাজ করে কারণ দশটা
+                   * সারির মধ্যে চোখ বুলিয়ে খুঁজতে হয়; এখানে একজনই"।
+                   * কিন্তু Figma-র Frame 2147236297 স্পষ্ট: Fill,
+                   * background #E8FFEC, লেখা #0ECF00 — অর্থাৎ designer
+                   * এখানেও pill-ই চেয়েছেন।
+                   */}
+                  <ReadOnlyField
+                    label="Status"
+                    value={isActive ? "Active" : "Inactive"}
+                    tone={isActive ? "positive" : "negative"}
+                  />
+                </div>
+
+                <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
+                  {/* ⚠️ Figma-তে শিরোনামটা শুধু "Category", "Supply
+                      Category" নয় (Frame 2147236666-এর label, w=67)। */}
+                  <ReadOnlyField label="Category" value={supplier.category ?? "—"} />
                 </div>
               </div>
 

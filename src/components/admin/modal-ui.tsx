@@ -868,6 +868,20 @@ export function ImageDropzone({
  * আসতে পারে। দুটো একসাথে করতে গেলে InfoField-এ আরও prop যোগ করতে
  * হতো, যা ওই ছোট component-টাকে ঘোলাটে করত।
  */
+/**
+ * ReadOnlyField-এর শিরোনামের ক্লাসগুলো আলাদা করে রাখা, কারণ কিছু ঘরে
+ * মানটা সাধারণ লেখা নয় (যেমন ViewSupplierModal-এর "Products", যেখানে
+ * মানটা একটা গুটিয়ে রাখা pill)। ওখানে component-টা ব্যবহার করা যায় না,
+ * অথচ শিরোনামটা হুবহু একই দেখাতে হয় — ক্লাসগুলো দুবার লিখলে একদিন
+ * একটা বদলে অন্যটা থেকে যেত।
+ *
+ * ⚠️ ৫৬০ থেকে ১৪px — Figma-র desktop frame-এ label Sora 400 14px
+ * (label→মান ফাঁক ১২)। ছোট পর্দায় ১৩px/৮ রাখা হলো, কারণ সেখানে
+ * ঘরগুলো দুই কলামে চেপে বসে।
+ */
+export const READ_ONLY_LABEL =
+  "font-sora text-[13px] font-normal leading-none text-black/70 min-[560px]:text-[14px]";
+
 export function ReadOnlyField({
   label,
   value,
@@ -878,8 +892,8 @@ export function ReadOnlyField({
   tone?: "positive" | "negative";
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <span className="font-sora text-[13px] font-normal leading-none text-black/70">{label}</span>
+    <div className="flex min-w-0 flex-col gap-2 min-[560px]:gap-3">
+      <span className={READ_ONLY_LABEL}>{label}</span>
       {tone ? (
         <span
           className={`inline-flex h-9 w-fit items-center rounded-full px-3 font-sora text-[12px] font-normal leading-none ${

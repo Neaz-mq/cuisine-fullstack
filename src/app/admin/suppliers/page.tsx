@@ -19,7 +19,8 @@ import {
 } from "@/lib/supplier-status";
 import { formatQuantity } from "@/lib/inventory-status";
 import SuppliersToolbar from "./SuppliersToolbar";
-import SupplierRowActions, { SupplierProductsPill } from "./SupplierRowActions";
+import SupplierRowActions from "./SupplierRowActions";
+import { SupplierProductsPill } from "./SupplierProductsPill";
 
 export const metadata = { title: "Suppliers" };
 
@@ -363,14 +364,25 @@ export default async function SuppliersPage({
           <div className="flex flex-col gap-4">
             {suppliers.map((supplier) => {
               return (
-                /* Figma Frame 2147236316: row, padding 16, gap 55,
-                   উচ্চতা 94, radius 16, BG #F9F6F3। */
+                /**
+                 * Figma Frame 2147236338 (ট্যাবলেট): column, padding 16,
+                 * gap 16, radius 16, BG #F9F6F3।
+                 *
+                 * ⚠️ ৫৬০-এর নিচে একটামাত্র কলাম; ৫৬০ থেকে দুই কলামের
+                 * grid, যাতে বোতামজোড়া উপরের সারির ডানে নাম/ইমেইলের
+                 * পাশে বসতে পারে (Frame 2147236690)। xl-এ আবার এক
+                 * সারির flex।
+                 *
+                 * ⚠️ base-এ `items-start` নেই, ইচ্ছাকৃত: flex-col-এ ওটা
+                 * মানে প্রতিটা সন্তান নিজের লেখার মাপে সংকুচিত, তাহলে
+                 * মাঠের সারিটা পুরো প্রস্থ পেত না।
+                 */
                 <div
                   key={supplier.id}
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-6 2xl:gap-[55px]"
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 min-[560px]:grid min-[560px]:grid-cols-[minmax(0,1fr)_auto] min-[560px]:items-start xl:flex xl:flex-row xl:items-center xl:gap-6 2xl:gap-[55px]"
                 >
                   {/* Frame 2147236287: নাম + ইমেইল। */}
-                  <div className="flex min-w-0 flex-col gap-1 xl:w-[160px] xl:shrink-0">
+                  <div className="flex min-w-0 flex-col gap-1 min-[560px]:col-start-1 min-[560px]:row-start-1 xl:col-auto xl:row-auto xl:w-[160px] xl:shrink-0">
                     <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
                       {supplier.name}
                     </p>
@@ -380,36 +392,78 @@ export default async function SuppliersPage({
                   </div>
 
                   {/**
-                   * Frame 2147236445 — ঘরগুলো।
+                   * Frame 2147236677 — ঘরগুলো।
                    *
-                   * ⚠️ প্রস্থগুলো `minmax(0, Nfr)` grid, flex নয়। প্রতিটা
-                   * সারি আলাদা container, তাই content-নির্ভর প্রস্থে
-                   * (flex-basis auto) এক সারির "Phone Number" আরেক সারির
-                   * সাথে মিলত না — Staff-এর তালিকায় ঠিক এই সমস্যাটাই
-                   * ধরা পড়েছিল। `fr` ভাগ হয় কেবল উপলব্ধ জায়গা আর
-                   * অনুপাত থেকে, ভেতরের লেখা থেকে নয়।
+                   * ⚠️ ট্যাবলেটে এটা সমান তিন ভাগের grid নয়, বরং
+                   * `justify-content: space-between` দিয়ে ছড়ানো তিনটে
+                   * খাড়া কলাম — প্রতিটার ভেতরে উপর-নিচে দুটো ঘর:
+                   *
+                   *   Address   | Phone Number | Category
+                   *   Products  | Status       |
+                   *
+                   * সমান তিন ভাগ করলে কলামগুলো বসত 0 / 33% / 67%-এ
+                   * (আগে ঠিক তাই হতো, আর "Category" মাঝামাঝি ঝুলে
+                   * থাকত)। Figma-র নিজের মাপে কলাম 94 · 134 · 67
+                   * (মোট 295) আর জায়গা 616, তাই space-between-এর ফাঁক
+                   * (616 − 295)/2 = 160.5 — শুরুর বিন্দু 0 / 254.5 / 549,
+                   * অর্থাৎ "Category" প্রায় ডান কিনারায়।
+                   *
+                   * ⚠️ মোড়ক তিনটে base-এ আর xl-এ `contents`, মাঝের
+                   * তিরে `flex flex-col`। অর্থাৎ ওরা কেবল ট্যাবলেটেই
+                   * সত্যিকারের বাক্স; দুই প্রান্তে মিলিয়ে গিয়ে পাঁচটা
+                   * ঘন সরাসরি বাইরের grid-এর ঘর হয়ে যায়।
+                   *
+                   * ⚠️ xl-এর কলাম-প্রস্থ অবস্থান-ভিত্তিক, অথচ DOM-ক্রম
+                   * এখন ট্যাবলেটের ক্রম (Address, Products, Phone,
+                   * Status, Category)। তাই প্রতিটা ঘরে স্পষ্ট
+                   * `xl:col-start` — auto-placement-এর ভরসায় থাকলে
+                   * desktop-এ ক্রম উল্টে যেত। template-টা আগের মতোই
+                   * desktop-এর **দেখানোর** ক্রমে: 160=Address,
+                   * 140=Phone, 90=Category, 120=Products, 80=Status।
                    */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:min-w-0 xl:flex-1 xl:grid-cols-[minmax(0,160fr)_minmax(0,140fr)_minmax(0,90fr)_minmax(0,120fr)_minmax(0,80fr)] xl:items-center xl:gap-5">
-                    <InfoField className="" label="Address" value={supplier.address ?? "—"} />
-                    <InfoField className="" label="Phone Number" value={supplier.phone ?? "—"} />
-                    <InfoField className="" label="Category" value={supplier.category ?? "—"} />
+                  <div className="grid grid-cols-2 gap-4 min-[560px]:col-span-2 min-[560px]:row-start-2 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-8 xl:col-auto xl:row-auto xl:grid xl:min-w-0 xl:flex-1 xl:grid-cols-[minmax(0,160fr)_minmax(0,140fr)_minmax(0,90fr)_minmax(0,120fr)_minmax(0,80fr)] xl:items-center xl:gap-5">
+                    {/* কলাম ১ — Frame 2147236675 */}
+                    <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
+                      <InfoField
+                        className="xl:col-start-1 xl:row-start-1"
+                        label="Address"
+                        value={supplier.address ?? "—"}
+                      />
 
-                    {/* Products — InfoField নয়, কারণ মানটা একটা লেখা নয়,
-                        একটা pill যেটা খোলা যায়। label-টা তবু হুবহু
-                        InfoField-এর মাপে, যাতে সারিটা মেলে। */}
-                    <div className="flex min-w-0 flex-col gap-3">
-                      <span className="whitespace-nowrap font-sora text-[13px] font-normal leading-none text-black/70 xl:text-[14px]">
-                        Products
-                      </span>
-                      <SupplierProductsPill products={supplier.products} />
+                      {/* Products — InfoField নয়, কারণ মানটা একটা লেখা নয়,
+                          একটা pill যেটা খোলা যায়। label-টা তবু হুবহু
+                          InfoField-এর মাপে, যাতে সারিটা মেলে। */}
+                      <div className="flex min-w-0 flex-col gap-3 xl:col-start-4 xl:row-start-1">
+                        <span className="whitespace-nowrap font-sora text-[13px] font-normal leading-none text-black/70 xl:text-[14px]">
+                          Products
+                        </span>
+                        <SupplierProductsPill products={supplier.products} />
+                      </div>
                     </div>
 
-                    <InfoField
-                      className=""
-                      label="Status"
-                      value={supplier.isActive ? "Active" : "Inactive"}
-                      tone={supplier.isActive ? "positive" : "negative"}
-                    />
+                    {/* কলাম ২ — Frame 2147236676 */}
+                    <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
+                      <InfoField
+                        className="xl:col-start-2 xl:row-start-1"
+                        label="Phone Number"
+                        value={supplier.phone ?? "—"}
+                      />
+                      <InfoField
+                        className="xl:col-start-5 xl:row-start-1"
+                        label="Status"
+                        value={supplier.isActive ? "Active" : "Inactive"}
+                        tone={supplier.isActive ? "positive" : "negative"}
+                      />
+                    </div>
+
+                    {/* কলাম ৩ — Frame 2147236294, একাই */}
+                    <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
+                      <InfoField
+                        className="xl:col-start-3 xl:row-start-1"
+                        label="Category"
+                        value={supplier.category ?? "—"}
+                      />
+                    </div>
                   </div>
 
                   <SupplierRowActions

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+// ⚠️ useEffect/useRef আর লাগে না — ওগুলো SupplierProductsPill-এর
+// ছিল, আর সেটা এখন নিজের ফাইলে। না সরালে no-unused-vars ভাঙত।
+import { useState } from "react";
 import SupplierFormModal, { type SupplierDraft } from "./SupplierFormModal";
 import ViewSupplierModal from "./ViewSupplierModal";
 
@@ -34,7 +35,23 @@ export default function SupplierRowActions({ supplier }: { supplier: SupplierDra
           ⚠️ xl-এ প্রস্থটা স্থির (১২০), hug নয় — Staff-এর সারির একই
           কারণ: hug হলে এই ব্লকটার প্রস্থ লেখার উপর নির্ভর করত আর
           তার বাঁ পাশের কলামগুলো সারিভেদে সরে যেত। */}
-      <div className="flex shrink-0 items-center justify-end gap-2 xl:w-[120px]">
+      {/**
+       * Figma Frame 2147236374 — বোতামজোড়া, তিন পর্দায় তিন জায়গা:
+       *
+       *   < ৫৬০px  → কার্ডটা একটামাত্র কলাম, তাই সবার নিচে ডান কোণে।
+       *              placement class লাগে না — flex-col-এর শেষ সন্তান,
+       *              ভেতরের `justify-end` বোতামদুটোকে ডানে ঠেলে।
+       *   ৫৬০–১২৭৯ → দুই কলামের grid, বোতাম **উপরের সারির ডানে**,
+       *              নাম/ইমেইলের ঠিক পাশে (Figma Frame 2147236690:
+       *              row, `justify-content: space-between`, উচ্চতা 48)।
+       *   ≥ ১২৮০   → grid ছেড়ে flex, placement নিষ্ক্রিয়, সারির শেষ ঘর।
+       *
+       * ⚠️ ট্যাবলেটে এটাই আগে ভুল ছিল: কোনো placement না থাকায়
+       * বোতামজোড়া DOM-ক্রমেই তৃতীয় সন্তান হিসেবে কার্ডের একেবারে
+       * নিচে ঝুলে থাকত, আর তার উপরে একটা বড় ফাঁকা জায়গা তৈরি হতো।
+       * Staff-এর সারিতে এটা আগেই ঠিক করা হয়েছে, একই উপায়ে।
+       */}
+      <div className="flex shrink-0 items-center justify-end gap-2 min-[560px]:col-start-2 min-[560px]:row-start-1 xl:col-auto xl:row-auto xl:w-[120px]">
         {/**
          * Figma: 53×40, padding 13×12, radius 100।
          *
@@ -99,100 +116,5 @@ export default function SupplierRowActions({ supplier }: { supplier: SupplierDra
         <SupplierFormModal open onClose={() => setMode(null)} supplier={supplier} />
       )}
     </>
-  );
-}
-
-/**
- * Figma-র "Products" ঘর — সাদা pill, ভেতরে একটা পণ্যের নাম আর একটা
- * ১৬px chevron (Frame 2147236294)।
- *
- * ── এটা ছাঁকনি নয় ───────────────────────────────────────────────────
- *
- * ⚠️ দেখতে dropdown, কিন্তু কিছু বাছাই করা যায় না — এটা নিছক একটা
- * তালিকা যেটা জায়গা বাঁচাতে গুটিয়ে রাখা। একজন সরবরাহকারী দশরকম পণ্য
- * দিতে পারেন, আর দশটা নাম এক সারিতে ধরানো যায় না।
- *
- * ⚠️ নামগুলো `Supplier.products` থেকে — অর্থাৎ modal-এ হাতে লেখা
- * "কী কী দিতে পারেন"। আগে এগুলো purchase order-এর line item থেকে
- * বের করা হতো ("কী কী এসেছে"), কিন্তু Figma-র modal-এ ঘরটা যোগ হওয়ায়
- * এখন উৎস একটাই। দুটোর তফাত আছে: নতুন সরবরাহকারীর কোনো অর্ডার নেই,
- * অথচ তিনি কী দেন সেটা জানা থাকে।
- *
- * Figma-তে pill-এ একটাই নাম দেখানো, কিন্তু সেটা designer-এর নমুনা।
- * বাস্তবে একাধিক থাকলে "Chicken +3" দেখানো হয়, নাহলে ব্যবহারকারী
- * ভাবতেন ওই একটাই পণ্য আসে।
- */
-export function SupplierProductsPill({ products }: { products: string[] }) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  if (products.length === 0) {
-    // "—", ফাঁকা pill নয়: একটা খালি বাক্স দেখে বোঝা যেত না ওটা
-    // ভরাট হয়নি না ভাঙা।
-    return <span className="font-frank-ruhl text-[16px] font-medium text-black">—</span>;
-  }
-
-  const [first, ...rest] = products;
-
-  return (
-    <div className="relative" ref={wrapperRef}>
-      {/* Figma: 94×36, padding 10×12, gap 4, radius 100, BG সাদা,
-          লেখা Sora 400 12px। */}
-      <button
-        type="button"
-        onClick={() => rest.length > 0 && setOpen((prev) => !prev)}
-        aria-expanded={rest.length > 0 ? open : undefined}
-        // একটাই পণ্য হলে খোলার কিছু নেই — তখন এটা নিছক একটা লেবেল,
-        // তাই cursor-ও বদলায় না।
-        className={`flex h-9 max-w-full items-center gap-1 rounded-full bg-white px-3 font-sora text-[12px] font-normal leading-none text-black ${
-          rest.length > 0 ? "cursor-pointer" : "cursor-default"
-        } focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]`}
-      >
-        <span className="min-w-0 truncate">{first}</span>
-        {rest.length > 0 && (
-          <>
-            <span className="shrink-0 text-black/50">+{rest.length}</span>
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 text-black transition-transform ${
-                open ? "rotate-180" : ""
-              }`}
-              strokeWidth={1.2}
-              aria-hidden="true"
-            />
-          </>
-        )}
-      </button>
-
-      {open && (
-        /* FilterMenu-র popup-এর একই চেহারা: সাদা কার্ড, padding 16,
-           radius 16, ছায়া 0 4px 30px rgba(0,0,0,0.06)। */
-        <ul className="absolute left-0 top-full z-30 mt-2 flex max-h-[180px] w-max min-w-full max-w-[240px] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]">
-          {products.map((product) => (
-            <li
-              key={product}
-              className="truncate rounded-[12px] p-2.5 font-sora text-[14px] font-normal leading-none text-[#121212]"
-            >
-              {product}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
