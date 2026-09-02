@@ -37,11 +37,19 @@ import {
  * কিনারায় সেই সাদা রেখাটা ফাঁক হয়ে ফুটে ওঠে। বিস্তারিত FilterMenu.tsx-এ।
  */
 export const FIELD =
-  "h-[43px] w-full rounded-[12px] border-0 bg-[#F9F6F3] px-3 font-sora text-[12px] font-normal leading-[1.6] text-black placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
+  "h-[43px] w-full text-ellipsis rounded-[12px] border-0 bg-[#F9F6F3] px-3 font-sora text-[12px] font-normal leading-[1.6] text-black placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
-/** Figma label: Frank Ruhl Libre 500, 14px, LH 160%, #000000, নিচে gap 6। */
+/**
+ * Figma label: Frank Ruhl Libre 500, 14px, LH 160%, #000000, নিচে gap 6।
+ *
+ * ⚠️ ৬৪০-এর নিচে ১৩px, আর এটা প্রসাধন নয়। ৩২০px-এ modal-এর জোড়া-ঘরের
+ * কলাম দাঁড়ায় ১২০px, অথচ সবচেয়ে লম্বা label "Permanent Address"
+ * ১৪px Frank Ruhl-এ ১২৪.৮px — অর্থাৎ দুই লাইনে ভাঙত, আর পাশের "NID
+ * Number" এক লাইনে থাকায় দুটো ঘর উঁচু-নিচু হয়ে যেত। ১৩px-এ ওটা
+ * ১১৫.৯px, ১২০-এর ভেতরে স্বস্তিতে আঁটে।
+ */
 export const LABEL =
-  "mb-1.5 block font-frank-ruhl text-[14px] font-medium leading-[1.6] text-black";
+  "mb-1.5 block font-frank-ruhl text-[13px] font-medium leading-[1.6] text-black min-[640px]:text-[14px]";
 
 /**
  * Figma Frame 2147236023-এর বোতামজোড়া: উচ্চতা 46, Sora 600 16px।
@@ -52,14 +60,26 @@ export const LABEL =
  * কমলা থেকে একটা নরম মাঝামাঝি রঙ দেখা যায়। সারির "View" বোতামেও
  * হুবহু এই একই gradient।
  */
+/**
+ * ⚠️ ৬৪০-এর নিচে লেখা ১৪px আর padding ১২ — নাহলে "Save Change"
+ * দুই লাইনে ভেঙে যায়। ৩২০px-এ দুটো বোতাম পাশাপাশি, তাই প্রতিটার
+ * ভাগে পড়ে (256 − 8)/2 = ১২৪px:
+ *
+ *   @16px + px-5 : 106.7 + 40 = 146.7  ❌
+ *   @16px + px-3 : 106.7 + 24 = 130.7  ❌
+ *   @14px + px-3 :  93.4 + 24 = 117.4  ✅
+ *
+ * `whitespace-nowrap`-টা জালের কাজ করে: ফন্ট লোড হওয়ার আগে fallback
+ * দিয়ে মাপলে সামান্য চওড়া হয়, তখনও যেন এক লাইনেই থাকে।
+ */
 export const PRIMARY_BUTTON =
-  "flex h-[46px] items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 disabled:opacity-60";
+  "flex h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-3 font-sora text-[14px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 disabled:opacity-60 min-[640px]:px-5 min-[640px]:text-[16px]";
 
 export const OUTLINE_BUTTON =
-  "flex h-[46px] items-center justify-center gap-2 rounded-[90px] border border-black px-5 font-sora text-[16px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:opacity-50";
+  "flex h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-[90px] border border-black px-3 font-sora text-[14px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:opacity-50 min-[640px]:px-5 min-[640px]:text-[16px]";
 
 export const DANGER_BUTTON =
-  "flex h-[46px] items-center justify-center gap-2 rounded-[90px] border border-[#D72A37] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-[#D72A37] transition-colors hover:bg-[#D72A37] hover:text-white disabled:opacity-50";
+  "flex h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-[90px] border border-[#D72A37] px-3 font-sora text-[14px] font-semibold leading-[1.3] text-[#D72A37] transition-colors hover:bg-[#D72A37] hover:text-white disabled:opacity-50 min-[640px]:px-5 min-[640px]:text-[16px]";
 
 /* ══ কার্ডের খোলস ═══════════════════════════════════════════════════ */
 
@@ -112,7 +132,15 @@ export function StaffModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-8 backdrop-blur-[2px] sm:p-6"
+      /**
+       * ⚠️ `sm:` নয়, `min-[640px]:` — globals.css-এ
+       * `--breakpoint-sm: 320px`, তাই `sm:p-6` কার্যত **৩২০px থেকেই**
+       * চালু ছিল আর base `p-4` কোথাও খাটত না। ফলে ৩২০px পর্দায়
+       * modal-টা পেত মাত্র 320 − 2×24 = ২৭২px, তার উপর কার্ডের নিজের
+       * `sm:p-[30px]` — ভেতরে বাকি থাকত ২১২px। ওই সংকীর্ণতাতেই
+       * শিরোনাম দুই লাইনে ভাঙত আর জোড়া-ঘরগুলো পাশাপাশি বসানো যেত না।
+       */
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-8 backdrop-blur-[2px] min-[640px]:p-6"
       // পটভূমিতে click করলে বন্ধ — কিন্তু কেবল পটভূমিতেই, তাই
       // `event.target === event.currentTarget`। নাহলে modal-এর ভেতরে
       // লেখা select করে mouse ছাড়লেও বন্ধ হয়ে যেত, আর তখন ভরাট করা
@@ -129,7 +157,11 @@ export function StaffModalShell({
           ছাড়িয়ে না যায়। বিস্তারিত useMenuPlacement-এ। */}
       <div
         data-staff-modal-card
-        className="my-auto flex w-full max-w-[735px] flex-col gap-10 rounded-[30px] bg-white p-5 sm:p-[30px]"
+        /* Figma Frame 2147236222 (৩২০px): padding 16, gap 40, radius 16।
+           padding ১৬ হওয়ায় ভেতরে থাকে 320 − 2×16 (overlay) − 2×16
+           = ২৫৬px — জোড়া-ঘরের প্রতিটা কলাম ১২০px, যা Figma-র বিন্যাসটা
+           ধরে রাখার জন্য যথেষ্ট। */
+        className="my-auto flex w-full max-w-[735px] flex-col gap-10 rounded-[30px] bg-white p-4 min-[640px]:p-[30px]"
       >
         <div className="flex flex-col gap-6">
           {/* Frame 2147236476: row, space-between, align center, উচ্চতা 32।
@@ -137,7 +169,12 @@ export function StaffModalShell({
           <div className="flex items-center justify-between gap-4">
             <h2
               id={titleId}
-              className="font-frank-ruhl text-[22px] font-semibold leading-[1.14] tracking-[-0.01em] text-black sm:text-[28px]"
+              /* ⚠️ আবার সেই `sm:` ফাঁদ — ২৮px ৩২০px-এও চালু ছিল, আর
+                 "Add New Staff" ২৮px Frank Ruhl-এ ১৭৬.৭px, বন্ধ-বোতাম
+                 (৪০) আর gap (১৬) সহ ২৩২.৭px — তখনকার ২১২px-এর ঘরে
+                 আঁটত না, তাই দুই লাইন। ২২px-এ ওটা ১৩৮.৯px, মোট ১৯৪.৯ —
+                 এখনকার ২৫৬px-এ এক লাইনেই ধরে। */
+              className="font-frank-ruhl text-[22px] font-semibold leading-[1.14] tracking-[-0.01em] text-black min-[640px]:text-[28px]"
             >
               {title}
             </h2>
@@ -332,12 +369,19 @@ export function SelectField({
   value,
   onChange,
   options,
+  className = "",
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: readonly { value: string; label: string }[];
+  /**
+   * grid-এ ঘরটা কতটা জায়গা নেবে। StaffFormModal-এর "Shift" আর
+   * "Status" ৬৪০-এর নিচে পুরো প্রস্থ জোড়ে (Figma-র বিন্যাস), তাই
+   * ওদের `col-span-2` পাঠাতে হয়। না দিলে আগের মতোই এক ঘর।
+   */
+  className?: string;
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(MENU_MAX_HEIGHT);
 
@@ -346,7 +390,7 @@ export function SelectField({
   const selected = options.find((option) => option.value === value) ?? options[0];
 
   return (
-    <div>
+    <div className={className}>
       {/* label-টা <label> নয়, <span> — কারণ trigger একটা <button>, আর
           <label htmlFor> দিয়ে button-এ click পাঠানো ব্রাউজারভেদে
           অসামঞ্জস্যপূর্ণ। সম্পর্কটা বরং aria-labelledby দিয়ে বাঁধা। */}

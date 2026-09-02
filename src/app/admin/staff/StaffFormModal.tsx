@@ -341,12 +341,36 @@ function StaffFormModalContent({
             setUploading={setUploading}
           />
 
-          {/* Frame 2147236092: column gap 20, প্রতিটা সারি row gap 16।
-              ৬৪০-এর নিচে এক কলাম — দুটো ঘর পাশাপাশি বসালে প্রতিটার
-              ভেতরে ~১২০px থাকত, আর country code pill-সহ ফোনের ঘরটা
-              ওতে আঁটে না। */}
-          <div className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2">
-            <div>
+          {/**
+           * Frame 2147236092: column gap 20, প্রতিটা সারি row gap 16।
+           *
+           * ⚠️ grid এখন **সব পর্দাতেই** দুই কলামের, আগের মতো
+           * `grid-cols-1 md:grid-cols-2` নয় — কারণ Figma-র ৩২০px
+           * frame-এ ঘরগুলো এক কলামে নামে না, বরং নির্দিষ্ট দুটো
+           * জোড়া পাশাপাশিই থাকে:
+           *
+           *   Staff Name        (পুরো প্রস্থ)
+           *   Phone Number      (পুরো প্রস্থ)
+           *   Email Address     (পুরো প্রস্থ)
+           *   Permanent Address | NID Number     ← Frame 2147236482
+           *   Role              | Join Date      ← Frame 2147236309
+           *   Shift             (পুরো প্রস্থ)
+           *   Status            (পুরো প্রস্থ)     ← Frame 2147236308
+           *
+           * তাই যে ঘরগুলো একা দাঁড়ায় তারা `col-span-2` নেয়, আর
+           * md থেকে `md:col-span-1` দিয়ে আগের desktop বিন্যাসে
+           * (Staff Name | Phone, Shift | Status) ফিরে যায় — অর্থাৎ
+           * বড় পর্দায় কিছুই বদলায়নি।
+           *
+           * ⚠️ আগের মন্তব্যে লেখা ছিল "৬৪০-এর নিচে এক কলাম, কারণ
+           * পাশাপাশি বসালে ~১২০px থাকে আর ফোনের ঘরটা আঁটে না" —
+           * পর্যবেক্ষণটা ঠিক ছিল, সিদ্ধান্তটা বেশি চওড়া। ফোনের ঘরটা
+           * সত্যিই ১২০px-এ আঁটে না, তাই ওটা (আর Staff Name, Email,
+           * Shift, Status) পুরো প্রস্থই নেয়; কিন্তু Address/NID আর
+           * Role/Join Date-এর ছোট মানগুলো ১২০px-এ দিব্যি ধরে।
+           */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <div className="col-span-2 md:col-span-1">
               <label htmlFor="staff-name" className={LABEL}>
                 Staff Name
               </label>
@@ -360,7 +384,11 @@ function StaffFormModalContent({
               />
             </div>
 
-            <div>
+            {/* ⚠️ ৬৪০-এর নিচে পুরো প্রস্থ, ইচ্ছাকৃতভাবে: ভেতরে পতাকা +
+                country code + বিভাজক + নম্বর — ১২০px-এর কলামে ওটা
+                আঁটে না। Figma-তেও এই ঘরটা ৩২০px frame-এ পুরো
+                প্রস্থ (Frame 2147236086, width 212 = ভরা)। */}
+            <div className="col-span-2 md:col-span-1">
               <label htmlFor="staff-phone" className={LABEL}>
                 Phone Number
               </label>
@@ -394,7 +422,10 @@ function StaffFormModalContent({
               </div>
             </div>
 
-            <div className="md:col-span-2">
+            {/* ⚠️ `col-span-2`, `md:col-span-2` নয় — grid এখন ৩২০px থেকেই
+                দুই কলামের, তাই md-শর্ত রাখলে ছোট পর্দায় ইমেইলের ঘরটা
+                অর্ধেক প্রস্থে সংকুচিত হয়ে NID-র পাশে গিয়ে বসত। */}
+            <div className="col-span-2">
               <label htmlFor="staff-email" className={LABEL}>
                 Email Address
                 {isEdit && (
@@ -469,6 +500,7 @@ function StaffFormModalContent({
             />
 
             <SelectField
+              className="col-span-2 md:col-span-1"
               id="staff-shift"
               label="Shift"
               value={shift}
@@ -483,7 +515,7 @@ function StaffFormModalContent({
               /* নিজের status বদলানো API-তে আটকানো, তাই ঘরটা দেখানো
                  হয় কিন্তু নিষ্ক্রিয় — লুকিয়ে ফেললে grid-এর সারিটা
                  ভেঙে যেত আর "আমার status কোথায়" প্রশ্ন থাকত। */
-              <div>
+              <div className="col-span-2 md:col-span-1">
                 <span className={LABEL}>Status</span>
                 <div
                   className={`${FIELD} flex cursor-not-allowed items-center text-black/50`}
@@ -494,6 +526,7 @@ function StaffFormModalContent({
               </div>
             ) : (
               <SelectField
+                className="col-span-2 md:col-span-1"
                 id="staff-status"
                 label="Status"
                 value={isActive ? "active" : "inactive"}
