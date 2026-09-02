@@ -7,8 +7,9 @@
  * একই grid, একই label/value typography — তাই StaffOverviewCards/
  * UserAvatar-এর একই যুক্তিতে এখানে বের করা।
  *
- * Figma: শিরোনাম Sora 400 14px Black/70, মান Frank Ruhl 500 16px
- * #000000, মাঝে 8px।
+ * Figma: শিরোনাম Sora 400 Black/70, মান Frank Ruhl 500 #000000,
+ * মাঝে 12px। মাপ দুটো পর্দা অনুযায়ী বদলায় — ৩২০px frame-এ ১২/১৪,
+ * desktop frame-এ ১৪/১৬ (নিচে label-এর পাশের মন্তব্য দ্রষ্টব্য)।
  *
  * ⚠️ `tone` — Users page-এর কোনো field-এই দরকার হয়নি, কিন্তু Staff
  * page-এর "Status" মাঠটা Figma-তে রঙিন pill (Active সবুজ, Inactive
@@ -61,7 +62,21 @@ export default function InfoField({
        * xl-এর নিচে wrap করতে দেওয়া হয়, কারণ সেখানে সারি ভেঙে
        * দুই/তিন কলামের grid হয়ে যায় আর প্রস্থ অনেক কম।
        */}
-      <p className="font-sora text-[13px] font-normal leading-none text-black/70 xl:whitespace-nowrap xl:text-[14px]">
+      {/**
+       * ⚠️ তিনটে ধাপ: ১২ → ১৩ → ১৪, আর সবচেয়ে ছোটটা প্রসাধন নয়,
+       * আঁটার শর্ত। Figma-র ৩২০px frame স্পষ্ট বলে label ১২px আর
+       * মান ১৪px (desktop frame-এ ১৪/১৬)। আগে ৩২০-এও ১৩/১৫ ছিল, আর
+       * তাতেই Staff সারির প্রথম সারিটা উপচে পড়ত — আসল ফন্ট দিয়ে মেপে:
+       *
+       *   ভেতরের জায়গা                        224px
+       *   Join Date + gap 20 + Shift @13/15   232.6px  ❌ (Shift কাটে)
+       *   Join Date + gap 20 + Shift @12/14   218.4px  ✅
+       *
+       * অর্থাৎ "Evening (02-10 PM)" ১৪px-এ ঠিক ১২৫.০px — Figma-র
+       * ওই মাঠটার জন্য লেখা `width: 125px`-এর সাথে হুবহু মেলে।
+       * designer মাপটা আন্দাজে বসাননি, ওটাই যা আঁটে।
+       */}
+      <p className="font-sora text-[12px] font-normal leading-none text-black/70 min-[560px]:text-[13px] xl:whitespace-nowrap xl:text-[14px]">
         {label}
       </p>
       {tone ? (
@@ -87,7 +102,7 @@ export default function InfoField({
         </span>
       ) : (
         // Figma: Frank Ruhl Libre 500, 16px, LH 100%, #000000।
-        <p className="truncate font-frank-ruhl text-[15px] font-medium leading-none text-black xl:text-[16px]">
+        <p className="truncate font-frank-ruhl text-[14px] font-medium leading-none text-black min-[560px]:text-[15px] xl:text-[16px]">
           {value}
         </p>
       )}

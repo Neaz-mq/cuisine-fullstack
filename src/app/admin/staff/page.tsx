@@ -126,7 +126,16 @@ export default async function StaffPage({
       <StaffOverviewCards period={period} />
 
       {/* --- Staff Information --- */}
-      <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
+      {/**
+       * ⚠️ ৩২০px-এ padding ২০ নয়, ১৬ — আর এই ৪px-টা নিছক রুচির প্রশ্ন
+       * নয়, ভেতরের সারিটা আঁটার শর্ত। Figma-র ৩২০px frame-এ staff
+       * কার্ডটার প্রস্থ লেখা `width: 256px`, অর্থাৎ 288 (shell-এর
+       * p-4 বাদে) − ২×১৬। ২০ রাখলে সেটা ২৪৮ হয়, কার্ডের নিজের p-4
+       * বাদে ভেতরে থাকে ২১৬ — অথচ Figma-র মাঠ-সারিটার জন্য দরকার
+       * ২২৪ (79 + gap 20 + 125)। ফলে "Evening (02-10 PM)" কেটে
+       * "Evening (02…" হয়ে যেত।
+       */}
+      <div className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
         <div className="flex items-center justify-between gap-3">
           <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
             Staff Information
@@ -153,9 +162,30 @@ export default async function StaffPage({
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex xl:flex-row xl:items-center xl:gap-6 2xl:gap-[52px]"
+                  /**
+                   * Figma Frame 2147236343 (৩২০px): column,
+                   * align-items flex-start, padding 16, gap 16,
+                   * width 256, radius 16, BG #F9F6F3।
+                   *
+                   * ⚠️ ৫৬০-এর নিচে এটা একটামাত্র কলাম — grid নয়।
+                   * আগে grid-টা সব পর্দায় চালু ছিল, আর ৩২০px-এ
+                   * তার ডান ঘরে Edit/View বসায় বাঁ ঘরে পড়ে থাকত
+                   * ~৯০px; নামটা ওখানে চেপে গিয়ে পড়াই যেত না।
+                   * এখন ৩২০-এ ক্রমটা Figma-র মতো উপর থেকে নিচে:
+                   * পরিচয় → পাঁচটা মাঠ → Edit/View (ডান কোণে)।
+                   *
+                   * ⚠️ base-এ `items-start` নেই, ইচ্ছাকৃতভাবে। flex-col-এ
+                   * ওটা মানে align-items: flex-start, অর্থাৎ প্রতিটা
+                   * সন্তান নিজের লেখার মাপে সংকুচিত — তাহলে মাঠের
+                   * সারিটা পুরো প্রস্থ পেত না আর বোতামজোড়া ডানে
+                   * যেত না। তাই ওটাও `min-[560px]:` দিয়ে ঘেরা।
+                   */
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 min-[560px]:grid min-[560px]:grid-cols-[minmax(0,1fr)_auto] min-[560px]:items-start xl:flex xl:flex-row xl:items-center xl:gap-6 2xl:gap-[52px]"
                 >
-                  <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-4 xl:col-auto xl:row-auto xl:w-[203px] xl:shrink-0">
+                  {/* Figma Frame 2147236287: row, gap 16, width 203।
+                      ৫৬০-এর নিচে placement ছাড়া — flex-col-এর প্রথম
+                      সন্তান হিসেবে পুরো প্রস্থটাই পায়। */}
+                  <div className="flex min-w-0 items-center gap-4 min-[560px]:col-start-1 min-[560px]:row-start-1 xl:col-auto xl:row-auto xl:w-[203px] xl:shrink-0">
                     <UserAvatar src={member.image} name={member.name ?? member.email} />
                     <div className="flex min-w-0 flex-col gap-1">
                       <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
@@ -170,54 +200,105 @@ export default async function StaffPage({
                         {member.email}
                       </p>
                       {member.staffProfile?.employeeId && (
-                        <p className="truncate font-sora text-[11px] font-normal leading-none tracking-[0.04em] text-black/40">
+                        /* Figma "EMP-0008": Sora 400 11px, LH 150%,
+                           Black/70 — letter-spacing নেই। আগে এটা
+                           /40 আর leading-none ছিল, তাতে লাইনটা এত
+                           ফিকে হত যে cream পটভূমিতে প্রায় মিলিয়ে
+                           যেত; export-এ পরিষ্কার লেখা rgba(0,0,0,0.7)। */
+                        <p className="truncate font-sora text-[11px] font-normal leading-[1.5] text-black/70">
                           {member.staffProfile.employeeId}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="col-span-2 row-start-2 grid grid-cols-2 gap-4 min-[560px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:col-auto xl:row-auto xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5 xl:grid-cols-[minmax(0,100fr)_minmax(0,125fr)_minmax(0,62fr)_minmax(0,190fr)_minmax(0,82fr)]">
+                  {/**
+                   * Frame 2147236686/2147236677 — পাঁচটা মাঠ।
+                   *
+                   * ⚠️ ৩২০px-এ এটা **দুটো আলাদা flex সারি**, একটা
+                   * grid নয় — আর কারণটা জ্যামিতিক, পছন্দের নয়।
+                   * Figma-র ৩২০px frame-এ কলামের মাপ প্রতি সারিতে
+                   * আলাদা:
+                   *
+                   *   সারি ১:  Join Date  79 | Shift  125 (grow)
+                   *   সারি ২:  Phone     140 (grow) | Role  64
+                   *
+                   * একটামাত্র grid দিয়ে এটা অসম্ভব: এক কলামকে একই
+                   * সাথে ৭৯ আর ১৪০ হতে হবে। দুটোরই সর্বোচ্চ নিলে
+                   * দাঁড়ায় 140 + 20 + 125 = ২৮৫, অথচ জায়গা ২২৪।
+                   * তাই designer যা করেছেন সেটাই — প্রতিটা সারি
+                   * নিজের মতো ভাগ করে নেয়: ছোট মাঠটা নিজের লেখার
+                   * মাপে (flex-grow 0), বড়টা বাকিটুকু নেয় (flex-1)।
+                   *
+                   * ⚠️ মোড়ক দুটোয় `min-[560px]:contents` — ৫৬০ থেকে
+                   * ওরা নিজেরা আর কোনো বাক্স থাকে না, ভেতরের পাঁচটা
+                   * InfoField সরাসরি এই grid-এর ঘর হয়ে যায়। এটা
+                   * জরুরি, কারণ ৫৬০+ আর xl-এ মাঠগুলো এক সারিতে
+                   * বসে — মোড়ক থাকলে ওরা দুটো ব্লকেই আটকে থাকত।
+                   *
+                   * ⚠️ DOM-ক্রম এখন মোবাইলের ক্রম (Join Date, Shift,
+                   * Phone, Role, Status), অথচ ৫৬০+ আর desktop-এ
+                   * দেখাতে হয় Join Date, Phone, Role, Shift, Status।
+                   * তাই প্রতিটা মাঠে স্পষ্ট `col-start`/`row-start` —
+                   * auto-placement-এর ভরসায় না থেকে। এতে ক্রম বদলাতে
+                   * DOM ছুঁতে হয় না, ফলে screen reader-এর ক্রমও
+                   * (উপর থেকে নিচে, মোবাইলের মতো) স্থির থাকে।
+                   *
+                   * ⚠️ xl-এর কলাম-প্রস্থগুলো অবস্থান-ভিত্তিক, তাই
+                   * template-টা desktop-এর **দেখানোর** ক্রমে লেখা:
+                   * 100=Join Date, 125=Phone, 62=Role, 190=Shift,
+                   * 82=Status। `minmax(0, Nfr)` — flex নয় — কারণ
+                   * প্রতিটা সারি আলাদা container, আর content-নির্ভর
+                   * প্রস্থে এক সারির "Shift" আরেক সারির সাথে মিলত না।
+                   */}
+                  <div className="flex flex-col gap-5 min-[560px]:col-span-2 min-[560px]:row-start-2 min-[560px]:grid min-[560px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] min-[560px]:gap-4 xl:col-auto xl:row-auto xl:min-w-0 xl:flex-1 xl:grid-cols-[minmax(0,100fr)_minmax(0,125fr)_minmax(0,62fr)_minmax(0,190fr)_minmax(0,82fr)] xl:items-center xl:gap-5">
+                    {/* Frame 2147236675 — মোবাইলের প্রথম সারি। */}
+                    <div className="flex gap-5 min-[560px]:contents">
+                      <InfoField
+                        className="min-[560px]:col-start-1 min-[560px]:row-start-1 xl:col-start-1 xl:row-start-1"
+                        label="Join Date"
+                        value={
+                          member.staffProfile ? formatJoinDate(member.staffProfile.hireDate) : "—"
+                        }
+                      />
+                      {/* flex-1 — Figma-তে এই মাঠটা flex-grow 1, কারণ
+                          "Evening (02-10 PM)" সারির সবচেয়ে চওড়া মান
+                          (১৪px-এ ঠিক ১২৫px, Figma-র লেখা মাপের সমান)। */}
+                      <InfoField
+                        className="flex-1 min-[560px]:col-start-1 min-[560px]:row-start-2 xl:col-start-4 xl:row-start-1"
+                        label="Shift"
+                        value={shiftLabel}
+                      />
+                    </div>
+
+                    {/* Frame 2147236676 — মোবাইলের দ্বিতীয় সারি। এখানে
+                        উল্টো: Phone বাড়ে, Role নিজের মাপে থাকে। */}
+                    <div className="flex gap-5 min-[560px]:contents">
+                      <InfoField
+                        className="flex-1 min-[560px]:col-start-2 min-[560px]:row-start-1 xl:col-start-2 xl:row-start-1"
+                        label="Phone Number"
+                        value={member.staffProfile?.phone ?? "—"}
+                      />
+                      {/**
+                       * ⚠️ "Role" সব পর্দায় বাঁ-ঘেঁষা। একবার
+                       * min-[560px]-এ `text-right` ছিল, এই ধারণায় যে
+                       * label + value কার্ডের ডান কিনারায় মেলানো উচিত।
+                       * Figma-র InfoField spec (Frame 2147236294)
+                       * বলে `align-items: flex-start` — প্রতিটা জোড়া
+                       * নিজের কলামের **বাঁ** কিনারায় বসে। কলামটা
+                       * এমনিতেই ডান দিকে গিয়ে বসে, ভেতরে ঠেলার
+                       * দরকার নেই।
+                       */}
+                      <InfoField
+                        className="min-[560px]:col-start-3 min-[560px]:row-start-1 xl:col-start-3 xl:row-start-1"
+                        label="Role"
+                        value={ROLE_LABELS[member.role as StaffRole]}
+                      />
+                    </div>
+
+                    {/* Frame 2147236296 — Status একা, নিজের সারিতে। */}
                     <InfoField
-                      className=""
-                      label="Join Date"
-                      value={
-                        member.staffProfile ? formatJoinDate(member.staffProfile.hireDate) : "—"
-                      }
-                    />
-                    <InfoField
-                      className=""
-                      label="Phone Number"
-                      value={member.staffProfile?.phone ?? "—"}
-                    />
-                    {/**
-                     * ⚠️ তৃতীয় কলামটা (Role) সব breakpoint-এ left-aligned।
-                     *
-                     * আগে min-[560px]-এ `text-right` ছিল — ধারণা ছিল
-                     * label + value দুটোই কার্ডের ডান কিনারায় (উপরের
-                     * "View" বোতামের কিনারার সাথে) মিলিয়ে দেখানো ঠিক।
-                     * কিন্তু Figma-র InfoField spec (Status/#RYT65162
-                     * ব্লক) স্পষ্ট করে দেখায় প্রতিটা label/value জোড়া
-                     * `align-items: flex-start` — মানে নিজের (auto-sized)
-                     * কলামের **বাঁ কিনারায়** বসে, ডানে নয়।
-                     *
-                     * কলামটা নিজেই `auto` (content-width) আর গ্রিডের
-                     * শেষ ট্র্যাক, তাই বাকি দুই `1fr` কলাম সব ফাঁকা
-                     * জায়গা শুষে নেয় আর এই auto কলামটা এমনিতেই কার্ডের
-                     * ডান দিকে গিয়ে বসে। তার ভেতরে টেক্সট বাঁ-ঘেঁষা
-                     * করলেই "Role" label আর তার value ("Waiter",
-                     * "Manager" ইত্যাদি) একই x-position থেকে শুরু হয় —
-                     * ঠিক যেটা দরকার ছিল, আলাদা করে ডান কিনারায় ঠেলে
-                     * দেওয়ার প্রয়োজন নেই।
-                     */}
-                    <InfoField
-                      className=""
-                      label="Role"
-                      value={ROLE_LABELS[member.role as StaffRole]}
-                    />
-                    <InfoField className="" label="Shift" value={shiftLabel} />
-                    <InfoField
-                      className=""
+                      className="min-[560px]:col-start-2 min-[560px]:row-start-2 xl:col-start-5 xl:row-start-1"
                       label="Status"
                       value={isActive ? "Active" : "Inactive"}
                       tone={isActive ? "positive" : "negative"}
