@@ -149,22 +149,28 @@ export default async function UsersPage({
          * ওখানে padding বাদে থাকে ২৮৮।
          */}
         <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
-          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
-            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            {/* ⚠️ `sm:` নয় — globals.css-এ sm = 320px, তাই `sm:hidden`
-                মানে কার্যত সবসময় লুকানো, আর ৩২০px-এ সংক্ষিপ্ত তারিখটা
-                কখনো দেখাই যেত না; উল্টে পুরো "Aug 30, 2026" বসত, যেটা
-                বাঁচানোর জন্যই এটা লেখা হয়েছিল। */}
-            <span className="min-[480px]:hidden">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-            <span className="hidden min-[480px]:inline">
-              {now.toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
+          <span className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black min-[480px]:h-11 min-[480px]:px-4 min-[480px]:text-[14px]">
+            <Calendar
+              className="h-4 w-4 shrink-0 text-black/70 min-[480px]:h-5 min-[480px]:w-5"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
+            {/* ⚠️ ৩২০px-এও পুরো তারিখ, বছর সহ — আগে সেখানে "Sep 2"
+                দেখানো হতো, জায়গা বাঁচানোর জন্য।
+                
+                কিন্তু জায়গার টানটা ছিল **মাপের**, লেখার নয়। Figma-র
+                ৩২০px frame (Frame 2147232352) বলছে: সারিটা ২৮৮ চওড়া,
+                দুটো pill ১৩৯ করে, gap ১০ — আর pill-এর ভেতরে
+                padding 12 + icon 20 + gap 8 + লেখা ৭৯ = ১৩১, অর্থাৎ
+                ১৩৯-এ আঁটে। শর্ত একটাই: লেখাটা ১২px হতে হবে, ১৪ নয়।
+
+                বছর বাদ দিলে "Sep 2" কোন বছরের তা বোঝার উপায় থাকে না —
+                একটা report-এর পাতায় সেটা ঠিক ওই তথ্যটাই যেটা লাগে। */}
+            {now.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
           </span>
 
           {/**
@@ -197,7 +203,17 @@ export default async function UsersPage({
 
       {/* --- Users --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
-        <div className="flex items-start justify-between gap-3">
+        {/* ⚠️ `items-center`, `items-start` নয়।
+
+            শিরোনামটা `leading-none`, অর্থাৎ তার line box ঠিক অক্ষরের
+            উচ্চতা (২৪px)। পাশের pill ৪০px উঁচু। `items-start`-এ দুটোর
+            **উপরের কিনারা** মেলে, তাই ৪০px pill-এর ভেতরে লেখাটা
+            মাঝখানে বসে আর শিরোনামটা তার চেয়ে ~৮px উপরে থেকে যায় —
+            চোখে ধরা পড়ে, কিন্তু কারণটা ধরা পড়ে না।
+
+            Suppliers আর Inventory-র একই সারিতে `items-center` ছিল,
+            তাই ওখানে সমস্যাটা কখনো দেখা যায়নি। */}
+        <div className="flex items-center justify-between gap-3">
           {/* Overview-এর শিরোনামের সাথে মাপ মেলানো — ব্যাখ্যা ওখানে। */}
           <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
             Users
@@ -273,22 +289,47 @@ export default async function UsersPage({
 
                   {/* Frame 2147236376: row, space-between, gap 30,
                       উচ্চতা 42, flex-grow 1। */}
-                  {/* ⚠️ `sm:grid-cols-3` ছিল — sm = 320px হওয়ায় ৩২০px-এই তিন
-                      কলাম হয়ে যেত, প্রতিটা ~৭৫px। তাতে "Customer Category"
-                      শিরোনামটা দু'লাইনে ভাঙত আর মানগুলো "Aug 3…" / "New C…"
-                      হয়ে কাটা পড়ত — অর্থাৎ সংখ্যা দেখা গেলেও পড়া যেত না।
-                      ৫৬০ থেকে তিন কলাম: তখন প্রতিটা ~১৬৫px, "Customer
-                      Category" এক লাইনে আঁটে। */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
+                  {/**
+                   * Figma-র ৩২০px frame (Frame 2147236677): column,
+                   * gap 20; প্রতিটা সারি (2147236675) row, gap 40,
+                   * ভেতরে দুটো ৮৮px মাঠ।
+                   *
+                   * ⚠️ মাঠের **ক্রমটা** Figma-র, আর সেটা আগে ভুল ছিল।
+                   * designer সাজিয়েছেন পড়ার ক্রমে:
+                   *
+                   *   Member Since  |  Reward Points
+                   *   Phone Number  |  Total Orders
+                   *   Customer Category (একাই, পুরো চওড়া)
+                   *
+                   * অর্থাৎ বাঁ কলামে "কবে থেকে, কীভাবে যোগাযোগ", ডান
+                   * কলামে "কত কিনেছেন"। আগের ক্রমে (Member Since,
+                   * Phone, Category, Points, Orders) দুটো সংখ্যা দুই
+                   * সারিতে ছড়িয়ে যেত আর Category মাঝখানে পড়ে দুটো
+                   * দলকে ভেঙে দিত।
+                   *
+                   * ⚠️ "Customer Category" শেষে আর `col-span-2` — Figma-তেও
+                   * ওটা একা নিজের সারিতে। কারণটা মাপেরও: ১২px-এ
+                   * শিরোনামটা লাগে ~১০৫px, অথচ দুই কলামে প্রতিটা মাঠ
+                   * পায় ~১০০। একা রাখলে পুরো ২২৪ পায়, তাই দু'লাইনে
+                   * ভাঙে না।
+                   *
+                   * ৫৬০ থেকে তিন কলাম, তখন প্রতিটা ~১৬৫px — সেখানে
+                   * span-টা আর লাগে না।
+                   */}
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:grid-cols-3 min-[560px]:gap-4 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
                     <InfoField label="Member Since" value={formatJoinDate(user.createdAt)} />
+                    <InfoField label="Reward Points" value={`${user.loyaltyPoints} Points`} />
                     {/* ফোন নম্বর ঐচ্ছিক — Google দিয়ে sign in করলে কখনোই
                         আসে না (schema-র মন্তব্য দ্রষ্টব্য)। */}
                     <InfoField label="Phone Number" value={user.phone ?? "—"} />
-                    <InfoField label="Customer Category" value={CATEGORY_LABELS[userCategory]} />
-                    <InfoField label="Reward Points" value={`${user.loyaltyPoints} Points`} />
                     <InfoField
                       label="Total Orders"
                       value={`${orderCount} ${orderCount === 1 ? "Order" : "Orders"}`}
+                    />
+                    <InfoField
+                      className="col-span-2 min-[560px]:col-span-1 xl:flex-1"
+                      label="Customer Category"
+                      value={CATEGORY_LABELS[userCategory]}
                     />
                   </div>
                 </div>

@@ -20,13 +20,24 @@ import { useEffect, useState } from "react";
  *
  * ── সীমানা দুটো কেন এখানে ──────────────────────────────────────────────
  *
- *   narrow  < 480    ফোন
- *   mid     480–1023 বড় ফোন / tablet
- *   wide    ≥ 1024
+ *   narrow  < 480   ফোন
+ *   mid     480–767 বড় ফোন / ছোট tablet
+ *   wide    ≥ 768   tablet ও তার উপরে
  *
  * ৪৮০-টা UsersToolbar-এর wrapper-এর সাথে মেলানো: ঠিক ওখানেই search আর
  * "All Statuses" pill এক সারিতে আসে। দুটো আলাদা হলে একটা সরু ফাঁকে
  * layout এক রকম আর লেখা আরেক রকম ধরে নিত।
+ *
+ * ⚠️ উপরের সীমানাটা আগে ১০২৪ ছিল, আর সেটা ভুল জায়গায় ছিল। যুক্তি
+ * ছিল "একটাই সীমানা মনে রাখা সহজ", কিন্তু ফলটা হলো ট্যাবলেটে
+ * (৭৬৮px) ছাঁটা লেখা — অথচ সেখানে ইনপুটের ভেতরে ~৪৯৬px জায়গা,
+ * আর পুরো লেখাটা লাগে ~২৫৭px। অর্থাৎ জায়গা থাকা সত্ত্বেও তথ্য
+ * লুকানো হচ্ছিল।
+ *
+ *   ৪৮০ (pill সহ)  → 448 − 156 − 24 − 60 = 208px  ← এখানে সত্যিই টান
+ *   ৭৬৮ (pill সহ)  → 736 − 156 − 24 − 60 = 496px  ← এখানে নয়
+ *
+ * তাই ৭৬৮ থেকেই "wide"। সরলতার চেয়ে সঠিক সীমানাটাই দামি।
  */
 export type ScreenTier = "narrow" | "mid" | "wide";
 
@@ -44,7 +55,7 @@ export function useScreenTier(): ScreenTier {
 
   useEffect(() => {
     const narrow = window.matchMedia("(max-width: 479px)");
-    const wide = window.matchMedia("(min-width: 1024px)");
+    const wide = window.matchMedia("(min-width: 768px)");
 
     const sync = () => setTier(narrow.matches ? "narrow" : wide.matches ? "wide" : "mid");
     sync();

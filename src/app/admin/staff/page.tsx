@@ -112,14 +112,19 @@ export default async function StaffPage({
          * ছাঁকা তালিকা, পর্দায় দেখা দশটা সারি নয়।
          */}
         <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
-          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
-            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
-            <span className="min-[480px]:hidden">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-            <span className="hidden min-[480px]:inline">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
+          <span className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black min-[480px]:h-11 min-[480px]:px-4 min-[480px]:text-[14px]">
+            <Calendar
+              className="h-4 w-4 shrink-0 text-black/70 min-[480px]:h-5 min-[480px]:w-5"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
+            {/* ⚠️ ৩২০px-এও পুরো তারিখ, বছর সহ — কারণ Users পাতার একই
+                pill-এর মন্তব্যে (Figma-র ৩২০px frame ধরে হিসাব)। */}
+            {now.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
           </span>
 
           <ExportReportButton
@@ -136,7 +141,17 @@ export default async function StaffPage({
 
       {/* --- Staff Information --- */}
       <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 md:p-[30px]">
-        <div className="flex items-start justify-between gap-3">
+        {/* ⚠️ `items-center`, `items-start` নয়।
+
+            শিরোনামটা `leading-none`, অর্থাৎ তার line box ঠিক অক্ষরের
+            উচ্চতা (২৪px)। পাশের pill ৪০px উঁচু। `items-start`-এ দুটোর
+            **উপরের কিনারা** মেলে, তাই ৪০px pill-এর ভেতরে লেখাটা
+            মাঝখানে বসে আর শিরোনামটা তার চেয়ে ~৮px উপরে থেকে যায় —
+            চোখে ধরা পড়ে, কিন্তু কারণটা ধরা পড়ে না।
+
+            Suppliers আর Inventory-র একই সারিতে `items-center` ছিল,
+            তাই ওখানে সমস্যাটা কখনো দেখা যায়নি। */}
+        <div className="flex items-center justify-between gap-3">
           <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
             Staff Information
           </h2>

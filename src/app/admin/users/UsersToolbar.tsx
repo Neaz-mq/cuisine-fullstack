@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Search } from "lucide-react";
-import { useScreenTier } from "@/components/admin/useScreenTier";
 import {
   CUSTOMER_CATEGORIES,
   CATEGORY_LABELS,
@@ -61,26 +60,25 @@ const FOCUS_RING =
  * `::placeholder`-এ font-size বা রঙ বদলানো যায়, কিন্তু `content`
  * কাজ করে না। লেখাটাই বদলাতে হলে JS-কে জানতে হয় পর্দা কত চওড়া।
  *
- * ⚠️ সীমানাটা lg (১০২৪), আর সেটাই এখানকার সবচেয়ে ভুল বোঝার মতো
- * জায়গা — মনে হতে পারে tablet-এ তো জায়গা আছেই। নেই, কারণ ৪৮০ থেকে
- * "All Statuses" pill পাশে চলে আসে আর ইনপুট **উল্টো সরু হয়ে যায়**।
+ * ⚠️ এখন আর দুটো রূপ নেই — সব পর্দায় পুরো লেখাটাই দেখা যায়।
+ *
+ * আগে ছোট পর্দায় শুধু "Search" দেখানো হতো, কারণ ১৬px-এ পুরো লেখাটা
+ * ৩২০px-এ আঁটত না। কিন্তু সমস্যাটা ছিল **মাপে**, লেখায় নয় — আর
+ * Figma-র ৩২০px frame-ও লেখাটা পুরোই রেখেছে, শুধু placeholder-এর
+ * মাপ ১২px করে। ইনপুটের মাপ আর placeholder-এর মাপ আলাদা রাখা যায়,
+ * তাই দুটো শর্তই মেটানো সম্ভব (নিচে input-এর className-এর মন্তব্য)।
+ *
  * ভেতরে লেখার জায়গা:
  *
- *   ৩২০  (ইনপুট একা)   → 288 − 44 − 16        = 228px
- *   ৪৮০  (pill সহ)     → 448 − 156 − 24 − 60  = 208px   ← সবচেয়ে কম
- *   ৭৬৮  (pill সহ)     → 736 − 156 − 24 − 60  = 496px
+ *   ৩২০  (ইনপুট একা)   → 288 − 44 − 16        = 228px   ← ১২px-এ ~২১০, আঁটে
+ *   ৪৮০  (pill সহ)     → 448 − 156 − 24 − 60  = 208px   ← ১৪px-এ ~১৮৪, আঁটে
+ *   ৭৬৮  (pill সহ)     → 736 − 156 − 24 − 60  = 496px   ← ১৬px-এ ~২৫৭, আঁটে
  *   ১০২৪+              → sidebar বাদেও যথেষ্ট
- *
- * ৭৬৮-এ ৪৯৬px থাকলেও পুরো Figma লেখাটা (~২৫৭px) দিব্যি আঁটত। তবু
- * ছোট রাখা হলো, কারণ একটাই সীমানা মনে রাখা সহজ, আর tablet-এ
- * ছাঁকনি-সারিটা এমনিতেই ঠাসা। মাঝের ধাপে ছাঁটা একটা তৃতীয় লেখা
- * ছিল — বাদ দেওয়া হলো, তিনটে রূপ রাখার মতো যথেষ্ট কারণ ছিল না।
  *
  * ⚠️ ছোট লেখা মানে কম তথ্য, তাই `aria-label`-টা সব পর্দাতেই পুরো
  * থাকে — screen reader ব্যবহারকারী কখনোই কেবল "Search" শোনেন না।
  */
 const FULL_PLACEHOLDER = "Search by Customer Name, Email…";
-const SHORT_PLACEHOLDER = "Search";
 
 export default function UsersToolbar({
   category,
@@ -106,13 +104,6 @@ export default function UsersToolbar({
    */
   const requestedRef = useRef(urlQuery);
   const pendingRef = useRef(false);
-
-  /**
-   * ধাপটা এখানে হিসাব করা হয় না — useScreenTier-এ। AdminTopbar-এও
-   * ঠিক একই মাপ লাগে, আর দুই জায়গায় দুটো matchMedia রাখলে একদিন
-   * একটার সীমানা বদলে অন্যটা পিছিয়ে থাকত।
-   */
-  const tier = useScreenTier();
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
@@ -207,9 +198,15 @@ export default function UsersToolbar({
        */}
       <div className="relative h-[50px] min-w-0 flex-1">
         {/* vuesax/linear/search-normal — 20×20, stroke 1.5,
-            Black/100 (#000000)। */}
+            Black/100 (#000000)।
+
+            ⚠️ ৪৮০px-এর নিচে ১৬×১৬। Figma-র ৩২০px frame-এ আইকনটা
+            ২০-ই, কিন্তু ওই frame-এ placeholder-ও ১২px — আর কাগজে যা
+            মেলে, পর্দায় তা মেলেনি: ২০px আইকনের পাশে ১২px লেখা দেখতে
+            বেঢপ লাগে, আইকনটাই মুখ্য হয়ে ওঠে অথচ সেটা নিছক একটা
+            ইঙ্গিত। লেখা ছোট হলে তার সঙ্গীও ছোট হওয়া উচিত। */}
         <Search
-          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-black"
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black min-[480px]:h-5 min-[480px]:w-5"
           strokeWidth={1.5}
           aria-hidden="true"
         />
@@ -217,22 +214,32 @@ export default function UsersToolbar({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={tier === "wide" ? FULL_PLACEHOLDER : SHORT_PLACEHOLDER}
+          placeholder={FULL_PLACEHOLDER}
           aria-label="Search customers by name, email or phone"
-          /* Figma type: Sora 400, 16px, line-height 100%, Black/70।
-             লেখা আর placeholder দুটোরই — তাই `text-black/70`, আর
-             একটা কঠিন ধূসর নয় (cream পটভূমিতে ওটা অন্যরকম বসত)।
-
-             ⚠️ মাপ সব পর্দায় ১৬-তেই, ছোট করা হয়নি। আগে ৩২০px-এ
-             placeholder-টা ১৩px করা হয়েছিল, কিন্তু সেটা ভুল সমাধান
-             ছিল — লেখাটা তখন ছোট **আর** কাটা, দুটোই। এখন লেখাটাই
-             বদলায় (উপরের FULL_PLACEHOLDER / SHORT_PLACEHOLDER), তাই মাপ
-             কমানোর দরকার নেই।
-
-             ১৬-তে রাখার আলাদা কারণও আছে: iOS Safari ১৬px-এর কম
-             font-size-এর ইনপুটে focus করলে পুরো পাতাটা zoom করে দেয়,
-             আর সেই zoom নিজে থেকে ফেরে না। */
-          className={`h-[50px] w-full rounded-full bg-white pl-11 pr-4 font-sora text-[16px] font-normal leading-none text-black/70 placeholder:text-black/70 ${FOCUS_RING}`}
+          /**
+           * Figma type: Sora 400, Black/70 — লেখা আর placeholder
+           * দুটোরই, তাই `text-black/70`।
+           *
+           * ⚠️ ইনপুটের নিজের মাপ সব পর্দায় ১৬px, কিন্তু **placeholder-এর**
+           * মাপ ছোট পর্দায় ১২ — আর এই দুটো আলাদা রাখাটাই এখানকার
+           * পুরো কৌশল, কারণ দুটো শর্ত একসাথে মানতে হয়:
+           *
+           *   ১। iOS Safari ১৬px-এর কম font-size-এর ইনপুটে focus করলে
+           *      পুরো পাতাটা zoom করে দেয়, আর সেই zoom নিজে থেকে
+           *      ফেরে না। তাই ইনপুটের মাপ ১৬-এর নিচে নামানো যায় না।
+           *
+           *   ২। ৩২০px-এ পুরো placeholder লেখাটা ১৬px-এ আঁটে না —
+           *      জায়গা ২২৮px, লেখা লাগে ~২৮০।
+           *
+           * `::placeholder`-এ font-size বদলানো যায় (`content` যায় না,
+           * সেটা আলাদা কথা), আর iOS-এর zoom-এর হিসাব হয় **ইনপুটের**
+           * computed font-size ধরে, placeholder-এরটা ধরে নয়। তাই
+           * ১২px placeholder + ১৬px ইনপুট — দুটো শর্তই মেটে।
+           *
+           * Figma-র ৩২০px frame-ও ঠিক এটাই বলে: placeholder Sora 12px,
+           * প্রস্থ ২১০px (জায়গা ২২৮ — আঁটে)।
+           */
+          className={`h-[50px] w-full rounded-full bg-white pl-10 pr-4 font-sora min-[480px]:pl-11 text-[16px] font-normal leading-none text-black/70 placeholder:text-[12px] placeholder:text-black/70 min-[480px]:placeholder:text-[14px] md:placeholder:text-[16px] ${FOCUS_RING}`}
         />
       </div>
 

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search } from "lucide-react";
-import { useScreenTier } from "@/components/admin/useScreenTier";
 import StaffFormModal from "./StaffFormModal";
 
 /**
@@ -35,7 +34,6 @@ const FOCUS_RING =
 
 // UsersToolbar-এর একই কারণ: placeholder attribute, CSS দিয়ে বদলায় না।
 const FULL_PLACEHOLDER = "Search by Name, Email or Employee ID…";
-const SHORT_PLACEHOLDER = "Search";
 
 export default function StaffToolbar({
   viewerRole,
@@ -56,7 +54,6 @@ export default function StaffToolbar({
   const requestedRef = useRef(urlQuery);
   const pendingRef = useRef(false);
 
-  const tier = useScreenTier();
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
@@ -99,8 +96,10 @@ export default function StaffToolbar({
     // globals.css-এ sm=320 হওয়ায় sm: কার্যত সবসময় চালু)।
     <div className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-start min-[480px]:gap-6">
       <div className="relative h-[50px] min-w-0 flex-1">
+        {/* ⚠️ ৪৮০px-এর নিচে ১৬×১৬ — কারণ UsersToolbar-এর একই
+            আইকনের মন্তব্যে (ছোট লেখার পাশে বড় আইকন বেঢপ লাগে)। */}
         <Search
-          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-black"
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black min-[480px]:h-5 min-[480px]:w-5"
           strokeWidth={1.5}
           aria-hidden="true"
         />
@@ -108,9 +107,15 @@ export default function StaffToolbar({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={tier === "wide" ? FULL_PLACEHOLDER : SHORT_PLACEHOLDER}
+          placeholder={FULL_PLACEHOLDER}
           aria-label="Search staff by name, email or employee ID"
-          className={`h-[50px] w-full rounded-full bg-white pl-11 pr-4 font-sora text-[16px] font-normal leading-none text-black/70 placeholder:text-black/70 ${FOCUS_RING}`}
+          /* ⚠️ placeholder-এর মাপ ইনপুটের চেয়ে আলাদা — কারণ
+             UsersToolbar-এর একই ঘরের মন্তব্যে (iOS-এর zoom বনাম
+             ৩২০px-এ জায়গা)। এখানে লেখাটা একটু লম্বা, তাই ৩২০px-এ
+             শেষ দিকটা সামান্য কাটতে পারে — তবু শুধু "Search"
+             দেখানোর চেয়ে ভালো, কারণ কাটা লেখাও বলে দেয় কী দিয়ে
+             খোঁজা যায়। */
+          className={`h-[50px] w-full rounded-full bg-white pl-10 pr-4 font-sora min-[480px]:pl-11 text-[16px] font-normal leading-none text-black/70 placeholder:text-[12px] placeholder:text-black/70 min-[480px]:placeholder:text-[14px] md:placeholder:text-[16px] ${FOCUS_RING}`}
         />
       </div>
 

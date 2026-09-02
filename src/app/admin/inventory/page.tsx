@@ -153,20 +153,28 @@ export default async function InventoryPage({
         </h1>
 
         <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-start">
-          <span className="flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 font-sora text-[14px] leading-none text-black">
+          <span className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black min-[480px]:h-11 min-[480px]:px-4 min-[480px]:text-[14px]">
             <Calendar
-              className="h-4 w-4 shrink-0 text-black/70"
+              className="h-4 w-4 shrink-0 text-black/70 min-[480px]:h-5 min-[480px]:w-5"
               strokeWidth={1.5}
               aria-hidden="true"
             />
-            {/* ⚠️ `sm:` নয় — globals.css-এ sm = 320px, তাই `sm:hidden`
-                মানে কার্যত সবসময় লুকানো। */}
-            <span className="min-[480px]:hidden">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-            <span className="hidden min-[480px]:inline">
-              {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
+            {/* ⚠️ ৩২০px-এও পুরো তারিখ, বছর সহ — আগে সেখানে "Sep 2"
+                দেখানো হতো, জায়গা বাঁচানোর জন্য।
+                
+                কিন্তু জায়গার টানটা ছিল **মাপের**, লেখার নয়। Figma-র
+                ৩২০px frame (Frame 2147232352) বলছে: সারিটা ২৮৮ চওড়া,
+                দুটো pill ১৩৯ করে, gap ১০ — আর pill-এর ভেতরে
+                padding 12 + icon 20 + gap 8 + লেখা ৭৯ = ১৩১, অর্থাৎ
+                ১৩৯-এ আঁটে। শর্ত একটাই: লেখাটা ১২px হতে হবে, ১৪ নয়।
+
+                বছর বাদ দিলে "Sep 2" কোন বছরের তা বোঝার উপায় থাকে না —
+                একটা report-এর পাতায় সেটা ঠিক ওই তথ্যটাই যেটা লাগে। */}
+            {now.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
           </span>
 
           <ExportReportButton

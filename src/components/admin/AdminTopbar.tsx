@@ -318,8 +318,34 @@ export default function AdminTopbar({
    * ডানে গোল pill — গোল জিনিস প্রান্তের কাছে গেলে চোখে বেশি ফাঁক লাগে,
    * তাই কম padding দিলেই ভারসাম্য মেলে।
    */
+  /**
+   * ⚠️ ৩৯০px-এর নিচে পুরো bar-টা Figma-র মোবাইল frame-এর হুবহু মাপে,
+   * আর সেটা করতে হয়েছে কারণ ৩২০px-এ "Cuisine" শব্দচিহ্নটা অন্যভাবে
+   * আঁটেই না।
+   *
+   * Figma (Frame 2147236040): bar 288×56, padding 12, radius 100।
+   * ভেতরে —
+   *
+   *   বাঁ দল  121 = hamburger 32 + gap 8 + (logo 20 + gap 6 + "Cuisine" 55)
+   *   ডান দল  112 = search 32 + 8 + bell 32 + 8 + avatar 32
+   *   মাঝের ফাঁক 31
+   *   ────────────────────────────────────────────────────────
+   *   12 + 121 + 31 + 112 + 12 = 288 ✓
+   *
+   * আগে বোতামগুলো ৪৪px ছিল (Apple/Google-এর স্পর্শ-লক্ষ্যের সুপারিশ),
+   * আর তাতেই শব্দচিহ্নটা লুকিয়ে রাখতে হচ্ছিল — ৩২০px-এ ওই মাপে
+   * "Cuisine"-এর জন্য পড়ে থাকত মোটে ৮px।
+   *
+   * ⚠️ কিন্তু ছোট স্পর্শ-লক্ষ্যের আপসটা **কেবল ৩৯০px-এর নিচেই**।
+   * বাস্তবের প্রায় সব ফোন (iPhone 12/13/14/15, বেশির ভাগ Android)
+   * ৩৯০ বা তার চেয়ে চওড়া, তাই সেখানে আগের ৪৪/৫০px মাপই ফিরে আসে।
+   * অর্থাৎ Figma-র মকআপ মেলে, আর আঙুলও ছোট বোতামে আটকায় না।
+   *
+   * `sm:` ব্যবহার করা হয়নি — globals.css-এ sm = 320px, তাই ওটা
+   * এখানে কার্যত সবসময় চালু থাকত।
+   */
   return (
-    <header className="bg-white rounded-full h-[72px] md:h-[86px] flex items-center justify-between gap-3 pl-3 pr-2 sm:pl-4 sm:pr-3 md:pl-[30px] md:pr-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <header className="bg-white rounded-full h-[56px] min-[390px]:h-[72px] md:h-[86px] flex items-center justify-between gap-3 px-3 min-[390px]:pl-4 min-[390px]:pr-3 md:pl-[30px] md:pr-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       {/* বাঁ দল — hamburger + brand। ফোনে search খুললে পুরোটা সরে
           যায়, যাতে input পুরো প্রস্থ পায়। */}
       <div
@@ -334,16 +360,16 @@ export default function AdminTopbar({
             সামলায়, তাই সেখানে drawer খোলার কিছু নেই।
 
             আগে এটা background ছাড়া একটা পাতলা তিন-দাগ ছিল, পাশের গোল
-            bell আর avatar-এর সাথে বেমানান। এখন ওদের মতোই ৪৪px গোল
-            বোতাম — একই ভাষা, আর আঙুলের জন্য যথেষ্ট বড় (৪৪px মোবাইলে
-            স্পর্শ-লক্ষ্যের স্বীকৃত ন্যূনতম)। */}
+            bell আর avatar-এর সাথে বেমানান। এখন ওদের মতোই গোল বোতাম —
+            একই ভাষা। মাপ ৩২ (Figma-র ৩২০px frame) থেকে ৩৯০px-এ ৪৪
+            (স্পর্শ-লক্ষ্যের স্বীকৃত ন্যূনতম); কারণ header-এর মন্তব্যে। */}
         <button
           type="button"
           onClick={onMenuClick}
           aria-label="Open menu"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
+          className="flex h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
         >
-          <Menu className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+          <Menu className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
         </button>
 
         {/**
@@ -375,15 +401,18 @@ export default function AdminTopbar({
         <Link
           href="/"
           aria-label="Cuisine — back to site"
-          className="flex items-center gap-2 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+          className="flex items-center gap-1.5 min-[390px]:gap-2 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
         >
-          {/* Figma: icon 34×34 */}
+          {/* Figma: মোবাইল frame-এ icon 20×20 (gap 6), ডেস্কটপে 34×34।
+              `width/height` attribute-এ বড় মাপটাই থাকে — ওটা কেবল
+              intrinsic size, আসল মাপ class থেকে আসে, আর বড় থেকে ছোট
+              করলে ছবিটা ধারালো থাকে। */}
           <Image
             src="/logo.svg"
             alt=""
             width={34}
             height={34}
-            className="w-[34px] h-[34px]"
+            className="h-5 w-5 min-[390px]:h-[34px] min-[390px]:w-[34px]"
           />
           {/* Figma typography panel: Frank Ruhl Libre, 600, 30px,
               line-height 100%, letter-spacing −3%, #000।
@@ -392,9 +421,17 @@ export default function AdminTopbar({
               শব্দচিহ্নটা বড় (30px) বলে অক্ষরগুলোকে বেশি টেনে আনা হয়েছে;
               বড় মাপে আলগা লাগে বলে এটা typography-র চেনা কৌশল।
 
-              30px ছোট পর্দায় hamburger আর search-এর সাথে আঁটে না, তাই
-              md-এর নিচে 24px। */}
-          <span className="font-frank-ruhl font-semibold text-[24px] md:text-[30px] leading-none tracking-[-0.03em] text-black hidden md:inline">
+              ⚠️ শব্দচিহ্নটা আগে `hidden md:inline` ছিল — অর্থাৎ ফোনে
+              একেবারেই দেখা যেত না। কারণ ছিল জায়গার অভাব, কিন্তু
+              অভাবটা তৈরি হয়েছিল আমাদের নিজেদের ৪৪px বোতাম থেকে,
+              নকশা থেকে নয়। Figma-র মোবাইল frame-এ এটা স্পষ্ট আছে:
+              Frank Ruhl 16px, প্রস্থ 55px, letter-spacing −1%।
+
+              তিনটে ধাপ: 16px (Figma-র ৩২০px মকআপ) → 24px → 30px।
+              tracking-ও বদলায়: বড় মাপে −3% (অক্ষর টেনে আনা), ছোট
+              মাপে −1% — বড় লেখায় আলগা লাগে বলে বেশি টানা হয়, ছোট
+              লেখায় বেশি টানলে পড়তে কষ্ট হয়। */}
+          <span className="font-frank-ruhl font-semibold text-[16px] tracking-[-0.01em] min-[390px]:text-[24px] min-[390px]:tracking-[-0.03em] md:text-[30px] leading-none text-black">
             Cuisine
           </span>
         </Link>
@@ -410,7 +447,20 @@ export default function AdminTopbar({
             আর নিচের onKeyDown দুটোই Enter-এ চলার চেষ্টা করত। */}
         <div
           ref={searchRef}
-          className={`relative min-w-0 flex-1 max-w-[505px] ${
+          /**
+           * ⚠️ ট্যাবলেটে (৭৬৮–১০২৩px) search ঘরটা সরু — ২৮০px, ৫০৫ নয়।
+           *
+           * `flex-1` মানে ঘরটা যত জায়গা পায় ততটাই নেয়, আর parent-এ
+           * `justify-end` থাকায় সেটা bell-এর গা ঘেঁষে ডানে বসার কথা।
+           * কিন্তু ৭৬৮px-এ বাকি জায়গাটা ৫০৫-এর চেয়ে কম, তাই cap-টা
+           * কার্যকরই হতো না — ঘরটা logo-র ঠিক পরেই শুরু হয়ে পুরোটা
+           * টেনে নিত।
+           *
+           * Figma-র ৭০৮px মকআপে search ~২৮০px, আর তার বাঁ দিকে
+           * logo-র সাথে একটা স্পষ্ট ফাঁক থাকে (দেখুন মকআপ)। lg থেকে
+           * আবার ৫০৫, কারণ তখন জায়গার টান নেই।
+           */
+          className={`relative min-w-0 flex-1 max-w-[505px] md:max-w-[280px] lg:max-w-[505px] ${
             mobileSearchOpen ? "block" : "hidden"
           } md:block`}
         >
@@ -511,11 +561,11 @@ export default function AdminTopbar({
           type="button"
           onClick={closeMobileSearch}
           aria-label="Close search"
-          className={`h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden ${
+          className={`h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden ${
             mobileSearchOpen ? "flex" : "hidden"
           }`}
         >
-          <X className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+          <X className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
         </button>
 
         {/* ফোনে search খোলার বোতাম, আর bell + avatar — তিনটেই একসাথে
@@ -530,9 +580,9 @@ export default function AdminTopbar({
             onClick={() => setMobileSearchOpen(true)}
             aria-label="Search"
             aria-expanded={mobileSearchOpen}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
+            className="flex h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
           >
-            <Search className="w-5 h-5" strokeWidth={2} aria-hidden="true" />
+            <Search className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
           </button>
 
           {/* Bell — role অনুযায়ী layout থেকে আসে, বা কিছুই আসে না */}
@@ -549,7 +599,10 @@ export default function AdminTopbar({
                padding 6/12/6/6, gap 20px, BG #F9F6F3।
                উচ্চতা 50 − উপরে-নিচে 6 = ভেতরের সব কিছু 38px, তাই
                avatar-ও 38। */
-            className="flex items-center gap-3 xl:gap-5 h-[50px] bg-[#F9F6F3] rounded-full p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+            /* ⚠️ ৩৯০px-এর নিচে এটা নিছক একটা ৩২px গোল ছবি — কোনো
+               cream মোড়ক বা padding নেই, কারণ Figma-র মোবাইল frame-এ
+               avatar-টা ৩২×৩২ আর তার চারপাশে কিছু নেই। */
+            className="flex items-center gap-3 xl:gap-5 h-8 min-[390px]:h-[50px] bg-transparent min-[390px]:bg-[#F9F6F3] rounded-full p-0 min-[390px]:p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
           >
             {image ? (
               <Image
@@ -557,10 +610,10 @@ export default function AdminTopbar({
                 alt=""
                 width={38}
                 height={38}
-                className="w-[38px] h-[38px] rounded-full object-cover shrink-0"
+                className="h-8 w-8 min-[390px]:h-[38px] min-[390px]:w-[38px] rounded-full object-cover shrink-0"
               />
             ) : (
-              <span className="w-[38px] h-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[14px] flex items-center justify-center shrink-0">
+              <span className="h-8 w-8 min-[390px]:h-[38px] min-[390px]:w-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[12px] min-[390px]:text-[14px] flex items-center justify-center shrink-0">
                 {initial}
               </span>
             )}
