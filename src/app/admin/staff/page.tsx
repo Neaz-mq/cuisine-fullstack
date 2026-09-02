@@ -197,9 +197,11 @@ export default async function StaffPage({
                      gap 52, উচ্চতা 94, radius 16, BG #F9F6F3।
                      ৯৪ = 16 + 62 + 16 — Status কলামটাই (label + ৩৬px pill)
                      উচ্চতা ঠিক করে, ছবিটা নয় (৬০)। */
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-6 2xl:gap-[52px]"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex xl:flex-row xl:items-center xl:gap-6 2xl:gap-[52px]"
                 >
-                  <div className="flex min-w-0 items-center gap-4 xl:w-[203px] xl:shrink-0">
+                  {/* xl-এর নিচে: উপরের সারির বাঁ ঘর (বোতামগুলো ডান ঘরে)।
+                      xl থেকে flex, তাই placement নিষ্ক্রিয়। */}
+                  <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-4 xl:col-auto xl:row-auto xl:w-[203px] xl:shrink-0">
                     <UserAvatar src={member.image} name={member.name ?? member.email} />
                     <div className="flex min-w-0 flex-col gap-1">
                       <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
@@ -296,7 +298,21 @@ export default async function StaffPage({
                    * xl-এর নিচে আগের মতোই দুই/তিন কলামের grid — সেখানে
                    * সারি ভেঙে যায়, তাই অনুপাত অর্থহীন।
                    */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:grid-cols-3 xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5 xl:grid-cols-[minmax(0,100fr)_minmax(0,125fr)_minmax(0,62fr)_minmax(0,190fr)_minmax(0,82fr)]">
+                  {/**
+                   * xl-এর নিচে: দ্বিতীয় সারি, দুই কলাম জুড়েই।
+                   *
+                   * ⚠️ ৫৬০–১২৭৯px-এ কলাম তিনটে, কিন্তু **সমান নয়** —
+                   * `1fr 1fr auto`। তৃতীয়টা তার লেখাটুকুর মাপ নেয় আর
+                   * ডান কিনারায় গিয়ে বসে।
+                   *
+                   * সমান তিন ভাগ করলে তৃতীয় ঘরটা ~২৬০px চওড়া হতো,
+                   * অথচ ভেতরে "Waiter" — মাত্র ~৫০px। ফলে "Role"
+                   * শিরোনাম আর মানটার মাঝে বিশাল ফাঁক পড়ত। Figma-তে
+                   * সারিটা (Frame 2147236671) `space-between`, অর্থাৎ
+                   * ঘরগুলো নিজের লেখাটুকুই নেয় আর বাড়তি জায়গাটা
+                   * ওদের **মাঝে** যায়, ভেতরে নয়। `auto` সেটাই করে।
+                   */}
+                  <div className="col-span-2 row-start-2 grid grid-cols-2 gap-4 min-[560px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:col-auto xl:row-auto xl:min-w-0 xl:flex-1 xl:items-center xl:gap-5 xl:grid-cols-[minmax(0,100fr)_minmax(0,125fr)_minmax(0,62fr)_minmax(0,190fr)_minmax(0,82fr)]">
                     <InfoField
                       className=""
                       label="Join Date"
@@ -309,8 +325,27 @@ export default async function StaffPage({
                       label="Phone Number"
                       value={member.staffProfile?.phone ?? "—"}
                     />
+                    {/**
+                     * ⚠️ তৃতীয় কলামটা ট্যাবলেটে **ডান-ঘেঁষা**।
+                     *
+                     * তিনটে সমান কলামে Role-এর ঘরটা কার্ডের ডান কিনারা
+                     * পর্যন্ত যায়, কিন্তু ভেতরের লেখাটা ("Waiter") ছোট,
+                     * তাই বাঁ দিকে বসে আর ডানে একটা বড় ফাঁক পড়ে থাকে।
+                     * Figma-তে ওই লেখাটা উপরের "View" বোতামের ডান
+                     * কিনারার সাথে মেলে — একটা খাড়া রেখা তৈরি হয়, আর
+                     * সেটাই কার্ডটাকে গোছানো দেখায়।
+                     *
+                     * ⚠️ ভেতরে `text-right` — ঘরটা এখন `auto` চওড়া
+                     * (উপরের grid-এর মন্তব্য), অর্থাৎ "Role" শিরোনামের
+                     * মাপেই দাঁড়ায়। "Waiter" তার চেয়ে সরু, তাই ডানে
+                     * ঠেলে দিলে সেটা শিরোনামের ডান কিনারার সাথে মেলে —
+                     * আর সেই কিনারাটাই উপরের "View" বোতামের কিনারা।
+                     *
+                     * xl থেকে সারিটা একটা টেবিল হয়ে যায় আর সব কলাম
+                     * বাঁ-ঘেঁষা, তাই সেখানে `text-left`-এ ফেরানো।
+                     */}
                     <InfoField
-                      className=""
+                      className="min-[560px]:text-right xl:text-left"
                       label="Role"
                       value={ROLE_LABELS[member.role as StaffRole]}
                     />

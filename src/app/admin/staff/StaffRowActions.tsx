@@ -67,7 +67,18 @@ export default function StaffRowActions({
           দ্রষ্টব্য); hug হলে ওই ব্লকটা সংকুচিত হয়ে যেত আর তার বাঁ
           পাশের পাঁচটা কলাম ডান দিকে সরে যেত। ফলে এক সারির "Shift"
           আরেক সারির "Shift"-এর সাথে মিলত না। */}
-      <div className="flex shrink-0 items-center justify-end gap-2 xl:w-[120px]">
+      {/* ⚠️ `col-start-2 row-start-1` — xl-এর নিচে সারিটা একটা
+          দুই-কলামের grid, আর এই বোতাম-জোড়াটা বসে **উপরের সারির ডানে**,
+          পরিচয়-ব্লকের ঠিক পাশে। Figma-র ট্যাবলেট মকআপে (Frame
+          2147236339) ওটাই: উপরে ছবি+নাম … Edit/View, নিচে পাঁচটা মাঠ।
+
+          আগে এটা DOM-ক্রমেই তৃতীয় সন্তান হিসেবে সবার নিচে পড়ত, তাই
+          কার্ডের নিচে ডান কোণে একা ঝুলে থাকত আর তার উপরে একটা বড়
+          ফাঁকা জায়গা তৈরি হতো।
+
+          xl থেকে grid ছেড়ে flex, তখন এই placement-গুলো নিষ্ক্রিয়
+          (`xl:col-auto xl:row-auto`) আর ব্লকটা সারির শেষ ঘরে ফেরে। */}
+      <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2 xl:col-auto xl:row-auto xl:w-[120px]">
         {canEdit && (
           /* Figma: 53×40, radius 100, padding 13px 12px, পাড় 1px
              #000000, BG স্বচ্ছ, লেখা Sora 400 14px #000000। */
