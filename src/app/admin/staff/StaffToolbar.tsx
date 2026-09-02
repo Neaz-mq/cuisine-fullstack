@@ -32,8 +32,54 @@ import StaffFormModal from "./StaffFormModal";
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
-// UsersToolbar-এর একই কারণ: placeholder attribute, CSS দিয়ে বদলায় না।
-const FULL_PLACEHOLDER = "Search by Name, Email or Employee ID…";
+/**
+ * Placeholder — একটাই রূপ, সব পর্দায়।
+ *
+ * ⚠️ লেখাটা আগে ছিল "Search by Name, Email or Employee ID…" আর সেটা
+ * ৩২০px-এ ডান দিক থেকে কেটে যেত ("…or Employee" পর্যন্ত দেখা যেত,
+ * "ID…" হারিয়ে যেত)। কারণটা font-size নয়, নিছক পাটিগণিত — আসল Sora
+ * 400 দিয়ে মেপে:
+ *
+ *   উপলব্ধ জায়গা  = 288 (shell-এর p-4 বাদে) − 40 (pl-10) − 16 (pr-4)
+ *                 = 232px
+ *   পুরনো লেখাটা  = 241.5px  @12px  → ৯.৫px উপচে পড়ে ❌
+ *   নতুন লেখাটা   = 178.9px  @12px  → আঁটে ✅
+ *
+ * ── কেন font-size আরও কমানো হলো না ──────────────────────────────────
+ *
+ * ১১px-এ পুরনো লেখাটা দাঁড়াত ~221px — আঁটত, কিন্তু ২৩২-এর ঘরে ২২১
+ * মানে ১১px-এর ব্যবধান। ব্যবহারকারীর ব্রাউজারে Sora লোড হওয়ার আগে
+ * fallback sans-serif দিয়ে আঁকা হয়, আর সেটা প্রায় সবসময়ই চওড়া —
+ * অর্থাৎ প্রথম রেন্ডারেই আবার কাটত। আর Figma-র ৩২০px frame স্পষ্ট
+ * করে বলে placeholder ১২px (`font-size: 12px`), তাই ওটা নামানোর
+ * সুযোগও নেই।
+ *
+ * ── কেন পর্দা মেপে দুটো আলাদা লেখা দেখানো হলো না ────────────────────
+ *
+ * সেটা করতে হলে JS-কে জানতে হতো পর্দা কত চওড়া (placeholder একটা
+ * attribute, `::placeholder`-এ `content` কাজ করে না)। UsersToolbar-এ
+ * ঠিক ওই ব্যবস্থাটাই একবার ছিল এবং **সরিয়ে ফেলা হয়েছে** — ওখানকার
+ * মন্তব্য দ্রষ্টব্য। server-এ আর client-এ আলাদা লেখা মানে hydration
+ * অমিল, আর matchMedia-র ফল state-এ তুললে সেটা useEffect-এর ভেতরে
+ * setState — যেটা এই প্রজেক্টে react-hooks/set-state-in-effect ভাঙে।
+ * একটা placeholder-এর জন্য ওই দাম দেওয়ার মানে হয় না।
+ *
+ * ── কেন ঠিক এই লেখাটা ───────────────────────────────────────────────
+ *
+ * Figma নিজেই এই সমস্যাটা এভাবেই সামলেছে: Users পাতার ৩২০px frame-এ
+ * লেখাটা "Search by Customer Name, Email…" — ২১০px, অর্থাৎ designer
+ * পুরো বাক্য না লিখে ছোট করে দিয়েছেন। এখানেও একই পথ।
+ *
+ * "Employee" শব্দটা বাদ গেল, "ID" থাকল — কারণ যে তিনটে মাঠে সত্যিই
+ * খোঁজা হয় (name, email, employeeId) তিনটেরই ইঙ্গিত থাকা জরুরি, আর
+ * এই তালিকায় "ID" বলতে যে employee ID বোঝানো হচ্ছে সেটা প্রেক্ষাপট
+ * থেকেই স্পষ্ট: প্রতিটা সারির পরিচয়-ব্লকের তৃতীয় লাইনটাই ওই ID।
+ *
+ * ⚠️ `aria-label`-টা কিন্তু পুরো থাকল ("…name, email or employee ID")।
+ * সংক্ষেপটা জায়গার সমস্যার সমাধান, তথ্য কমানোর সিদ্ধান্ত নয় — screen
+ * reader-এ জায়গার সমস্যা নেই, তাই সেখানে কাটছাঁটেরও কারণ নেই।
+ */
+const FULL_PLACEHOLDER = "Search by Name, Email or ID…";
 
 export default function StaffToolbar({
   viewerRole,
@@ -109,13 +155,28 @@ export default function StaffToolbar({
           onChange={(event) => setQuery(event.target.value)}
           placeholder={FULL_PLACEHOLDER}
           aria-label="Search staff by name, email or employee ID"
-          /* ⚠️ placeholder-এর মাপ ইনপুটের চেয়ে আলাদা — কারণ
-             UsersToolbar-এর একই ঘরের মন্তব্যে (iOS-এর zoom বনাম
-             ৩২০px-এ জায়গা)। এখানে লেখাটা একটু লম্বা, তাই ৩২০px-এ
-             শেষ দিকটা সামান্য কাটতে পারে — তবু শুধু "Search"
-             দেখানোর চেয়ে ভালো, কারণ কাটা লেখাও বলে দেয় কী দিয়ে
-             খোঁজা যায়। */
-          className={`h-[50px] w-full rounded-full bg-white pl-10 pr-4 font-sora min-[480px]:pl-11 text-[16px] font-normal leading-none text-black/70 placeholder:text-[12px] placeholder:text-black/70 min-[480px]:placeholder:text-[14px] md:placeholder:text-[16px] ${FOCUS_RING}`}
+          /**
+           * ⚠️ placeholder-এর মাপ ইনপুটের চেয়ে আলাদা — কারণ
+           * UsersToolbar-এর একই ঘরের মন্তব্যে (iOS Safari ১৬px-এর কম
+           * ইনপুটে পাতা zoom করে দেয়, তাই ইনপুট ১৬; আর ৩২০px-এ
+           * ১৬px placeholder আঁটে না, তাই placeholder ১২)।
+           *
+           * ⚠️ `text-ellipsis` — নিরাপত্তা-জাল, প্রধান সমাধান নয়।
+           * প্রধান সমাধানটা উপরের FULL_PLACEHOLDER: লেখাটাই এখন
+           * সব পর্দায় আঁটে (৩২০-এ ১৭৯/২৩২, ৪৮০-এ ২০৯/২২৮,
+           * ৭৬৮+-এ ২৩৯/৫১৬)। কিন্তু Sora লোড হওয়ার আগের কয়েকটা
+           * frame-এ fallback sans-serif দিয়ে আঁকা হয়, আর সেটা চওড়া।
+           * ওই মুহূর্তে `text-overflow: ellipsis` ছাড়া লেখাটা
+           * অক্ষরের মাঝখানে খাড়াভাবে কেটে যায় (এখনকার ছবিতে যেমন
+           * দেখা যাচ্ছে); এটা থাকলে সেটা একটা "…"-এ শেষ হয় —
+           * অর্থাৎ সবচেয়ে খারাপ অবস্থাটাও দেখতে ইচ্ছাকৃত লাগে।
+           *
+           * input-এ `text-overflow` value আর placeholder **দুটোতেই**
+           * খাটে (Chrome/Firefox/Safari), আর focus করে টাইপ করার সময়
+           * ব্রাউজার নিজেই এটা উপেক্ষা করে — তাই caret ঢাকা পড়ার
+           * ভয় নেই।
+           */
+          className={`h-[50px] w-full text-ellipsis rounded-full bg-white pl-10 pr-4 font-sora min-[480px]:pl-11 text-[16px] font-normal leading-none text-black/70 placeholder:text-[12px] placeholder:text-black/70 min-[480px]:placeholder:text-[14px] md:placeholder:text-[16px] ${FOCUS_RING}`}
         />
       </div>
 
