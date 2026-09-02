@@ -134,6 +134,17 @@ export default async function SuppliersPage({
         category: true,
         products: true,
         isActive: true,
+        /**
+         * Figma-র ৩২০px frame-এ একটা বাড়তি ঘর: "Total Orders / 46 Order"
+         * (Frame 2147236294)। ট্যাবলেট আর desktop frame-এ ওটা নেই —
+         * সেখানে সারিটা আড়াআড়ি, জায়গা কম; মোবাইলে কার্ডটা খাড়া বলে
+         * জায়গা আছে।
+         *
+         * ⚠️ `_count` — আলাদা query নয়। দশটা সরবরাহকারীর জন্য দশবার
+         * `purchaseOrder.count()` চালালে N+1, অথচ Prisma এটাকে একটাই
+         * LEFT JOIN … GROUP BY-তে মিলিয়ে দেয়।
+         */
+        _count: { select: { purchaseOrders: true } },
       },
     }),
     /**
@@ -228,7 +239,11 @@ export default async function SuppliersPage({
       <SuppliersOverviewCards period={period} />
 
       {/* --- Recent Deliveries --- Figma Frame 2147236295। */}
-      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
+      {/* ⚠️ ৩২০px-এ padding ২০ নয়, ১৬ — Figma-র সারি-কার্ডটার প্রস্থ
+          `width: 256px`, অর্থাৎ 288 (shell-এর p-4 বাদে) − ২×১৬। ২০
+          রাখলে ভেতরে থাকে ২১৬, আর তাতে "Charmatha, Bogura" (১৪px
+          Frank Ruhl-এ ১২৪.৪px) কেটে যেত। */}
+      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
         {/* Frame 2147236374: row, space-between, উচ্চতা 40। */}
         <div className="flex items-center justify-between gap-4">
           <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
@@ -337,7 +352,11 @@ export default async function SuppliersPage({
       </div>
 
       {/* --- Suppliers Information --- Figma Frame 2147236296। */}
-      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
+      {/* ⚠️ ৩২০px-এ padding ২০ নয়, ১৬ — Figma-র সারি-কার্ডটার প্রস্থ
+          `width: 256px`, অর্থাৎ 288 (shell-এর p-4 বাদে) − ২×১৬। ২০
+          রাখলে ভেতরে থাকে ২১৬, আর তাতে "Charmatha, Bogura" (১৪px
+          Frank Ruhl-এ ১২৪.৪px) কেটে যেত। */}
+      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
         <div className="flex items-center justify-between gap-4">
           <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
             Suppliers Information
@@ -392,40 +411,62 @@ export default async function SuppliersPage({
                   </div>
 
                   {/**
-                   * Frame 2147236677 — ঘরগুলো।
+                   * ঘরগুলো — তিন পর্দায় তিনরকম বিন্যাস, তাই প্রতিটা ঘরে
+                   * স্পষ্ট placement আর মোড়কগুলো প্রয়োজনমতো মিলিয়ে যায়।
                    *
-                   * ⚠️ ট্যাবলেটে এটা সমান তিন ভাগের grid নয়, বরং
-                   * `justify-content: space-between` দিয়ে ছড়ানো তিনটে
-                   * খাড়া কলাম — প্রতিটার ভেতরে উপর-নিচে দুটো ঘর:
+                   * < ৫৬০px — Figma Frame 2147236691: দুই কলাম,
+                   *   `justify-content: space-between`:
                    *
-                   *   Address   | Phone Number | Category
-                   *   Products  | Status       |
+                   *     Address       | Category
+                   *     Phone Number  | Total Orders
+                   *     Products      | Status
                    *
-                   * সমান তিন ভাগ করলে কলামগুলো বসত 0 / 33% / 67%-এ
-                   * (আগে ঠিক তাই হতো, আর "Category" মাঝামাঝি ঝুলে
-                   * থাকত)। Figma-র নিজের মাপে কলাম 94 · 134 · 67
-                   * (মোট 295) আর জায়গা 616, তাই space-between-এর ফাঁক
-                   * (616 − 295)/2 = 160.5 — শুরুর বিন্দু 0 / 254.5 / 549,
-                   * অর্থাৎ "Category" প্রায় ডান কিনারায়।
+                   *   মোড়ক তিনটে তখন `contents`, অর্থাৎ ছয়টা ঘন সরাসরি
+                   *   এই grid-এর ঘর, আর কে কোথায় বসবে সেটা নিচের
+                   *   `col-start`/`row-start` বলে দেয়।
                    *
-                   * ⚠️ মোড়ক তিনটে base-এ আর xl-এ `contents`, মাঝের
-                   * তিরে `flex flex-col`। অর্থাৎ ওরা কেবল ট্যাবলেটেই
-                   * সত্যিকারের বাক্স; দুই প্রান্তে মিলিয়ে গিয়ে পাঁচটা
-                   * ঘন সরাসরি বাইরের grid-এর ঘর হয়ে যায়।
+                   *   ⚠️ কলাম দুটো সমান নয়, `124fr : 76fr`। সমান করলে
+                   *   প্রতিটা ১০৪px, অথচ বাঁ কলামে "Charmatha, Bogura"
+                   *   ১৪px Frank Ruhl-এ ১২৪.৪px — কেটে যেত। অনুপাতে
+                   *   ভাগ করলে বাঁ কলাম ১২৯.৩ আর ডানটা ৭৮.৭ (দরকার
+                   *   ৭৫.৭), আর ডান কলাম শুরু হয় ১৪৫.৩px-এ — Figma-র
+                   *   ১৪৯-এর প্রায় গায়ে।
                    *
-                   * ⚠️ xl-এর কলাম-প্রস্থ অবস্থান-ভিত্তিক, অথচ DOM-ক্রম
-                   * এখন ট্যাবলেটের ক্রম (Address, Products, Phone,
-                   * Status, Category)। তাই প্রতিটা ঘরে স্পষ্ট
-                   * `xl:col-start` — auto-placement-এর ভরসায় থাকলে
-                   * desktop-এ ক্রম উল্টে যেত। template-টা আগের মতোই
-                   * desktop-এর **দেখানোর** ক্রমে: 160=Address,
-                   * 140=Phone, 90=Category, 120=Products, 80=Status।
+                   * ৫৬০–১২৭৯ — Figma Frame 2147236677: তিনটে খাড়া কলাম,
+                   *   space-between (Address+Products · Phone+Status ·
+                   *   Category)। তখন মোড়কগুলোই সত্যিকারের বাক্স, আর
+                   *   উপরের placement class-গুলো নিষ্ক্রিয় (grid নয়,
+                   *   flex — `grid-column-start` ওখানে অর্থহীন)।
+                   *
+                   * ≥ ১২৮০ — এক সারির পাঁচ কলাম। মোড়ক আবার `contents`,
+                   *   আর ক্রম ঠিক রাখে `xl:col-start`। template-টা
+                   *   desktop-এর দেখানোর ক্রমে: 160=Address, 140=Phone,
+                   *   90=Category, 120=Products, 80=Status।
                    */}
-                  <div className="grid grid-cols-2 gap-4 min-[560px]:col-span-2 min-[560px]:row-start-2 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-8 xl:col-auto xl:row-auto xl:grid xl:min-w-0 xl:flex-1 xl:grid-cols-[minmax(0,160fr)_minmax(0,140fr)_minmax(0,90fr)_minmax(0,120fr)_minmax(0,80fr)] xl:items-center xl:gap-5">
-                    {/* কলাম ১ — Frame 2147236675 */}
+                  <div className="grid grid-cols-[minmax(0,124fr)_minmax(0,76fr)] gap-x-4 gap-y-5 min-[560px]:col-span-2 min-[560px]:row-start-2 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-8 xl:col-auto xl:row-auto xl:grid xl:min-w-0 xl:flex-1 xl:grid-cols-[minmax(0,160fr)_minmax(0,140fr)_minmax(0,90fr)_minmax(0,120fr)_minmax(0,80fr)] xl:items-center xl:gap-5">
+                    {/**
+                     * ⚠️ মোড়কের ভেতরে কে থাকবে সেটা **কেবল ট্যাবলেটের**
+                     * প্রশ্ন, আর এখানেই একবার ভুল হয়েছিল।
+                     *
+                     * ৩২০px-এ আর desktop-এ মোড়কগুলো `contents` — তখন
+                     * ছয়টা ঘরই বাইরের grid-এর সরাসরি ঘর, আর কে কোথায়
+                     * বসবে সেটা প্রতিটার নিজের `col-start`/`row-start`
+                     * বলে দেয়, DOM-ক্রম নয়। কিন্তু ৫৬০–১২৭৯-তে মোড়ক
+                     * তিনটেই সত্যিকারের flex-column, তাই ওখানে ভাগটা
+                     * DOM-ক্রম **ছাড়া আর কিছুই** ঠিক করে না।
+                     *
+                     * অর্থাৎ মোড়কের সদস্যতালিকা মানতে হবে ট্যাবলেটের
+                     * ভাগ (Frame 2147236677): Address+Products ·
+                     * Phone+Status · Category। মোবাইলের ভাগটা
+                     * (Address/Phone/Products বাঁয়ে) placement দিয়েই
+                     * হয়ে যায়, তার জন্য ঘর সরানোর দরকার নেই — সরালে
+                     * উল্টে ট্যাবলেট ভেঙে যায়।
+                     */}
+
+                    {/* ট্যাবলেটের কলাম ১ — Frame 2147236675 */}
                     <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
                       <InfoField
-                        className="xl:col-start-1 xl:row-start-1"
+                        className="col-start-1 row-start-1 xl:col-start-1 xl:row-start-1"
                         label="Address"
                         value={supplier.address ?? "—"}
                       />
@@ -433,35 +474,54 @@ export default async function SuppliersPage({
                       {/* Products — InfoField নয়, কারণ মানটা একটা লেখা নয়,
                           একটা pill যেটা খোলা যায়। label-টা তবু হুবহু
                           InfoField-এর মাপে, যাতে সারিটা মেলে। */}
-                      <div className="flex min-w-0 flex-col gap-3 xl:col-start-4 xl:row-start-1">
-                        <span className="whitespace-nowrap font-sora text-[13px] font-normal leading-none text-black/70 xl:text-[14px]">
+                      <div className="col-start-1 row-start-3 flex min-w-0 flex-col gap-3 xl:col-start-4 xl:row-start-1">
+                        <span className="whitespace-nowrap font-sora text-[12px] font-normal leading-none text-black/70 min-[560px]:text-[13px] xl:text-[14px]">
                           Products
                         </span>
                         <SupplierProductsPill products={supplier.products} />
                       </div>
                     </div>
 
-                    {/* কলাম ২ — Frame 2147236676 */}
+                    {/* ট্যাবলেটের কলাম ২ — Frame 2147236676 */}
                     <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
                       <InfoField
-                        className="xl:col-start-2 xl:row-start-1"
+                        className="col-start-1 row-start-2 xl:col-start-2 xl:row-start-1"
                         label="Phone Number"
                         value={supplier.phone ?? "—"}
                       />
+
                       <InfoField
-                        className="xl:col-start-5 xl:row-start-1"
+                        className="col-start-2 row-start-3 xl:col-start-5 xl:row-start-1"
                         label="Status"
                         value={supplier.isActive ? "Active" : "Inactive"}
                         tone={supplier.isActive ? "positive" : "negative"}
                       />
                     </div>
 
-                    {/* কলাম ৩ — Frame 2147236294, একাই */}
+                    {/* ট্যাবলেটের কলাম ৩ — Frame 2147236294 */}
                     <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5 xl:contents">
                       <InfoField
-                        className="xl:col-start-3 xl:row-start-1"
+                        className="col-start-2 row-start-1 xl:col-start-3 xl:row-start-1"
                         label="Category"
                         value={supplier.category ?? "—"}
+                      />
+
+                      {/**
+                       * ⚠️ কেবল ৫৬০-এর নিচে — Figma-র ৩২০px frame-এ ঘরটা
+                       * আছে, ট্যাবলেট আর desktop frame-এ নেই। বড় পর্দায়
+                       * সারিটা আড়াআড়ি, সেখানে ষষ্ঠ একটা কলাম ঢোকালে
+                       * বাকিগুলো চেপে যেত।
+                       *
+                       * "46 Order" — Figma-র নমুনা লেখাটা একবচন, তাই
+                       * সংখ্যার পাশে "Order"/"Orders" বসানো হয়েছে
+                       * ইংরেজি নিয়ম মেনে (১ হলে একবচন)।
+                       */}
+                      <InfoField
+                        className="col-start-2 row-start-2 min-[560px]:hidden"
+                        label="Total Orders"
+                        value={`${supplier._count.purchaseOrders} ${
+                          supplier._count.purchaseOrders === 1 ? "Order" : "Orders"
+                        }`}
                       />
                     </div>
                   </div>
