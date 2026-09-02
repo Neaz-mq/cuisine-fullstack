@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import FilterMenu, { FILTER_FOCUS_RING } from "@/components/admin/FilterMenu";
@@ -28,9 +28,25 @@ export default function SuppliersToolbar({ status }: { status: SupplierStatusFil
   const [query, setQuery] = useState(urlQuery);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // শেষ যেটা push করা হয়েছে — নাহলে URL বদলালে (back বোতাম, ছাঁকনি)
-  // effect আবার একই query push করত, আর অসীম চক্র তৈরি হতো।
-  const requestedRef = useRef(urlQuery);
+  /**
+   * URL বাইরে থেকে বদলালে (back/forward, ছাঁকনি) ঘরটাও মিলিয়ে নেওয়া।
+   *
+   * ⚠️ এটা একটা `useEffect`-এ ছিল, আর lint ঠিকই ধরেছে
+   * (`react-hooks/set-state-in-effect`): effect-এর শরীরে সরাসরি
+   * setState মানে React একবার পুরনো মান নিয়ে render করে, তারপর
+   * setState দেখে আবার — একটা অপ্রয়োজনীয় cascading render, আর
+   * এক ফ্রেমের জন্য ঘরে ভুল লেখা।
+   *
+   * এটা React-এর নিজের "prop বদলালে state ঠিক করে নেওয়া" প্যাটার্ন
+   * (react.dev/learn/you-might-not-need-an-effect): render চলাকালীন
+   * তুলনা করে setState — React তখন DOM-এ কিছু আঁকার **আগেই** আবার
+   * render করে, তাই বাড়তি commit হয় না।
+   */
+  const [syncedQuery, setSyncedQuery] = useState(urlQuery);
+  if (urlQuery !== syncedQuery) {
+    setSyncedQuery(urlQuery);
+    setQuery(urlQuery);
+  }
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
@@ -51,23 +67,21 @@ export default function SuppliersToolbar({ status }: { status: SupplierStatusFil
     router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
   };
 
-  // টাইপ করার সময় প্রতিটা অক্ষরে নয়, থামার ৩০০ms পরে — নাহলে প্রতিটা
-  // keystroke-এ একটা করে server round-trip হতো।
+  /**
+   * টাইপ করার সময় প্রতিটা অক্ষরে নয়, থামার ৩০০ms পরে — নাহলে প্রতিটা
+   * keystroke-এ একটা করে server round-trip হতো।
+   *
+   * ⚠️ শর্তটা এখন সরাসরি `query === urlQuery` — আগের `requestedRef`
+   * লাগে না। ঘরের লেখা আর URL এক মানে push করার কিছু নেই, তা সেটা
+   * ব্যবহারকারী টাইপ করে মিলিয়েছেন নাকি back বোতাম মিলিয়ে দিয়েছে।
+   * একটা ref কম মানে render-এর সময় ref বদলানোর প্রশ্নও নেই।
+   */
   useEffect(() => {
-    if (query === requestedRef.current) return;
-    const timer = setTimeout(() => {
-      requestedRef.current = query;
-      push({ q: query || null });
-    }, 300);
+    if (query === urlQuery) return;
+    const timer = setTimeout(() => push({ q: query || null }), 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  // URL বাইরে থেকে বদলালে (back/forward, ছাঁকনি) ঘরটাও মিলিয়ে নেওয়া।
-  useEffect(() => {
-    requestedRef.current = urlQuery;
-    setQuery(urlQuery);
-  }, [urlQuery]);
+  }, [query, urlQuery]);
 
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
