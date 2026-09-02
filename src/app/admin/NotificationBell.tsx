@@ -133,10 +133,23 @@ export default function NotificationBell({
          BG #F9F6F3 — অর্থাৎ ডান পাশের user card-এর মতোই একটা বৃত্ত।
          আগে এটা ছিল rounded-md আর background-হীন, তাই পাশের গোল
          pill-টার সাথে বেমানান লাগত। padding 15px + icon 20px = 50। */
-      className="relative w-[50px] h-[50px] shrink-0 flex items-center justify-center rounded-full bg-[#F9F6F3] hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+      /**
+       * তিন ধাপ: ৩২ → ৪৪ → ৫০।
+       *
+       * ⚠️ মাঝের ধাপটা (৪৪) আগে ছিল না, আর সেটাই ভুল ছিল। ৩৯০px-এ
+       * এটা সরাসরি ৫০ হয়ে যেত, অথচ তার পাশের hamburger আর search
+       * বোতাম ৪৪ — ফলে একই সারিতে তিনটে গোল বোতামের একটা বাকি
+       * দুটোর চেয়ে বড় দেখাত। Figma-তে ওরা সবসময় সমান (মোবাইলে
+       * তিনটেই ৩২)।
+       *
+       * ৫০-এ ফেরা md থেকে, কারণ তখন search icon-বোতামটা আর থাকে না
+       * (তার জায়গায় পুরো search ঘর) — অর্থাৎ তুলনা করার মতো পাশের
+       * বোতামটাই নেই, আর ডেস্কটপে bell আর avatar দুটোই ৫০।
+       */
+      className="relative h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 md:h-[50px] md:w-[50px] shrink-0 flex items-center justify-center rounded-full bg-[#F9F6F3] hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
       aria-label={ariaLabel}
     >
-      <Bell className="w-5 h-5 text-black/70" strokeWidth={1.8} />
+      <Bell className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5 text-black/70" strokeWidth={1.8} />
       {count > 0 && (
         /* Figma-তে badge-টা বৃত্তের *বাইরে* উঁকি দেয়, ভেতরে নয় — ডান
            প্রান্তে মিলিয়ে, উপরে সামান্য বেরিয়ে। ভেতরে বসালে ওটা
@@ -145,7 +158,7 @@ export default function NotificationBell({
            `min-w` + `px-1`, স্থির চওড়া নয়: গণনা দুই অঙ্কে গেলে (১২টা
            নতুন order) স্থির ২০px-এ সংখ্যাটা কেটে যেত। এক অঙ্কে এটা
            নিখুঁত বৃত্তই থাকে। */
-        <span className="absolute -top-0.5 right-0 bg-red-600 text-white text-[11px] font-bold leading-none rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center">
+        <span className="absolute -top-0.5 -right-0.5 min-[390px]:right-0 bg-red-600 text-white text-[10px] min-[390px]:text-[11px] font-bold leading-none rounded-full h-4 min-w-[16px] min-[390px]:h-5 min-[390px]:min-w-[20px] px-1 flex items-center justify-center">
           {count > 9 ? "9+" : count}
         </span>
       )}

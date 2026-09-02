@@ -601,8 +601,12 @@ export default function AdminTopbar({
                avatar-ও 38। */
             /* ⚠️ ৩৯০px-এর নিচে এটা নিছক একটা ৩২px গোল ছবি — কোনো
                cream মোড়ক বা padding নেই, কারণ Figma-র মোবাইল frame-এ
-               avatar-টা ৩২×৩২ আর তার চারপাশে কিছু নেই। */
-            className="flex items-center gap-3 xl:gap-5 h-8 min-[390px]:h-[50px] bg-transparent min-[390px]:bg-[#F9F6F3] rounded-full p-0 min-[390px]:p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+               avatar-টা ৩২×৩২ আর তার চারপাশে কিছু নেই।
+
+               মাপের ধাপগুলো bell-এর সাথে হুবহু এক (৩২ → ৪৪ → ৫০) —
+               একই সারির গোল জিনিসগুলো সমান না হলে সেটা সাথে সাথে
+               চোখে পড়ে। ব্যাখ্যা NotificationBell.tsx-এ। */
+            className="flex items-center gap-3 xl:gap-5 h-8 min-[390px]:h-11 md:h-[50px] bg-transparent min-[390px]:bg-[#F9F6F3] rounded-full p-0 min-[390px]:p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
           >
             {image ? (
               <Image
@@ -610,10 +614,10 @@ export default function AdminTopbar({
                 alt=""
                 width={38}
                 height={38}
-                className="h-8 w-8 min-[390px]:h-[38px] min-[390px]:w-[38px] rounded-full object-cover shrink-0"
+                className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full object-cover shrink-0"
               />
             ) : (
-              <span className="h-8 w-8 min-[390px]:h-[38px] min-[390px]:w-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[12px] min-[390px]:text-[14px] flex items-center justify-center shrink-0">
+              <span className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[12px] md:text-[14px] flex items-center justify-center shrink-0">
                 {initial}
               </span>
             )}
