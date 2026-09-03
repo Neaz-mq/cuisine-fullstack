@@ -268,10 +268,34 @@ export default async function UsersPage({
                    ৯২ = 16 + 60 (ছবি) + 16 — অর্থাৎ ছবিটাই উচ্চতা ঠিক করে। */
                 <div
                   key={user.id}
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-[30px]"
+                  /**
+                   * ⚠️ এক সারির চেহারাটা শুরু ১৪০০ থেকে, xl (1280) থেকে নয়।
+                   *
+                   * পাঁচটা মাঠ এক সারিতে বসতে কতটা লাগে সেটা মেপে দেখা
+                   * (label 14px nowrap, মান 16px, gap 30):
+                   *
+                   *   Member Since 102.1 · Reward Points 102.0 ·
+                   *   Phone Number 122.5 · Total Orders 88.3 ·
+                   *   Customer Category 139.9   → যোগফল + 4×30 = 674.9
+                   *
+                   * তার সাথে পরিচয়-ব্লক 203 + gap 30, কার্ডের padding
+                   * 32 + 60, sidebar 281 + 24, shell 60 — অর্থাৎ সব
+                   * মিলিয়ে viewport দরকার **~১৩৬৫px**।
+                   *
+                   * ১২৮০-তে মাঠগুলো পেত ৫৯০, ১৩৪০-এ ৬৫০ — দুটোই কম।
+                   * আর label-এ `xl:whitespace-nowrap` থাকায় লেখাটা
+                   * ভাঁজ হতো না, নিজের ঘরের বাইরে বেরিয়ে যেত — তাই
+                   * "Customer Category" কার্ডের ডান কিনারা পেরিয়ে
+                   * চলে যাচ্ছিল। ১৪৪০-এও প্রতিটা মাঠ পেত ১২৬px, অথচ
+                   * ওই শিরোনামটার লাগে ১৩৯.৯।
+                   *
+                   * তাই ১৪০০-এর নিচে ১০২৪-এর চেহারাটাই থাকে: উপরে
+                   * পরিচয়, নিচে তিন কলামে মাঠ — যা ওই মাপে দিব্যি ধরে।
+                   */
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 min-[1400px]:flex-row min-[1400px]:items-center min-[1400px]:gap-[30px]"
                 >
                   {/* Frame 2147236287: row, gap 16, চওড়া 203, উচ্চতা 60। */}
-                  <div className="flex min-w-0 items-center gap-4 xl:w-[203px] xl:shrink-0">
+                  <div className="flex min-w-0 items-center gap-4 min-[1400px]:w-[203px] min-[1400px]:shrink-0">
                     <UserAvatar src={user.image} name={user.name ?? user.email} />
 
                     {/* Frame 2147236286: column, gap 4। */}
@@ -316,7 +340,19 @@ export default async function UsersPage({
                    * ৫৬০ থেকে তিন কলাম, তখন প্রতিটা ~১৬৫px — সেখানে
                    * span-টা আর লাগে না।
                    */}
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:grid-cols-3 min-[560px]:gap-4 xl:flex xl:min-w-0 xl:flex-1 xl:gap-[30px]">
+                  {/**
+                   * ⚠️ ১৪০০ থেকে flex নয়, **grid** — আর কলামের অনুপাত
+                   * প্রতিটা মাঠের সত্যিকারের চাহিদা অনুযায়ী।
+                   *
+                   * আগে `xl:flex` + প্রতিটা মাঠে `flex-1` ছিল, অর্থাৎ
+                   * পাঁচজন সমান ভাগ পেত। কিন্তু চাহিদা সমান নয় —
+                   * "Total Orders"-এর লাগে ৮৮.৩, "Customer Category"-র
+                   * ১৩৯.৯। সমান ভাগে সবচেয়ে চওড়াটাই প্রথমে উপচে পড়ত,
+                   * আর সমান ভাগ ধরে হিসাব করলে এক সারির জন্য viewport
+                   * লাগত ~১৫১০px। অনুপাতে ভাগ করলে ~১৩৬৫ — অর্থাৎ
+                   * ১৪৪০px-এর পর্দাগুলো টেবিলের চেহারাটা ফিরে পায়।
+                   */}
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:grid-cols-3 min-[560px]:gap-4 min-[1400px]:min-w-0 min-[1400px]:flex-1 min-[1400px]:grid-cols-[minmax(0,102fr)_minmax(0,102fr)_minmax(0,123fr)_minmax(0,88fr)_minmax(0,140fr)] min-[1400px]:items-center min-[1400px]:gap-[30px]">
                     <InfoField label="Member Since" value={formatJoinDate(user.createdAt)} />
                     <InfoField label="Reward Points" value={`${user.loyaltyPoints} Points`} />
                     {/* ফোন নম্বর ঐচ্ছিক — Google দিয়ে sign in করলে কখনোই
@@ -327,7 +363,7 @@ export default async function UsersPage({
                       value={`${orderCount} ${orderCount === 1 ? "Order" : "Orders"}`}
                     />
                     <InfoField
-                      className="col-span-2 min-[560px]:col-span-1 xl:flex-1"
+                      className="col-span-2 min-[560px]:col-span-1"
                       label="Customer Category"
                       value={CATEGORY_LABELS[userCategory]}
                     />

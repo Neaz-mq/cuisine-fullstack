@@ -187,7 +187,23 @@ export default function UsersToolbar({
      * placeholder-টা কাটলেও টাইপ করার মতো যথেষ্ট। ৩২০-এ ওটাই দাঁড়াত
      * ১০৮।
      */
-    <div className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-start min-[480px]:gap-6">
+    /**
+     * ⚠️ পাশাপাশি বসা শুরু ৫৬০ থেকে, ৪৮০ থেকে নয়।
+     *
+     * ৪৮০-এ দুটো পাশাপাশি বসলে search ঘরটা পায় 448 − 156 (pill) − 24
+     * (gap) = ২৬৮px, ভেতরে placeholder-এর জন্য মাত্র ২০৮। অথচ ওই
+     * মাপেই placeholder ১৪px হয়ে যেত, আর "Search by Customer Name,
+     * Email…" ১৪px Sora-তে ২৪৫.৬px — অর্থাৎ ৪৮০ থেকে ৫৩৯px পর্যন্ত
+     * লেখাটা ডান দিক থেকে কাটা থাকত ("…Customer Name, Ema")।
+     *
+     * লেখাটা ছোট করা যেত, কিন্তু ওটা Figma-র নিজের (৩২০px frame-এ
+     * `width: 210px`, মেপে হুবহু মেলে) — তাই লেখা নয়, সারিটাই
+     * পিছিয়ে দেওয়া ঠিক। ৫৬০-এ জায়গা ২৮৮, লেখা ২৪৫.৬ — ৪২px হাতে।
+     *
+     * Staff/Suppliers-এ এই সমস্যা হয়নি, কারণ ওদের লেখা ছোট
+     * ("Search by Name, Email or ID…" ১৪px-এ ২০৮.৭)।
+     */
+    <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-start min-[560px]:gap-6">
       {/**
        * Figma: padding 16, gap 8, radius 100, BG #FFFFFF, উচ্চতা 50।
        *
@@ -253,16 +269,17 @@ export default function UsersToolbar({
          * ("Platinum"), পুরোটা নয় — দেখুন CATEGORY_SHORT_LABELS।
          *
          * ছোট পর্দায় পুরো প্রস্থ, কারণ ওখানে pill-টা নিজের সারিতে একা।
-         * ৪৮০ থেকে স্থির ১৫৬ — উপরের wrapper-এর সাথে একই সীমা, দুটো
-         * আলাদা হলে একটা সরু ফাঁকে pill নিজের সারিতে অথচ ১৫৬px চওড়া
-         * হয়ে বসত।
+         * ৫৬০ থেকে স্থির ১৫৬ — উপরের wrapper-এর সাথে **একই** সীমা।
+         * দুটো আলাদা হলে মাঝের একটা সরু ফাঁকে pill নিজের সারিতে
+         * অথচ ১৫৬px চওড়া হয়ে বসত; তাই সীমাটা বদলালে দুই জায়গাতেই
+         * একসাথে বদলাতে হয়।
          */}
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className={`flex h-[50px] w-full items-center justify-between gap-2 rounded-full bg-white p-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] min-[480px]:w-[156px] ${FOCUS_RING}`}
+          className={`flex h-[50px] w-full items-center justify-between gap-2 rounded-full bg-white p-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black/[0.03] min-[560px]:w-[156px] ${FOCUS_RING}`}
         >
           {/* Figma: Sora 400 16px, Black/100 — search-এর লেখা Black/70,
               এটা নয়। বাছাই করা মান আর placeholder এক নয়, তাই পার্থক্যটা
