@@ -153,15 +153,39 @@ export default function FilterMenu<T extends string>({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel ? `${ariaLabel}: ${selected.label}` : undefined}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full font-sora text-[14px] font-normal leading-none text-black transition-colors ${FILTER_FOCUS_RING} ${
+        /**
+         * ⚠️ লেখার মাপটা আর শেয়ার্ড অংশে নেই, দুই surface-এ আলাদা করে
+         * লেখা — ইচ্ছাকৃত। আগে বাইরে `text-[14px]` আর white-এর ভেতরে
+         * `md:text-[16px]` ছিল; এখন white-এ ৩২০px-এর জন্য
+         * `text-[12px]`-ও দরকার, আর একই class-তালিকায় দুটো
+         * `text-[Npx]` রাখলে কোনটা জিতবে সেটা Tailwind-এর তৈরি
+         * CSS-এর ক্রম ঠিক করে, class লেখার ক্রম নয় — অর্থাৎ ফলটা
+         * অনুমান-নির্ভর। প্রতিটা শাখায় নিজের মাপ থাকলে সেই প্রশ্নই ওঠে না।
+         *
+         * ⚠️ white pill-টা ৪৮০-এর নিচে ৩৬px উঁচু, ৫০ নয় — Figma-র
+         * ৩২০px frame-এ toolbar-এর তিনটে ঘরই (search, এই pill, "Add"
+         * বোতাম) ৩৬×padding 12×লেখা 12px। ৫০px রাখলে দুটো pill
+         * পাশাপাশি ২৮৮px-এ আঁটত না।
+         */
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full font-sora font-normal leading-none text-black transition-colors ${FILTER_FOCUS_RING} ${
           surface === "white"
-            ? "h-[50px] bg-white px-4 hover:bg-black/[0.03] md:text-[16px]"
-            : "h-10 bg-[#F9F6F3] px-3 hover:bg-black/[0.06]"
+            ? "h-9 bg-white px-3 text-[12px] hover:bg-black/[0.03] min-[480px]:h-[50px] min-[480px]:px-4 min-[480px]:text-[14px] md:text-[16px]"
+            : "h-10 bg-[#F9F6F3] px-3 text-[14px] hover:bg-black/[0.06]"
         }`}
       >
         {selected.triggerLabel ?? selected.label}
+        {/**
+         * ⚠️ তীরটা কেবল white pill-এ ২০×২০, cream-এ আগের ১৬×১৬।
+         * Figma-র toolbar frame-এ `vuesax/linear/arrow-down` ২০px, আর
+         * সেটা ধরেই pill-এর প্রস্থ মেলে: 12+72+8+20+12 = 124, যা
+         * frame-এর লেখা মাপের সমান। কার্ডের ভেতরের cream pill-গুলো
+         * আলাদা frame থেকে আসে আর সেখানে ১৬ — তাই সবখানে এক করে
+         * দেওয়া হয়নি।
+         */}
         <ChevronDown
-          className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 transition-transform ${
+            surface === "white" ? "h-5 w-5" : "h-4 w-4"
+          } ${open ? "rotate-180" : ""}`}
           strokeWidth={1.6}
           aria-hidden="true"
         />
