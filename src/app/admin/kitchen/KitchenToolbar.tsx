@@ -47,7 +47,10 @@ export default function KitchenToolbar({ status }: { status: KitchenStatusFilter
 
   const push = (changes: Record<string, string | null>) => {
     const params = new URLSearchParams();
-    ["q", "status"].forEach((key) => {
+    // ⚠️ `type` Overview-র ছাঁকনি, এই toolbar-এর নয় — কিন্তু তালিকায়
+    // না রাখলে search বা status বদলালেই সেটা নীরবে "All Orders"-এ
+    // ফিরে যেত। SuppliersToolbar-এ `period` নিয়ে একই কথা লেখা আছে।
+    ["q", "status", "type"].forEach((key) => {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     });

@@ -5,6 +5,8 @@
  * (InventoryOverviewCards-এ), অর্থে কাছাকাছি, আর ঝুঁকিহীন।
  */
 import { ClipboardList, CircleCheck, Package, AlarmClock } from "lucide-react";
+import KitchenTypeFilter from "@/components/admin/KitchenTypeFilter";
+import type { KitchenTypeFilter as KitchenTypeFilterValue } from "@/lib/kitchen-status";
 
 /**
  * src/components/admin/KitchenOverviewCards.tsx
@@ -18,24 +20,27 @@ import { ClipboardList, CircleCheck, Package, AlarmClock } from "lucide-react";
  * কিছু আঁকা হয়নি — একই জিনিস পাঁচ জায়গায় পাঁচরকম হলে সেটাই সবচেয়ে
  * চোখে লাগে।
  *
- * ── কেন এখানে period ছাঁকনি নেই ─────────────────────────────────────
+ * ── ছাঁকনিটা period নয়, অর্ডারের ধরন ────────────────────────────────
  *
- * ⚠️ Figma-তে শিরোনামের পাশে "Today ⌄" আঁকা, কিন্তু বসানো হয়নি —
- * InventoryOverviewCards-এর একই কারণে। নিচের চারটের মধ্যে তিনটে
- * (Ready to Serve · Preparing · Pending) **এই মুহূর্তের অবস্থা**:
- * রান্নাঘরে এখন কী ঝুলে আছে। "গত সপ্তাহে কতগুলো ঝুলছিল" প্রশ্নটার
- * কোনো উত্তর হয় না — status একটাই কলাম, ইতিহাস নয়।
+ * Figma-তে শিরোনামের পাশে "Today ⌄" আঁকা, কিন্তু সেটা বসানো যায় না:
+ * নিচের চারটের মধ্যে তিনটে (Ready to Serve · Preparing · Pending)
+ * **এই মুহূর্তের অবস্থা**, আর তার কোনো "গত সপ্তাহ" রূপ হয় না।
+ * বসালে তিনটে অনড় থেকে একটা বদলাত — ব্যবহারকারী ধরে নিতেন চারটেই
+ * বদলেছে। পুরো যুক্তিটা `lib/kitchen-status.ts`-এ।
  *
- * শুধু "Total Orders"-এর সময়ের মাত্রা আছে, আর সেটা ইতিমধ্যেই
- * "আজকের" — hint-এ লেখাই আছে। একটা ছাঁকনি বসিয়ে তিনটে সংখ্যা
- * অপরিবর্তিত রেখে একটা বদলালে ব্যবহারকারী ধরে নিতেন চারটেই বদলেছে,
- * আর সেটা নীরব মিথ্যা।
+ * ধরন দিয়ে ছাঁকলে চারটেই বদলায়, আর প্রশ্নটাও রান্নাঘরের নিজের:
+ * "টেবিলের কটা ঝুলছে, ডেলিভারির কটা"।
+ *
+ * ⚠️ ছাঁকনিটা **নিচের বোর্ড ছোঁয় না**, শুধু এই চারটে সংখ্যার পরিধি
+ * ঠিক করে — Users/Staff/Inventory-র Overview ছাঁকনিগুলোর মতোই।
+ * বোর্ডের নিজের ছাঁকনি toolbar-এ ("All Statuses")।
  */
 export default function KitchenOverviewCards({
   totalToday,
   readyToServe,
   preparing,
   pending,
+  type,
 }: {
   /** আজ তৈরি হওয়া অর্ডার — রান্নাঘরের দিনের কাজের মাপ। */
   totalToday: number;
@@ -45,6 +50,8 @@ export default function KitchenOverviewCards({
   preparing: number;
   /** এখনো ধরাই হয়নি। */
   pending: number;
+  /** URL-এর `type` param — চারটে সংখ্যারই পরিধি। */
+  type: KitchenTypeFilterValue;
 }) {
   const CARDS = [
     {
@@ -75,9 +82,14 @@ export default function KitchenOverviewCards({
 
   return (
     <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
-      <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-        Overview
-      </h2>
+      {/* Figma: শিরোনাম বাঁয়ে, ছাঁকনির pill ডান কিনারায়। */}
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+          Overview
+        </h2>
+
+        <KitchenTypeFilter value={type} />
+      </div>
 
       {/* Figma Frame 2147236226: row, gap 20, চারটে কার্ড সমান ভাগে। */}
       <div className="grid gap-5 min-[480px]:grid-cols-2 xl:grid-cols-4">

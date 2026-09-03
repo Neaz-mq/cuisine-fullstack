@@ -7,8 +7,11 @@ import ExportReportButton from "@/components/admin/dashboard/ExportReportButton"
 import KitchenOverviewCards from "@/components/admin/KitchenOverviewCards";
 import {
   DEFAULT_KITCHEN_STATUS,
+  DEFAULT_KITCHEN_TYPE,
   KITCHEN_STATUS_TO_ORDER_STATUS,
+  KITCHEN_TYPE_TO_ORDER_TYPE,
   isKitchenStatus,
+  isKitchenType,
 } from "@/lib/kitchen-status";
 import KitchenToolbar from "./KitchenToolbar";
 import KitchenBoard from "./KitchenBoard";
@@ -32,7 +35,7 @@ const READY_COLUMN_WINDOW_MINUTES = 15;
 export default async function KitchenDisplayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; type?: string }>;
 }) {
   // layout.tsx-ও `requireStaff("kitchen")` ডাকে; এখানে আবার ডাকা হয়
   // session-টার জন্য (নাম দেখাতে), আর সেটাই একমাত্র কারণ।
@@ -41,6 +44,7 @@ export default async function KitchenDisplayPage({
 
   const q = params.q?.trim() ?? "";
   const status = isKitchenStatus(params.status) ? params.status : DEFAULT_KITCHEN_STATUS;
+  const type = isKitchenType(params.type) ? params.type : DEFAULT_KITCHEN_TYPE;
   const readySince = minutesAgo(READY_COLUMN_WINDOW_MINUTES);
   const now = new Date();
 
@@ -69,7 +73,15 @@ export default async function KitchenDisplayPage({
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
+    prisma.order.count({
+      where: {
+        createdAt: { gte: startOfToday },
+        // ⚠️ ধরনের ছাঁকনিটা এখানে DB-তেই, memory-তে নয় — `orderType`
+        // একটা সাধারণ কলাম, তাই Postgres নিজেই গুনতে পারে। নিচের
+        // বোর্ডের ছাঁকাগুলো memory-তে, কারণ ওদের শর্ত আলাদা।
+        ...(type === "all" ? {} : { orderType: KITCHEN_TYPE_TO_ORDER_TYPE[type] }),
+      },
+    }),
   ]);
 
   /**
@@ -99,9 +111,14 @@ export default async function KitchenDisplayPage({
   // Overview-র সংখ্যাগুলো **ছাঁকার আগের** তালিকা থেকে — "এখন ৩টে
   // অর্ডার ঝুলে আছে" সত্যটা search box-এ কী লেখা তার উপর নির্ভর
   // করা উচিত নয়। Inventory-র Overview-তেও একই নিয়ম।
-  const pending = rows.filter((row) => row.status === "PLACED").length;
-  const preparing = rows.filter((row) => row.status === "PREPARING").length;
-  const readyToServe = rows.filter((row) => row.status === "OUT_FOR_DELIVERY").length;
+  const summaryRows =
+    type === "all"
+      ? rows
+      : rows.filter((row) => row.orderType === KITCHEN_TYPE_TO_ORDER_TYPE[type]);
+
+  const pending = summaryRows.filter((row) => row.status === "PLACED").length;
+  const preparing = summaryRows.filter((row) => row.status === "PREPARING").length;
+  const readyToServe = summaryRows.filter((row) => row.status === "OUT_FOR_DELIVERY").length;
 
   return (
     <div className="space-y-4">
@@ -143,6 +160,7 @@ export default async function KitchenDisplayPage({
         readyToServe={readyToServe}
         preparing={preparing}
         pending={pending}
+        type={type}
       />
 
       {/* --- Kitchen Display — Frame 2147236276: column, padding 30,
