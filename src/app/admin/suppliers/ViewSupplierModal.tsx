@@ -181,14 +181,22 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
         title="Suppliers Details"
         footer={
           /**
-           * ⚠️ `sm:` নয়, `min-[640px]:` — `--breakpoint-sm: 320px`
-           * হওয়ায় `sm:flex-row` ৩২০px-এও চালু ছিল, অর্থাৎ base
-           * `flex-col` কোথাও খাটত না। তিনটে বোতাম (Deactivate 133 +
-           * Close 99.5 + Edit 97.5 = ৩৩০px) ৩২০px-এর পর্দায় এক সারিতে
-           * ধরে না, তাই ওগুলো চেপে গিয়ে লেখা ভেঙে যেত। এখন ৬৪০-এর
-           * নিচে সত্যিই উপর-নিচে বসে।
+           * ⚠️ তিনটে বোতাম **সব পর্দাতেই এক সারিতে** (Figma-র ৩২০px
+           * frame-এও, Frame 2147236669: row, gap 8)।
+           *
+           * এখানে আমি একবার ভুল করেছিলাম: `sm:flex-row`-কে
+           * `min-[640px]:flex-row` করে ৬৪০-এর নিচে উপর-নিচে বসিয়ে
+           * দিয়েছিলাম, এই হিসাবে যে ১৩৩ + ৯৯.৫ + ৯৭.৫ = ৩৩০px
+           * ৩২০px-এর পর্দায় ধরে না। হিসাবটা তখনকার বোতামের মাপে ঠিক
+           * ছিল, কিন্তু ওই একই দফায় বোতামের ধ্রুবকগুলো ৬৪০-এর নিচে
+           * ১৪px + px-3 করা হয়েছে — তাতে মাপ দাঁড়ায়:
+           *
+           *   Deactivate 102.1 + Close 65.3 + Edit 52.7 = 220.2
+           *   জায়গা 256 − দুটো gap (16) = 240  ✅
+           *
+           * অর্থাৎ শর্তটা আর খাটে না, আর খাড়া করার দরকারও নেই।
            */
-          <div className="flex flex-col gap-2 min-[640px]:flex-row">
+          <div className="flex flex-row gap-2">
             {supplier && (
               <button
                 type="button"
@@ -261,9 +269,36 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
                * ছোট পর্দায় অর্থহীন, অথচ মোড়ক থাকলে ওরা তিনটে ব্লকে
                * আটকে থাকত।
                */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-5 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-6">
+              {/**
+               * ⚠️ ৩২০px-এ ভাগটা ট্যাবলেটের থেকে আলাদা (Figma Frame
+               * 2147236693 — দুই কলাম):
+               *
+               *   Address   | Phone Number
+               *   Category  | Status
+               *   Products  |
+               *
+               * মোড়ক তিনটে তখন `contents`, তাই পাঁচটা ঘরই এই grid-এর
+               * সরাসরি ঘর আর অবস্থান ঠিক করে নিজের `col-start`/
+               * `row-start` — মোড়কের সদস্যতালিকা ছোঁয়ার দরকার নেই।
+               * (সারির কার্ডে ঠিক এই জায়গাটাতেই একবার ঘর সরিয়ে
+               * ট্যাবলেট ভেঙেছিলাম।)
+               *
+               * ⚠️ কলাম দুটো ঠিক আধাআধি নয়, `124fr : 117fr`। Figma-তে
+               * দুটোই ১০৬ (মোট ২১২), কিন্তু ওই frame-টা আসলে ০.৬৯৯
+               * মাপে ছোট করা — তার সত্যিকারের প্রস্থ ৩৪৯px, যা ৩২০px
+               * পর্দায় হওয়াই সম্ভব নয়। আমাদের ২৫৬px-এ আধাআধি করলে
+               * প্রতিটা ১২৪ (gap 8 বাদে), অথচ বাঁ কলামে
+               * "Charmatha, Bogura" ১৪px-এ ১২৪.৪ — ০.৪px-এর জন্য
+               * কেটে যেত। অনুপাতে ভাগ করলে ১২৭.৬ আর ১২০.৪ (দরকার
+               * ১১৬.৮), দুদিকেই স্বস্তি।
+               */}
+              <div className="grid grid-cols-[minmax(0,124fr)_minmax(0,117fr)] gap-x-2 gap-y-5 min-[560px]:flex min-[560px]:justify-between min-[560px]:gap-x-6">
                 <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
-                  <ReadOnlyField label="Address" value={supplier.address ?? "—"} />
+                  <ReadOnlyField
+                    className="col-start-1 row-start-1"
+                    label="Address"
+                    value={supplier.address ?? "—"}
+                  />
 
                   {/**
                    * ⚠️ ReadOnlyField ব্যবহার করা গেল না, কারণ ওটার মান
@@ -279,14 +314,18 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
                    * আর তাতে দুটো জায়গায় একই জিনিস একইরকম দেখায় —
                    * chevron চাপলে পুরো তালিকাটা এমনিতেই খোলে।
                    */}
-                  <div className="flex min-w-0 flex-col gap-2 min-[560px]:gap-3">
+                  <div className="col-start-1 row-start-3 flex min-w-0 flex-col gap-2 min-[560px]:gap-3">
                     <span className={READ_ONLY_LABEL}>Products</span>
                     <SupplierProductsPill products={supplier.products} surface="cream" />
                   </div>
                 </div>
 
                 <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
-                  <ReadOnlyField label="Phone Number" value={supplier.phone ?? "—"} />
+                  <ReadOnlyField
+                    className="col-start-2 row-start-1"
+                    label="Phone Number"
+                    value={supplier.phone ?? "—"}
+                  />
                   {/**
                    * ⚠️ এখন pill, সাধারণ লেখা নয় — আগের সিদ্ধান্তটা উল্টে।
                    * তখনকার যুক্তি ছিল "তালিকায় রঙটা কাজ করে কারণ দশটা
@@ -296,6 +335,7 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
                    * এখানেও pill-ই চেয়েছেন।
                    */}
                   <ReadOnlyField
+                    className="col-start-2 row-start-2"
                     label="Status"
                     value={isActive ? "Active" : "Inactive"}
                     tone={isActive ? "positive" : "negative"}
@@ -305,7 +345,11 @@ function ViewSupplierModalContent({ open, onClose, supplierId, onEdit }: Props) 
                 <div className="contents min-[560px]:flex min-[560px]:min-w-0 min-[560px]:flex-col min-[560px]:gap-5">
                   {/* ⚠️ Figma-তে শিরোনামটা শুধু "Category", "Supply
                       Category" নয় (Frame 2147236666-এর label, w=67)। */}
-                  <ReadOnlyField label="Category" value={supplier.category ?? "—"} />
+                  <ReadOnlyField
+                    className="col-start-1 row-start-2"
+                    label="Category"
+                    value={supplier.category ?? "—"}
+                  />
                 </div>
               </div>
 

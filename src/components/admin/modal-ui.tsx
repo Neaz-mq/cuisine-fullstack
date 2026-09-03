@@ -886,13 +886,20 @@ export function ReadOnlyField({
   label,
   value,
   tone,
+  className = "",
 }: {
   label: string;
   value: string;
   tone?: "positive" | "negative";
+  /**
+   * grid-এ ঘরটা কোথায় বসবে। ViewSupplierModal-এ ৩২০px আর ট্যাবলেটে
+   * ঘরগুলোর ভাগ আলাদা, তাই সেখানে `col-start`/`row-start` পাঠাতে হয়।
+   * না দিলে আগের মতোই auto-placement।
+   */
+  className?: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 min-[560px]:gap-3">
+    <div className={`flex min-w-0 flex-col gap-2 min-[560px]:gap-3 ${className}`}>
       <span className={READ_ONLY_LABEL}>{label}</span>
       {tone ? (
         <span
@@ -903,7 +910,15 @@ export function ReadOnlyField({
           {value}
         </span>
       ) : (
-        <span className="truncate font-frank-ruhl text-[16px] font-medium leading-none text-black">
+        /**
+         * ⚠️ ৫৬০-এর নিচে ১৪px — Figma-র desktop frame ১৬ বলে, কিন্তু
+         * ৩২০px-এ modal-এর ভেতরে থাকে ২৫৬px আর ঘরগুলো দুই কলামে বসে,
+         * অর্থাৎ প্রতিটার ভাগে ~১২৭px। সেখানে ১৬px Frank Ruhl-এ
+         * "Charmatha, Bogura" = ১৪২.২px আর "+880 1254-678955" =
+         * ১৩৩.৪px — দুটোই কেটে যেত ("Charnatha, B…")। ১৪px-এ ওগুলো
+         * ১২৪.৪ আর ১১৬.৮, পুরোটাই দেখা যায়। label-এর মতোই দুই ধাপ।
+         */
+        <span className="truncate font-frank-ruhl text-[14px] font-medium leading-none text-black min-[560px]:text-[16px]">
           {value}
         </span>
       )}
