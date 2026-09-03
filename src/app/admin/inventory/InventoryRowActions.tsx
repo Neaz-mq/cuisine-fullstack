@@ -34,6 +34,25 @@ export default function InventoryRowActions({
   return (
     <>
       {/**
+       * ⚠️ বোতামজোড়া xl-এর নিচে ছোট: উচ্চতা ৪০, লেখা ১৪px, padding ১২ —
+       * আর Edit-এর সর্বনিম্ন প্রস্থটাও তখন খাটে না।
+       *
+       * মেপে দেখলে পার্থক্যটা ছোট নয়:
+       *
+       *   @16px + px-4 (+ Edit-এর min-w 86) → 86 + 12 + 98.1 = 196.1
+       *   @14px + px-3                      → 52.3 + 12 + 81.8 = 146.1
+       *
+       * ৩২০px-এ সারি-কার্ডের ভেতরে থাকে ২১৬px, অর্থাৎ আগেরটা "আঁটত"
+       * ঠিকই — কিন্তু কার্ডের প্রায় পুরো প্রস্থ জুড়ে বসে থাকত, আর
+       * নামের চেয়ে বোতাম বড় দেখাত। ট্যাবলেটেও একই — জায়গার অভাব নয়,
+       * অনুপাতের সমস্যা।
+       *
+       * ⚠️ Figma-র ট্যাবলেট frame-এ (Frame 2147236283) বোতামটা ৯৮×৫০,
+       * অর্থাৎ ওখানেও ৫০px। এই ছোট করাটা তাই designer-এর মাপ থেকে
+       * ইচ্ছাকৃত সরে আসা — কারণ ওই frame-এ Edit বোতামটাই নেই, একা
+       * Restock; জোড়া হিসেবে ওই মাপটা আর মানানসই থাকে না।
+       */}
+      {/**
        * Figma Frame 2147236283 — বোতামজোড়া, row, gap 12, justify flex-end।
        *
        *   < ৫৬০px  → কার্ডটা একটামাত্র কলাম, তাই সবার নিচে।
@@ -72,7 +91,7 @@ export default function InventoryRowActions({
           type="button"
           onClick={() => setMode("edit")}
           aria-label={`Edit ${item.name}`}
-          className="flex h-[50px] min-w-[86px] shrink-0 items-center justify-center rounded-full border border-black px-4 font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+          className="flex h-10 shrink-0 items-center justify-center rounded-full border border-black px-3 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] xl:h-[50px] xl:min-w-[86px] xl:px-4 xl:text-[16px]"
         >
           Edit
         </button>
@@ -89,7 +108,7 @@ export default function InventoryRowActions({
           type="button"
           onClick={() => setMode("restock")}
           aria-label={`Restock ${item.name}`}
-          className="flex h-[50px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[16px] font-normal leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+          className="flex h-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-3 font-sora text-[14px] font-normal leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] xl:h-[50px] xl:px-4 xl:text-[16px]"
         >
           Restock
         </button>
