@@ -13,6 +13,7 @@ import {
 } from "@/lib/inventory-status";
 import InventoryToolbar from "./InventoryToolbar";
 import InventoryRow, { type InventoryRowItem } from "./InventoryRow";
+import Pagination from "@/app/admin/orders/Pagination";
 
 export const metadata = { title: "Inventory" };
 
@@ -41,16 +42,52 @@ export const metadata = { title: "Inventory" };
  * একটা রেস্তোরাঁর উপকরণ-তালিকা কয়েকশোর বেশি হয় না, তাই এটা নিরাপদ।
  * হাজার ছাড়ালে সংখ্যাগুলো আলাদা aggregate query-তে সরাতে হবে।
  *
- * ⚠️ Figma-তে প্রতিটা শ্রেণি-ভাগের নিচে আলাদা pagination আঁকা। বসানো
- * হয়নি: N-টা ভাগের N-টা স্বাধীন page মানে URL-এ N-টা আলাদা param,
- * আর ভাগগুলো তৈরি হয় ডেটা থেকে — অর্থাৎ নামগুলো আগে থেকে জানা নেই।
- * ভাগগুলো এমনিতেই ছোট (একটা রেস্তোরাঁয় ১০-১৫ রকম protein), তাই
- * প্রতিটার নিচে "N items" লেখা যথেষ্ট।
+ * ⚠️ প্রতিটা শ্রেণি-ভাগের নিচে এখন আলাদা pagination — Figma-তে যেমন
+ * আঁকা, তিনটে সারির পরে "‹ 1 2 3 › "।
+ *
+ * এখানে আগে লেখা ছিল যে এটা করা যাবে না, কারণ "N-টা ভাগের N-টা
+ * স্বাধীন page মানে URL-এ N-টা আলাদা param, আর ভাগের নামগুলো ডেটা
+ * থেকে আসে বলে আগে থেকে জানা নেই"। আপত্তিটা আসল ছিল, কিন্তু সমাধানও
+ * সরল: param-এর নামটা আগে থেকে জানার দরকারই নেই, ভাগের নাম থেকে
+ * বানিয়ে নিলেই হয় — `categoryPageParam()` দ্রষ্টব্য। তাই
+ * searchParams-এর ধরনটা এখন খোলা Record, নির্দিষ্ট কয়েকটা key নয়।
+ *
+ * ⚠️ ভাগ করাটা এখনো **memory-তেই**, DB-তে নয় — উপরের দুটো কারণ
+ * অপরিবর্তিত। অর্থাৎ page বদলালে নতুন query হয় না, শুধু একই
+ * তালিকার আলাদা টুকরো দেখানো হয়। ছোট তালিকায় এটাই সবচেয়ে সরল,
+ * আর Overview-র সংখ্যাগুলোও ঠিক থাকে।
  */
+
+/**
+ * প্রতি ভাগে কতগুলো সারি — Figma-র মকআপে তিনটে।
+ */
+const ITEMS_PER_CATEGORY = 3;
+
+/**
+ * ভাগের নাম থেকে URL-এর param-নাম।
+ *
+ * ⚠️ প্রতিটা ভাগের নিজের page লাগে। একটাই `page` param হলে
+ * "Proteins"-এর ২ নম্বরে গেলে "Vegetables"-ও লাফ দিয়ে ২-এ চলে যেত —
+ * Suppliers পাতায় ঠিক এই কারণেই Pagination-এ `pageParam` prop যোগ
+ * করা হয়েছিল, ওখানে দুটো তালিকা এক পর্দায়।
+ *
+ * নামের বদলে ক্রম-সংখ্যা (`p1`, `p2`) ব্যবহার করা যেত না: ভাগগুলোতে
+ * খালিগুলো বাদ পড়ে, তাই একটা ভাগের শেষ জিনিসটা মুছলে বা ছাঁকনি
+ * বদলালে ক্রম সরে যেত আর bookmark-করা URL ভুল ভাগে গিয়ে পড়ত। নাম
+ * থেকে বানালে সেটা স্থির থাকে।
+ */
+function categoryPageParam(name: string) {
+  return `p_${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  /**
+   * ⚠️ খোলা Record, কারণ ভাগগুলোর page-param-এর নাম ডেটা থেকে তৈরি
+   * হয় (`p_proteins`, `p_vegetables`, …) — সংকলনের সময় ওগুলো লিখে
+   * রাখা সম্ভব নয়। `q` আর `status` আগের মতোই পড়া যায়।
+   */
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   // layout-এও "inventory" scope-এর গেট আছে; এখানে session লাগে শুধু
   // শিরোনামের নামটার জন্য।
@@ -239,7 +276,34 @@ export default async function InventoryPage({
           </p>
         </div>
       ) : (
-        groups.map((group) => (
+        groups.map((group) => {
+          /**
+           * ⚠️ ছাঁটাইটা এখানেই, render-এর ঠিক আগে — কারণ `groups`
+           * তৈরি হওয়ার সময় জানা যায় না কোন ভাগে ব্যবহারকারী কোন
+           * page-এ আছেন, আর সব ভাগের জন্য আলাদা করে হিসাব করলে
+           * উপরের `groups` গড়ার অংশটা অকারণে জটিল হতো।
+           */
+          const total = group.items.length;
+          const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_CATEGORY));
+          const pageParam = categoryPageParam(group.name);
+
+          /**
+           * ⚠️ URL থেকে আসা সংখ্যাটা যাচাই করে নেওয়া হচ্ছে। `?p_proteins=99`
+           * বা `=abc` হাতে লিখলে (বা কেউ পুরনো bookmark খুললে, যেখানে
+           * তখন বেশি জিনিস ছিল) `Number()` দেবে 99 বা NaN, আর slice
+           * ফেরত দিত খালি তালিকা — ব্যবহারকারী দেখতেন একটা শূন্য কার্ড
+           * আর বুঝতেন না কেন। তাই সীমার বাইরে গেলে ১ নম্বরে ফিরিয়ে আনা।
+           */
+          const requested = Number(params[pageParam]);
+          const page =
+            Number.isInteger(requested) && requested >= 1 && requested <= totalPages
+              ? requested
+              : 1;
+
+          const start = (page - 1) * ITEMS_PER_CATEGORY;
+          const pageItems = group.items.slice(start, start + ITEMS_PER_CATEGORY);
+
+          return (
           <div
             key={group.name}
             className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]"
@@ -259,12 +323,51 @@ export default async function InventoryPage({
             </div>
 
             <div className="flex flex-col gap-4">
-              {group.items.map((item) => (
+              {pageItems.map((item) => (
                 <InventoryRow key={item.id} item={item} suppliers={suppliers} />
               ))}
             </div>
+
+            {/**
+             * ⚠️ `totalPages > 1` হলে তবেই পুরো সারিটা — Pagination
+             * নিজেই এক page হলে `null` ফেরায়, কিন্তু বাঁ দিকের
+             * "Showing …" লেখাটা তখনো থাকত। তিনটে বা তার কম জিনিসের
+             * ভাগে "Showing 1–2 of 2" পড়ার কিছু নেই, আর উপরের
+             * pill-এ সংখ্যাটা এমনিতেই আছে।
+             */}
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="flex items-center gap-1.5 font-sora text-[12px] leading-[15px] text-[#121212]/60">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF9540]"
+                    aria-hidden="true"
+                  />
+                  Showing{" "}
+                  <span className="font-semibold text-black">
+                    {start + 1}–{start + pageItems.length}
+                  </span>{" "}
+                  of <span className="font-semibold text-black">{total}</span>{" "}
+                  {total === 1 ? "Item" : "Items"}
+                </p>
+
+                {/**
+                 * ⚠️ `pageParam` — প্রতিটা ভাগের নিজের নাম। Pagination
+                 * বাকি সব param অপরিবর্তিত রেখে শুধু এটাই বদলায়, তাই
+                 * "Proteins"-এর ২ নম্বরে গেলে "Vegetables" যেখানে ছিল
+                 * সেখানেই থাকে, আর `q`/`status` ছাঁকনিও হারায় না।
+                 */}
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  searchParams={params}
+                  basePath="/admin/inventory"
+                  pageParam={pageParam}
+                />
+              </div>
+            )}
           </div>
-        ))
+          );
+        })
       )}
     </div>
   );
