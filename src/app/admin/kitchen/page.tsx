@@ -5,11 +5,14 @@ import { minutesAgo } from "@/lib/time";
 import { orderIdSearchToken } from "@/lib/format-order-id";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import KitchenOverviewCards from "@/components/admin/KitchenOverviewCards";
+import KitchenSortFilter from "@/components/admin/KitchenSortFilter";
 import {
+  DEFAULT_KITCHEN_SORT,
   DEFAULT_KITCHEN_STATUS,
   DEFAULT_KITCHEN_TYPE,
   KITCHEN_STATUS_TO_ORDER_STATUS,
   KITCHEN_TYPE_TO_ORDER_TYPE,
+  isKitchenSort,
   isKitchenStatus,
   isKitchenType,
 } from "@/lib/kitchen-status";
@@ -35,7 +38,7 @@ const READY_COLUMN_WINDOW_MINUTES = 15;
 export default async function KitchenDisplayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; type?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; type?: string; sort?: string }>;
 }) {
   // layout.tsx-ও `requireStaff("kitchen")` ডাকে; এখানে আবার ডাকা হয়
   // session-টার জন্য (নাম দেখাতে), আর সেটাই একমাত্র কারণ।
@@ -45,6 +48,7 @@ export default async function KitchenDisplayPage({
   const q = params.q?.trim() ?? "";
   const status = isKitchenStatus(params.status) ? params.status : DEFAULT_KITCHEN_STATUS;
   const type = isKitchenType(params.type) ? params.type : DEFAULT_KITCHEN_TYPE;
+  const sort = isKitchenSort(params.sort) ? params.sort : DEFAULT_KITCHEN_SORT;
   const readySince = minutesAgo(READY_COLUMN_WINDOW_MINUTES);
   const now = new Date();
 
@@ -183,16 +187,21 @@ export default async function KitchenDisplayPage({
       {/* --- Kitchen Display — Frame 2147236276: column, padding 30,
               gap 24, radius 20, সাদা। --- */}
       <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
-        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-          Kitchen Display
-        </h2>
+        {/* Figma: শিরোনাম বাঁয়ে, pill ডান কিনারায়। */}
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+            Kitchen Display
+          </h2>
+
+          <KitchenSortFilter value={sort} />
+        </div>
 
         {/**
          * ⚠️ `JSON.parse(JSON.stringify(...))` — Prisma-র Date আর
          * Decimal সরাসরি client component-এ পাঠানো যায় না। আগের
          * কোডেও এটাই ছিল, ইচ্ছাকৃতভাবে রাখা।
          */}
-        <KitchenBoard initialOrders={JSON.parse(JSON.stringify(visible))} />
+        <KitchenBoard initialOrders={JSON.parse(JSON.stringify(visible))} sort={sort} />
       </div>
     </div>
   );

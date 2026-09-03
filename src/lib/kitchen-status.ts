@@ -97,3 +97,50 @@ export const KITCHEN_TYPE_TO_ORDER_TYPE: Record<
   "dine-in": "DINE_IN",
   delivery: "DELIVERY",
 };
+
+/* ── Kitchen Display-র dropdown: সাজানোর ক্রম ─────────────────────── */
+
+/**
+ * ⚠️ এটা ছাঁকনি নয়, **সাজানোর ক্রম** — আর সেটা ইচ্ছাকৃত।
+ *
+ * Figma-তে "Kitchen Display"-র শিরোনামের পাশেও একটা pill আঁকা
+ * ("Today ⌄"), কিন্তু বোর্ডে সময়-ছাঁকনির কোনো মানে নেই: বোর্ডে
+ * এমনিতেই কেবল **সচল** অর্ডার থাকে (এখনো ধরা হয়নি, চুলায় আছে, বা
+ * সদ্য তৈরি) — "গত সপ্তাহের সচল অর্ডার" বলে কিছু হয় না।
+ *
+ * বাকি যে দুটো মাত্রায় সত্যিই ছাঁকা যেত, দুটোই ইতিমধ্যে আছে:
+ *
+ *   status (Placed/Preparing/Ready) → toolbar-এর "All Statuses"
+ *   ধরন (Dine in/Delivery)         → Overview-র "All Orders"
+ *
+ * তৃতীয় একটা ছাঁকনি বসালে হয় ওদেরই পুনরাবৃত্তি হতো, নয়তো বোর্ড থেকে
+ * অর্ডার **লুকিয়ে** ফেলত — আর রান্নাঘরের পর্দায় লুকিয়ে ফেলা মানে
+ * ভুলে যাওয়া, অর্থাৎ কারও খাবার দেরি হওয়া।
+ *
+ * তাই ওখানে যা বসল সেটা সব অর্ডার দেখায়, শুধু **ক্রম** বদলায় — আর
+ * এটাই বাণিজ্যিক KDS (Toast, Square, Lightspeed) গুলোর বোর্ডেও থাকে।
+ */
+export type KitchenSort = "oldest" | "newest" | "dine-in";
+
+export const DEFAULT_KITCHEN_SORT: KitchenSort = "oldest";
+
+export function isKitchenSort(value: unknown): value is KitchenSort {
+  return typeof value === "string" && ["oldest", "newest", "dine-in"].includes(value);
+}
+
+export const KITCHEN_SORT_OPTIONS: FilterMenuOption<KitchenSort>[] = [
+  /**
+   * ⚠️ ডিফল্ট "Oldest first", আর এটা নিছক পছন্দ নয় — রান্নাঘরের
+   * ন্যায্যতার নিয়ম। যে আগে অর্ডার দিয়েছেন তিনি আগে পাবেন। ডিফল্ট
+   * উল্টো হলে ব্যস্ত সময়ে পুরনো অর্ডারগুলো তলায় চাপা পড়ে থাকত।
+   */
+  { value: "oldest", label: "Oldest first" },
+  // নতুনগুলো উপরে — সদ্য আসা অর্ডার চোখে পড়ার জন্য, ঝিমিয়ে থাকা সময়ে।
+  { value: "newest", label: "Newest first" },
+  /**
+   * টেবিলের অর্ডার আগে। খদ্দের সামনে বসে অপেক্ষা করছেন, আর
+   * ডেলিভারির রাইডার এখনো আসেননি — তাই তাড়া এক নয়। ভেতরে
+   * আবার পুরনোটাই আগে, অর্থাৎ ন্যায্যতা প্রতিটা দলের ভেতরে বজায় থাকে।
+   */
+  { value: "dine-in", label: "Dine in first" },
+];

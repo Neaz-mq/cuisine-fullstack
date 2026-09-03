@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronDown } from "lucide-react";
 import { toast } from "react-toastify";
 import { formatOrderId } from "@/lib/format-order-id";
+import type { KitchenSort } from "@/lib/kitchen-status";
 
 const POLL_INTERVAL_MS = 15000; // NotificationBell-এর সাথে একই ছন্দ
 const URGENT_AFTER_MS = 15 * 60 * 1000; // ১৫ মিনিটের পুরনো অর্ডার লাল
@@ -232,7 +233,41 @@ function OrderCard({
   );
 }
 
-export default function KitchenBoard({ initialOrders }: { initialOrders: KitchenOrder[] }) {
+/**
+ * সাজানোর নিয়মগুলো।
+ *
+ * ⚠️ ক্রমটা server-এ (page.tsx-এ) করা যেত না — এবং এটাই এখানে থাকার
+ * আসল কারণ। বোর্ডটা প্রতি ১৫ সেকেন্ডে `/api/admin/kitchen/orders`
+ * থেকে তালিকা এনে পুরোটা বদলে ফেলে; server-এ সাজালে প্রথম poll-এর
+ * পরেই ক্রমটা হারিয়ে যেত আর ব্যবহারকারী দেখতেন pill-এ এক কথা লেখা
+ * অথচ বোর্ড অন্যভাবে সাজানো।
+ */
+const SORTERS: Record<KitchenSort, (a: KitchenOrder, b: KitchenOrder) => number> = {
+  oldest: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  newest: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  /**
+   * টেবিলের অর্ডার আগে, তারপর ডেলিভারি — আর **প্রতিটা দলের ভেতরে
+   * পুরনোটাই আগে**। শুধু ধরন দিয়ে সাজালে একই দলের ভেতরে ক্রমটা
+   * এলোমেলো হয়ে যেত, আর ন্যায্যতা (যে আগে দিয়েছেন, তিনি আগে পাবেন)
+   * ভাঙত।
+   */
+  "dine-in": (a, b) => {
+    const rank = (order: KitchenOrder) => (order.orderType === "DINE_IN" ? 0 : 1);
+    return (
+      rank(a) - rank(b) ||
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  },
+};
+
+export default function KitchenBoard({
+  initialOrders,
+  sort,
+}: {
+  initialOrders: KitchenOrder[];
+  /** URL-এর `sort` param — তিনটে কলামেই একই নিয়মে খাটে। */
+  sort: KitchenSort;
+}) {
   const [orders, setOrders] = useState<KitchenOrder[]>(initialOrders);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
@@ -302,11 +337,18 @@ export default function KitchenBoard({ initialOrders }: { initialOrders: Kitchen
     });
   }
 
+  /**
+   * ⚠️ `[...orders]` — নকল করে তারপর sort। `Array.prototype.sort`
+   * মূল array-টাকেই বদলে দেয়, আর এখানে সেটা React-এর state; state
+   * সরাসরি বদলালে React ধরতেই পারে না যে কিছু বদলেছে।
+   */
+  const sorted = [...orders].sort(SORTERS[sort]);
+
   const columns = [
     {
       key: "placed",
       title: "Placed",
-      orders: orders.filter((o) => o.status === "PLACED"),
+      orders: sorted.filter((o) => o.status === "PLACED"),
       action: (order: KitchenOrder) => ({
         label: "Start Preparing",
         onClick: () => advanceStatus(order.id, "PREPARING"),
@@ -315,7 +357,7 @@ export default function KitchenBoard({ initialOrders }: { initialOrders: Kitchen
     {
       key: "preparing",
       title: "Preparing",
-      orders: orders.filter((o) => o.status === "PREPARING"),
+      orders: sorted.filter((o) => o.status === "PREPARING"),
       action: (order: KitchenOrder) => ({
         label: "Make Ready",
         onClick: () => advanceStatus(order.id, "OUT_FOR_DELIVERY"),
@@ -324,7 +366,7 @@ export default function KitchenBoard({ initialOrders }: { initialOrders: Kitchen
     {
       key: "ready",
       title: "Ready",
-      orders: orders.filter((o) => o.status === "OUT_FOR_DELIVERY"),
+      orders: sorted.filter((o) => o.status === "OUT_FOR_DELIVERY"),
       action: null,
     },
   ];
