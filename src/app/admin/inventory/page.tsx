@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Calendar, Siren } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
+import { getRestaurantSettings } from "@/lib/get-settings";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import InventoryOverviewCards from "@/components/admin/InventoryOverviewCards";
 import {
@@ -101,7 +102,12 @@ export default async function InventoryPage({
 
   const now = new Date();
 
-  const [rows, suppliers] = await Promise.all([
+  /**
+   * ⚠️ settings-টা এই একই Promise.all-এ, আলাদা await-এ নয় — নাহলে
+   * তিনটে query পরপর চলত (rows → suppliers → settings) আর পাতাটা
+   * অকারণে ধীর হতো। তিনটেই স্বাধীন, তাই একসাথেই যায়।
+   */
+  const [rows, suppliers, settings] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -130,6 +136,9 @@ export default async function InventoryPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // দোকানের চলতি মুদ্রা — Restock আর Add/Edit modal-এর "Total Cost"
+    // ঘরটা এটা দিয়েই সাজে। row না থাকলে নিজেই ডিফল্ট দিয়ে তৈরি করে।
+    getRestaurantSettings(),
   ]);
 
   const items: InventoryRowItem[] = rows.map((row) => ({
@@ -222,12 +231,17 @@ export default async function InventoryPage({
         </div>
       </div>
 
-      <InventoryToolbar status={status} suppliers={suppliers} />
+      <InventoryToolbar status={status} suppliers={suppliers} currency={settings.currency} />
 
       {/* ⚠️ কার্ডের সংখ্যাগুলো **সব** সক্রিয় উপকরণ ধরে (`items`),
           ছাঁকা তালিকা (`visible`) নয় — "৩টে জিনিস ফুরিয়ে গেছে" সত্যটা
           search box-এ কী লেখা আছে তার উপর নির্ভর করা উচিত নয়। */}
-      <InventoryOverviewCards items={items} />
+      {/* ⚠️ `items` এখানে **সব** সক্রিয় উপকরণ — উপরের search/status
+          ছাঁকনি এদের বদলায় না। ইচ্ছাকৃত: "৩টে জিনিস ফুরিয়ে গেছে"
+          সত্যটা search box-এ কী লেখা আছে তার উপর নির্ভর করা উচিত নয়।
+          কার্ডের নিজের `cat` ছাঁকনিটা আলাদা, আর সেটাও নিচের তালিকা
+          ছোঁয় না — শুধু চারটে সংখ্যার পরিধি ঠিক করে। */}
+      <InventoryOverviewCards items={items} category={params.cat ?? "all"} />
 
       {/* --- জরুরি সতর্কবার্তা --- Figma Frame 2147236302।
           ⚠️ কেবল যখন সত্যিই কিছু জরুরি — শূন্য অবস্থায় একটা লাল
@@ -324,7 +338,12 @@ export default async function InventoryPage({
 
             <div className="flex flex-col gap-4">
               {pageItems.map((item) => (
-                <InventoryRow key={item.id} item={item} suppliers={suppliers} />
+                <InventoryRow
+                  key={item.id}
+                  item={item}
+                  suppliers={suppliers}
+                  currency={settings.currency}
+                />
               ))}
             </div>
 

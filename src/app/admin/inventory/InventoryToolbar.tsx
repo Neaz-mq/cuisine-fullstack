@@ -24,9 +24,12 @@ import IngredientFormModal, { type SupplierOption } from "./IngredientFormModal"
 export default function InventoryToolbar({
   status,
   suppliers,
+  currency,
 }: {
   status: InventoryStatusFilter;
   suppliers: SupplierOption[];
+  /** IngredientFormModal-এর "Total Cost" ঘরটার জন্য — নিচে চলে যায়। */
+  currency: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -131,6 +134,7 @@ export default function InventoryToolbar({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         suppliers={suppliers}
+        currency={currency}
       />
     </div>
   );

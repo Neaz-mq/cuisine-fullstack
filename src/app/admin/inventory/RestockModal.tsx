@@ -13,6 +13,7 @@ import {
   SelectField,
 } from "@/components/admin/modal-ui";
 import { UNIT_LABELS, formatQuantity } from "@/lib/inventory-status";
+import { formatAmount } from "@/lib/currency-format";
 import type { IngredientDraft, SupplierOption } from "./IngredientFormModal";
 
 /**
@@ -49,11 +50,23 @@ export default function RestockModal({
   onClose,
   item,
   suppliers,
+  currency,
 }: {
   open: boolean;
   onClose: () => void;
   item: IngredientDraft;
   suppliers: SupplierOption[];
+  /**
+   * ⚠️ মুদ্রার চিহ্নটা এখানে হার্ডকোড করা যায় না। RestaurantSettings-এ
+   * `currency` একটা সেটিং (ডিফল্ট USD), আর অ্যাপের বাকি সব জায়গা
+   * `formatAmount()` দিয়ে সেটাই মানে। এই দুটো modal-এ "৳" লেখা ছিল,
+   * তাই দোকান USD-তে চললেও এখানে টাকার চিহ্ন দেখাত — অথচ Figma-তে
+   * "$360.00"।
+   *
+   * client component বলে settings নিজে পড়া যায় না, তাই server থেকে
+   * `suppliers`-এর পাশ দিয়েই নেমে আসে।
+   */
+  currency: string;
 }) {
   const router = useRouter();
 
@@ -225,7 +238,7 @@ export default function RestockModal({
             <span className="font-sora text-[11px] font-normal text-black/40">(calculated)</span>
           </span>
           <div className={readOnlyBox} aria-disabled="true">
-            ৳ {totalCost.toFixed(2)}
+            {formatAmount(totalCost, currency)}
           </div>
         </div>
 

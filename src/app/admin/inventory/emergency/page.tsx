@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { stockStateOf } from "@/lib/inventory-status";
+import { getRestaurantSettings } from "@/lib/get-settings";
 import InventoryRow, { type InventoryRowItem } from "../InventoryRow";
 
 export const metadata = { title: "Emergency stock" };
@@ -32,7 +33,15 @@ export const metadata = { title: "Emergency stock" };
 export default async function EmergencyInventoryPage() {
   await requireStaff("inventory");
 
-  const [rows, suppliers] = await Promise.all([
+  /**
+   * ⚠️ settings-টা এখানেও লাগে, আর কারণটা এই পাতার নিজের নয় —
+   * `InventoryRow` ভেতরে Restock/Edit modal খোলে, আর ওই দুটোর
+   * "Total Cost" ঘর দোকানের চলতি মুদ্রায় সাজে (আগে "৳" হার্ডকোড
+   * ছিল)। অর্থাৎ যেখানেই InventoryRow বসে, সেখানেই `currency`
+   * পাঠাতে হয় — এই পাতাটা তালিকার পাতা নয় বলে প্রথমবার চোখ এড়িয়ে
+   * গিয়েছিল, আর build ধরিয়ে দিয়েছে।
+   */
+  const [rows, suppliers, settings] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { currentStock: "asc" },
@@ -57,6 +66,7 @@ export default async function EmergencyInventoryPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    getRestaurantSettings(),
   ]);
 
   const items: InventoryRowItem[] = rows.map((row) => ({
@@ -111,7 +121,12 @@ export default async function EmergencyInventoryPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {urgent.map((item) => (
-              <InventoryRow key={item.id} item={item} suppliers={suppliers} />
+              <InventoryRow
+                key={item.id}
+                item={item}
+                suppliers={suppliers}
+                currency={settings.currency}
+              />
             ))}
           </div>
         )}

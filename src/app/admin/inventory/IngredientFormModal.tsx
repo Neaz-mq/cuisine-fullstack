@@ -18,6 +18,7 @@ import {
   UNIT_LABELS,
   UNIT_OPTIONS,
 } from "@/lib/inventory-status";
+import { formatAmount } from "@/lib/currency-format";
 
 /**
  * src/app/admin/inventory/IngredientFormModal.tsx
@@ -78,6 +79,17 @@ type Props = {
   open: boolean;
   onClose: () => void;
   suppliers: SupplierOption[];
+  /**
+   * ⚠️ মুদ্রার চিহ্নটা এখানে হার্ডকোড করা যায় না। RestaurantSettings-এ
+   * `currency` একটা সেটিং (ডিফল্ট USD), আর অ্যাপের বাকি সব জায়গা
+   * `formatAmount()` দিয়ে সেটাই মানে। এই দুটো modal-এ "৳" লেখা ছিল,
+   * তাই দোকান USD-তে চললেও এখানে টাকার চিহ্ন দেখাত — অথচ Figma-তে
+   * "$360.00"।
+   *
+   * client component বলে settings নিজে পড়া যায় না, তাই server থেকে
+   * `suppliers`-এর পাশ দিয়েই নেমে আসে।
+   */
+  currency: string;
   /** না দিলে "Add Ingredient"; দিলে সেই উপকরণের সম্পাদনা। */
   item?: IngredientDraft;
 };
@@ -90,7 +102,7 @@ export default function IngredientFormModal(props: Props) {
   return <IngredientFormModalContent {...props} />;
 }
 
-function IngredientFormModalContent({ open, onClose, suppliers, item }: Props) {
+function IngredientFormModalContent({ open, onClose, suppliers, currency, item }: Props) {
   const router = useRouter();
   const isEdit = Boolean(item);
 
@@ -364,7 +376,7 @@ function IngredientFormModalContent({ open, onClose, suppliers, item }: Props) {
             className={`${FIELD} flex cursor-not-allowed items-center text-black/50`}
             aria-disabled="true"
           >
-            ৳ {totalCost.toFixed(2)}
+            {formatAmount(totalCost, currency)}
           </div>
         </div>
 

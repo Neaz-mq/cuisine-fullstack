@@ -22,9 +22,12 @@ import RestockModal from "./RestockModal";
 export default function InventoryRowActions({
   item,
   suppliers,
+  currency,
 }: {
   item: IngredientDraft;
   suppliers: SupplierOption[];
+  /** দুটো modal-ই "Total Cost" দেখায়, তাই দুজায়গাতেই পাঠাতে হয়। */
+  currency: string;
 }) {
   const [mode, setMode] = useState<null | "restock" | "edit">(null);
 
@@ -62,7 +65,13 @@ export default function InventoryRowActions({
           মানে ৮০ জোড়া modal — সবগুলো mount থাকলে প্রতিটা নিজের
           state, effect আর listener বয়ে বেড়াত। */}
       {mode === "restock" && (
-        <RestockModal open onClose={() => setMode(null)} item={item} suppliers={suppliers} />
+        <RestockModal
+          open
+          onClose={() => setMode(null)}
+          item={item}
+          suppliers={suppliers}
+          currency={currency}
+        />
       )}
       {mode === "edit" && (
         <IngredientFormModal
@@ -70,6 +79,7 @@ export default function InventoryRowActions({
           onClose={() => setMode(null)}
           item={item}
           suppliers={suppliers}
+          currency={currency}
         />
       )}
     </>

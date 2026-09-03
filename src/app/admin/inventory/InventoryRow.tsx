@@ -19,9 +19,12 @@ export type InventoryRowItem = IngredientDraft & { supplierName: string | null }
 export default function InventoryRow({
   item,
   suppliers,
+  currency,
 }: {
   item: InventoryRowItem;
   suppliers: SupplierOption[];
+  /** Restock/Edit modal-এর "Total Cost" ঘরটার জন্য — নিচে চলে যায়। */
+  currency: string;
 }) {
   const state = stockStateOf(item);
   const badge = STOCK_STATE_STYLE[state];
@@ -75,7 +78,7 @@ export default function InventoryRow({
         </span>
       </div>
 
-      <InventoryRowActions item={item} suppliers={suppliers} />
+      <InventoryRowActions item={item} suppliers={suppliers} currency={currency} />
     </div>
   );
 }
