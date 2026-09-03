@@ -57,3 +57,43 @@ export const KITCHEN_STATUS_TO_ORDER_STATUS: Record<
   preparing: "PREPARING",
   ready: "OUT_FOR_DELIVERY",
 };
+
+/* ── Overview-র ছাঁকনি: অর্ডারের ধরন ──────────────────────────────── */
+
+/**
+ * ⚠️ Figma-তে Overview-র শিরোনামের পাশে "Today ⌄" আঁকা, কিন্তু সেটা
+ * বসানো যায় না — নিচের চারটের মধ্যে তিনটে (Ready to Serve · Preparing
+ * · Pending) **এই মুহূর্তের অবস্থা**। "গত সপ্তাহে কতগুলো ঝুলছিল"
+ * প্রশ্নের উত্তর দিতে হলে প্রতিদিনের status-এর স্থিরচিত্র রাখতে হতো,
+ * যা schema-য় নেই। ছাঁকনিটা বসালে তিনটে সংখ্যা অনড় থাকত আর একটা
+ * বদলাত — ব্যবহারকারী ধরে নিতেন চারটেই বদলেছে, যা নীরব মিথ্যা।
+ *
+ * ধরন দিয়ে ছাঁকলে **চারটেই** বদলায়, আর প্রশ্নটাও রান্নাঘরের নিজের:
+ * "টেবিলের অর্ডার কটা ঝুলছে, ডেলিভারির কটা"। রান্নাঘরে দুটোর
+ * তাড়াও আলাদা — টেবিলের খদ্দের সামনে বসে আছেন, ডেলিভারির রাইডার
+ * এখনো আসেননি।
+ *
+ * (Inventory-র Overview-তেও ঠিক এই কারণেই period-এর বদলে শ্রেণি।)
+ */
+export type KitchenTypeFilter = "all" | "dine-in" | "delivery";
+
+export const DEFAULT_KITCHEN_TYPE: KitchenTypeFilter = "all";
+
+export function isKitchenType(value: unknown): value is KitchenTypeFilter {
+  return typeof value === "string" && ["all", "dine-in", "delivery"].includes(value);
+}
+
+export const KITCHEN_TYPE_OPTIONS: FilterMenuOption<KitchenTypeFilter>[] = [
+  // pill-এ "All Orders", popup-এ শুধু "All" — বাকি ছাঁকনিগুলোর একই আচরণ।
+  { value: "all", label: "All", triggerLabel: "All Orders" },
+  { value: "dine-in", label: "Dine in" },
+  { value: "delivery", label: "Delivery" },
+];
+
+export const KITCHEN_TYPE_TO_ORDER_TYPE: Record<
+  Exclude<KitchenTypeFilter, "all">,
+  "DINE_IN" | "DELIVERY"
+> = {
+  "dine-in": "DINE_IN",
+  delivery: "DELIVERY",
+};

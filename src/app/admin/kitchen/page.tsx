@@ -57,16 +57,33 @@ export default async function KitchenDisplayPage({
    */
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const boardStatuses = {
-    OR: [
-      { status: { in: ["PLACED", "PREPARING"] as const } },
-      { status: "OUT_FOR_DELIVERY" as const, updatedAt: { gte: readySince } },
-    ],
-  };
-
   const [rows, totalToday] = await Promise.all([
     prisma.order.findMany({
-      where: boardStatuses,
+      /**
+       * বোর্ডে যা যা থাকে: এখনো ধরা হয়নি, চুলায় আছে, আর সদ্য
+       * তৈরি হয়েছে (শেষ ১৫ মিনিটে) — পুরনো "ready" গুলো নিজে থেকেই
+       * ঝরে যায়, নাহলে ডান কলামটা সারাদিনের জঞ্জাল জমিয়ে রাখত।
+       *
+       * ⚠️ শর্তটা আগে একটা আলাদা `const boardStatuses`-এ ছিল, আর
+       * তাতে TypeScript ভাঙত:
+       *
+       *   Type 'readonly ["PLACED", "PREPARING"]' is 'readonly' and
+       *   cannot be assigned to the mutable type 'OrderStatus[]'
+       *
+       * আলাদা ধ্রুবকে TS নিজে থেকে ধরনটা আন্দাজ করে, আর string দুটো
+       * `string` হয়ে যায় বলে `as const` লিখতে হয়েছিল — কিন্তু
+       * `as const` আবার array-টাকে `readonly` করে দেয়, যা Prisma-র
+       * `in` নেয় না। `where`-এর ভেতরে সরাসরি লিখলে TS প্রেক্ষাপট
+       * থেকেই `OrderStatus` বোঝে, তাই `as const`-এর দরকারই নেই।
+       * (`Prisma.OrderWhereInput` দিয়ে টাইপ করাও চলত, কিন্তু তাতে
+       * একটা বাড়তি import — এটাই সরল।)
+       */
+      where: {
+        OR: [
+          { status: { in: ["PLACED", "PREPARING"] } },
+          { status: "OUT_FOR_DELIVERY", updatedAt: { gte: readySince } },
+        ],
+      },
       include: {
         items: { include: { menuItem: { select: { title: true } } } },
         table: { select: { label: true } },
