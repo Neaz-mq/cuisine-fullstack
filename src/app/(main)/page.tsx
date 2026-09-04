@@ -6,7 +6,8 @@ import SignatureSection from "@/components/landing/SignatureSection";
 import ComboSection from "@/components/landing/ComboSection";
 import GuestsSection from "@/components/landing/GuestsSection";
 import FaqSection from "@/components/landing/FaqSection";
-import Deliver from "@/components/Deliver";
+import OneAppSection from "@/components/landing/OneAppSection";
+
 
 /**
  * src/app/(main)/page.tsx
@@ -35,7 +36,7 @@ export default function Home() {
       <ComboSection />
       <GuestsSection />
       <FaqSection />
-      <Deliver />
+      <OneAppSection />
     </div>
   );
 }
