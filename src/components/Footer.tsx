@@ -1,203 +1,220 @@
-import {
-  FaFacebookF,
-  FaLinkedinIn,
-  FaInstagram,
-  FaApple,
-  FaGooglePlay,
-} from "react-icons/fa";
-import { MdEmail } from "react-icons/md";
-import { FaPhone, FaLocationDot } from "react-icons/fa6";
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
-import Container from "@/components/Container";
+import {
+  FaApple,
+  FaGooglePlay,
+  FaInstagram,
+  FaLinkedinIn,
+  FaFacebookF,
+} from "react-icons/fa";
 
 /**
- * src/components/Footer.tsx
+ * src/components/landing/Footer.tsx
  *
- * Figma-র নতুন কালো footer — আগের সবুজ (#2C6252) নকশার বদলে। রঙ ও
- * ফন্ট বাকি নতুন সেকশনগুলোর (AboutUs, OneAppSection ইত্যাদি) সাথে
- * একই: font-frank-ruhl / font-sora utility, accent #FF9540।
+ * Figma "Footer - Desktop" — বাইরের wrapper 1440px, padding 60px 80px,
+ * bg #000000। ভিতরে max-w 1280px (max-width 1320px) centered container,
+ * gap 78px। এই কম্পোনেন্ট OneAppSection.tsx-এর মতোই
+ * max-w-[1280px] + responsive px-4/md:px-10/xl:px-20 প্যাটার্ন ফলো করে,
+ * যাতে ফুটার বাকি সেকশনগুলোর সাথে ঠিক একই গ্রিডে align হয়।
  *
- * ⚠️ দুটো জিনিস ইচ্ছা করেই Figma থেকে বদলানো হয়েছে:
- *   ১) কপিরাইট লাইনে Figma/আগের কোড দুটোতেই ভুল টেক্সট ছিল
- *      ("Grocery Website Design") — ব্র্যান্ডের নাম "Cuisine" বসানো
- *      হলো।
- *   ২) Figma-র CSS export-এ ইমেইল লেখা আছে "example@gmall.com"
- *      (বানান ভুল) — এখানে সঠিক "example@gmail.com" রাখা হয়েছে,
- *      কারণ ভুল বানানে mailto: লিংকটাও ভেঙে যেত।
+ * Customer Services / Our Information / Contact Info — Figma-তে এই তিনটা
+ * একই "Menus" auto-layout group-এর ভেতরে sibling column (space-between)।
+ * তাই কোডেও তিনটাকে একই flex row-এ রাখা হয়েছে, no flex-wrap on md+ —
+ * আলাদা group করলে বা wrap রাখলে দ্বিতীয় কলাম নিচে নেমে যায় (আগের bug)।
+ *
+ * FIX (logo): previously used a hand-drawn placeholder `<BellLogo />`
+ * (a flat orange bell), which is why it looked different from the real
+ * mark. Swapped it for the actual `/logo.svg` from the public folder —
+ * the same gradient bell-with-hand icon `Navbar.tsx` already uses —
+ * via `next/image`, so the footer and navbar logos are pixel-identical.
  */
 
-/** Customer Services / Our Information কলামের লিংক লিস্ট। */
-function FooterLinkList({
-  items,
+const customerServiceLinks = [
+  { label: "My Account", href: "#" },
+  { label: "Track Your Order", href: "#" },
+  { label: "Return", href: "#" },
+  { label: "FAQ", href: "#" },
+];
+
+const informationLinks = [
+  { label: "Privacy", href: "#" },
+  { label: "User Terms & Condition", href: "#" },
+  { label: "Return Policy", href: "#", underline: true },
+];
+
+const socialLinks = [
+  { icon: FaInstagram, label: "Instagram", href: "#" },
+  { icon: FaLinkedinIn, label: "LinkedIn", href: "#" },
+  { icon: FaFacebookF, label: "Facebook", href: "#" },
+];
+
+function FooterMenuLink({
+  href,
+  label,
+  underline,
 }: {
-  items: { label: string; underline?: boolean }[];
+  href: string;
+  label: string;
+  underline?: boolean;
 }) {
   return (
-    <ul className="space-y-2.5 font-sora text-[14px] leading-[1.6] text-white">
-      {items.map(({ label, underline }) => (
-        <li key={label}>
-          <a
-            href="#"
-            className={`focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
-              underline ? "underline" : ""
-            }`}
-          >
-            {label}
-          </a>
-        </li>
-      ))}
-    </ul>
+    <Link
+      href={href}
+      className={`font-sora text-[14px] leading-[1.6] text-white/70 transition-colors hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
+        underline ? "underline" : ""
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
 
-const socialLinks = [
-  { icon: FaInstagram, label: "Instagram" },
-  { icon: FaLinkedinIn, label: "LinkedIn" },
-  { icon: FaFacebookF, label: "Facebook" },
-];
+function StoreButtonSmall({
+  icon,
+  label,
+  variant,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  variant: "apple" | "play";
+}) {
+  return (
+    <a
+      href="#"
+      aria-label={label}
+      className={`flex h-[46px] items-center justify-center gap-[5px] rounded-full px-5 font-sora text-[13px] font-semibold leading-[1.6] transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
+        variant === "apple" ? "bg-[#FF9540] text-white" : "bg-white text-black"
+      }`}
+    >
+      {icon}
+      {label}
+    </a>
+  );
+}
 
 export default function Footer() {
   return (
-    <footer
-      className="bg-black text-white"
-      role="contentinfo"
-      aria-label="Site Footer"
-    >
-      <Container>
-        <div className="flex flex-col gap-12 px-4 py-16 md:px-10 xl:px-20 xl:py-[60px]">
-          {/* Top: brand column + three menu columns */}
-          <div className="flex flex-col gap-10 text-center lg:flex-row lg:justify-between lg:gap-10 lg:text-left">
-            {/* Brand */}
-            <div className="flex max-w-[370px] flex-col items-center gap-4 lg:items-start">
-              <Link
-                href="/"
-                aria-label="Navigate to homepage"
-                className="flex items-center gap-3"
-              >
-                <Image src="/logo.svg" alt="" width={40} height={40} aria-hidden="true" />
-                <span className="font-frank-ruhl text-[26px] font-bold leading-[1.26] tracking-[-0.01em] text-[#FF9540] md:text-[30px]">
+    <footer className="flex flex-col items-center bg-black px-4 py-10 md:px-10 md:py-14 xl:px-20 xl:py-[60px]">
+      {/* Container — mirrors the 1280px content width used across every landing section */}
+      <div className="flex w-full max-w-[1280px] flex-col items-center gap-12 md:gap-16 xl:gap-[78px]">
+        {/* Content: top (logo/desc/social) + menu columns + contact */}
+        <div className="flex w-full flex-col items-start gap-12 md:flex-row md:justify-between md:gap-10 xl:gap-[80px]">
+          {/* Top: logo + description + socials */}
+          <div className="flex w-full max-w-[370px] flex-col items-start gap-[30px]">
+            <div className="flex flex-col items-start gap-4">
+              <Link href="/" className="flex items-center gap-3">
+                <Image
+                  src="/logo 2.svg"
+                  alt="Cuisine logo"
+                  width={40}
+                  height={40}
+                  className="h-10 w-10"
+                />
+                <span className="font-frank-ruhl text-[28px] font-bold leading-[1.26] tracking-[-0.01em] text-[#FF9540]">
                   Cuisine
                 </span>
               </Link>
-              <p className="font-sora text-[15px] leading-[1.6] text-white/70 md:text-[16px]">
+              <p className="font-sora text-[16px] leading-[1.6] text-white/70">
                 Cuisine brings your favorite restaurants and delicious meals
                 together in one seamless food delivery experience.
               </p>
-              <div className="flex items-center gap-5" aria-label="Follow Cuisine on social media">
-                {socialLinks.map(({ icon: Icon, label }) => (
-                  <a
-                    key={label}
-                    href="#"
-                    aria-label={label}
-                    className="flex h-5 w-5 items-center justify-center text-white transition-opacity hover:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-                  >
-                    <Icon className="h-full w-full" aria-hidden="true" />
-                  </a>
+            </div>
+
+            <div className="flex items-center gap-5">
+              {socialLinks.map(({ icon: Icon, label, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  aria-label={label}
+                  className="flex h-5 w-5 items-center justify-center text-white transition-opacity hover:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                >
+                  <Icon className="h-5 w-5" />
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* Menus: Customer Services + Our Information + Contact Info — one row, three columns */}
+          <div className="flex w-full flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-10 md:w-auto md:flex-1 md:flex-nowrap md:justify-between md:gap-10 xl:gap-16">
+            <div className="flex flex-col items-start gap-4">
+              <h3 className="font-frank-ruhl text-[18px] font-semibold leading-[1.3] text-white">
+                Customer Services
+              </h3>
+              <div className="flex flex-col items-start gap-[7px]">
+                {customerServiceLinks.map((link) => (
+                  <FooterMenuLink key={link.label} {...link} />
                 ))}
               </div>
             </div>
 
-            {/* Menu columns */}
-            <div className="flex flex-col items-center gap-10 sm:flex-row sm:justify-center sm:gap-16 lg:items-start lg:justify-start xl:gap-[142px]">
-              <nav aria-labelledby="footer-customer-services">
-                <h2
-                  id="footer-customer-services"
-                  className="mb-4 font-frank-ruhl text-[17px] font-semibold leading-[1.3] text-white md:text-[18px]"
-                >
-                  Customer Services
-                </h2>
-                <FooterLinkList
-                  items={[
-                    { label: "My Account" },
-                    { label: "Track Your Order" },
-                    { label: "Return" },
-                    { label: "FAQ", underline: true },
-                  ]}
-                />
-              </nav>
-
-              <nav aria-labelledby="footer-our-information">
-                <h2
-                  id="footer-our-information"
-                  className="mb-4 font-frank-ruhl text-[17px] font-semibold leading-[1.3] text-white md:text-[18px]"
-                >
-                  Our Information
-                </h2>
-                <FooterLinkList
-                  items={[
-                    { label: "Privacy" },
-                    { label: "User Terms & Condition" },
-                    { label: "Return Policy", underline: true },
-                  ]}
-                />
-              </nav>
-
-              <address className="not-italic">
-                <h2 className="mb-4 font-frank-ruhl text-[17px] font-semibold leading-[1.3] text-white md:text-[18px]">
-                  Contact Info
-                </h2>
-                <ul className="space-y-2.5 font-sora text-[14px] leading-[1.6] text-white">
-                  <li className="flex items-center justify-center gap-2 lg:justify-start">
-                    <FaPhone aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                    <a
-                      href="tel:+0123456789"
-                      className="underline focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-                    >
-                      +0123-456-789
-                    </a>
-                  </li>
-                  <li className="flex items-center justify-center gap-2 lg:justify-start">
-                    <MdEmail aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                    <a
-                      href="mailto:example@gmail.com"
-                      className="underline focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-                    >
-                      example@gmail.com
-                    </a>
-                  </li>
-                  <li className="flex items-start justify-center gap-2 text-left lg:justify-start">
-                    <FaLocationDot aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>8602 Preston Rd. Inglewood, Maine 98380</span>
-                  </li>
-                </ul>
-              </address>
+            <div className="flex flex-col items-start gap-4">
+              <h3 className="font-frank-ruhl text-[18px] font-semibold leading-[1.3] text-white">
+                Our Information
+              </h3>
+              <div className="flex flex-col items-start gap-[7px]">
+                {informationLinks.map((link) => (
+                  <FooterMenuLink key={link.label} {...link} />
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Divider */}
-          <div className="h-px w-full bg-white/10" aria-hidden="true" />
-
-          {/* Bottom bar */}
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <span className="font-sora text-[12px] leading-[1.7] text-white/50">
-              © {new Date().getFullYear()} Cuisine. All rights reserved.
-            </span>
-
-            <div className="flex items-center gap-4">
-              <span className="font-sora text-[12px] leading-[1.7] text-white/70">
-                Install on your device
-              </span>
-              <a
-                href="#"
-                aria-label="Apple Store"
-                className="flex h-11 items-center gap-1.5 rounded-full bg-[#FF9540] px-5 font-sora text-[13px] font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-              >
-                <FaApple className="h-4 w-4" aria-hidden="true" />
-                Apple Store
-              </a>
-              <a
-                href="#"
-                aria-label="Play Store"
-                className="flex h-11 items-center gap-1.5 rounded-full bg-white px-5 font-sora text-[13px] font-semibold text-black transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-              >
-                <FaGooglePlay className="h-4 w-4" aria-hidden="true" />
-                Play Store
-              </a>
+            <div className="flex w-full max-w-[300px] flex-col items-start gap-4 sm:w-auto">
+              <h3 className="font-frank-ruhl text-[18px] font-semibold leading-[1.3] text-white">
+                Contact Info
+              </h3>
+              <div className="flex flex-col items-start gap-[7px]">
+                <a
+                  href="tel:+0123456789"
+                  className="font-sora text-[14px] leading-[1.6] text-white"
+                >
+                  +0123-456-789
+                </a>
+                <a
+                  href="mailto:example@gmail.com"
+                  className="font-sora text-[14px] leading-[1.6] text-white underline"
+                >
+                  example@gmail.com
+                </a>
+                <p className="font-sora text-[14px] leading-[1.6] text-white">
+                  8602 Preston Rd. Inglewood, Maine 98380
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </Container>
+
+        {/* Bottom content: copyright — divider — install/store buttons */}
+        <div className="flex w-full flex-col items-center gap-6 md:flex-row md:gap-[26px]">
+          <p className="font-sora text-[12px] leading-[1.7] text-white/50">
+            © 2026 Cuisine. All rights reserved.
+          </p>
+
+          <span
+            className="hidden h-px flex-1 bg-[#52525A]/10 md:block"
+            aria-hidden="true"
+          />
+
+          <div className="flex flex-col items-center gap-3 md:flex-row md:gap-4">
+            <span className="font-sora text-[12px] leading-[1.7] text-white/70">
+              Install on your device
+            </span>
+            <div className="flex items-center gap-2">
+              <StoreButtonSmall
+                icon={<FaApple className="h-4 w-4" aria-hidden="true" />}
+                label="Apple Store"
+                variant="apple"
+              />
+              <StoreButtonSmall
+                icon={<FaGooglePlay className="h-4 w-4" aria-hidden="true" />}
+                label="Play store"
+                variant="play"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </footer>
   );
 }

@@ -22,6 +22,20 @@ import {
  * Figma Frame 2147236004 — ব্যাজ → শিরোনাম → বর্ণনা → দুটো বোতাম →
  * খাবারের সারি। Section: padding 0 80px 60px, gap 60, BG #F9F6F3।
  *
+ * FIX (navbar↔hero gap): in `sections_css.txt`, the outer wrapper
+ * ("Frame 2147236004", the same BG:#F9F6F3 frame that contains the
+ * black top bar + navbar + this hero) is a `flex-direction: column`
+ * with `gap: 60px` between its children. The navbar block is one
+ * child (height 141px) and this hero content is the next child — so
+ * Figma expects 60px of breathing room between the navbar's divider
+ * line and the "Fresh Flavors..." badge.
+ *
+ * This component previously had no top padding at all (only
+ * `pb-10 xl:pb-[60px]` at the bottom), so the badge/heading rendered
+ * flush against the Navbar component with zero gap. Added matching
+ * top padding (scaled down on small screens, full 60px at xl to match
+ * Figma exactly) to close that gap.
+ *
  * ⚠️ `"use client"` — framer-motion-এর জন্য। ডেটা এখনো prop হিসেবেই
  * আসে, তাই পরে backend যুক্ত হলে server component থেকে prop পাঠালেই
  * চলবে; এই ফাইলটা ছুঁতে হবে না।
@@ -267,7 +281,7 @@ export default function Hero({
   };
 
   return (
-    <section className="overflow-hidden bg-[#F9F6F3] pb-10 xl:pb-[60px]">
+    <section className="overflow-hidden bg-[#F9F6F3] pt-6 pb-10 md:pt-10 xl:pt-[60px] xl:pb-[60px]">
       <motion.div
         className="mx-auto flex max-w-[1280px] flex-col items-center gap-9 px-4 md:px-10 xl:px-20"
         variants={container}
