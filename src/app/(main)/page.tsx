@@ -1,18 +1,40 @@
-import Banner from "@/components/Banner";
-import Buffet from "@/components/Buffet";
+import Hero from "@/components/landing/Hero";
+import BrandStrip from "@/components/landing/BrandStrip";
+import AboutUs from "@/components/landing/AboutUs";
+import ServicesSection from "@/components/landing/ServicesSection";
+import SignatureSection from "@/components/landing/SignatureSection";
+import ComboSection from "@/components/landing/ComboSection";
+import GuestsSection from "@/components/landing/GuestsSection";
+import FaqSection from "@/components/landing/FaqSection";
 import Deliver from "@/components/Deliver";
-import Services from "@/components/Services";
-import Signature from "@/components/Signature";
-import Testimonials from "@/components/Testimonials";
 
+/**
+ * src/app/(main)/page.tsx
+ *
+ * ⚠️ পুরনো `<Buffet />` আর `<Signature />` সরিয়ে
+ * `<SignatureSection />` — Figma-তে ওই দুটোর জায়গায় একটাই section
+ * ("Our Signature", gradient পটভূমি)।
+ *
+ * পুরনো ফাইলগুলো **মুছিনি**। এখন অব্যবহৃত: `Banner.tsx`, `TopBar.tsx`,
+ * `Navbar.tsx`, `Services.tsx`, `Buffet.tsx`, `Signature.tsx`। নতুন
+ * নকশা চোখে দেখে পছন্দ হলে যাচাই করে মুছবেন:
+ *
+ *     grep -rn "components/Buffet\|components/Signature" src/
+ *
+ * ⚠️ বাকি ধাপ: One App · Footer।
+ * নিচের `<Deliver />` এখনো পুরনো নকশার।
+ */
 export default function Home() {
   return (
     <div>
-      <Banner />
-      <Services />
-      <Buffet />
-      <Signature />
-      <Testimonials />  
+      <Hero />
+      <BrandStrip />
+      <AboutUs />
+      <ServicesSection />
+      <SignatureSection />
+      <ComboSection />
+      <GuestsSection />
+      <FaqSection />
       <Deliver />
     </div>
   );
