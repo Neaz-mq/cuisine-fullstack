@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, UtensilsCrossed } from "lucide-react";
 import { toast } from "react-toastify";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import CategoryFormModal from "./CategoryFormModal";
+import MenuItemFormModal from "@/app/admin/menu/MenuItemFormModal";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -16,6 +16,14 @@ export type CategoryRowItem = {
   id: string;
   title: string;
   description: string;
+  /**
+   * ⚠️ `number`, Prisma-র `Decimal` নয়। `MenuItem.price` DB-তে
+   * numeric(12,3), আর Prisma সেটা একটা Decimal **object** হিসেবে ফেরায় —
+   * ওটা সরল object নয় বলে server component থেকে client-এ পাঠানোই যায় না
+   * ("Only plain objects can be passed to Client Components")। তাই
+   * page.tsx-এ `Number()` দিয়ে রূপান্তর করে পাঠানো হয়।
+   */
+  price: number;
   imageUrl: string | null;
   isAvailable: boolean;
 };
@@ -60,9 +68,9 @@ export type CategoryRowItem = {
  *
  * ── Edit/Delete এখন কার? ────────────────────────────────────────────
  *
- * নকশার কার্ডে বোতাম দুটো **পদের**, শ্রেণির নয় — তাই Edit যায়
- * /admin/menu/<id>/edit-এ আর Delete ডাকে
- * DELETE /api/admin/menu-items/<id>।
+ * নকশার কার্ডে বোতাম দুটো **পদের**, শ্রেণির নয় — তাই Edit খোলে
+ * `MenuItemFormModal` (পদটার নিজের form, এই পাতা ছেড়ে না গিয়ে) আর
+ * Delete ডাকে DELETE /api/admin/menu-items/<id>।
  *
  * ⚠️ ঐ route-টা `menu` scope চায়, এই পাতা চায় `categories` — দুটো
  * আলাদা scope, কিন্তু matrix-এ (lib/permissions.ts) দুটোই কেবল
@@ -79,14 +87,26 @@ export default function CategoryRow({
   id,
   name,
   items,
+  categories,
+  currency,
 }: {
   id: string;
   name: string;
   items: CategoryRowItem[];
+  /** সব শ্রেণি — পদ সম্পাদনার modal-এর Category dropdown-এর জন্য। */
+  categories: readonly { value: string; label: string }[];
+  /** দামের ঘরের গায়ে দেখানোর জন্য, যেমন "USD"। */
+  currency?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  /**
+   * কোন পদটা সম্পাদনা হচ্ছে — boolean নয়, পুরো পদটাই। modal-টার
+   * প্রাথমিক মান ওখান থেকেই আসে, আর তালিকায় ইতিমধ্যে সব কটা মাঠ
+   * থাকায় prefill-এর জন্য বাড়তি কোনো fetch লাগে না।
+   */
+  const [editingItem, setEditingItem] = useState<CategoryRowItem | null>(null);
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -184,9 +204,17 @@ export default function CategoryRow({
                 className="flex flex-col gap-4 rounded-2xl bg-white p-4 md:flex-row md:items-center md:justify-between md:gap-[27px]"
               >
                 {/* Frame 2147236287: row, gap 16। */}
-                <div className="flex min-w-0 items-center gap-4">
-                  {/* Frame 2147225236: 78×78, BG #F8F8F8, radius 12। */}
-                  <div className="relative h-[78px] w-[78px] shrink-0 overflow-hidden rounded-xl bg-[#F8F8F8]">
+                <div className="flex min-w-0 items-center gap-3 md:gap-4">
+                  {/**
+                   * Frame 2147225236: 78×78, BG #F8F8F8, radius 12।
+                   *
+                   * ⚠️ ৭৬৮-এর নিচে ৫৬px, আর এটা প্রসাধন নয়। ৩২০px পর্দায়
+                   * এই কার্ডের ভেতরে থাকে ~১৯২px; ৭৮ + gap ১৬ নিলে নামের
+                   * জন্য বাকি থাকে ~৯৮px — "Crispy French Fries" ওখানে
+                   * "Crispy F…" হয়ে যেত। ৫৬ + gap ১২-তে ~১২৪px, দুই
+                   * লাইনে পুরো নামটা ধরে।
+                   */}
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#F8F8F8] md:h-[78px] md:w-[78px]">
                     {item.imageUrl ? (
                       /**
                        * ⚠️ `unoptimized` — reviews পাতার মতোই। পদের ছবি
@@ -200,14 +228,14 @@ export default function CategoryRow({
                         src={item.imageUrl}
                         alt=""
                         fill
-                        sizes="78px"
+                        sizes="(min-width: 768px) 78px, 56px"
                         unoptimized
                         className="object-cover"
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center">
                         <UtensilsCrossed
-                          className="h-6 w-6 text-black/20"
+                          className="h-5 w-5 text-black/20 md:h-6 md:w-6"
                           strokeWidth={1.5}
                           aria-hidden="true"
                         />
@@ -218,7 +246,11 @@ export default function CategoryRow({
                   {/* Frame 2147236286: column, gap 8, w 204। */}
                   <div className="flex min-w-0 flex-col gap-2 md:w-[204px]">
                     <div className="flex min-w-0 items-center gap-2">
-                      <h4 className="min-w-0 truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-[#141921]">
+                      {/* ⚠️ ৭৬৮-এর নিচে ellipsis নয়, দুই লাইন — সরু
+                          পর্দায় `truncate` মানে প্রায় প্রতিটা নামই
+                          কাটা পড়া, আর নামটাই তো সারিটার মূল কথা।
+                          ৭৬৮+ এ Figma-র এক-লাইন ফিরে আসে। */}
+                      <h4 className="min-w-0 font-frank-ruhl text-[17px] font-medium leading-[1.25] text-[#141921] max-md:line-clamp-2 md:truncate md:text-[20px] md:leading-[1.2]">
                         {item.title}
                       </h4>
                       {!item.isAvailable && (
@@ -235,14 +267,31 @@ export default function CategoryRow({
                   </div>
                 </div>
 
-                {/* Frame 2147236283: row, gap 12। */}
-                <div className="flex shrink-0 items-center gap-3">
-                  <Link
-                    href={`/admin/menu/${item.id}/edit`}
-                    className={`flex h-[50px] w-[86px] shrink-0 items-center justify-center rounded-full border border-black font-sora text-[16px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white ${FOCUS_RING}`}
+                {/**
+                 * Frame 2147236283: row, gap 12।
+                 *
+                 * ⚠️ ৭৬৮-এর নিচে দুটো বোতাম `flex-1`, অর্থাৎ কার্ডের
+                 * প্রস্থ সমান দুই ভাগে — modal-এর Cancel/Save জোড়ার
+                 * হুবহু একই নিয়ম (modal-ui.tsx-এর footer)। স্থির ৮৬px
+                 * রাখলে ৩২০px-এ দুটো বোতাম বাঁ দিকে জড়ো হয়ে থাকত আর
+                 * ডানে একটা অকারণ ফাঁকা জায়গা পড়ে থাকত — ঠিক যেটা
+                 * screenshot-এ দেখা যাচ্ছিল।
+                 *
+                 * উচ্চতাও ৫০ → ৪০, লেখা ১৬ → ১৪। মোবাইলে বাকি সব
+                 * বোতামই এই মাপে (ExportReportButton, তারিখ-pill,
+                 * ছাঁকনি-pill — সবগুলোই h-10)।
+                 */}
+                <div className="flex items-center gap-2 md:shrink-0 md:gap-3">
+                  {/* ⚠️ `<Link>` নয় — সম্পাদনার form এখন modal, আলাদা
+                      পাতায় নয়। তালিকা ছেড়ে যেতে হয় না, আর ভুল করে
+                      খুললে Escape/Cancel-এ কিছুই হারায় না। */}
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem(item)}
+                    className={`flex h-10 flex-1 items-center justify-center rounded-full border border-black font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white md:h-[50px] md:w-[86px] md:flex-none md:shrink-0 md:text-[16px] ${FOCUS_RING}`}
                   >
                     Edit
-                  </Link>
+                  </button>
 
                   <button
                     type="button"
@@ -250,7 +299,7 @@ export default function CategoryRow({
                       setConfirming({ kind: "item", id: item.id, title: item.title })
                     }
                     disabled={isPending}
-                    className={`flex h-[50px] w-[86px] shrink-0 items-center justify-center rounded-full bg-[#D72A37] font-sora text-[16px] font-normal leading-none text-white transition-opacity hover:opacity-90 disabled:opacity-50 ${FOCUS_RING}`}
+                    className={`flex h-10 flex-1 items-center justify-center rounded-full bg-[#D72A37] font-sora text-[14px] font-normal leading-none text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:h-[50px] md:w-[86px] md:flex-none md:shrink-0 md:text-[16px] ${FOCUS_RING}`}
                   >
                     Delete
                   </button>
@@ -265,13 +314,20 @@ export default function CategoryRow({
            * পদহীন শ্রেণির ক্ষেত্রেও দেখা যায়, নাহলে খালি শ্রেণিটা আর
            * মোছাই যেত না।
            */}
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          {/**
+           * ⚠️ ৪৮০-এর নিচে দুটো বোতাম আলাদা সারিতে, পুরো প্রস্থে।
+           * পাশাপাশি বসালে ভাগে পড়ত ~১০৮px, আর "Delete category"
+           * ১৪px Sora-তে ৯৩px + padding ৩২ = ১২৫px — আঁটত না, লেখাটা
+           * দুই লাইনে ভেঙে বোতামদুটো উঁচু-নিচু হয়ে যেত। ৪৮০+ এ আগের
+           * মতোই ডানে চাপানো, নিজের মাপে।
+           */}
+          <div className="flex flex-col gap-2 min-[480px]:flex-row min-[480px]:flex-wrap min-[480px]:items-center min-[480px]:justify-end min-[480px]:gap-3">
             {/* ⚠️ `<Link>` নয় — শ্রেণির নাম বদলানোর form এখন Figma-র
                 modal-এ (CategoryFormModal), আলাদা পাতায় নয়। */}
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className={`flex h-10 shrink-0 items-center justify-center rounded-full border border-black/70 px-4 font-sora text-[14px] font-normal leading-none text-black/70 transition-colors hover:border-black hover:text-black ${FOCUS_RING}`}
+              className={`flex h-10 w-full shrink-0 items-center justify-center rounded-full border border-black/70 px-4 font-sora text-[13px] font-normal leading-none text-black/70 transition-colors hover:border-black hover:text-black min-[480px]:w-auto min-[480px]:text-[14px] ${FOCUS_RING}`}
             >
               Edit category
             </button>
@@ -280,7 +336,7 @@ export default function CategoryRow({
               type="button"
               onClick={() => setConfirming({ kind: "category" })}
               disabled={isPending}
-              className={`flex h-10 shrink-0 items-center justify-center rounded-full border border-[#D72A37] px-4 font-sora text-[14px] font-normal leading-none text-[#D72A37] transition-colors hover:bg-[#D72A37] hover:text-white disabled:opacity-50 ${FOCUS_RING}`}
+              className={`flex h-10 w-full shrink-0 items-center justify-center rounded-full border border-[#D72A37] px-4 font-sora text-[13px] font-normal leading-none text-[#D72A37] transition-colors hover:bg-[#D72A37] hover:text-white disabled:opacity-50 min-[480px]:w-auto min-[480px]:text-[14px] ${FOCUS_RING}`}
             >
               Delete category
             </button>
@@ -294,6 +350,28 @@ export default function CategoryRow({
        * নকশার বাইরে, style করা যায় না, আর মোবাইলে পাতার উপরে একটা
        * বেমানান সাদা বাক্স হয়ে বসে।
        */}
+      {/* ⚠️ শর্তসাপেক্ষে render — modal-টা `item` ছাড়া চলে না, আর
+          `editingItem` null হলে পাঠানোর মতো কিছু থাকে না। */}
+      {editingItem && (
+        <MenuItemFormModal
+          open
+          onClose={() => setEditingItem(null)}
+          item={{
+            id: editingItem.id,
+            title: editingItem.title,
+            description: editingItem.description,
+            price: editingItem.price,
+            imageUrl: editingItem.imageUrl,
+            // পদটা এই সারিরই ভেতরে, তাই শ্রেণিটা নিশ্চিতভাবে এটাই —
+            // আলাদা করে query করার কিছু নেই।
+            categoryId: id,
+            isAvailable: editingItem.isAvailable,
+          }}
+          categories={categories}
+          currency={currency}
+        />
+      )}
+
       <CategoryFormModal
         open={editing}
         onClose={() => setEditing(false)}

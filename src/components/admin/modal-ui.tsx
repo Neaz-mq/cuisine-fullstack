@@ -46,6 +46,21 @@ export const FIELD =
   "h-[43px] w-full text-ellipsis rounded-[12px] border-0 bg-[#F9F6F3] px-3 font-sora text-[12px] font-normal leading-[1.6] text-black placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
 /**
+ * FIELD-এর বহু-লাইন রূপ — একই BG, একই radius, একই লেখা, শুধু উচ্চতা
+ * স্থির নয়।
+ *
+ * ⚠️ `FIELD`-এর সাথে বাড়তি একটা class জুড়ে এটা করা যায় না: ওখানে
+ * `h-[43px]` আছে, আর Tailwind-এ পরে লেখা class আগে লেখাটাকে হারায় না —
+ * জেতে stylesheet-এ যেটা পরে বসে সেটা। অর্থাৎ `${FIELD} min-h-[86px]`
+ * লিখলে ফল অনিশ্চিত, তাই আলাদা token।
+ *
+ * ৮৬ = ৪৩ × ২ — দেখতে ঠিক দুটো সাধারণ ঘরের সমান, তাই Figma-র grid
+ * ভাঙে না।
+ */
+export const TEXTAREA =
+  "min-h-[86px] w-full resize-y rounded-[12px] border-0 bg-[#F9F6F3] px-3 py-3 font-sora text-[12px] font-normal leading-[1.6] text-black placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
+
+/**
  * Figma label: Frank Ruhl Libre 500, 14px, LH 160%, #000000, নিচে gap 6।
  *
  * ⚠️ ৬৪০-এর নিচে ১৩px, আর এটা প্রসাধন নয়। ৩২০px-এ modal-এর জোড়া-ঘরের

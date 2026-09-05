@@ -1,6 +1,7 @@
 import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
+import { getRestaurantSettings } from "@/lib/get-settings";
 import {
   DEFAULT_CATEGORY_FILTER,
   isCategoryFilter,
@@ -93,6 +94,10 @@ export default async function AdminCategoriesPage({
           id: true,
           title: true,
           description: true,
+          // ⚠️ `price` কেবল সম্পাদনার modal-এর জন্য — কার্ডে দাম দেখানো
+          // হয় না (Figma-তে নেই)। Decimal হিসেবে আসে, নিচে সারি বানানোর
+          // সময় `Number()` করে পাঠানো হয়।
+          price: true,
           imageUrl: true,
           isAvailable: true,
         },
@@ -136,6 +141,19 @@ export default async function AdminCategoriesPage({
   });
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+
+  /**
+   * পদ সম্পাদনার modal-এর Category dropdown — **ছাঁকার আগের** পুরো
+   * তালিকা থেকে। `visible` থেকে নিলে "Empty" ছাঁকনি চালু থাকা অবস্থায়
+   * dropdown-এ কেবল খালি শ্রেণিগুলোই থাকত, আর একটা পদ অন্য শ্রেণিতে
+   * সরানোর উপায়ই বন্ধ হয়ে যেত।
+   */
+  const categoryOptions = rows.map((row) => ({ value: row.id, label: row.name }));
+
+  // দামের ঘরের গায়ে ISO code দেখানোর জন্য ("USD")। পুরনো MenuItemForm
+  // এটা /api/settings থেকে client-এ আনত; এই পাতা server component, তাই
+  // সরাসরি পড়ে নেওয়াই সরল আর একটা round-trip কম।
+  const { currency } = await getRestaurantSettings();
 
   /**
    * ⚠️ URL-এর page নম্বরটা যাচাই করে নেওয়া। `?page=99` হাতে লিখলে —
@@ -222,7 +240,19 @@ export default async function AdminCategoriesPage({
         ) : (
           <div className="flex flex-col gap-4">
             {pageRows.map((row) => (
-              <CategoryRow key={row.id} id={row.id} name={row.name} items={row.menuItems} />
+              <CategoryRow
+                key={row.id}
+                id={row.id}
+                name={row.name}
+                /* Decimal → number, নাহলে client component-এ পাঠানোই
+                   যায় না — CategoryRowItem-এর `price`-এ বিস্তারিত। */
+                items={row.menuItems.map((item) => ({
+                  ...item,
+                  price: Number(item.price),
+                }))}
+                categories={categoryOptions}
+                currency={currency}
+              />
             ))}
           </div>
         )}
