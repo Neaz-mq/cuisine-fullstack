@@ -100,6 +100,15 @@ export default async function AdminCategoriesPage({
           price: true,
           imageUrl: true,
           isAvailable: true,
+          // ⚠️ এই সাতটাও কার্ডে দেখানো হয় না — কেবল সম্পাদনার
+          // modal-এর ঘরগুলো ভরার জন্য। CategoryRowItem-এ বিস্তারিত।
+          calories: true,
+          fatGrams: true,
+          proteinGrams: true,
+          carbGrams: true,
+          prepTimeMinutes: true,
+          ingredientTags: true,
+          foodStatus: true,
         },
       },
     },

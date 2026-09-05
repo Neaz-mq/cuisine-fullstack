@@ -26,6 +26,23 @@ export type CategoryRowItem = {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
+
+  /**
+   * ⚠️ নিচের সাতটা মাঠ এই কার্ডে **দেখানো হয় না** — Figma-র শ্রেণি-সারিতে
+   * ছবি, নাম আর বিবরণের বেশি কিছু নেই। এগুলো কেবল সম্পাদনার modal-এর
+   * প্রাথমিক মান ভরার জন্য।
+   *
+   * বিকল্প ছিল Edit চাপার পর পদটা আলাদা করে fetch করা, কিন্তু তাতে
+   * modal খুলে একটা ফাঁকা form দেখা যেত আর ঘরগুলো এক মুহূর্ত পরে ভরত —
+   * অথচ সংখ্যাগুলো ইতিমধ্যেই এই একই query-তে আছে।
+   */
+  calories: number | null;
+  fatGrams: number | null;
+  proteinGrams: number | null;
+  carbGrams: number | null;
+  prepTimeMinutes: number | null;
+  ingredientTags: string[];
+  foodStatus: string | null;
 };
 
 /**
@@ -366,6 +383,13 @@ export default function CategoryRow({
             // আলাদা করে query করার কিছু নেই।
             categoryId: id,
             isAvailable: editingItem.isAvailable,
+            calories: editingItem.calories,
+            fatGrams: editingItem.fatGrams,
+            proteinGrams: editingItem.proteinGrams,
+            carbGrams: editingItem.carbGrams,
+            ingredientTags: editingItem.ingredientTags,
+            foodStatus: editingItem.foodStatus,
+            prepTimeMinutes: editingItem.prepTimeMinutes,
           }}
           categories={categories}
           currency={currency}

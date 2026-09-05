@@ -234,6 +234,48 @@ model MenuItem {
   isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
 
+  // ── Figma-র "Add Item" modal-এর বাকি ঘরগুলো ─────────────────────────
+  //
+  // সবগুলোই optional, আর সেটা ইচ্ছাকৃত: এই কলামগুলো যোগ হওয়ার আগে
+  // তৈরি প্রতিটা পদের ঘরে এদের কোনো মান নেই, আর `Int @default(0)`
+  // দিলে পুরনো ৩৯টা পদ হঠাৎ "0 Kcal" দাবি করত — যেটা "জানা নেই"-এর
+  // চেয়ে খারাপ, কারণ শূন্য একটা **উত্তর**। UI-তে null মানে ঘরটা
+  // ফাঁকা দেখায়, আর সেটাই সত্যি।
+
+  // Nutrition — Figma-র চারটে ছোট ঘর (Kcal · Fat · Protin · Carb)।
+  // ক্যালরি পূর্ণসংখ্যা; বাকি তিনটে গ্রামে, আর ভগ্নাংশ হয় (২.৫g fat),
+  // তাই Float। এগুলো পুষ্টি-তথ্য, টাকা নয় — Decimal-এর দরকার নেই।
+  calories     Int?
+  fatGrams     Float?
+  proteinGrams Float?
+  carbGrams    Float?
+
+  // Figma-র "Ingredients" chip-গুলো — খদ্দেরকে দেখানোর মতো সাধারণ
+  // তালিকা ("Pizza dough", "Mushrooms")।
+  //
+  // ⚠️ এটা নিচের `ingredients` relation-এর সাথে গুলিয়ে ফেলার নয়।
+  // ওটা recipe: কোন InventoryItem কতটা লাগে — stock কাটা আর food cost
+  // হিসাবের ভিত্তি। এটা নিছক লেখা, কোনো হিসাবে ঢোকে না। দুটো আলাদা
+  // জিনিস, তাই আলাদা মাঠ; একটাকে অন্যটা দিয়ে চালাতে গেলে হয় recipe-এ
+  // পরিমাণহীন সারি বসত (food cost নষ্ট), নয় মেনুর লেখাটা
+  // গুদামের নামের উপর নির্ভরশীল হয়ে পড়ত।
+  ingredientTags String[] @default([])
+
+  // Figma-র "Food Status" — খাবারটা কী ধরনের ("Veg", "Non-veg",
+  // "Spicy")। উপরের `isAvailable`-এর সাথে সম্পর্ক নেই; ওটা "এখন
+  // পাওয়া যাচ্ছে কিনা", এটা "কী জিনিস"।
+  //
+  // ⚠️ enum নয়, মুক্ত লেখা — Figma-তে ঘরটা একটা সাধারণ input
+  // ("Type here"), dropdown নয়, অর্থাৎ তালিকাটা আগে থেকে ঠিক করা নেই।
+  foodStatus String?
+
+  // Figma-র "Mead Time" — রান্না/প্রস্তুতির সময়, মিনিটে।
+  //
+  // ⚠️ নামটা mockup-এ ওভাবেই লেখা; মেনু-তালিকার "Nutrition & Time"
+  // কলামের সাথে মিলিয়ে ধরে নেওয়া হয়েছে এটা প্রস্তুতির সময়। অন্য কিছু
+  // বোঝানো হলে migration চালানোর **আগে** নামটা বদলে নেওয়া দরকার।
+  prepTimeMinutes Int?
+
   category   Category    @relation(fields: [categoryId], references: [id])
   categoryId String
   orderItems OrderItem[]
