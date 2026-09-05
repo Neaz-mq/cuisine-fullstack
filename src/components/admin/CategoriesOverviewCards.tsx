@@ -1,4 +1,6 @@
 import { LayoutDashboard, CircleCheck, Package, CircleAlert } from "lucide-react";
+import CategoryScopeFilter from "@/components/admin/CategoryScopeFilter";
+import { CATEGORY_SCOPE_HINTS, type CategoryScope } from "@/lib/category-scope";
 
 /**
  * src/components/admin/CategoriesOverviewCards.tsx
@@ -24,64 +26,76 @@ import { LayoutDashboard, CircleCheck, Package, CircleAlert } from "lucide-react
  * migration, CategoryForm-এ একটা toggle, আর API-তে মাঠটা নেওয়া।
  * বললেই করে দেব; আন্দাজে schema বদলাইনি।
  *
- * ── এখানে ছাঁকনি নেই, আর সেটাও ইচ্ছাকৃত ─────────────────────────────
+ * ── শিরোনামের পাশের ছাঁকনি ──────────────────────────────────────────
  *
- * ⚠️ Figma-তে শিরোনামের পাশে "Today ⌄" আঁকা। `Category`-তে কোনো
- * তারিখের মাঠই নেই (`createdAt` পর্যন্ত না), তাই সময় দিয়ে ছাঁকা
- * অসম্ভব। আর অবস্থা দিয়ে ছাঁকাটা এখানে চক্রাকার হতো: "Active"
- * বাছলে কার্ডগুলো দাঁড়াত Total 5 · Active 5 · Empty 0 — অর্থাৎ
- * ছাঁকনিটা নিজের উত্তরটাই আবার দেখাত।
+ * ⚠️ এখানে আগে কোনো ছাঁকনি ছিল না — Figma-র "Today ⌄" বসানো যায়নি
+ * (`Category`-তে তারিখ নেই) আর অবস্থার ছাঁকনি বসালে কার্ডগুলো
+ * নিজেদের উত্তরই আবার দেখাত। এখন যেটা বসেছে সেটা তৃতীয় জিনিস:
+ * শ্রেণি ছাঁকে না, **কোনটা "পদ" হিসেবে গোনা হবে** সেটা বদলায় —
+ * সবগুলো, নাকি কেবল এই মুহূর্তে পাওয়া যাচ্ছে এমনগুলো। পুরো যুক্তিটা
+ * `lib/category-scope.ts`-এ।
  *
- * সেই ছাঁকনিটা তাই নিচের তালিকার শিরোনামে বসেছে, যেখানে ওটা
- * সত্যিই কাজে লাগে।
+ * সংখ্যা গোনার কাজটা এখানে নয়, `page.tsx`-এ — ওখানে শ্রেণির পুরো
+ * তালিকাটা এমনিতেই একবার আনা হয় (তালিকা + ছাঁকনি + pagination সবই
+ * ওটার উপরে চলে), তাই একই ডেটা দ্বিতীয়বার query করার কোনো কারণ নেই।
  */
 export default function CategoriesOverviewCards({
   total,
   active,
   menuItems,
   empty,
+  scope,
 }: {
-  /** মোট শ্রেণি। */
+  /** মোট শ্রেণি — scope যাই হোক, এটা বদলায় না। */
   total: number;
   /** যেগুলোতে অন্তত একটা পদ **এখন পাওয়া যাচ্ছে**। */
   active: number;
-  /** সব শ্রেণি মিলিয়ে মোট পদ। */
+  /** scope অনুযায়ী: সব পদ, নাকি কেবল পাওয়া-যাচ্ছে এমন পদ। */
   menuItems: number;
-  /** যেগুলোতে একটাও পদ নেই। */
+  /** scope অনুযায়ী: একটাও পদ নেই, নাকি একটাও *পাওয়া যাচ্ছে* না। */
   empty: number;
+  scope: CategoryScope;
 }) {
+  const hints = CATEGORY_SCOPE_HINTS[scope];
+
   const CARDS = [
     {
       label: "Total Categories",
       value: total,
-      hint: "All Menu Categories",
+      hint: hints[0],
       icon: LayoutDashboard,
     },
     {
       label: "Active",
       value: active,
-      hint: "Currently Available",
+      hint: hints[1],
       icon: CircleCheck,
     },
     {
       label: "Menu Items",
       value: menuItems,
-      hint: "Across All Categories",
+      hint: hints[2],
       icon: Package,
     },
     {
       label: "Empty",
       value: empty,
-      hint: "No Items Added",
+      hint: hints[3],
       icon: CircleAlert,
     },
   ];
 
   return (
     <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
-      <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-        Overview
-      </h2>
+      {/* Frame 2147236238: row, space-between, উচ্চতা 40 — Suppliers/
+          Users/Staff-এর Overview-এর হুবহু একই মাথা। */}
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+          Overview
+        </h2>
+
+        <CategoryScopeFilter value={scope} />
+      </div>
 
       {/* Figma Frame 2147236226: row, gap 20, চারটে কার্ড সমান ভাগে। */}
       <div className="grid gap-5 min-[480px]:grid-cols-2 xl:grid-cols-4">

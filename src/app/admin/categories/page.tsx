@@ -6,7 +6,13 @@ import {
   isCategoryFilter,
   type CategoryFilter,
 } from "@/lib/category-filter";
+import {
+  DEFAULT_CATEGORY_SCOPE,
+  isCategoryScope,
+  type CategoryScope,
+} from "@/lib/category-scope";
 import CategoriesOverviewCards from "@/components/admin/CategoriesOverviewCards";
+import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import Pagination from "@/app/admin/orders/Pagination";
 import CategoriesToolbar from "./CategoriesToolbar";
 import CategoryListFilter from "./CategoryListFilter";
@@ -47,6 +53,14 @@ export default async function AdminCategoriesPage({
   const filter: CategoryFilter = isCategoryFilter(params.filter)
     ? params.filter
     : DEFAULT_CATEGORY_FILTER;
+  /**
+   * Overview কার্ডের ছাঁকনি — তালিকার `filter`-এর সাথে গুলিয়ে ফেলার
+   * নয়। এটা শ্রেণি ছাঁকে না, শুধু "কোনটা পদ হিসেবে গোনা হবে" বদলায়।
+   * বিস্তারিত `lib/category-scope.ts`-এ।
+   */
+  const scope: CategoryScope = isCategoryScope(params.scope)
+    ? params.scope
+    : DEFAULT_CATEGORY_SCOPE;
   const now = new Date();
 
   /**
@@ -68,7 +82,20 @@ export default async function AdminCategoriesPage({
       name: true,
       menuItems: {
         orderBy: { title: "asc" },
-        select: { id: true, title: true, isAvailable: true },
+        /**
+         * ⚠️ `description` আর `imageUrl` এখানে যোগ হলো — খোলা তাকের
+         * নকশায় (Figma Frame 2147236295) প্রতিটা পদ একটা কার্ড:
+         * ৭৮×৭৮ ছবি, নাম, আর দুই লাইনের বিবরণ। CategoryRow client
+         * component, তাই ওখান থেকে আলাদা করে আনার উপায় নেই — এই
+         * একটাই query, শুধু দুটো কলাম বেশি।
+         */
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          isAvailable: true,
+        },
       },
     },
   });
@@ -77,8 +104,29 @@ export default async function AdminCategoriesPage({
   // খালি" সত্যটা search box-এ কী লেখা তার উপর নির্ভর করা উচিত নয়।
   const total = rows.length;
   const active = rows.filter((row) => row.menuItems.some((item) => item.isAvailable)).length;
-  const empty = rows.filter((row) => row.menuItems.length === 0).length;
-  const menuItems = rows.reduce((sum, row) => sum + row.menuItems.length, 0);
+
+  /**
+   * ⚠️ শেষ দুটো সংখ্যা scope-এর উপর নির্ভর করে, প্রথম দুটো করে না।
+   *
+   * "Total Categories" স্বভাবতই বদলায় না। "Active"-ও নয় — ওটার
+   * সংজ্ঞাই ইতিমধ্যে "অন্তত একটা পদ এখন পাওয়া যাচ্ছে", অর্থাৎ ওটা
+   * সবসময়ই available-দৃষ্টিতে গোনা।
+   *
+   * বদলায় "Menu Items" আর "Empty"। available scope-এ Empty মানে
+   * "খদ্দেরের কাছে কার্যত খালি" — পদ আছে কিন্তু সবগুলো বন্ধ, এমন
+   * শ্রেণিও ওখানে ধরা পড়ে। তখন Active + Empty = Total, আর সেটাই
+   * উদ্দেশ্য: মেনুর কতটা এই মুহূর্তে সত্যিই খোলা।
+   */
+  const availableOnly = scope === "available";
+  const menuItems = rows.reduce(
+    (sum, row) =>
+      sum +
+      (availableOnly ? row.menuItems.filter((item) => item.isAvailable).length : row.menuItems.length),
+    0
+  );
+  const empty = rows.filter((row) =>
+    availableOnly ? !row.menuItems.some((item) => item.isAvailable) : row.menuItems.length === 0
+  ).length;
 
   const visible = rows.filter((row) => {
     if (filter === "active" && !row.menuItems.some((item) => item.isAvailable)) return false;
@@ -127,16 +175,20 @@ export default async function AdminCategoriesPage({
           </span>
 
           {/**
-           * ⚠️ Figma-তে এখানে "Export Report" আঁকা, কিন্তু বোতামটা
-           * বসানো হয়নি — categories-এর কোনো export endpoint নেই।
-           * অন্য পাতাগুলোর আছে (`/api/admin/staff/export`,
-           * `/inventory/export`, `/suppliers/export`, `/users/export`,
-           * `/insights/export`), এটার নেই। যে বোতাম চাপলে 404 আসে,
-           * সেটা না থাকার চেয়েও খারাপ।
+           * ⚠️ এই বোতামটা আগে ছিল না, আর কারণটা ছিল সৎ: categories-এর
+           * কোনো export endpoint ছিল না, আর যে বোতাম চাপলে 404 আসে
+           * সেটা না থাকার চেয়েও খারাপ। এখন route-টা আছে
+           * (`/api/admin/categories/export`), তাই বোতামটাও এলো।
            *
-           * route-টা বানানো ছোট কাজ (kitchen-এরটা এই সেশনেই বানানো
-           * হয়েছে) — বললেই বোতামসহ যোগ করে দেব।
+           * forwardParams-এ `page` নেই, ইচ্ছাকৃতভাবে — export মানে পুরো
+           * ছাঁকা তালিকা, পর্দায় দেখা পাঁচটা সারি নয়। `scope`-ও নেই:
+           * ওটা কেবল Overview-র সংখ্যা বদলায়, তালিকার একটা সারিও নয়।
            */}
+          <ExportReportButton
+            endpoint="/api/admin/categories/export"
+            forwardParams={["q", "filter"]}
+            fallbackFilename="cuisine-categories.csv"
+          />
         </div>
       </div>
 
@@ -147,6 +199,7 @@ export default async function AdminCategoriesPage({
         active={active}
         menuItems={menuItems}
         empty={empty}
+        scope={scope}
       />
 
       {/* --- Categories — Frame 2147236295: column, padding 30, gap 24,

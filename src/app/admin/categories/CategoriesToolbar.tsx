@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search } from "lucide-react";
+import CategoryFormModal from "./CategoryFormModal";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -25,6 +25,7 @@ export default function CategoriesToolbar() {
 
   const urlQuery = searchParams.get("q") ?? "";
   const [query, setQuery] = useState(urlQuery);
+  const [adding, setAdding] = useState(false);
 
   /**
    * URL বদলালে (back বোতাম, বা ছাঁকনি মোছা) ঘরের লেখাও মিলিয়ে নেওয়া।
@@ -84,17 +85,23 @@ export default function CategoriesToolbar() {
        * ঠিক 90deg আর দ্বিতীয় রঙ 100%-এ, অর্থাৎ ডান কিনারাতেই পুরো
        * গোলাপি। Figma-তে গোলাপিটা 145.78%-এ — বোতামের **বাইরে**।
        *
-       * ⚠️ `<button>` নয়, `<Link>` — শ্রেণি যোগ করার form একটা আলাদা
-       * পাতায় (`/admin/categories/new`)। ওটাকে modal-এ তোলা যেত,
-       * কিন্তু সেটা এই কাজের বাইরে; লিঙ্ক রাখায় পুরনো পথটাও অক্ষত।
+       * ⚠️ আগে এটা `<Link href="/admin/categories/new">` ছিল, আর
+       * ওখানকার মন্তব্যে লেখা ছিল "modal-এ তোলা যেত, কিন্তু সেটা এই
+       * কাজের বাইরে"। Figma Frame 2147236195 হাতে আসায় সেটাই এখন
+       * করা হলো — বোতামটা আর পাতা বদলায় না, একই জায়গায় modal খোলে।
+       * নতুন শ্রেণি যোগ করে পিছনের তালিকাটা ছেড়ে যেতে হয় না, আর
+       * ভুল করে খুললে Escape/Cancel-এ কিছুই হারায় না।
        */}
-      <Link
-        href="/admin/categories/new"
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
         className={`flex h-[50px] shrink-0 items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[16px] font-semibold leading-none text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
       >
         <Plus className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
         Add Categories
-      </Link>
+      </button>
+
+      <CategoryFormModal open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }
