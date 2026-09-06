@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed } from "lucide-react";
 import { toast } from "react-toastify";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import FilterMenu from "@/components/admin/FilterMenu";
+import ListPill from "@/components/admin/ListPill";
 import LocalPagination from "@/components/admin/LocalPagination";
 import {
   compareMenuItems,
@@ -27,22 +27,49 @@ const INFO_PILL =
 /** Figma: কলামের label — Sora 400 14px, Black/70। */
 const COLUMN_LABEL = "font-sora text-[13px] font-normal leading-none text-black/70 md:text-[14px]";
 
-/** পাঁচটার বেশি হলে pagination — Figma-র "Showing 1 to 5 of …"। */
-const PAGE_SIZE = 5;
+/**
+ * প্রতিটা শ্রেণি-কার্ডে কত সারি।
+ *
+ * ⚠️ Figma-র frame-টা **তিনটে** সারি ধরে আঁকা, অথচ নিচের লেখাটা
+ * "Showing 1-5 of 20 Transactions" — দুটো সংখ্যা একমত নয়। ওই লেখাটা
+ * designer-এর boilerplate (Suppliers কার্ডেও একই লেখা, সেখানে আবার
+ * নয়টা সারি আঁকা), তাই আঁকা সারির সংখ্যাটাই মানা হলো: তিন।
+ *
+ * ⚠️ Suppliers-এর "Recent Deliveries"-এ ঠিক এই দোটানায় উল্টো
+ * সিদ্ধান্ত নেওয়া আছে (`DELIVERIES_PER_PAGE = 5`), আর সেটা ইচ্ছাকৃত —
+ * ওখানে সারি ছোট (৮০px) আর একটাই তালিকা, তাই বেশি সারি রাখলে click
+ * বাঁচে। এখানে সারি ১১০px আর একই পর্দায় ১৪টা শ্রেণি-কার্ড; পাঁচটা
+ * করে রাখলে পাতাটা অসম্ভব লম্বা হয়ে যেত।
+ */
+const PAGE_SIZE = 3;
 
 /**
- * "499 Kcal · 20 min" — যেটুকু বসানো আছে কেবল সেটুকুই, আর কিছুই না
- * থাকলে `null`।
+ * খোলা তালিকার লাইনগুলো — যেটুকু বসানো আছে কেবল সেটুকুই।
  *
  * ⚠️ `?? 0` করে "0 Kcal" দেখানো হয় না। শূন্য একটা দাবি ("এই খাবারে
  * কোনো ক্যালরি নেই"), আর সেটা প্রায় কখনোই সত্যি নয় — সত্যিটা হলো
- * কেউ এখনো সংখ্যাটা বসায়নি।
+ * কেউ এখনো সংখ্যাটা বসায়নি। তাই null মাঠগুলো তালিকা থেকেই বাদ।
  */
-function nutritionLabel(item: MenuSectionItem): string | null {
-  const parts: string[] = [];
-  if (item.calories !== null) parts.push(`${item.calories} Kcal`);
-  if (item.prepTimeMinutes !== null) parts.push(`${item.prepTimeMinutes} min`);
-  return parts.length > 0 ? parts.join(" · ") : null;
+function nutritionItems(item: MenuSectionItem): string[] {
+  const lines: string[] = [];
+  if (item.calories !== null) lines.push(`Calories: ${item.calories} Kcal`);
+  if (item.fatGrams !== null) lines.push(`Fat: ${item.fatGrams} g`);
+  if (item.proteinGrams !== null) lines.push(`Protein: ${item.proteinGrams} g`);
+  if (item.carbGrams !== null) lines.push(`Carbs: ${item.carbGrams} g`);
+  if (item.prepTimeMinutes !== null) lines.push(`Prep time: ${item.prepTimeMinutes} min`);
+  return lines;
+}
+
+/**
+ * গুটানো pill-এ কী লেখা থাকবে।
+ *
+ * ⚠️ Figma-তে ওখানে "499 Kcal" — ক্যালরিটাই সবচেয়ে বেশি খোঁজা
+ * সংখ্যা, তাই সেটাই সামনে। না থাকলে `undefined`, আর তখন ListPill
+ * তালিকার প্রথম লাইনটাই দেখায় ("Fat: 12 g +2") — সেটাও ঠিক, কারণ
+ * ফাঁকা pill-এর চেয়ে যেকোনো সত্যি সংখ্যা ভালো।
+ */
+function nutritionLabel(item: MenuSectionItem): string | undefined {
+  return item.calories !== null ? `${item.calories} Kcal` : undefined;
 }
 
 export type MenuSectionItem = {
@@ -104,9 +131,14 @@ export type MenuSectionItem = {
  * করে (Insights পাতা এটাই ব্যবহার করে)। দামের ঠিক পাশে বসায় প্রশ্নটা
  * এক নজরেই মেলে: "এটা বেচে কত থাকছে"।
  *
- * "Ingredients" কলামটা Figma-রই, আর ওটার ডেটাও আসল — pill-এ উপকরণের
- * সংখ্যা, chevron চাপলে নামগুলো নিচে খোলে (Figma-র chevron-টা ঠিক
- * এটাই ইঙ্গিত করে)।
+ * ⚠️ দুটো মাঝের ঘরই `ListPill` — Suppliers তালিকার "Products" ঘরের
+ * হুবহু একই component (`components/admin/ListPill.tsx`)। Figma-তে
+ * তিনটে জায়গাতেই একই pill: গুটানো অবস্থায় একটা মান আর একটা ১৬px
+ * chevron, চাপলে নিচে একটা সাদা কার্ডে পুরো তালিকা।
+ *
+ * ⚠️ আগে এখানে নিজের হাতে লেখা একটা toggle ছিল যেটা সারির **ভেতরে**
+ * chip-গুলো খুলত — তাতে সারিটা লম্বা হয়ে যেত আর নিচের পদগুলো লাফ
+ * দিয়ে সরত, যেটা Figma-তে নেই। ভাসমান dropdown সারির উচ্চতা ছোঁয় না।
  *
  * "Status" pill-টা **চাপা যায়** — Available ↔ Unavailable। পুরনো
  * পাতার `AvailabilityToggle` এই কাজটাই করত; নকশায় ওটার আলাদা কোনো
@@ -130,7 +162,6 @@ export default function MenuCategorySection({
   const router = useRouter();
   const [sort, setSort] = useState<MenuSort>(DEFAULT_MENU_SORT);
   const [page, setPage] = useState(1);
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<MenuSectionItem | null>(null);
   const [confirming, setConfirming] = useState<MenuSectionItem | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -231,10 +262,10 @@ export default function MenuCategorySection({
                */
               <div
                 key={item.id}
-                className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 lg:flex-row lg:items-center lg:justify-between lg:gap-[27px]"
+                className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 lg:flex-row lg:items-center lg:gap-6 2xl:gap-[27px]"
               >
                 {/* Frame 2147236287: row, gap 16। */}
-                <div className="flex min-w-0 items-center gap-3 md:gap-4 lg:w-[221px] lg:shrink-0">
+                <div className="flex min-w-0 items-center gap-3 md:gap-4 lg:flex-[2_1_280px]">
                   {/* Frame 2147225236: 78×78, radius 12। */}
                   <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white md:h-[78px] md:w-[78px]">
                     {item.imageUrl ? (
@@ -267,7 +298,15 @@ export default function MenuCategorySection({
 
                   {/* Frame 2147236286: column, gap 8। */}
                   <div className="flex min-w-0 flex-col gap-2">
-                    <h3 className="min-w-0 font-frank-ruhl text-[17px] font-medium leading-[1.25] text-black max-lg:line-clamp-2 lg:truncate lg:text-[20px] lg:leading-[1.2]">
+                    {/**
+                     * ⚠️ `truncate` নয়, দুই লাইন — এমনকি ১০২৪+ এও।
+                     * Figma-তে নামের ঘরটা ১৩৩px, তাই ওখানে এক লাইনেই
+                     * শেষ; বাস্তবে "Crispy Fried Chicken" বা "Grilled
+                     * Chicken Salad" ওই মাপে "Crispy Fried Chi…" হয়ে
+                     * যেত। নামটাই সারিটার মূল কথা, আর দুই লাইনে ধরলে
+                     * সারির উচ্চতাও বাড়ে না (২৪+৮+৪০ = ৭২, ছবিটাই ৭৮)।
+                     */}
+                    <h3 className="line-clamp-2 min-w-0 font-frank-ruhl text-[17px] font-medium leading-[1.25] text-black lg:text-[20px] lg:leading-[1.2]">
                       {item.title}
                     </h3>
                     {/* নকশায় ঘরটা 40px উঁচু = ঠিক দুই লাইন (12px × 170%)। */}
@@ -280,11 +319,24 @@ export default function MenuCategorySection({
                 {/**
                  * Frame 2147236288: row, gap 18, চারটে কলাম।
                  *
-                 * ⚠️ ৬৪০-এর নিচে দুই কলামের grid, তার উপরে চারটে পাশাপাশি।
+                 * ⚠️ ১০২৪+ এ কলামগুলো `minmax(0,Nfr)` অনুপাতে —
+                 * Figma-র প্রস্থ ৭১ · ১১৬ · ১১৭ · ৮০, সেই অনুপাতই এখানে
+                 * সংখ্যা হয়ে বসেছে। Suppliers, Staff আর Users — তিনটে
+                 * তালিকাতেই সারির মাঝের অংশটা ঠিক এই ছাঁদে লেখা
+                 * (`flex-1` + অনুপাতে grid), তাই এটাও তাই।
+                 *
+                 * ⚠️ কিন্তু `flex-1` নয়, `flex-[1_1_400px]` — আর নামের
+                 * block-টা `flex-[2_1_280px]`, অর্থাৎ অবশিষ্ট জায়গার
+                 * দুই ভাগ নাম পায়, এক ভাগ এই ঘরগুলো। সমান ভাগে দিলে
+                 * চওড়া পর্দায় ছোট ছোট pill গুলো বিশাল কলামের মধ্যে
+                 * ভেসে থাকত, অথচ নামটা তখনো কাটা পড়ত — জায়গাটা
+                 * যেখানে দরকার সেখানেই যাওয়া উচিত।
+                 *
+                 * ⚠️ ৬৪০-এর নিচে দুই কলামের grid, তার উপরে চারটে সমান।
                  * ৩২০px-এ চারটে কলাম মানে প্রতিটার ভাগে ~৪০px — pill-এর
                  * ভেতরের লেখাই আঁটত না।
                  */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 min-[640px]:grid-cols-4 lg:w-[438px] lg:shrink-0 lg:gap-x-[18px]">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 min-[640px]:grid-cols-4 lg:min-w-0 lg:flex-[1_1_400px] lg:grid-cols-[minmax(0,71fr)_minmax(0,116fr)_minmax(0,117fr)_minmax(0,80fr)] lg:items-center lg:gap-[18px]">
                   <div className="flex min-w-0 flex-col gap-3">
                     <span className={COLUMN_LABEL}>Reg Price</span>
                     <span className="truncate font-frank-ruhl text-[16px] font-medium leading-none text-black">
@@ -293,71 +345,49 @@ export default function MenuCategorySection({
                   </div>
 
                   {/**
-                   * Figma-র "Nutrition & Time" — pill-এ "499 Kcal · 20 min"।
+                   * Figma-র "Nutrition & Time" — গুটানো pill-এ "499 Kcal ⌄",
+                   * chevron চাপলে fat/protein/carb/সময় সহ পুরো তালিকা।
                    *
                    * ⚠️ আগের দফায় এই ঘরে "Food Cost" বসানো হয়েছিল, কারণ
                    * তখন `MenuItem`-এ ক্যালরি বা সময়ের কোনো মাঠই ছিল না।
                    * এখন Add Item modal-এর সাথে ওগুলো যোগ হয়েছে, তাই
                    * নকশার আসল কলামটাই ফিরিয়ে আনা গেল। Food cost এখনো
-                   * হিসাব হয় — Insights পাতায়, যেখানে margin-এর পাশে
-                   * ওটার আসল জায়গা।
-                   *
-                   * দুটোর একটাও বসানো না থাকলে "Not set" — "0 Kcal" নয়,
-                   * কারণ শূন্য একটা উত্তর, আর এখানে উত্তরটা জানা নেই।
+                   * হিসাব হয় — Insights পাতায় আর CSV export-এ, যেখানে
+                   * margin-এর পাশে ওটার আসল জায়গা।
                    */}
                   <div className="flex min-w-0 flex-col gap-3">
                     <span className={COLUMN_LABEL}>Nutrition &amp; Time</span>
-                    <span
-                      className={`${INFO_PILL} bg-white ${
-                        nutritionLabel(item) ? "text-black" : "text-black/40"
-                      }`}
-                      title={
-                        nutritionLabel(item)
-                          ? "Calories and preparation time"
-                          : "No nutrition or time set for this item yet"
-                      }
-                    >
-                      <span className="truncate">{nutritionLabel(item) ?? "Not set"}</span>
-                    </span>
+                    <ListPill
+                      items={nutritionItems(item)}
+                      label={nutritionLabel(item)}
+                      emptyLabel="Not set"
+                      emptyVariant="pill"
+                      ariaLabel={`Nutrition and time for ${item.title}`}
+                    />
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-3">
                     <span className={COLUMN_LABEL}>Ingredients</span>
                     {/**
-                     * ⚠️ এগুলো `ingredientTags` — Add Item modal-এ হাতে
+                     * ⚠️ এগুলো `ingredientTags` — Add/Edit modal-এ হাতে
                      * লেখা chip, খদ্দেরকে দেখানোর মতো তালিকা। পদটার
-                     * **recipe** (কোন InventoryItem কতটা লাগে) আলাদা
-                     * জিনিস, আর সেটা এখনো /admin/menu/<id>/edit-এ।
+                     * **recipe** (কোন InventoryItem কতটা লাগে, যা দিয়ে
+                     * stock কাটা আর food cost হয়) সম্পূর্ণ আলাদা জিনিস।
                      *
-                     * ⚠️ তালিকা খালি হলেও pill-টা বোতামই থাকে —
-                     * নিষ্ক্রিয় করে দিলে যে পদগুলোয় এখনো কিছু বসানো
-                     * হয়নি ঠিক সেগুলোতেই recipe-র লিঙ্কটা পৌঁছত না।
+                     * ⚠️ এখানে আগে dropdown-এর নিচে একটা "Edit recipe"
+                     * লিঙ্ক ছিল — সরানো হয়েছে, কারণ সারিতে Edit বোতাম
+                     * থাকতে ওটা দ্বিতীয় একটা পথ মনে হচ্ছিল। কিন্তু
+                     * recipe modal-এ নেই, তাই লিঙ্কটা এখন modal-এর
+                     * Ingredients ঘরের ঠিক নিচে (MenuItemFormModal.tsx)।
+                     * পুরোপুরি ফেলে দিলে /admin/menu/<id>/edit পাতায়
+                     * পৌঁছনোর আর কোনো উপায় থাকত না।
                      */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpanded((prev) => (prev === item.id ? null : item.id))
-                      }
-                      aria-expanded={expanded === item.id}
-                      className={`${INFO_PILL} bg-white transition-colors hover:bg-black/[0.04] ${
-                        item.ingredientTags.length === 0 ? "text-black/40" : "text-black"
-                      } ${FOCUS_RING}`}
-                    >
-                      <span className="truncate">
-                        {item.ingredientTags.length === 0
-                          ? "None"
-                          : `${item.ingredientTags.length} ${
-                              item.ingredientTags.length === 1 ? "item" : "items"
-                            }`}
-                      </span>
-                      <ChevronDown
-                        className={`h-4 w-4 shrink-0 transition-transform ${
-                          expanded === item.id ? "rotate-180" : ""
-                        }`}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
-                    </button>
+                    <ListPill
+                      items={item.ingredientTags}
+                      emptyLabel="None"
+                      emptyVariant="pill"
+                      ariaLabel={`Ingredients for ${item.title}`}
+                    />
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-3">
@@ -386,38 +416,6 @@ export default function MenuCategorySection({
                       </span>
                     </button>
                   </div>
-
-                  {/**
-                   * উপকরণের তালিকা — pill-এর chevron চাপলে খোলে।
-                   * grid-এর পুরো প্রস্থ জুড়ে, তাই লম্বা নামও আঁটে।
-                   *
-                   * ⚠️ শেষের "Edit recipe" লিঙ্কটা গুরুত্বপূর্ণ, আর
-                   * এটা উপরের chip-গুলোর সাথে **এক জিনিস নয়**। recipe
-                   * (উপকরণের পরিমাণ, যা দিয়ে stock কাটা আর food cost
-                   * হয়) modal-এ নেই — দুটো আলাদা save একই কার্ডে বসত,
-                   * MenuItemFormModal-এ ব্যাখ্যা — তাই ওটা এখনো
-                   * /admin/menu/<id>/edit পাতাতেই। এই লিঙ্কটা না দিলে
-                   * নকশা বদলের পর ওই পাতায় পৌঁছনোর আর কোনো উপায়
-                   * থাকত না, আর একটা কাজ নীরবে হারিয়ে যেত।
-                   */}
-                  {expanded === item.id && (
-                    <div className="col-span-2 flex flex-wrap items-center gap-2 min-[640px]:col-span-4">
-                      {item.ingredientTags.map((name) => (
-                        <span
-                          key={name}
-                          className="rounded-full bg-white px-3 py-1.5 font-sora text-[11px] leading-none text-black/70"
-                        >
-                          {name}
-                        </span>
-                      ))}
-                      <Link
-                        href={`/admin/menu/${item.id}/edit`}
-                        className={`rounded-full px-3 py-1.5 font-sora text-[11px] font-medium leading-none text-[#FF7100] underline-offset-2 hover:underline ${FOCUS_RING}`}
-                      >
-                        Edit recipe
-                      </Link>
-                    </div>
-                  )}
                 </div>
 
                 {/**

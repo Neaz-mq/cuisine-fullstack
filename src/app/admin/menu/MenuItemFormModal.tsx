@@ -494,6 +494,17 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
         </div>
 
         {/**
+         * ⚠️ Ingredients ঘরের নিচে আগে একটা ছোট লিঙ্ক ছিল —
+         * "Edit recipe", যেটা /admin/menu/<id>/edit-এ নিয়ে যেত।
+         * সরানো হয়েছে, কারণ নকশায় ওটা নেই।
+         *
+         * ফলে ঐ পাতাটায় এখন কোনো বোতাম বা লিঙ্ক দিয়ে **পৌঁছনো যায় না**,
+         * শুধু URL হাতে লিখে। route-টা কাজ করে, আর recipe-ই stock কাটা
+         * ও Insights-এর food cost-এর ভিত্তি — তাই ওই কাজটা দরকার হলে
+         * এখানে বা তালিকার সারিতে একটা পথ ফিরিয়ে আনতে হবে।
+         */}
+
+        {/**
          * Frame 2147236303: Food Status │ Prep Time, দুটোই 329.5px।
          *
          * ⚠️ Figma-তে ডানের ঘরটার label "Mead Time" — ইংরেজিতে ওরকম
