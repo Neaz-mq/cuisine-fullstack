@@ -301,12 +301,11 @@ export default async function MenuPage() {
     <>
       <MenuHero />
       <TodaysOffers offers={offers} />
-      <MenuBrowser
-        categories={categories}
-        kitchenOpenHour={settings.kitchenOpenHour}
-        kitchenCloseHour={settings.kitchenCloseHour}
-        timezone={settings.timezone}
-      />
+      {/* ⚠️ রান্নাঘরের সময়ের prop গুলো আর নেই — "Order Now" এখন cart-এ
+          যোগ করে না, পদটার নিজের পাতায় নিয়ে যায়। যোগ করার কাজটা
+          ওখানে (ProductDetail.tsx), আর সেখানেই ওই যাচাইটার কথা
+          লেখা আছে। */}
+      <MenuBrowser categories={categories} />
       <SignatureSection />
       <MenuComboCta />
     </>

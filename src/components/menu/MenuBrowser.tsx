@@ -1,17 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { Star, UtensilsCrossed } from "lucide-react";
-import { toast } from "react-toastify";
-import { useCart } from "@/context/CartContext";
+import { useState } from "react";
+import FoodCard, { type MenuCardItem } from "./FoodCard";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
-
-/** Figma-র ছোট তথ্য-chip: padding 4px 8px, radius 30, BG #F9F6F3, Sora 12। */
-const FACT_CHIP =
-  "flex shrink-0 items-center rounded-[30px] bg-[#F9F6F3] px-2 py-1 font-sora text-[12px] font-normal leading-[1.6] text-black";
 
 /** "All" দেখা অবস্থায় প্রতিটা শ্রেণির কতগুলো পদ দেখা যাবে (Figma: তিনটে)। */
 const PREVIEW_COUNT = 3;
@@ -77,27 +70,12 @@ function iconFor(name: string): string {
   return FALLBACK_ICON;
 }
 
-export type MenuBrowserItem = {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  priceLabel: string;
-  imageUrl: string | null;
-  isAvailable: boolean;
-  calories: number | null;
-  fatGrams: number | null;
-  proteinGrams: number | null;
-  prepTimeMinutes: number | null;
-  /** অনুমোদিত review-এর গড়, না থাকলে null। */
-  rating: number | null;
-  /**
-   * ছবির বাঁ কোণে যে ছাড়ের ব্যাজ বসবে ("20%", "$5 Off"), না থাকলে
-   * null। কোথা থেকে আসে তা page.tsx-এ — সংক্ষেপে: এই পদটার বা এর
-   * শ্রেণির জন্য নির্দিষ্ট করা চালু কুপন।
-   */
-  discountLabel: string | null;
-};
+/**
+ * ⚠️ কার্ডের আকারটা এখন `FoodCard.tsx`-এ, কারণ detail পাতাও ওটাই
+ * ব্যবহার করে। এখানে কেবল পুরনো নামটা ধরে রাখা, যাতে page.tsx-এর
+ * import বদলাতে না হয়।
+ */
+export type MenuBrowserItem = MenuCardItem;
 
 export type MenuBrowserCategory = {
   id: string;
@@ -119,16 +97,9 @@ export type MenuBrowserCategory = {
  *                      আর "View All" (Sora 400 20px, Black/70)
  *     Frame …270       row, gap 16 — তিনটে Food Card
  *
- *   Food Card          column, padding 12/12/20, gap 16, radius 30,
- *                      সাদা, 416×455
- *     ছবির ঘর          392×203, BG #F9F6F3, radius 24; উপরে সাদা
- *                      "Food Available" pill
- *     নাম + রেটিং      Frank Ruhl 500 24px · তারা 16px + সংখ্যা
- *     তথ্য-chip        30 min · 615 kcal · 65 Fats · 45 Protein
- *     বিবরণ            Sora 400 14px/170%, Black/70, দুই লাইন
- *     দাম + বোতাম      Frank Ruhl 500 24px · gradient "Order Now"
+ *   Food Card          `FoodCard.tsx` — detail পাতাও ওটাই ব্যবহার করে
  *
- * ── নকশার সাথে তিনটে জায়গায় পার্থক্য, আর প্রতিটার কারণ ─────────────
+ * ── নকশার সাথে একটা পার্থক্য ────────────────────────────────────────
  *
  * ⚠️ chip-এর emoji গুলো **নাম দেখে অনুমান করা** (`iconFor`), DB থেকে
  * আসে না — `Category` model-এ icon-এর কোনো মাঠই নেই। অনুমানটা শব্দাংশ
@@ -136,82 +107,18 @@ export type MenuBrowserCategory = {
  * নিরপেক্ষ 🍽️ বসে। সঠিক সমাধান হলো schema-য় `icon String?` + Add
  * Category modal-এ একটা ঘর; বিস্তারিত `CATEGORY_ICONS`-এর মন্তব্যে।
  *
- * ⚠️ ছাড়ের ব্যাজটা ("20%") আছে, কিন্তু কাটা পুরনো দামটা নেই।
- * `MenuItem`-এ "আগের দাম" বলে কোনো মাঠ নেই, তাই ওটা দেখানোর উপায়ও
- * নেই। ব্যাজটা আসে চালু কুপন থেকে — কেবল সেই কুপনগুলো থেকে যেগুলো
- * **এই পদটার বা এর শ্রেণির জন্য নির্দিষ্ট**। সাইট-জোড়া কুপন থাকলে
- * প্রতিটা কার্ডেই ব্যাজ বসত, অথচ সেটা "Today's Offers"-এ এমনিতেই
- * দেখা যাচ্ছে — তখন ব্যাজটা তথ্য নয়, গোলমাল।
- *
- * ⚠️ যা লেখা থাকে তা checkout-এ সত্যিই পাওয়া যায় (কোডটা বসালে)।
- * বানানো কোনো "২০%" নয় — নাহলে সেটা নকশা মানা নয়, প্রতারণা।
- *
- * ⚠️ তথ্য-chip গুলো যেগুলোর মান আছে কেবল সেগুলোই দেখায়। Admin-এর
- * "Add Item" modal-এ ওগুলো ঐচ্ছিক, তাই পুরনো পদে প্রায়ই ফাঁকা — আর
- * "0 kcal" লেখা মানে "এই খাবারে ক্যালরি নেই" দাবি করা।
+ * ⚠️ এখানে আর cart-এ কিছু যোগ হয় না — "Order Now" পদটার নিজের পাতায়
+ * নিয়ে যায়, আর যোগ করার কাজটা ওখানে। তাই রান্নাঘরের সময় দেখার
+ * যুক্তিটাও এখান থেকে সরেছে (আগে ওটাই "Kitchen is closed" toast
+ * দেখাচ্ছিল)।
  */
 export default function MenuBrowser({
   categories,
-  kitchenOpenHour,
-  kitchenCloseHour,
-  timezone,
 }: {
   categories: MenuBrowserCategory[];
-  kitchenOpenHour: number;
-  kitchenCloseHour: number;
-  timezone: string;
 }) {
-  const { addToCart } = useCart();
   // null = "All"। শ্রেণির id, নাম নয় — দুটো শ্রেণির নাম এক হতে পারে।
   const [selected, setSelected] = useState<string | null>(null);
-  const [isKitchenOpen, setIsKitchenOpen] = useState(true);
-
-  /**
-   * রান্নাঘর খোলা কিনা — **রেস্তোরাঁর** ঘড়ি ধরে, browser-এর নয়।
-   * Signature.tsx-এ একই যুক্তি, তবে সেখানে সময়টা হাতে লেখা ধ্রুবক;
-   * এখানে সেটা RestaurantSettings থেকে prop হয়ে আসে, তাই admin-এ
-   * সময় বদলালে এই পাতাও সাথে সাথে মেনে চলে।
-   */
-  useEffect(() => {
-    const check = () => {
-      const hour = Number.parseInt(
-        new Intl.DateTimeFormat("en-US", {
-          timeZone: timezone,
-          hour: "numeric",
-          hourCycle: "h23",
-        }).format(new Date()),
-        10
-      );
-      setIsKitchenOpen(hour >= kitchenOpenHour && hour < kitchenCloseHour);
-    };
-
-    check();
-    const interval = setInterval(check, 60_000);
-    return () => clearInterval(interval);
-  }, [kitchenOpenHour, kitchenCloseHour, timezone]);
-
-  const handleOrder = (item: MenuBrowserItem) => {
-    if (!isKitchenOpen) {
-      toast.error(
-        `Kitchen is closed right now. We're open ${kitchenOpenHour}:00–${kitchenCloseHour}:00.`
-      );
-      return;
-    }
-    if (!item.isAvailable) {
-      toast.error(`${item.title} isn't available right now.`);
-      return;
-    }
-
-    addToCart({
-      id: item.id,
-      title: item.title,
-      price: item.price,
-      quantity: 1,
-      imageUrl: item.imageUrl ?? undefined,
-      description: item.description,
-    });
-    toast.success(`${item.title} added to cart!`);
-  };
 
   const visible = selected
     ? categories.filter((category) => category.id === selected)
@@ -326,11 +233,7 @@ export default function MenuBrowser({
                   /* Frame 2147235270: row, gap 16 — তিনটে কার্ড। */
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {items.map((item) => (
-                      <FoodCard
-                        key={item.id}
-                        item={item}
-                        onOrder={() => handleOrder(item)}
-                      />
+                      <FoodCard key={item.id} item={item} />
                     ))}
                   </div>
                 )}
@@ -340,150 +243,5 @@ export default function MenuBrowser({
         )}
       </div>
     </section>
-  );
-}
-
-/** Figma "Food Card 2" — column, padding 12/12/20, gap 16, radius 30। */
-function FoodCard({ item, onOrder }: { item: MenuBrowserItem; onOrder: () => void }) {
-  const facts = [
-    item.prepTimeMinutes !== null ? `${item.prepTimeMinutes} min` : null,
-    item.calories !== null ? `${item.calories} kcal` : null,
-    item.fatGrams !== null ? `${item.fatGrams} Fats` : null,
-    item.proteinGrams !== null ? `${item.proteinGrams} Protein` : null,
-  ].filter((fact): fact is string => fact !== null);
-
-  return (
-    <article className="flex flex-col gap-4 rounded-[30px] bg-white p-3 pb-5">
-      {/* Frame 2147225236: ছবির ঘর, 392×203, radius 24, BG #F9F6F3। */}
-      <div className="relative h-[203px] w-full overflow-hidden rounded-[24px] bg-[#F9F6F3]">
-        {item.imageUrl ? (
-          /**
-           * ⚠️ `unoptimized` — ছবি Supabase Storage বা Cloudinary
-           * যেকোনোটা থেকে আসতে পারে, আর পুরনো সারিতে অন্য host-ও থেকে
-           * যেতে পারে; optimizer-এ গেলে remotePatterns-এ না থাকা host
-           * পুরো পাতাটাই 400 দিয়ে ভাঙে।
-           */
-          <Image
-            src={item.imageUrl}
-            alt=""
-            fill
-            sizes="(min-width: 1280px) 392px, (min-width: 768px) 45vw, 90vw"
-            unoptimized
-            className="object-cover"
-          />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center">
-            <UtensilsCrossed
-              className="h-10 w-10 text-black/15"
-              strokeWidth={1.2}
-              aria-hidden="true"
-            />
-          </span>
-        )}
-
-        {/**
-         * Rectangle 34628975 — ছবির উপরের ৬৩px জুড়ে কালো থেকে
-         * স্বচ্ছের দিকে gradient।
-         *
-         * ⚠️ এটা সাজসজ্জা নয়, ব্যাজদুটো পড়ার শর্ত। সাদা pill সাদা
-         * লেখার উপরে নয়, **সাদা ছবির** উপরে বসে — french fries বা
-         * mozzarella-র মতো হালকা ছবিতে ওটা প্রায় মিলিয়ে যেত। কালো
-         * ছবিতে (burger) দেখা যেত, তাই সমস্যাটা ছবিভেদে বদলাত, আর
-         * সেটাই এটাকে ধরা কঠিন করত।
-         *
-         * ⚠️ `pointer-events-none` — নাহলে অদৃশ্য এই স্তরটা ছবির
-         * উপরের অংশে মাউস আটকে দিত।
-         */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[63px]"
-          style={{
-            background: "linear-gradient(180deg, #000000 0%, rgba(0,0,0,0) 100%)",
-          }}
-        />
-
-        {/**
-         * Frame 2147235205 — ছবির উপরে সাদা pill।
-         *
-         * ⚠️ অবস্থার ব্যাজটা **ডানে**, ছাড়েরটা বাঁয়ে — Figma-তে ঠিক
-         * এভাবেই। আগে অবস্থারটা বাঁয়ে বসানো ছিল, ফলে ছাড় যোগ হলে
-         * দুটো একই কোণে চাপাচাপি করত।
-         */}
-        {item.discountLabel && (
-          <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] font-semibold leading-[1.2] text-black">
-            {item.discountLabel}
-          </span>
-        )}
-
-        <span className="absolute right-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] leading-[1.2] text-black">
-          {item.isAvailable ? "Food Available" : "Unavailable"}
-        </span>
-      </div>
-
-      {/* Frame 2147235266: column, padding 0 12px, gap 20। */}
-      <div className="flex flex-1 flex-col justify-between gap-5 px-3">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3">
-            {/* Frame 2147236014: row, space-between — নাম আর রেটিং। */}
-            <div className="flex items-start justify-between gap-5">
-              <h4 className="min-w-0 font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
-                {item.title}
-              </h4>
-
-              {/**
-               * ⚠️ রেটিংটা কেবল তখনই, যখন অন্তত একটা অনুমোদিত review
-               * আছে। নাহলে Figma-র মতো "4.7" বসিয়ে রাখা মানে একটা
-               * সংখ্যা বানিয়ে লেখা, আর খদ্দের সেটার উপর ভরসা করেন।
-               */}
-              {item.rating !== null && (
-                <span className="flex shrink-0 items-center gap-1">
-                  <Star
-                    className="h-4 w-4 fill-[#FF9540] text-[#FF9540]"
-                    strokeWidth={1.5}
-                    aria-hidden="true"
-                  />
-                  <span className="font-frank-ruhl text-[16px] font-normal leading-none text-black">
-                    {item.rating.toFixed(1)}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            {facts.length > 0 && (
-              /* Frame 2147225242: row, gap 6 — `flex-wrap`, কারণ চারটে
-                 chip সরু পর্দায় এক সারিতে ধরে না। */
-              <div className="flex flex-wrap gap-1.5">
-                {facts.map((fact) => (
-                  <span key={fact} className={FACT_CHIP}>
-                    {fact}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* নকশায় ঘরটা 48px উঁচু = ঠিক দুই লাইন (14px × 170%)। */}
-          <p className="line-clamp-2 font-sora text-[14px] font-normal leading-[1.7] text-black/70">
-            {item.description}
-          </p>
-        </div>
-
-        {/* Frame 2147236028: row, space-between — দাম আর বোতাম। */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
-            {item.priceLabel}
-          </span>
-
-          <button
-            type="button"
-            onClick={onOrder}
-            disabled={!item.isAvailable}
-            className={`flex h-[46px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
-          >
-            Order Now
-          </button>
-        </div>
-      </div>
-    </article>
   );
 }
