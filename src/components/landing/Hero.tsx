@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { motion, useReducedMotion } from "framer-motion";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 /**
  * ⚠️ `UtensilsCrossed` নয়, `ChefHat` আর `Calendar` — ওই দুটো প্রজেক্টে
@@ -43,6 +43,31 @@ import {
  * ⚠️ ছবি `next/image` দিয়ে, `<img>` দিয়ে নয় — Cloudinary host
  * `next.config.ts`-এ আগে থেকেই অনুমোদিত (Buffet/Signature ওখান থেকেই
  * ছবি আনে), তাই optimization বিনামূল্যে পাওয়া যায়।
+ *
+ * ── UPDATE: butter-smooth carousel transition ───────────────────────
+ * `layoutId` + `LayoutGroup` ব্যবহার করা হয়েছে যাতে একই dish card
+ * left/center/right slot-এর মধ্যে সত্যিই travel করে। ফলে reorder-এর
+ * সময় নতুন card হঠাৎ করে render হওয়ার মতো jump/flash হয় না।
+ *
+ * Layout transition এখন 1.2s-এর smooth ease-out tween — spring-এর
+ * overshoot নেই, কিন্তু position + width + height একসাথে খুব নরমভাবে
+ * morph হয়। GPU compositor-এর জন্য moving cards-এ `will-change-transform`
+ * যোগ করা হয়েছে।
+ *
+ * ── FIX (this pass): missing closing tag ────────────────────────────
+ * ⚠️ আগের ভার্সনে বাইরের flex wrapper
+ * (`<div className="flex w-full items-center gap-3 md:gap-6">`) খোলা
+ * হয়েছিল কিন্তু কখনো বন্ধ হয়নি — সোজা ডান দলের `</div>` থেকে
+ * `</LayoutGroup>`-এ চলে গিয়েছিল। JSX parser তাই একটা `</div>` কম
+ * পেয়ে ভেঙে পড়ছিল ("Expected '</', got 'jsx text'")। এখানে সেই
+ * হারানো `</div>` ফিরিয়ে দেওয়া হয়েছে, ঠিক `</LayoutGroup>`-এর আগে।
+ *
+ * সাথে দুটো ছোট পালিশ:
+ * (১) "near" (distance 1) কার্ডেও `priority` — এরাই পরের ঘূর্ণনে
+ *     হিরো হবে, তাই আগে থেকে decode করা থাকলে সেই মুহূর্তে flash
+ *     হয় না।
+ * (২) ঘূর্ণনের ব্যবধান বাড়িয়ে 5200ms — চোখ আগের অবস্থাটা একটু বেশি
+ *     সময় ধরে দেখার সুযোগ পায়, পুরো ব্যাপারটা কম তাড়াহুড়োর মনে হয়।
  */
 
 /**
@@ -63,6 +88,17 @@ import {
  * এখানে ধরনটা সরাসরি লিখে দেওয়া।
  */
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+/**
+ * ⚠️ `layout` (resize/move) animation-এর জন্য shared transition —
+ * সব কার্ডে (hero + near/far) একই config ব্যবহার করা হয়, যাতে মাপ
+ * বদলানোর গতি সবখানে সমান লাগে।
+ */
+const LAYOUT_TRANSITION = {
+  type: "tween" as const,
+  duration: 1.2,
+  ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
+};
 
 const container = {
   hidden: {},
@@ -97,9 +133,9 @@ export default function Hero({
    * সমান সরাও" বলা যেত; অসমান বলে প্রতিবার আলাদা দূরত্ব হিসাব করতে
    * হতো, আর একটুও ভুল হলে সারিটা মাঝ থেকে সরে যেত।
    *
-   * তার বদলে **জায়গাগুলো স্থির, খাবারগুলো ঘোরে**। প্রতি ৪ সেকেন্ডে
+   * তার বদলে **জায়গাগুলো স্থির, খাবারগুলো ঘোরে**। প্রতি ৫.২ সেকেন্ডে
    * তালিকাটা এক ঘর ঘুরে যায়, তাই মাঝের বড় ঘরে নতুন একটা খাবার আসে।
-   * প্রতিটা `<figure>`-এ `layout` আর `layoutId` থাকায় framer-motion
+   * প্রতিটা `<figure>`-এ `layout`/`layoutId` থাকায় framer-motion
    * নিজেই পুরনো জায়গা-মাপ থেকে নতুনটায় মসৃণভাবে নিয়ে যায় — কার্ড
    * বড় হয়, পাশেরটা ছোট হয়, সবই একসাথে।
    *
@@ -112,7 +148,7 @@ export default function Hero({
   useEffect(() => {
     // কম-নড়াচড়া চাইলে, বা মাউস উপরে থাকলে, ঘোরা বন্ধ।
     if (reduceMotion || paused || dishes.length < 2) return;
-    const timer = setInterval(() => setOffset((prev) => prev + 1), 4000);
+    const timer = setInterval(() => setOffset((prev) => prev + 1), 5200);
     return () => clearInterval(timer);
   }, [reduceMotion, paused, dishes.length]);
 
@@ -141,143 +177,152 @@ export default function Hero({
    * ওটা থেকেই ঠিক হয়, খাবারটা কে সেটা থেকে নয়।
    */
   const renderCard = (dish: HeroDish, index: number) => {
-              const size = sizeFor(index);
+    const size = sizeFor(index);
 
-              /**
-               * ⚠️ ক্রমটা মাঝ থেকে বাইরের দিকে, বাঁ থেকে ডানে নয় —
-               * `Math.abs(index - heroIndex)`। মাঝের বড় ছবিটা আগে আসে,
-               * তারপর দুপাশে ছড়িয়ে পড়ে। বাঁ-থেকে-ডান ক্রমে নায়কটা
-               * তিন নম্বরে আসত, আর চোখ প্রথমে কোথায় যাবে সেটা ঠিক
-               * করা যেত না।
-               */
-              const delay = 0.45 + Math.abs(index - heroIndex) * 0.12;
+    /**
+     * ⚠️ ক্রমটা মাঝ থেকে বাইরের দিকে, বাঁ থেকে ডানে নয় —
+     * `Math.abs(index - heroIndex)`। মাঝের বড় ছবিটা আগে আসে,
+     * তারপর দুপাশে ছড়িয়ে পড়ে। বাঁ-থেকে-ডান ক্রমে নায়কটা
+     * তিন নম্বরে আসত, আর চোখ প্রথমে কোথায় যাবে সেটা ঠিক
+     * করা যেত না।
+     */
+    const delay = 0.45 + Math.abs(index - heroIndex) * 0.12;
 
-              if (size === "hero") {
-                return (
-                  <motion.figure
-                    /**
-                     * ⚠️ `key` খাবারের id, অবস্থানের নম্বর নয় — এটাই
-                     * পুরো slider-টা কাজ করার শর্ত। id দিলে React
-                     * বোঝে "এই কার্ডটা আগেও ছিল, শুধু জায়গা বদলেছে",
-                     * আর framer-motion তখন পুরনো মাপ থেকে নতুন মাপে
-                     * নিয়ে যেতে পারে। `key={index}` দিলে React ভাবত
-                     * প্রতিটা ঘরে নতুন কার্ড এসেছে, আর animation-এর
-                     * বদলে হঠাৎ ঝিলিক দিত।
-                     */
-                    key={dish.id}
-                    layout
-                    initial={reduceMotion ? false : { opacity: 0, y: 40, scale: 0.94 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{
-                      duration: 0.7,
-                      ease: EASE,
-                      delay,
-                      // মাপ/জায়গা বদলের জন্য আলাদা, একটু ধীর গতি —
-                      // spring নয়, কারণ spring-এ কার্ডটা থেমে গিয়ে
-                      // সামান্য দুলত, আর ৬৪৫px চওড়া জিনিসে সেটা চোখে লাগে।
-                      layout: { duration: 0.85, ease: EASE },
-                    }}
-                    className="relative h-[240px] w-[280px] shrink-0 overflow-hidden rounded-[30px] bg-white md:h-[320px] md:w-[480px] xl:h-[399px] xl:w-[645px]"
-                  >
-                    <Image
-                      src={dish.image}
-                      alt={dish.name}
-                      fill
-                      priority
-                      sizes="(min-width: 1280px) 645px, (min-width: 768px) 480px, 280px"
-                      className="object-cover"
-                    />
+    /**
+     * ⚠️ পরের ঘূর্ণনে এই কার্ডটাই হিরো হবে কিনা — "near" (distance 1)
+     * সবসময় সেই প্রার্থী। আগে থেকে `priority` দিলে ব্রাউজার ছবিটা
+     * decode করে রাখে, তাই হিরোতে পরিণত হওয়ার মুহূর্তে flash/blur
+     * দেখা যায় না।
+     */
+    const isUpcomingHero = size === "near";
 
-                    {/* Rectangle 34628974: নিচ থেকে কালোর দিকে gradient,
-                        যাতে সাদা ঘরগুলো ছবির উপরে পড়া যায়। */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 bottom-0 h-[140px]"
-                      style={{
-                        background:
-                          "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)",
-                      }}
-                      aria-hidden="true"
-                    />
+    if (size === "hero") {
+      return (
+        <motion.figure
+          /**
+           * ⚠️ `key` খাবারের id, অবস্থানের নম্বর নয় — এটাই
+           * পুরো slider-টা কাজ করার শর্ত। id দিলে React
+           * বোঝে "এই কার্ডটা আগেও ছিল, শুধু জায়গা বদলেছে",
+           * আর framer-motion তখন পুরনো মাপ থেকে নতুন মাপে
+           * নিয়ে যেতে পারে। `key={index}` দিলে React ভাবত
+           * প্রতিটা ঘরে নতুন কার্ড এসেছে, আর animation-এর
+           * বদলে হঠাৎ ঝিলিক দিত।
+           */
+          key={dish.id}
+          layout
+          // Critical: the dish keeps the same shared identity while moving
+          // between the left, center, and right flex groups.
+          layoutId={`hero-dish-${dish.id}`}
+          initial={reduceMotion ? false : { opacity: 0, y: 40, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{
+            opacity: { duration: 0.7, ease: EASE, delay },
+            y: { duration: 0.7, ease: EASE, delay },
+            scale: { duration: 0.7, ease: EASE, delay },
+            layout: LAYOUT_TRANSITION,
+          }}
+          className="relative h-[240px] w-[280px] shrink-0 overflow-hidden rounded-[30px] bg-white md:h-[320px] md:w-[480px] xl:h-[399px] xl:w-[645px] will-change-transform"
+        >
+          <Image
+            src={dish.image}
+            alt={dish.name}
+            fill
+            priority
+            sizes="(min-width: 1280px) 645px, (min-width: 768px) 480px, 280px"
+            className="object-cover"
+          />
 
-                    {/* Frame 2147225264: row, gap 12, ছবির নিচে ভাসা। */}
-                    {/**
-                     * ⚠️ ঘরগুলোর দেরি ছোট আর স্থির (0.12 + i×0.06),
-                     * কার্ডের `delay`-এর সাথে যুক্ত নয়।
-                     *
-                     * কারণ: মাঝের ঘরে নতুন খাবার এলে এই ঘরগুলো নতুন
-                     * করে mount হয়, আর তখন প্রথম-লোডের দেরিটা (০.৮s)
-                     * আবার খাটত — ছবিটার নিচের অংশ প্রায় এক সেকেন্ড
-                     * খালি পড়ে থাকত, প্রতি ৪ সেকেন্ডে একবার। ছোট
-                     * দেরিতে ঘোরাটা মসৃণ থাকে, আর প্রথম লোডেও ঘরগুলো
-                     * ছবির ঠিক পরেই আসে।
-                     */}
-                    <figcaption className="absolute inset-x-2 bottom-3 flex flex-wrap justify-center gap-1.5 md:inset-x-4 md:bottom-4 md:gap-3">
-                      {nutrients.map((nutrient, i) => (
-                        <motion.span
-                          key={nutrient.label}
-                          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          /* ছবিটা বসার পরে ঘরগুলো একটা একটা করে — ছবির
-                             আগে এলে ওগুলো শূন্যে ভাসত। */
-                          transition={{ duration: 0.4, ease: EASE, delay: 0.12 + i * 0.06 }}
-                          className="flex min-w-[64px] flex-col items-center gap-1 rounded-[14px] px-3 py-2 md:min-w-[100px] md:px-6 xl:min-w-[133px]"
-                          style={{ backgroundColor: nutrient.tint }}
-                        >
-                          <span className="font-sora text-[10px] font-normal leading-none text-black/70 md:text-[12px]">
-                            {nutrient.label}
-                          </span>
-                          <span className="font-sora text-[12px] font-semibold leading-none text-black md:text-[16px]">
-                            {nutrient.value}
-                          </span>
-                        </motion.span>
-                      ))}
-                    </figcaption>
-                  </motion.figure>
-                );
-              }
+          {/* Rectangle 34628974: নিচ থেকে কালোর দিকে gradient,
+              যাতে সাদা ঘরগুলো ছবির উপরে পড়া যায়। */}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-[140px]"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 100%)",
+            }}
+            aria-hidden="true"
+          />
 
-              /**
-               * ⚠️ পাশের কার্ডগুলো ছোট পর্দায় লুকোনো। ৩২০px-এ মাঝেরটাই
-               * ২৮০px জোড়ে — পাশে জায়গা নেই, আর জোর করে রাখলে সবগুলোই
-               * এত সরু হতো যে খাবার চেনা যেত না।
-               */
-              return (
-                <motion.figure
-                  key={dish.id}
-                  layout
-                  initial={reduceMotion ? false : { opacity: 0, y: 40, scale: 0.94 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    duration: 0.7,
-                    ease: EASE,
-                    delay,
-                    layout: { duration: 0.85, ease: EASE },
-                  }}
-                  /* hover-এ সামান্য উঠে আসে — ছবিগুলো যে জীবন্ত, সেটুকুই। */
-                  whileHover={reduceMotion ? undefined : { y: -6 }}
-                  /**
-                   * ⚠️ base-এ আর `md:block` নেই — দেখানো/লুকানোর নিয়ম
-                   * এখন পুরোটাই নিচের শাখা দুটোয়। আগে base-এ
-                   * `md:block` আর "far" শাখায় `md:hidden` দুটোই ছিল,
-                   * অর্থাৎ একই media query-তে দুটো বিপরীত নিয়ম — কে
-                   * জিতবে তা Tailwind-এর CSS-ক্রম ঠিক করত, আর সেটাই
-                   * সারিটা এক পাশে হেলিয়ে দিচ্ছিল।
-                   */
-                  className={`relative shrink-0 overflow-hidden rounded-[30px] bg-[#F3F3F3] ${
-                    size === "near"
-                      ? "hidden md:block md:h-[280px] md:w-[200px] xl:h-[352px] xl:w-[264px]"
-                      : "hidden xl:block xl:h-[313px] xl:w-[236px]"
-                  }`}
-                >
-                  <Image
-                    src={dish.image}
-                    alt={dish.name}
-                    fill
-                    sizes="(min-width: 1280px) 264px, 200px"
-                    className="object-cover"
-                  />
-                </motion.figure>
-              );
+          {/* Frame 2147225264: row, gap 12, ছবির নিচে ভাসা। */}
+          {/**
+           * ⚠️ ঘরগুলোর দেরি ছোট আর স্থির (0.12 + i×0.06),
+           * কার্ডের `delay`-এর সাথে যুক্ত নয়।
+           *
+           * কারণ: মাঝের ঘরে নতুন খাবার এলে এই ঘরগুলো নতুন
+           * করে mount হয়, আর তখন প্রথম-লোডের দেরিটা (০.৮s)
+           * আবার খাটত — ছবিটার নিচের অংশ প্রায় এক সেকেন্ড
+           * খালি পড়ে থাকত, প্রতি রোটেশনে একবার। ছোট দেরিতে
+           * ঘোরাটা মসৃণ থাকে, আর প্রথম লোডেও ঘরগুলো ছবির ঠিক
+           * পরেই আসে।
+           */}
+          <figcaption className="absolute inset-x-2 bottom-3 flex flex-wrap justify-center gap-1.5 md:inset-x-4 md:bottom-4 md:gap-3">
+            {nutrients.map((nutrient, i) => (
+              <motion.span
+                key={nutrient.label}
+                initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                /* ছবিটা বসার পরে ঘরগুলো একটা একটা করে — ছবির
+                   আগে এলে ওগুলো শূন্যে ভাসত। */
+                transition={{ duration: 0.4, ease: EASE, delay: 0.12 + i * 0.06 }}
+                className="flex min-w-[64px] flex-col items-center gap-1 rounded-[14px] px-3 py-2 md:min-w-[100px] md:px-6 xl:min-w-[133px]"
+                style={{ backgroundColor: nutrient.tint }}
+              >
+                <span className="font-sora text-[10px] font-normal leading-none text-black/70 md:text-[12px]">
+                  {nutrient.label}
+                </span>
+                <span className="font-sora text-[12px] font-semibold leading-none text-black md:text-[16px]">
+                  {nutrient.value}
+                </span>
+              </motion.span>
+            ))}
+          </figcaption>
+        </motion.figure>
+      );
+    }
+
+    /**
+     * ⚠️ পাশের কার্ডগুলো ছোট পর্দায় লুকোনো। ৩২০px-এ মাঝেরটাই
+     * ২৮০px জোড়ে — পাশে জায়গা নেই, আর জোর করে রাখলে সবগুলোই
+     * এত সরু হতো যে খাবার চেনা যেত না।
+     */
+    return (
+      <motion.figure
+        key={dish.id}
+        layout
+        initial={reduceMotion ? false : { opacity: 0, y: 40, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{
+          opacity: { duration: 0.7, ease: EASE, delay },
+          y: { duration: 0.7, ease: EASE, delay },
+          scale: { duration: 0.7, ease: EASE, delay },
+          layout: LAYOUT_TRANSITION,
+        }}
+        /* hover-এ সামান্য উঠে আসে — ছবিগুলো যে জীবন্ত, সেটুকুই। */
+        whileHover={reduceMotion ? undefined : { y: -6 }}
+        /**
+         * ⚠️ base-এ আর `md:block` নেই — দেখানো/লুকানোর নিয়ম
+         * এখন পুরোটাই নিচের শাখা দুটোয়। আগে base-এ
+         * `md:block` আর "far" শাখায় `md:hidden` দুটোই ছিল,
+         * অর্থাৎ একই media query-তে দুটো বিপরীত নিয়ম — কে
+         * জিতবে তা Tailwind-এর CSS-ক্রম ঠিক করত, আর সেটাই
+         * সারিটা এক পাশে হেলিয়ে দিচ্ছিল।
+         */
+        className={`relative shrink-0 overflow-hidden rounded-[30px] bg-[#F3F3F3] ${
+          size === "near"
+            ? "hidden md:block md:h-[280px] md:w-[200px] xl:h-[352px] xl:w-[264px]"
+            : "hidden xl:block xl:h-[313px] xl:w-[236px] will-change-transform"
+        }`}
+      >
+        <Image
+          src={dish.image}
+          alt={dish.name}
+          fill
+          priority={isUpcomingHero}
+          sizes="(min-width: 1280px) 264px, 200px"
+          className="object-cover"
+        />
+      </motion.figure>
+    );
   };
 
   return (
@@ -373,7 +418,6 @@ export default function Hero({
        * scrollbar বাদে। কোনো viewport-একক নেই, তাই কাটাও দুপাশে সমান।
        */}
       <div className="mt-9 flex w-full justify-center overflow-x-hidden overflow-y-hidden xl:mt-[60px]">
-
         {/**
          * Frame 2147235994 — খাবারের সারি: row, gap 24, মোট চওড়া 1741।
          *
@@ -401,9 +445,10 @@ export default function Hero({
          * (`left: calc(50% - 1741px/2)`)। তাই দুই কিনারার কার্ড
          * সমানভাবে কাটে, আর দেখতে ইচ্ছাকৃত লাগে।
          */}
-          {/* ⚠️ মাউস উপরে থাকলে ঘোরা থামে — কেউ একটা ছবি দেখছেন
-              মানে ওটা সরে যাওয়া উচিত নয়। `onFocus`/`onBlur`-ও আছে,
-              যাতে keyboard-এ চলাফেরা করলেও একই আচরণ হয়। */}
+        {/* ⚠️ মাউস উপরে থাকলে ঘোরা থামে — কেউ একটা ছবি দেখছেন
+            মানে ওটা সরে যাওয়া উচিত নয়। `onFocus`/`onBlur`-ও আছে,
+            যাতে keyboard-এ চলাফেরা করলেও একই আচরণ হয়। */}
+        <LayoutGroup id="hero-dishes">
           <div
             /* ⚠️ `w-full`, `w-max` নয় — দুই পাশের দল `flex-1 basis-0` দিয়ে
                জায়গা ভাগ করে নেয়, আর সেটা তখনই সম্ভব যখন সারিটার
@@ -466,7 +511,8 @@ export default function Hero({
                 .map((dish, i) => renderCard(dish, heroIndex + 1 + i))}
             </div>
           </div>
-        </div>
+        </LayoutGroup>
+      </div>
     </section>
   );
 }
