@@ -14,6 +14,28 @@ export const metadata: Metadata = {
 };
 
 /**
+ * ⚠️ প্রতিটা request-এ নতুন করে render, build-এর সময় নয়।
+ *
+ * এটাই `(main)`-এর প্রথম **প্রকাশ্য** পাতা যেটা server-এ সরাসরি
+ * database ছোঁয় (বাকিগুলো হয় স্থির, নয় client থেকে `/api/menu`
+ * ডাকে)। Next.js ডিফল্টে এমন পাতা build-এর সময়ই একবার চালিয়ে HTML
+ * বানিয়ে রাখতে চায় — আর CI-তে (GitHub Actions) কোনো database নেই,
+ * তাই `prisma.restaurantSettings.upsert()` ECONNREFUSED দিয়ে পুরো
+ * build ভেঙে দিত।
+ *
+ * ⚠️ `revalidate` দিয়ে সমাধান হতো না — ওটাতেও build-এর সময় একবার
+ * render হয়, কেবল পরে নতুন করে হয়। ভাঙাটা ঠিক ওই প্রথম render-এই।
+ *
+ * Admin পাতাগুলোয় এই সমস্যা নেই, কারণ ওরা `requireStaff()` → `auth()`
+ * → cookie পড়ে, আর cookie পড়া মানেই Next-এর কাছে পাতাটা এমনিতেই
+ * dynamic।
+ *
+ * খরচ: প্রতিটা ভিজিটে কয়েকটা query। মেনু জিনিসটা ছোট, আর দাম বা
+ * "পাওয়া যাচ্ছে না" অবস্থাটা বাসি দেখানোর চেয়ে সেটা অনেক সস্তা।
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * src/app/(main)/menu/page.tsx
  *
  * Figma "Web/Menu" — পাঁচটা অংশ, উপর থেকে নিচে:
