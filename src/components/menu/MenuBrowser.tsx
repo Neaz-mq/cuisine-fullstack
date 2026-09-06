@@ -16,6 +16,67 @@ const FACT_CHIP =
 /** "All" দেখা অবস্থায় প্রতিটা শ্রেণির কতগুলো পদ দেখা যাবে (Figma: তিনটে)। */
 const PREVIEW_COUNT = 3;
 
+/**
+ * শ্রেণির নাম → emoji।
+ *
+ * ⚠️ `Category` model-এ icon-এর কোনো মাঠ নেই, তাই এটা **নাম দেখে
+ * অনুমান** — সঠিক সমাধান নয়, কাজ চালানোর মতো সমাধান। সঠিকটা হলো
+ * schema-য় একটা `icon String?` কলাম + Add Category modal-এ একটা ঘর;
+ * তখন এই তালিকাটা শুধু fallback হয়ে যাবে (`category.icon ?? iconFor(name)`)।
+ *
+ * ⚠️ মিলটা পুরো নামে নয়, **শব্দাংশে** — তাই "Chicken", "Spicy Chicken"
+ * আর "Chicken Wings" তিনটেতেই 🍗 বসে। পুরো নামের তালিকা রাখলে সামান্য
+ * বানান বদলেই সব খালি হয়ে যেত।
+ *
+ * ⚠️ ক্রমটা গুরুত্বপূর্ণ — প্রথম যেটা মেলে সেটাই জেতে। তাই নির্দিষ্ট
+ * শব্দগুলো (biryani, milkshake) সাধারণগুলোর (rice, drink) **আগে**।
+ * উল্টো হলে "Rice & Biryani" ভাতের আইকন পেত, আর "Milkshake" পানীয়ের।
+ *
+ * ⚠️ কিছুই না মিললে 🍽️ — খালি রাখলে ওই chip-টা বাকিগুলোর চেয়ে সরু
+ * হয়ে সারিটা এবড়োখেবড়ো দেখাত।
+ */
+const CATEGORY_ICONS: [readonly string[], string][] = [
+  [["biryani", "pulao", "pilaf"], "🍛"],
+  [["milkshake", "shake", "smoothie"], "🥤"],
+  [["ice cream", "gelato"], "🍨"],
+  [["pizza"], "🍕"],
+  [["burger"], "🍔"],
+  [["sandwich", "wrap", "roll"], "🥪"],
+  [["taco", "burrito", "nacho"], "🌮"],
+  [["sushi", "sashimi"], "🍣"],
+  [["pasta", "spaghetti"], "🍝"],
+  [["noodle", "ramen", "soup", "broth"], "🍜"],
+  [["rice", "fried rice"], "🍚"],
+  [["chicken", "wing", "poultry"], "🍗"],
+  [["steak", "beef", "lamb", "mutton", "grill", "bbq"], "🥩"],
+  [["fish", "seafood", "prawn", "shrimp", "crab"], "🦐"],
+  [["mushroom"], "🍄"],
+  [["salad", "veg", "green"], "🥗"],
+  [["appetizer", "starter", "snack", "fries", "side"], "🍟"],
+  [["coffee", "espresso", "latte"], "☕"],
+  [["tea", "matcha"], "🍵"],
+  [["juice"], "🧃"],
+  [["drink", "beverage", "soda", "cooler"], "🥤"],
+  [["dessert", "cake", "pastry", "sweet"], "🍰"],
+  [["bread", "bakery", "bun", "croissant"], "🥐"],
+  [["breakfast", "egg", "omelet"], "🍳"],
+  [["combo", "meal", "feast", "platter", "family"], "🍱"],
+  [["offer", "deal", "discount"], "🏷️"],
+  [["popular", "trending", "best"], "🔥"],
+  [["signature", "chef", "premium"], "⭐"],
+  [["weekly", "special", "today"], "✨"],
+];
+
+const FALLBACK_ICON = "🍽️";
+
+function iconFor(name: string): string {
+  const needle = name.toLowerCase();
+  for (const [keywords, icon] of CATEGORY_ICONS) {
+    if (keywords.some((keyword) => needle.includes(keyword))) return icon;
+  }
+  return FALLBACK_ICON;
+}
+
 export type MenuBrowserItem = {
   id: string;
   title: string;
@@ -63,11 +124,11 @@ export type MenuBrowserCategory = {
  *
  * ── নকশার সাথে তিনটে জায়গায় পার্থক্য, আর প্রতিটার কারণ ─────────────
  *
- * ⚠️ chip-এ emoji নেই। Figma-র প্রতিটা chip-এ একটা করে emoji (🍕 🍔 🍚),
- * কিন্তু `Category` model-এ কেবল `name` — কোনো icon বা emoji-র মাঠ নেই।
- * কোডে হাতে একটা তালিকা লিখে রাখলে ("Pizza" → 🍕) নতুন শ্রেণি যোগ
- * করলেই সেটা emoji ছাড়া থেকে যেত, আর কেউ বুঝত না কেন। মাঠটা যোগ করলে
- * বসানোও যাবে — তখন এখানে এক লাইনেই ঢুকবে।
+ * ⚠️ chip-এর emoji গুলো **নাম দেখে অনুমান করা** (`iconFor`), DB থেকে
+ * আসে না — `Category` model-এ icon-এর কোনো মাঠই নেই। অনুমানটা শব্দাংশ
+ * ধরে, তাই নতুন শ্রেণিও সাধারণত ঠিক আইকন পায়, আর না মিললে একটা
+ * নিরপেক্ষ 🍽️ বসে। সঠিক সমাধান হলো schema-য় `icon String?` + Add
+ * Category modal-এ একটা ঘর; বিস্তারিত `CATEGORY_ICONS`-এর মন্তব্যে।
  *
  * ⚠️ ছাড়ের ব্যাজ ("20%") আর কাটা পুরনো দাম বসানো হয়নি। `MenuItem`-এ
  * "আগের দাম" বলে কিছু নেই, আর ছাড় এই অ্যাপে কুপন-ভিত্তিক (checkout-এ
@@ -163,6 +224,8 @@ export default function MenuBrowser({
            * গিয়ে হয় লেখা কাটত, নয় আড়াআড়ি scroll লাগত।
            */}
           <div className="flex flex-wrap gap-3 xl:gap-4">
+            {/* ⚠️ "All"-এ কোনো আইকন নেই — Figma-তেও নেই, আর থাকলে
+                ওটা একটা শ্রেণির নাম বলে ভুল হতো। */}
             <button
               type="button"
               onClick={() => setSelected(null)}
@@ -182,12 +245,23 @@ export default function MenuBrowser({
                 type="button"
                 onClick={() => setSelected(category.id)}
                 aria-pressed={selected === category.id}
-                className={`flex h-12 shrink-0 items-center justify-center rounded-[90px] px-5 font-sora text-[14px] font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
+                className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-[90px] px-5 font-sora text-[14px] font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
                   selected === category.id
                     ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
                     : "border border-black text-black hover:bg-black hover:text-white"
                 } ${FOCUS_RING}`}
               >
+                {/**
+                 * ⚠️ `aria-hidden` — emoji-টা কেবল চোখের জন্য। না দিলে
+                 * screen reader "Pizza" পড়ার আগে "slice of pizza"-ও
+                 * পড়ত, অর্থাৎ প্রতিটা chip দুবার শোনা যেত।
+                 *
+                 * Figma-তে আইকনগুলো ২০px, তাই লেখার (১৬px) চেয়ে সামান্য
+                 * বড় — `text-[18px]`/`xl:text-[20px]`।
+                 */}
+                <span aria-hidden="true" className="text-[18px] leading-none xl:text-[20px]">
+                  {iconFor(category.name)}
+                </span>
                 {category.name}
               </button>
             ))}
