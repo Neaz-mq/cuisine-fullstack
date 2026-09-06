@@ -124,9 +124,13 @@ export default async function MenuPage() {
         ],
       },
       orderBy: { createdAt: "desc" },
-      // তিনটে দেখানো হয়, কিন্তু কয়েকটা বেশি আনা হয় — নিচে ব্যবহারের
-      // সীমা পেরোনো কুপনগুলো বাদ পড়বে, আর তখনো যেন তিনটে থাকে।
-      take: 10,
+      /**
+       * ⚠️ এই তালিকাটা **দুই কাজে** লাগে: উপরের "Today's Offers"-এর
+       * তিনটে কার্ড, আর প্রতিটা পদের ছবির কোণে ছাড়ের ব্যাজ। তাই
+       * তিনটের বেশি আনা হয় — ব্যাজের জন্য সবগুলো চালু কুপনই দেখা
+       * দরকার, নাহলে চার নম্বর কুপনটা কোনো পদে বসত না।
+       */
+      take: 50,
       select: {
         id: true,
         code: true,
@@ -137,7 +141,8 @@ export default async function MenuPage() {
         expiresAt: true,
         usageLimit: true,
         usageCount: true,
-        restrictedCategories: { select: { name: true } },
+        restrictedCategories: { select: { id: true, name: true } },
+        restrictedItems: { select: { id: true } },
       },
     }),
   ]);
@@ -145,6 +150,61 @@ export default async function MenuPage() {
   const ratingByItem = new Map(
     ratingRows.map((row) => [row.menuItemId, row._avg.rating])
   );
+
+  // ব্যবহারের সীমা পেরোনো কুপন কোথাও দেখানো হয় না — কার্ডেও না,
+  // ব্যাজেও না। এটা JS-এ, কারণ Prisma-য় এক কলামের সাথে আরেক কলামের
+  // তুলনা (`usageCount < usageLimit`) raw SQL ছাড়া লেখা যায় না, আর
+  // কুপনের সংখ্যা এমনিতেই হাতে গোনা।
+  const liveCoupons = couponRows.filter(
+    (coupon) => coupon.usageLimit === null || coupon.usageCount < coupon.usageLimit
+  );
+
+  /**
+   * ── ছবির কোণের ছাড়ের ব্যাজ ────────────────────────────────────────
+   *
+   * ⚠️ কেবল সেই কুপনগুলো, যেগুলো কোনো **নির্দিষ্ট** পদ বা শ্রেণির জন্য।
+   * সাইট-জোড়া কুপন ধরলে প্রতিটা কার্ডেই ব্যাজ বসত, অথচ সেটা উপরের
+   * "Today's Offers"-এ এমনিতেই দেখা যাচ্ছে — তখন ব্যাজটা তথ্য নয়,
+   * গোলমাল।
+   *
+   * ⚠️ একাধিক কুপন মিললে সবচেয়ে বড়টা — আর তুলনাটা **এই পদের দামের
+   * উপরে টাকার অঙ্কে**, শতাংশে নয়। "১০%" আর "$৫ ছাড়" সরাসরি তুলনা
+   * করা যায় না: $২০-র পদে ১০% মানে $২, কিন্তু $১০০-র পদে $১০।
+   */
+  const targetedCoupons = liveCoupons.filter(
+    (coupon) =>
+      coupon.restrictedItems.length > 0 || coupon.restrictedCategories.length > 0
+  );
+
+  const discountFor = (itemId: string, categoryId: string, price: number) => {
+    let bestValue = 0;
+    let bestLabel: string | null = null;
+
+    for (const coupon of targetedCoupons) {
+      const applies =
+        coupon.restrictedItems.some((item) => item.id === itemId) ||
+        coupon.restrictedCategories.some((category) => category.id === categoryId);
+      if (!applies) continue;
+
+      if (coupon.type === "PERCENT" && coupon.percentOff !== null) {
+        const value = (price * coupon.percentOff) / 100;
+        if (value > bestValue) {
+          bestValue = value;
+          bestLabel = `${coupon.percentOff}%`;
+        }
+      } else if (coupon.fixedOff !== null) {
+        // দামের চেয়ে বড় ছাড় হয় না — $২০ ছাড়ের কুপন $৫-এর পদে
+        // বসলে "$২০ Off" লেখাটা অর্থহীন হতো।
+        const value = Math.min(Number(coupon.fixedOff), price);
+        if (value > bestValue) {
+          bestValue = value;
+          bestLabel = `${formatAmount(value.toFixed(units), settings.currency)} Off`;
+        }
+      }
+    }
+
+    return bestLabel;
+  };
 
   /**
    * DB-র সারি → client component যা বোঝে সেই আকার।
@@ -180,6 +240,7 @@ export default async function MenuPage() {
           // `_avg` কোনো review না থাকলে `null` দেয় — সেটাই এখানে
           // "রেটিং দেখানো হবে না"-র সংকেত।
           rating: average ?? null,
+          discountLabel: discountFor(item.id, row.id, price),
         };
       }),
     }));
@@ -191,11 +252,8 @@ export default async function MenuPage() {
    * লেখা নেই — কারণ `Coupon`-এ ওরকম কোনো মাঠই নেই। পুরো যুক্তিটা
    * TodaysOffers.tsx-এর মাথায়।
    */
-  const offers: MenuOffer[] = couponRows
-    // ব্যবহারের সীমা পেরোনো কুপন বাদ। এটা JS-এ, কারণ Prisma-য় এক
-    // কলামের সাথে আরেক কলামের তুলনা (`usageCount < usageLimit`)
-    // raw SQL ছাড়া লেখা যায় না, আর কুপনের সংখ্যা এমনিতেই হাতে গোনা।
-    .filter((coupon) => coupon.usageLimit === null || coupon.usageCount < coupon.usageLimit)
+  const offers: MenuOffer[] = liveCoupons
+    // নকশায় তিনটে কার্ড, তাই তিনটেই।
     .slice(0, 3)
     .map((coupon) => {
       const discount =

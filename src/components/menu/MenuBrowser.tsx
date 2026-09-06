@@ -91,6 +91,12 @@ export type MenuBrowserItem = {
   prepTimeMinutes: number | null;
   /** অনুমোদিত review-এর গড়, না থাকলে null। */
   rating: number | null;
+  /**
+   * ছবির বাঁ কোণে যে ছাড়ের ব্যাজ বসবে ("20%", "$5 Off"), না থাকলে
+   * null। কোথা থেকে আসে তা page.tsx-এ — সংক্ষেপে: এই পদটার বা এর
+   * শ্রেণির জন্য নির্দিষ্ট করা চালু কুপন।
+   */
+  discountLabel: string | null;
 };
 
 export type MenuBrowserCategory = {
@@ -130,10 +136,15 @@ export type MenuBrowserCategory = {
  * নিরপেক্ষ 🍽️ বসে। সঠিক সমাধান হলো schema-য় `icon String?` + Add
  * Category modal-এ একটা ঘর; বিস্তারিত `CATEGORY_ICONS`-এর মন্তব্যে।
  *
- * ⚠️ ছাড়ের ব্যাজ ("20%") আর কাটা পুরনো দাম বসানো হয়নি। `MenuItem`-এ
- * "আগের দাম" বলে কিছু নেই, আর ছাড় এই অ্যাপে কুপন-ভিত্তিক (checkout-এ
- * প্রয়োগ হয়), পদের গায়ে লেখা নয়। ২০% লিখে রেখে checkout-এ পুরো দাম
- * নেওয়াটা নকশা মানা নয়, প্রতারণা।
+ * ⚠️ ছাড়ের ব্যাজটা ("20%") আছে, কিন্তু কাটা পুরনো দামটা নেই।
+ * `MenuItem`-এ "আগের দাম" বলে কোনো মাঠ নেই, তাই ওটা দেখানোর উপায়ও
+ * নেই। ব্যাজটা আসে চালু কুপন থেকে — কেবল সেই কুপনগুলো থেকে যেগুলো
+ * **এই পদটার বা এর শ্রেণির জন্য নির্দিষ্ট**। সাইট-জোড়া কুপন থাকলে
+ * প্রতিটা কার্ডেই ব্যাজ বসত, অথচ সেটা "Today's Offers"-এ এমনিতেই
+ * দেখা যাচ্ছে — তখন ব্যাজটা তথ্য নয়, গোলমাল।
+ *
+ * ⚠️ যা লেখা থাকে তা checkout-এ সত্যিই পাওয়া যায় (কোডটা বসালে)।
+ * বানানো কোনো "২০%" নয় — নাহলে সেটা নকশা মানা নয়, প্রতারণা।
  *
  * ⚠️ তথ্য-chip গুলো যেগুলোর মান আছে কেবল সেগুলোই দেখায়। Admin-এর
  * "Add Item" modal-এ ওগুলো ঐচ্ছিক, তাই পুরনো পদে প্রায়ই ফাঁকা — আর
@@ -370,8 +381,41 @@ function FoodCard({ item, onOrder }: { item: MenuBrowserItem; onOrder: () => voi
           </span>
         )}
 
-        {/* Frame 2147235205: সাদা pill, ছবির উপরে। */}
-        <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] leading-[1.2] text-black">
+        {/**
+         * Rectangle 34628975 — ছবির উপরের ৬৩px জুড়ে কালো থেকে
+         * স্বচ্ছের দিকে gradient।
+         *
+         * ⚠️ এটা সাজসজ্জা নয়, ব্যাজদুটো পড়ার শর্ত। সাদা pill সাদা
+         * লেখার উপরে নয়, **সাদা ছবির** উপরে বসে — french fries বা
+         * mozzarella-র মতো হালকা ছবিতে ওটা প্রায় মিলিয়ে যেত। কালো
+         * ছবিতে (burger) দেখা যেত, তাই সমস্যাটা ছবিভেদে বদলাত, আর
+         * সেটাই এটাকে ধরা কঠিন করত।
+         *
+         * ⚠️ `pointer-events-none` — নাহলে অদৃশ্য এই স্তরটা ছবির
+         * উপরের অংশে মাউস আটকে দিত।
+         */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[63px]"
+          style={{
+            background: "linear-gradient(180deg, #000000 0%, rgba(0,0,0,0) 100%)",
+          }}
+        />
+
+        {/**
+         * Frame 2147235205 — ছবির উপরে সাদা pill।
+         *
+         * ⚠️ অবস্থার ব্যাজটা **ডানে**, ছাড়েরটা বাঁয়ে — Figma-তে ঠিক
+         * এভাবেই। আগে অবস্থারটা বাঁয়ে বসানো ছিল, ফলে ছাড় যোগ হলে
+         * দুটো একই কোণে চাপাচাপি করত।
+         */}
+        {item.discountLabel && (
+          <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] font-semibold leading-[1.2] text-black">
+            {item.discountLabel}
+          </span>
+        )}
+
+        <span className="absolute right-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] leading-[1.2] text-black">
           {item.isAvailable ? "Food Available" : "Unavailable"}
         </span>
       </div>
