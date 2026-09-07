@@ -415,6 +415,17 @@ model Order {
 
   taxMode TaxMode @default(EXCLUSIVE)
 
+  /// অর্ডারের সময়কার পুরো সিঁড়িটা, হুবহু।
+  ///
+  /// ⚠️ কেবল মিলে যাওয়া ধাপটা নয়, **গোটা তালিকা** — কারণ owner
+  /// আগামীকাল দাম বদলাবেন, আর তখন গতকালের অর্ডারের modal-এ আজকের
+  /// তালিকা দেখানো মানে মিথ্যা বলা: "এই অর্ডারে $7 বসেছিল" লেখা
+  /// থাকবে অথচ পাশের চিপে $9।
+  ///
+  /// taxRate, taxName আর currencyMinorUnits ঠিক এই একই কারণে Order-এ
+  /// snapshot করা আছে। এটা সেই ধারারই ধারাবাহিকতা।
+  deliveryZones Json?
+
   // DELIVERY (default) = existing checkout flow, unchanged. DINE_IN = QR
   // Table Ordering — customer scans a QR code at a physical table, orders
   // are tied to `table` below instead of a delivery address, and are paid
@@ -444,6 +455,36 @@ model Order {
   city      String?
   state     String?
   zip       String?
+
+  /// খদ্দেরের ঠিকানার স্থানাঙ্ক, checkout-এ geocode করে বসানো।
+  ///
+  /// ⚠️ এটা DeliveryTracking.destLat/destLng-এর নকল নয়। ওটা তৈরি হয়
+  /// rider assign করার সময়, আর কেবল OWN_DELIVERY অর্ডারে। এটা বসে
+  /// checkout-এ, প্রতিটা DELIVERY অর্ডারে, কারণ ফি-টাই এর উপর নির্ভর
+  /// করে — অর্থাৎ এটা টাকার হিসাবের প্রমাণ, মানচিত্রের পিন নয়।
+  ///
+  /// পার্শ্ব-লাভ: assign-rider route এখন এই মানটা পেলে আর নতুন করে
+  /// geocode করে না। এক অর্ডারে দুবার Nominatim ডাকার কারণ নেই, আর
+  /// dispatch-এর সময় ওই call-টাই মাঝেমধ্যে ব্যর্থ হয়ে rider পাঠানো
+  /// আটকে দিত।
+  deliveryLat Float?
+  deliveryLng Float?
+
+  /// রেস্তোরাঁ থেকে মাপা দূরত্ব, কিলোমিটারে (আকাশপথ — কেন, তার
+  /// ব্যাখ্যা lib/delivery-zones.ts-এর haversineKm()-এ)।
+  ///
+  /// null = মাপা যায়নি (geocode ব্যর্থ) বা FLAT mode।
+  deliveryDistanceKm Float?
+
+  /// যে ধাপটা বসেছিল — "3–5 Km"। কেবল দেখানোর জন্য; আসল ফি
+  /// deliveryFee-তে, আর সেটাই একমাত্র সত্য।
+  deliveryZoneLabel String?
+
+  /// দূরত্ব মাপা যায়নি বলে flat ফি বসেছে কিনা।
+  ///
+  /// ⚠️ এটা না রাখলে staff কখনো জানতেন না কোন অর্ডারে ফি-টা মাপা আর
+  /// কোনটায় অনুমান — dispatch modal-এ দুটো হুবহু এক দেখাত।
+  deliveryZoneFallback Boolean @default(false)
 
   // OPTIONAL as of QR Table Ordering — irrelevant for orderType = DINE_IN
   // (nothing is being shipped). Still required in practice for DELIVERY
@@ -1140,6 +1181,33 @@ model RestaurantSettings {
   deliveryFeeFlat    Decimal @default(0) @db.Decimal(12, 3)
   deliveryFeeTaxable Boolean @default(true)
 
+  /// FLAT না DISTANCE — উপরের enum দ্রষ্টব্য।
+  deliveryFeeMode DeliveryFeeMode @default(FLAT)
+
+  /// দূরত্বের সিঁড়ি: `[{ "upToKm": 1, "fee": 2 }, …, { "upToKm": null, "fee": 14 }]`
+  ///
+  /// ⚠️ Json, কারণ এটা একটা **সেটিং**, সত্তা নয় — এর কোনো id লাগে না,
+  /// কেউ এতে relation করে না, আর সবসময় গোটাটাই একসাথে পড়া/লেখা হয়।
+  /// আলাদা DeliveryZone table বানালে প্রতিটা checkout quote-এ একটা
+  /// বাড়তি query যোগ হতো, আর owner ধাপ বদলালে row মেলানোর ঝামেলা।
+  ///
+  /// ⚠️ Json মানে database-স্তরে কোনো আকৃতির নিশ্চয়তা নেই — হাতে লেখা
+  /// SQL বা ভবিষ্যতের bug যা-ই বসাক, পড়ার সময় সবসময়
+  /// lib/delivery-zones.ts-এর normalizeDeliveryZones() দিয়ে যেতে হবে।
+  /// ওটা নোংরা input সংশোধন করে, throw করে না — একটা খারাপ settings
+  /// row যেন গোটা checkout বন্ধ করে দিতে না পারে।
+  deliveryZones Json?
+
+  /// রেস্তোরাঁর নিজের স্থানাঙ্ক — দূরত্ব এখান থেকেই মাপা হয়।
+  ///
+  /// ⚠️ nullable, আর সেটাই ঠিক: null হলে lib/restaurant-location.ts-এর
+  /// RESTAURANT_LOCATION constant-টা ব্যবহার হয়। ওই constant-টা এতদিন
+  /// rider-এর শুরুর অবস্থান হিসেবেই কাজ করছিল; এখন owner চাইলে
+  /// settings থেকে override করতে পারেন (দোকান সরালে কোড deploy না
+  /// করেই)।
+  restaurantLat Float?
+  restaurantLng Float?
+
   // --- Tipping -------------------------------------------------------------
 
   // Off by default, and it must stay possible to keep it off: in Japan,
@@ -1162,6 +1230,19 @@ model RestaurantSettings {
 enum TaxMode {
   INCLUSIVE
   EXCLUSIVE
+}
+
+/// Delivery charge কীভাবে ঠিক হবে।
+///
+/// FLAT — deliveryFeeFlat, প্রতিটা অর্ডারে একই। আগের একমাত্র আচরণ, আর
+/// এখনো ডিফল্ট: বিদ্যমান কোনো দোকানের ফি migration চালানোমাত্র বদলে
+/// যাওয়া উচিত নয়।
+///
+/// DISTANCE — deliveryZones সিঁড়ি থেকে, খদ্দেরের ঠিকানা geocode করে
+/// মাপা দূরত্ব অনুযায়ী (lib/delivery-fee.ts)।
+enum DeliveryFeeMode {
+  FLAT
+  DISTANCE
 }
 
 // ---------------------------------------------------------------------------

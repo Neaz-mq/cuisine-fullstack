@@ -11,6 +11,7 @@ import {
   ModalShell,
   SelectField,
 } from "@/components/admin/modal-ui";
+import DeliveryZoneBreakdown from "@/components/admin/DeliveryZoneBreakdown";
 import { type OrderViewData } from "./OrderViewModal";
 
 type Rider = { id: string; name: string | null; phone: string | null };
@@ -23,7 +24,7 @@ type Rider = { id: string; name: string | null; phone: string | null };
  *
  *   Address           cream বাক্স, read-only
  *   Delivery Rider    select + "Assign" বোতাম
- *   Delivery Charge   এই অর্ডারে যে ফি বসেছে
+ *   Delivery Charge   দূরত্বের ধাপ + মাপা দূরত্ব + প্রযোজ্য ফি
  *   পদের সারি         কালো গোল নম্বর + "নাম × সংখ্যা" … দাম
  *   পাদটীকা           মাধ্যম · টাকার ধরন, ডানে Total
  *
@@ -35,7 +36,8 @@ type Rider = { id: string; name: string | null; phone: string | null };
  *   ১. ONLINE অর্ডারের টাকা এসেছে কিনা দেখে (PENDING হলে আটকে দেয়)
  *   ২. PLACED হলে আগে PREPARING-এ নেয় — কারণ inventory ঠিক ওই
  *      ধাপেই কাটা হয়, আর লাফ দিলে stock নীরবে ভুল হয়ে যেত
- *   ৩. ঠিকানাটা geocode করে (না মিললে 422, অর্থাৎ পাঠানোই হয় না)
+ *   ৩. গন্তব্যের স্থানাঙ্ক ঠিক করে (checkout-এ মাপা মানটা থাকলে সেটাই,
+ *      নইলে তখনই geocode করে)
  *   ৪. rider বসিয়ে অর্ডারটাকে OUT_FOR_DELIVERY-তে নেয়
  *
  * ⚠️ তাই "Assign" আর "Mark as out for delivery" আলাদা দুটো বোতাম নয় —
@@ -44,24 +46,20 @@ type Rider = { id: string; name: string | null; phone: string | null };
  *
  * ── Delivery Charge নিয়ে ────────────────────────────────────────────
  *
- * ⚠️ Figma-তে এখানে পাঁচটা দূরত্ব-ভিত্তিক ধাপ (0–1 Km $2 … 8+ Km $14)
- * আর একটা "Distance to customer" slider আঁকা। দুটোর একটাও বসানো
- * হয়নি, আর কারণটা ডেটার:
+ * ⚠️ Figma-র ধাপগুলো আর "Distance to customer" বার এখন সত্যিই আছে,
+ * কিন্তু **পড়ার জন্য, বদলানোর জন্য নয়**।
  *
- *   • দূরত্ব মাপার উপায় নেই — `Order`-এ খদ্দেরের কোনো স্থানাঙ্ক
- *     সংরক্ষিত হয় না (assign-rider geocode করে, কিন্তু ফলটা রাখে না),
- *     আর রেস্তোরাঁর নিজের স্থানাঙ্কও settings-এ নেই।
- *   • ধাপগুলোও কোথাও লেখা নেই — `RestaurantSettings`-এ আছে একটাই
- *     `deliveryFeeFlat`, কোনো তালিকা নয়।
+ * ফি বসে checkout-এ (lib/delivery-fee.ts), আর তার উপরেই tax আর
+ * grandTotal হিসাব হয়ে Order row-তে জমা থাকে; ONLINE অর্ডারে টাকাটা
+ * ততক্ষণে কেটেও গেছে। এখান থেকে ধাপ বদলাতে দিলে খদ্দের একটা দাম
+ * দেখে টাকা দিতেন আর রসিদে অন্যটা থাকত।
  *
- * তার চেয়েও বড় কথা: ফি বদলানো এখানে **ভুল হতো**। `deliveryFee`
- * checkout-এর সময় বসে যায়, আর তার উপরেই tax আর grandTotal হিসাব হয়ে
- * অর্ডারে জমা থাকে। এখন ফি বদলালে ওই তিনটে সংখ্যা আর মিলত না —
- * খদ্দের একটা দাম দেখে টাকা দিয়েছেন, রসিদে অন্যটা থাকত।
+ * এই পর্দার কাজ তাই একটাই: staff-কে দেখানো **কেন** এই ফি বসেছিল।
+ * অঙ্কটা ভুল মনে হলে পথ refund/adjustment, ধাপ বদলানো নয়।
  *
- * তাই যা দেখানো হয় সেটা এই অর্ডারে **সত্যিই বসা** ফি। দূরত্ব-ভিত্তিক
- * ধাপ সত্যিই দরকার হলে সেটা checkout-এ বসাতে হবে, এখানে নয় — তখন
- * settings-এ ধাপের তালিকা আর order-এ স্থানাঙ্ক, দুটোই লাগবে।
+ * তালিকাটা order-এর নিজের snapshot থেকে আসে (Order.deliveryZones),
+ * আজকের settings থেকে নয় — নইলে owner দাম বদলানোর পরদিন পুরোনো
+ * প্রতিটা অর্ডারের modal মিথ্যা বলত।
  */
 export default function OrderDeliveryModal({
   open,
@@ -245,11 +243,17 @@ function OrderDeliveryModalContent({
             )}
           </div>
 
+          {/**
+           * ⚠️ `w-full` তারপর `min-[560px]:w-auto` — ৩২০px পর্দায়
+           * select আর বোতাম উপর-নিচে বসে, আর তখন `shrink-0` + px-6
+           * বোতামটাকে সরু পর্দায় modal-এর বাইরে ঠেলে দিত। orders
+           * তালিকার বোতামজোড়াতেও ঠিক এই ভুলটাই ছিল।
+           */}
           <button
             type="button"
             onClick={handleAssign}
             disabled={submitting || !selected}
-            className="flex h-[43px] shrink-0 items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[14px] font-semibold leading-none text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+            className="flex h-[43px] w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[14px] font-semibold leading-none text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[560px]:w-auto min-[560px]:shrink-0"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Assign
@@ -257,15 +261,25 @@ function OrderDeliveryModalContent({
         </div>
       </div>
 
-      {/* Delivery Charge — এই অর্ডারে সত্যিই যা বসেছে। */}
-      <div className="flex items-center justify-between gap-4 rounded-[20px] bg-[#F9F6F3] p-4">
-        <span className="font-sora text-[14px] leading-none text-black/70">
-          Delivery Charge Applied
-        </span>
-        <span className="font-frank-ruhl text-[20px] font-semibold leading-none text-black">
-          {order.deliveryFeeLabel}
-        </span>
-      </div>
+      {/**
+       * Delivery Charge — Figma-র ধাপ + দূরত্ব বার + প্রযোজ্য ফি।
+       *
+       * ⚠️ `order.delivery` না থাকলে (FLAT mode-এ চলা দোকান, বা এই
+       * feature চালুর আগের অর্ডার) component নিজেই সরল সারিটায় নেমে
+       * আসে — এখানে আলাদা শর্ত লেখা হয়নি, যাতে "কখন কোনটা" সিদ্ধান্তটা
+       * এক জায়গাতেই থাকে।
+       */}
+      <DeliveryZoneBreakdown
+        delivery={
+          order.delivery ?? {
+            zones: [],
+            distanceKm: null,
+            barRatio: 0,
+            appliedFeeLabel: order.deliveryFeeLabel,
+            fellBackToFlat: false,
+          }
+        }
+      />
 
       {/* পদের সারি — View Order modal-এর হুবহু একই গড়ন। */}
       <div className="flex flex-col gap-3">
