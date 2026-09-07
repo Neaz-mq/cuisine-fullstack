@@ -11,6 +11,22 @@ const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
 
 /**
+ * দুটো বোতামের **অভিন্ন** class — যেগুলো breakpoint-ভেদে বদলায়।
+ * আলাদা করে রাখা হয়েছে কারণ দুটো বোতামে হুবহু একই প্রস্থ-নিয়ম চলতে
+ * হবে; একটায় বদলে অন্যটায় ভুলে গেলে ঠিক আগের bug-টাই ফিরে আসে।
+ *
+ * ── প্রস্থের তিনটে স্তর, তিনটে আলাদা কারণে ──────────────────────────
+ *
+ *   < 400px      w-full, উপর-নিচে সাজানো
+ *   400px – xl   লেখার মাপে (w-auto + px-4), প্রয়োজনে wrap
+ *   xl+          স্থির প্রস্থ (নিচে দেখুন)
+ */
+const BUTTON_BASE =
+  "flex h-9 w-full items-center justify-center gap-1.5 rounded-full " +
+  "font-sora text-[13px] font-medium leading-none " +
+  "min-[400px]:w-auto min-[400px]:px-4 xl:shrink-0 xl:px-2";
+
+/**
  * সারির দ্বিতীয় বোতামটা কী করবে — অর্ডারের অবস্থা আর ধরন দেখে।
  *
  * ⚠️ বোতামটা **সবসময় থাকে**, শুধু লেখা আর কাজ বদলায়। আগে সেটা কেবল
@@ -141,25 +157,38 @@ export default function OrderRowActions({
 
   return (
     /**
-     * ⚠️ দুটো বোতামেরই প্রস্থ **স্থির** (১০৪ আর ১৫০px), লেখার মাপে
-     * নয়।
+     * ⚠️ স্থির প্রস্থ (১০৪ + ১৫০) এখন **কেবল `xl`-এ**, সব মাপে নয়।
      *
-     * দ্বিতীয় বোতামের লেখা সারি-ভেদে বদলায় ("Move to Kitchen",
-     * "Ready to Delivery", "Mark Delivered", "Cancelled") — প্রস্থ
-     * লেখার হাতে ছাড়লে প্রতিটা সারিতে জোড়াটার বাঁ কিনারা অন্য
-     * জায়গায় পড়ত, আর তালিকাটা টেবিল নয়, এলোমেলো কার্ড দেখাত।
-     * screenshot-এ ঠিক সেটাই দেখা যাচ্ছিল।
+     * কেন স্থির: `xl`-এ সারিটা টেবিলের মতো এক লাইনে বসে, আর দ্বিতীয়
+     * বোতামের লেখা সারি-ভেদে বদলায় ("Move to Kitchen", "Ready to
+     * Delivery", "Mark Delivered", "Cancelled")। প্রস্থ লেখার হাতে
+     * ছাড়লে প্রতিটা সারিতে জোড়াটার বাঁ কিনারা অন্য জায়গায় পড়ত, আর
+     * তালিকাটা টেবিল নয়, এলোমেলো কার্ড দেখাত।
      *
      * ১৫০ = সবচেয়ে লম্বা লেখা "Ready to Delivery" (১৩px Sora-তে
      * ~১১৯px) + spinner-এর জায়গা (~২০px), সামান্য হাওয়া সহ। নতুন
-     * কোনো লেখা যোগ করলে এই হিসাবটা মিলিয়ে নিতে হবে, নাহলে
-     * `truncate` ওটা কেটে দেবে।
+     * কোনো লেখা যোগ করলে এই হিসাবটা মিলিয়ে নিতে হবে।
+     *
+     * ⚠️ কেন `xl`-এর নিচে স্থির নয় — এটাই ছিল bug-টা। ওখানে সারিটা
+     * column, তাই "ডান কিনারা মেলানো"র যুক্তিটাই খাটে না, অথচ
+     * ১০৪ + ৮ + ১৫০ = ২৬২px `shrink-0` হয়ে বসে থাকত। ৩২০px পর্দায়
+     * card-এর ভেতরে জায়গা থাকে ~২২৪px (shell padding + card `p-4` +
+     * row `p-4` বাদ দিয়ে) — অর্থাৎ ৩৮px বেশি, আর `shrink-0` বলে
+     * চাপতেও পারত না। ফলে gradient বোতামটা কার্ডের গোল কিনারা ছাড়িয়ে
+     * বাইরে বেরিয়ে যেত।
+     *
+     * তিনটে স্তর:
+     *   < 400px      উপর-নিচে, দুটোই পুরো চওড়া — কাটা পড়ে না, আর
+     *                সরু পর্দায় tap target-ও বড় থাকে
+     *   400px – xl   পাশাপাশি, লেখার মাপে; `flex-wrap` জাল হিসেবে
+     *                থাকে যাতে ভবিষ্যতে লম্বা লেখা এলেও উপচে না পড়ে
+     *   xl+          আগের স্থির প্রস্থ, ডানে সারিবদ্ধ
      */
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex w-full min-w-0 flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center xl:w-auto xl:flex-nowrap xl:shrink-0">
       <button
         type="button"
         onClick={() => setViewing(true)}
-        className={`flex h-9 w-[104px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-black/15 bg-white font-sora text-[13px] font-medium leading-none text-black transition-colors hover:border-black ${FOCUS_RING}`}
+        className={`${BUTTON_BASE} whitespace-nowrap border border-black/15 bg-white text-black transition-colors hover:border-black xl:w-[104px] ${FOCUS_RING}`}
       >
         View Order
       </button>
@@ -177,14 +206,23 @@ export default function OrderRowActions({
           else if (step.kind === "patch") advance(step.status, step.toast);
         }}
         disabled={isPending || step.kind === "done"}
-        className={`flex h-9 w-[150px] shrink-0 items-center justify-center gap-1.5 truncate rounded-full px-2 font-sora text-[13px] font-medium leading-none transition-opacity disabled:cursor-not-allowed ${
+        className={`${BUTTON_BASE} transition-opacity disabled:cursor-not-allowed xl:w-[150px] ${
           step.kind === "done"
             ? "bg-black/[0.06] text-black/40"
             : "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white hover:opacity-90 disabled:opacity-50"
         } ${FOCUS_RING}`}
       >
-        {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-        {step.label}
+        {isPending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />}
+        {/**
+         * ⚠️ `truncate` বোতামের উপরে নয়, ভেতরের span-এ।
+         *
+         * বোতামটা নিজে `display:flex` — আর flex container-এ
+         * `text-overflow: ellipsis` কাজই করে না, তাই আগের
+         * `truncate` class-টা কার্যত নিষ্ক্রিয় ছিল। `min-w-0`
+         * ছাড়া flex item নিজের content-এর নিচে নামতে চায় না, তাই
+         * সেটাও লাগে।
+         */}
+        <span className="min-w-0 truncate">{step.label}</span>
       </button>
 
       <OrderViewModal open={viewing} onClose={() => setViewing(false)} order={order} />
