@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Check, Minus, Plus, Star, UtensilsCrossed } from "lucide-react";
 import { toast } from "react-toastify";
 import { useCart } from "@/context/CartContext";
+import { formatAmount } from "@/lib/currency-format";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -15,7 +16,19 @@ export type ProductDetailItem = {
   title: string;
   description: string;
   price: number;
+  /** এক ইউনিটের দাম, মুদ্রা সহ — server-এ `formatAmount` দিয়ে তৈরি। */
   priceLabel: string;
+  /**
+   * মুদ্রার ISO কোড ("USD")। সংখ্যা বদলালে মোট দামটা এখানেই হিসাব
+   * করতে হয়, তাই কোডটাও লাগে।
+   *
+   * ⚠️ `lib/currency-format.ts` ইচ্ছাকৃতভাবে Prisma-মুক্ত, তাই client
+   * component-এ import করা নিরাপদ — ওই ফাইলের মাথায় সতর্কতাটা লেখা
+   * আছে, আর এই প্রজেক্টেই একবার সেটা ভেঙে `next build` থেমেছিল।
+   */
+  currency: string;
+  /** মুদ্রার দশমিক সংখ্যা — RestaurantSettings থেকে। */
+  currencyMinorUnits: number;
   images: string[];
   isAvailable: boolean;
   ingredients: string[];
@@ -70,6 +83,25 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
 
   const [imageIndex, setImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  /**
+   * ⚠️ দেখানো দামটা **মোট**, এক ইউনিটের নয় — সংখ্যা বাড়ালে দামও বাড়ে।
+   *
+   * Figma-তে ওখানে স্থির একটা দাম আঁকা, কিন্তু সেটা mockup-এ সংখ্যা
+   * ০১ বলেই — এক ইউনিটে দুটো এক জিনিস। বাস্তবে ৩টা বাছার পরেও
+   * "$3.00" লেখা থাকলে খদ্দের ভাবতেন দাম বদলায়নি, আর cart-এ গিয়ে
+   * $9.00 দেখে অবাক হতেন।
+   *
+   * এক ইউনিটের দামটা হারায় না — সংখ্যা একের বেশি হলে সেটা নিচে ছোট
+   * করে দেখানো হয় ("$3.00 each")।
+   */
+  const totalLabel =
+    quantity > 1
+      ? formatAmount(
+          (item.price * quantity).toFixed(item.currencyMinorUnits),
+          item.currency
+        )
+      : item.priceLabel;
 
   const hasImages = item.images.length > 0;
   const hasGallery = item.images.length > 1;
@@ -220,9 +252,41 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
 
             {/* Frame 2147236130 — দাম আর সংখ্যা বাছাই। */}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <span className="font-frank-ruhl text-[28px] font-semibold leading-[1.3] text-black xl:text-[36px]">
-                {item.priceLabel}
-              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span
+                  /* ⚠️ `aria-live` — সংখ্যা বদলালে screen reader নতুন
+                     দামটা পড়ে শোনায়, নাহলে বদলটা কেবল চোখেই ধরা পড়ত। */
+                  aria-live="polite"
+                  className="font-frank-ruhl text-[28px] font-semibold leading-[1.3] text-black xl:text-[36px]"
+                >
+                  {totalLabel}
+                </span>
+                {/**
+                 * ⚠️ লাইনটা সবসময় থাকে, কেবল দেখা যায় না — `invisible`,
+                 * `{quantity > 1 && …}` নয়।
+                 *
+                 * শর্ত দিয়ে সরিয়ে দিলে সংখ্যা ১ থেকে ২ হওয়ার মুহূর্তে
+                 * ঘরটা ১৫px লম্বা হয়ে যেত, আর তার নিচের সব কিছু —
+                 * Ingredients, Benefits, বোতামদুটো — এক ধাক্কায় নেমে
+                 * যেত। ডান কার্ড লম্বা হওয়ায় বাঁয়ের ছবিটাও (`items-
+                 * stretch`) সাথে সাথে বড় হত, তাই পুরো পাতাটা লাফাত।
+                 *
+                 * `invisible` জায়গাটা ধরে রাখে কিন্তু আঁকে না, তাই
+                 * উচ্চতা স্থির — কিছুই নড়ে না।
+                 *
+                 * ⚠️ সাথে `aria-hidden`, নাহলে screen reader লুকোনো
+                 * লেখাটাও পড়ত ("$3.00 each" যখন সংখ্যা ১, অর্থাৎ
+                 * অর্থহীন)।
+                 */}
+                <span
+                  aria-hidden={quantity === 1}
+                  className={`font-sora text-[12px] font-normal leading-none text-black/70 ${
+                    quantity > 1 ? "" : "invisible"
+                  }`}
+                >
+                  {item.priceLabel} each
+                </span>
+              </div>
 
               {/* Frame 2147225266 — cream stepper, 122×50, radius 90। */}
               <div className="flex h-[50px] shrink-0 items-center gap-2.5 rounded-[90px] bg-[#F9F6F3] p-[5px]">

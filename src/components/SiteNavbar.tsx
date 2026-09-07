@@ -8,6 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import { FaShoppingCart } from "react-icons/fa";
 import { ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
 import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
+import { useCart } from "@/context/CartContext";
 
 /**
  * src/components/SiteNavbar.tsx
@@ -49,14 +50,39 @@ import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions
  * mark. Swap the `src` below if your file lives at a different path.
  */
 
+/**
+ * ⚠️ "Our Chefs" আগে `/our-chefs`-এ যেত, কিন্তু পাতাটার আসল ঠিকানা
+ * `app/(main)/chefs/` — অর্থাৎ লিঙ্কটা 404 দিত। নামের সাথে ফোল্ডারের
+ * নাম মিলিয়ে ধরে নেওয়াটাই ভুল ছিল।
+ *
+ * ⚠️ "Reservation"-এর কোনো পাতা এখনো **নেই** (`app/(main)/`-এ
+ * `reservation` ফোল্ডার নেই), তাই ওটা এখনো 404 দেয়। ইচ্ছাকৃতভাবে
+ * অন্য কোথাও পাঠাইনি — `/dine-in` বা `/order`-এ পাঠালে খদ্দের যা
+ * চাইছেন তার বদলে অন্য জিনিস পেতেন, আর সেটা 404-এর চেয়েও
+ * বিভ্রান্তিকর। পাতাটা বানানো না হলে বরং এই সারিটা তালিকা থেকে
+ * মুছে ফেলাই ভালো।
+ */
 const navLinks = [
   { label: "Home", href: "/" },
   { label: "Menu", href: "/menu" },
-  { label: "Our Chefs", href: "/our-chefs" },
+  { label: "Our Chefs", href: "/chefs" },
   { label: "Reservation", href: "/reservation" },
 ];
 
-export default function Navbar({ cartCount = 0 }: { cartCount?: number }) {
+export default function Navbar() {
+  /**
+   * ⚠️ সংখ্যাটা এখন `useCart()` থেকে, prop থেকে নয়।
+   *
+   * আগে এটা `cartCount = 0` নামের একটা ঐচ্ছিক prop ছিল, কিন্তু
+   * `(main)/layout.tsx` কেবল `<SiteNavbar />` লেখে — কেউ কোনোদিন
+   * মানটা পাঠায়নি। ফলে ডিফল্ট শূন্যই থেকে যেত, আর `cartCount > 0`
+   * শর্তটা কখনো সত্যি হতো না: cart-এ যাই থাকুক, badge কখনোই
+   * দেখা যেত না।
+   *
+   * layout থেকে পাঠানোও যেত না — ওটা server component, আর cart
+   * থাকে browser-এর state-এ। তাই উৎসটাই বদলানো হলো।
+   */
+  const { cartCount } = useCart();
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -217,9 +243,17 @@ export default function Navbar({ cartCount = 0 }: { cartCount?: number }) {
               </>
             )}
 
+            {/**
+             * ⚠️ `/carts`, `/cart` নয় — পাতাটার ফোল্ডার
+             * `app/(main)/carts/`। এক অক্ষরের ভুলে cart-এর আইকনটা
+             * সোজা 404-এ নিয়ে যেত, অথচ "Add to cart" ঠিকই কাজ করছিল —
+             * তাই মনে হচ্ছিল cart-টাই ফাঁকা।
+             */}
             <Link
-              href="/cart"
-              aria-label="Cart"
+              href="/carts"
+              aria-label={
+                cartCount > 0 ? `Cart, ${cartCount} items` : "Cart"
+              }
               className="relative flex h-[46px] w-[46px] items-center justify-center rounded-full bg-black transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
             >
               <FaShoppingCart className="h-[18px] w-[18px] text-white" />

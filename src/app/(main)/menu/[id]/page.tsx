@@ -38,6 +38,20 @@ export const dynamic = "force-dynamic";
  */
 const PLACEHOLDER_RATING = { rating: 4.7, reviewCount: 20 };
 
+/**
+ * Feedback অংশের মাঝের ছবিটা।
+ *
+ * ⚠️ আগে এখানে পদটার নিজের ছবি বসানো ছিল, ফলে বার্গারের পাতায় তিনটে
+ * ঘরের মাঝখানে সেই একই বার্গার — অর্থাৎ ছবিটা কিছুই যোগ করত না।
+ * নকশায় ওখানে খদ্দেরদের খেতে বসার একটা ছবি, কিন্তু ওরকম কোনো ছবি
+ * এই অ্যাপের ডেটায় নেই (`Review`-তে ছবির মাঠ নেই)।
+ *
+ * তাই আপাতত একটা স্থির ছবি। কোনোদিন সত্যিকারের ছবি এলে (settings-এ
+ * একটা মাঠ, বা review-র সাথে ছবি) কেবল এই লাইনটাই বদলাবে।
+ */
+const PLACEHOLDER_FEEDBACK_IMAGE =
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1787501234/e07f2ff3501ab463298a1af3cfd6da761f10b803_xkhcwx.webp";
+
 const PLACEHOLDER_FEEDBACK: FeedbackCard[] = [
   {
     id: "placeholder-1",
@@ -201,6 +215,10 @@ export default async function MenuItemPage({
     description: item.description,
     price,
     priceLabel: formatAmount(price.toFixed(units), settings.currency),
+    // সংখ্যা বদলালে মোট দামটা client-এ হিসাব হয়, তাই মুদ্রার কোড আর
+    // দশমিক সংখ্যা দুটোই পাঠাতে হয় — ProductDetail-এ বিস্তারিত।
+    currency: settings.currency,
+    currencyMinorUnits: units,
     /**
      * ⚠️ `MenuItem`-এ ছবি একটাই (`imageUrl`), তাই array-টায় শূন্য বা
      * একটা সদস্য থাকে। ProductDetail একাধিক ছবি সামলাতে পারে, তাই
@@ -274,7 +292,8 @@ export default async function MenuItemPage({
   return (
     <>
       <ProductDetail item={detail} />
-      <CustomerFeedback cards={feedbackCards} centerImage={item.imageUrl} />
+      {/* ⚠️ PLACEHOLDER — মাঝের ছবিটা স্থির; উপরের মন্তব্য দ্রষ্টব্য। */}
+      <CustomerFeedback cards={feedbackCards} centerImage={PLACEHOLDER_FEEDBACK_IMAGE} />
       <MoreOptions items={related} />
       <FullMenuCta />
     </>
