@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
@@ -149,10 +150,23 @@ export default function TodaysOffers({ offers }: { offers: MenuOffer[] }) {
             className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-3 xl:overflow-visible"
           >
             {offers.map((offer, index) => (
-              <article
+              /**
+               * ⚠️ পুরো কার্ডটাই একটা লিঙ্ক — ভেতরে আলাদা কোনো বোতাম নেই।
+               * নকশায় কার্ডে কোনো "See offer" বোতাম আঁকা নেই, অথচ কার্ডটা
+               * চাপলে ছাড়ের পাতায় যাওয়ার কথা; পুরোটা ক্লিকযোগ্য হলে
+               * লক্ষ্যটাও বড় হয় (মোবাইলে আঙুলের জন্য গুরুত্বপূর্ণ)।
+               *
+               * ⚠️ `draggable={false}` — নাহলে slider-এ কার্ড টেনে সরাতে
+               * গেলে browser লিঙ্কটাকেই "টেনে আনা" শুরু করত, আর swipe
+               * মাঝপথে আটকে যেত।
+               */
+              <Link
                 key={offer.id}
+                href={`/offers/${encodeURIComponent(offer.code)}`}
+                draggable={false}
+                aria-label={`${offer.eyebrow}: ${offer.headline}`}
                 style={{ backgroundColor: CARD_COLORS[index % CARD_COLORS.length] }}
-                className="relative flex h-[269px] w-[288px] shrink-0 snap-start flex-col justify-between gap-10 overflow-hidden rounded-[20px] p-7 md:w-[416px] md:rounded-[30px] xl:w-auto"
+                className="relative flex h-[269px] w-[288px] shrink-0 snap-start flex-col justify-between gap-10 overflow-hidden rounded-[20px] p-7 transition-transform hover:scale-[1.01] focus:outline-none focus-visible:[outline:2px_solid_#111] focus-visible:[outline-offset:3px] md:w-[416px] md:rounded-[30px] xl:w-auto"
               >
                 {/**
                  * Vector 7957 — Figma-র হালকা ঢেউ (একটা path, 20px সাদা
@@ -215,7 +229,7 @@ export default function TodaysOffers({ offers }: { offers: MenuOffer[] }) {
                     {offer.detail}
                   </p>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
 

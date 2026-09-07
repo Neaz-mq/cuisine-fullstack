@@ -76,7 +76,24 @@ export async function POST(request: Request) {
       code: result.coupon.code,
       type: result.coupon.type,
       percentOff: result.coupon.percentOff,
-      fixedOff: result.coupon.fixedOff,
+      /**
+       * ⚠️ `Number()` — এখানে একটা সত্যিকারের বাগ ছিল।
+       *
+       * `fixedOff` Prisma-র `Decimal`, আর `NextResponse.json()` সেটাকে
+       * **string** বানিয়ে পাঠায় ("5"), number নয়। client-এ
+       * (`Carts.tsx`) মাঠটার ধরন লেখা `number | null`, তাই TypeScript
+       * কিছুই বলেনি — কিন্তু render-এর সময় `fixedOff.toFixed(2)` চলত
+       * একটা string-এর উপরে, আর "toFixed is not a function" দিয়ে
+       * পুরো cart পাতাটা error boundary-তে চলে যেত।
+       *
+       * শতাংশের কুপনে (`PERCENT`) ওই শাখাটাই চলত না, তাই বাগটা কেবল
+       * FIXED কুপনে দেখা যেত — ধরা কঠিন হওয়ার কারণ সেটাই।
+       *
+       * নিচের `discountAmount` আর `eligibleSubtotal` আগে থেকেই
+       * `.toNumber()` করা; এই একটা মাঠ বাদ পড়ে গিয়েছিল।
+       */
+      fixedOff:
+        result.coupon.fixedOff === null ? null : Number(result.coupon.fixedOff),
       // number-এ রূপান্তর — কারণ /api/gift-cards/validate-এর একই
       // মন্তব্যে ব্যাখ্যা করা: এটা preview, আসল হিসাব নয়।
       discountAmount: discountAmount.toNumber(),

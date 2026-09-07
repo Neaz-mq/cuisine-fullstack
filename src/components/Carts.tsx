@@ -779,7 +779,14 @@ const Carts = () => {
         code: data.code,
         type: data.type,
         percentOff: data.percentOff,
-        fixedOff: data.fixedOff,
+        // ⚠️ `Number()` — API এখন সংখ্যাই পাঠায়, কিন্তু এখানেও রূপান্তর
+        // রাখা হলো। state-এ যা ঢোকে তার ধরন এই component-এরই দায়িত্ব,
+        // আর ঠিক এই জায়গাতেই একবার string ঢুকে `.toFixed()`-এ পুরো
+        // পাতা ভেঙেছিল। route.ts-এ পুরো ব্যাখ্যা।
+        fixedOff:
+          data.fixedOff === null || data.fixedOff === undefined
+            ? null
+            : Number(data.fixedOff),
       });
       setDiscountCode("");
       const discountLabel =

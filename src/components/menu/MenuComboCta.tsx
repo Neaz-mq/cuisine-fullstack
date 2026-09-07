@@ -37,7 +37,23 @@ const FOCUS_RING =
  * বানানোর দিন দুটোই একসাথে কাজ শুরু করে; ততদিন অন্য কোথাও পাঠাতে
  * চাইলে এখানকার `href`-টাই বদলাতে হবে।
  */
-export default function MenuComboCta() {
+const DEFAULT_DESCRIPTION =
+  "Save More with Our Curated Combo Meals — Enjoy More Flavor, More Variety, and More Value, All Packed into One Delicious Order.";
+
+/**
+ * ⚠️ দুটো ঐচ্ছিক prop, কারণ এই ব্লকটা দুই জায়গায় বসে আর Figma-তে
+ * সামান্য আলাদা: `/menu`-এ দুটো বোতাম, আর ছাড়ের পাতায় (`/offers/…`)
+ * কেবল "Book a Table", সাথে একটু ভিন্ন বর্ণনা।
+ *
+ * ডিফল্ট মানদুটো `/menu`-এর, তাই ওখানে কল করার ধরনটা বদলাতে হয়নি।
+ */
+export default function MenuComboCta({
+  description = DEFAULT_DESCRIPTION,
+  showMenuLink = true,
+}: {
+  description?: string;
+  showMenuLink?: boolean;
+} = {}) {
   return (
     <section className="bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]">
       <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-8 xl:gap-9">
@@ -47,19 +63,20 @@ export default function MenuComboCta() {
           </h2>
 
           <p className="max-w-[636px] text-center font-sora text-[14px] font-normal leading-[1.6] text-black/70 md:text-[16px]">
-            Save More with Our Curated Combo Meals — Enjoy More Flavor, More Variety, and
-            More Value, All Packed into One Delicious Order.
+            {description}
           </p>
         </div>
 
         {/* Frame 2147236401: row, gap 12। */}
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/order"
-            className={`flex h-[52px] items-center justify-center rounded-[90px] border border-black px-6 font-sora text-[15px] font-semibold leading-[1.6] text-black transition-colors hover:bg-black hover:text-white xl:h-14 ${FOCUS_RING}`}
-          >
-            Download Menu
-          </Link>
+          {showMenuLink && (
+            <Link
+              href="/order"
+              className={`flex h-[52px] items-center justify-center rounded-[90px] border border-black px-6 font-sora text-[15px] font-semibold leading-[1.6] text-black transition-colors hover:bg-black hover:text-white xl:h-14 ${FOCUS_RING}`}
+            >
+              Download Menu
+            </Link>
+          )}
 
           {/**
            * Figma: padding 14px 6px 14px 24px — ডান দিকটা কম, কারণ
