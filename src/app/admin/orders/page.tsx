@@ -22,6 +22,7 @@ import Pagination from "./Pagination";
 import OrdersToolbar from "./OrdersToolbar";
 import OrderStatusSelect from "./OrderStatusSelect";
 import OrderRowActions from "./OrderRowActions";
+import { type OrderViewData } from "./OrderViewModal";
 
 export const metadata = { title: "Orders" };
 
@@ -55,6 +56,20 @@ function money(
  * "Uber Eats নয় মানেই Food Panda" ধরে নেওয়া যায় না — আগে সেটা নিরাপদ
  * ছিল, এখন null মান ভুল করে "Food Panda" দেখাত।
  */
+/**
+ * টাকা কীভাবে দেওয়া হবে/হয়েছে।
+ *
+ * ⚠️ dine-in-এ "Cash on Delivery" লেখাটা অর্থহীন — কিছু delivered
+ * হচ্ছে না, খদ্দের টেবিলেই দেন। তাই একই `COD` মানের দুটো আলাদা লেখা।
+ */
+function paymentLabel(order: {
+  orderType: "DELIVERY" | "DINE_IN";
+  paymentMethod: string;
+}) {
+  if (order.paymentMethod !== "COD") return "Online Payment";
+  return order.orderType === "DINE_IN" ? "Pay at Table" : "Cash on Delivery";
+}
+
 function channelLabel(order: {
   orderType: "DELIVERY" | "DINE_IN";
   shippingMethod: string | null;
@@ -123,7 +138,14 @@ export default async function AdminOrdersPage({
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { items: { include: { menuItem: true } }, user: true, table: true },
+      include: {
+        items: { include: { menuItem: true } },
+        user: true,
+        table: true,
+        // rider-এর id দরকার শুধু dispatch modal-এর dropdown আগে থেকে
+        // বাছা রাখতে — পুরো user সারিটা নয়, তাই `select`।
+        deliveryTracking: { select: { riderId: true } },
+      },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -268,13 +290,17 @@ export default async function AdminOrdersPage({
                  * টেবিল নয়, এলোমেলো কতগুলো কার্ড দেখাত। screenshot-এ
                  * প্রথম সারিটা ঠিক ওভাবেই বাকিদের থেকে সরে ছিল।
                  *
-                 * ২৮০ = View Order (~১১০) + gap ৮ + Move to Kitchen
-                 * (~১৫৫), সামান্য হাওয়া সহ। `justify-end`, তাই একটা
-                 * বোতাম থাকলে সেটা ডান কিনারাতেই বসে — সব সারিতে এক
-                 * জায়গায়।
+                 * ২৬২ = View Order (১০৪) + gap ৮ + কাজের বোতাম (১৫০)।
+                 * ভেতরের দুটোরও প্রস্থ স্থির — OrderRowActions-এ কেন,
+                 * তার ব্যাখ্যা আছে।
                  */}
-                <div className="flex xl:w-[280px] xl:shrink-0 xl:justify-end">
-                  <OrderRowActions orderId={order.id} status={order.status} />
+                <div className="flex xl:w-[262px] xl:shrink-0 xl:justify-end">
+                  <OrderRowActions
+                    orderId={order.id}
+                    status={order.status}
+                    orderType={order.orderType}
+                    order={viewData(order)}
+                  />
                 </div>
               </div>
             ))}
@@ -310,6 +336,73 @@ export default async function AdminOrdersPage({
       </div>
     </div>
   );
+}
+
+/**
+ * সারির ডেটা → modal যা বোঝে সেই আকার।
+ *
+ * ⚠️ `Decimal`-গুলো এখানেই লেখা রূপে বদলে যায়। OrderRowActions একটা
+ * client component, আর Prisma-র `Decimal` সরল object নয় — সরাসরি
+ * পাঠালে Next.js throw করে ("Only plain objects can be passed to
+ * Client Components")।
+ *
+ * ⚠️ ঠিকানাটা এখানেই জোড়া হয়, client-এ নয় — কোন অংশগুলো আছে আর
+ * কোনগুলো `null` (dine-in অর্ডারে প্রায় সবই) সেটা এক জায়গায় ঠিক করা
+ * থাকলে দুই জায়গায় দুরকম ফল হয় না।
+ */
+function viewData(order: {
+  id: string;
+  email: string | null;
+  phone: string;
+  address: string | null;
+  apartment: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
+  orderType: "DELIVERY" | "DINE_IN";
+  shippingMethod: string | null;
+  paymentMethod: string;
+  currency: string;
+  currencyMinorUnits: number;
+  totalAmount: Prisma.Decimal;
+  deliveryFee: Prisma.Decimal;
+  table: { label: string } | null;
+  deliveryTracking: { riderId: string } | null;
+  items: {
+    id: string;
+    quantity: number;
+    price: Prisma.Decimal;
+    menuItem: { title: string };
+  }[];
+}): OrderViewData {
+  const addressParts = [
+    order.address,
+    order.apartment,
+    order.city,
+    order.state,
+    order.zip,
+    order.country,
+  ].filter((part): part is string => Boolean(part && part.trim()));
+
+  return {
+    id: order.id,
+    reference: formatOrderId(order.id),
+    email: order.email,
+    phone: order.phone,
+    address: addressParts.length > 0 ? addressParts.join(", ") : null,
+    items: order.items.map((item) => ({
+      id: item.id,
+      title: item.menuItem.title,
+      quantity: item.quantity,
+      lineTotal: money(order, item.price.times(item.quantity)),
+    })),
+    channel: channelLabel(order),
+    paymentLabel: paymentLabel(order),
+    totalLabel: money(order, order.totalAmount),
+    deliveryFeeLabel: money(order, order.deliveryFee),
+    riderId: order.deliveryTracking?.riderId ?? null,
+  };
 }
 
 /**
