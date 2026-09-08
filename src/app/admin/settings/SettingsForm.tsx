@@ -5,6 +5,8 @@ import { useState, useEffect, useTransition } from "react";
 // currency-format.ts ইচ্ছাকৃতভাবে Prisma-মুক্ত, তাই client component-এও
 // import করা নিরাপদ — ওই ফাইলের header-এ কারণটা লেখা আছে।
 import { formatAmount } from "@/lib/currency-format";
+import { Calendar } from "lucide-react";
+import { FIELD, LABEL, PRIMARY_BUTTON, SelectField } from "@/components/admin/modal-ui";
 
 const TIMEZONES = [
   "Asia/Dhaka",
@@ -116,9 +118,20 @@ export interface SettingsFormData {
   tipPresetPercents: number[];
 }
 
-const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white";
-const labelClass = "block text-sm font-medium text-gray-700 mb-1";
-const helpClass = "text-xs text-gray-500 mt-1";
+/**
+ * ⚠️ এই তিনটে token আগে নিজের মতো করে লেখা ছিল — `border-gray-300`,
+ * `rounded-md`, সাদা background। অর্থাৎ পাতাটা অ্যাপের নকশা-ব্যবস্থার
+ * বাইরে দাঁড়িয়ে ছিল, যেখানে বাকি প্রতিটা admin পর্দা cream ঘর, radius
+ * ১২, Sora/Frank Ruhl আর AdminShell-এর কার্ড ব্যবহার করে।
+ *
+ * এখন সরাসরি components/admin/modal-ui.tsx-এর token গুলোই ব্যবহার হয়,
+ * নিজের কপি নয় — নাহলে একদিন ওখানে radius বদলালে এই পাতাটা একা পুরোনো
+ * চেহারায় থেকে যেত। Kitchen, Categories আর Orders-এর ক্ষেত্রেও ঠিক
+ * এটাই হয়েছিল।
+ */
+const inputClass = FIELD;
+const labelClass = LABEL;
+const helpClass = "mt-1.5 font-sora text-[11px] leading-[1.6] text-black/50";
 
 function Section({
   title,
@@ -130,10 +143,16 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border border-gray-200 rounded-lg p-4 space-y-4">
+    /**
+     * Figma-র কার্ড: সাদা, radius 20, padding 30 (সরু পর্দায় কমে)।
+     * Orders আর Kitchen-এর তালিকা-কার্ডের হুবহু একই খোলস।
+     */
+    <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
       <div>
-        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
-        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+        <h2 className="font-frank-ruhl text-[20px] font-semibold leading-none text-black min-[480px]:text-[24px]">
+          {title}
+        </h2>
+        <p className="mt-2 font-sora text-[12px] leading-[1.6] text-black/50">{description}</p>
       </div>
       {children}
     </section>
@@ -152,22 +171,90 @@ function Toggle({
   help?: string;
 }) {
   return (
-    <div>
-      <label className="flex items-start gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#FF4C15] focus:ring-[#FF4C15]"
+    /**
+     * Figma-র "Notifications" কার্ডের সারিটা: cream পটভূমি, বাঁয়ে লেখা,
+     * ডানে gradient pill switch।
+     *
+     * ⚠️ checkbox নয়, `role="switch"` সহ একটা <button>। checkbox-এর
+     * native চেহারা browser-ভেদে আলাদা আর Figma-র pill-টা তাতে বানানো
+     * যায় না। screen reader-এর কাছে দুটোই সমান স্পষ্ট, কারণ
+     * aria-checked সেই ভূমিকাটাই বহন করে।
+     */
+    <div className="flex items-center justify-between gap-4 rounded-[16px] bg-[#F9F6F3] p-4">
+      <span className="min-w-0">
+        <span className="block font-frank-ruhl text-[14px] font-medium leading-[1.4] text-black">
+          {label}
+        </span>
+        {help && (
+          <span className="mt-1 block font-sora text-[11px] leading-[1.6] text-black/50">
+            {help}
+          </span>
+        )}
+      </span>
+
+      {/**
+        * ⚠️ gradient নয়, **একরঙা** কমলা — Figma-র switch গুলো তাই।
+        *
+        * gradient-টা বোতামের জন্য (PRIMARY_BUTTON), আর ওখানে সেটা কাজ
+        * করে কারণ বোতাম চওড়া। ৪০px-এর একটা track-এ ওই gradient কার্যত
+        * একটা ঘোলাটে রঙ হয়ে দাঁড়ায় — নকশাটা দেখা যায় না, শুধু কমলাটা
+        * নোংরা লাগে।
+        *
+        * বন্ধ অবস্থার ধূসরটা উষ্ণ (#D9D2CC), নিরপেক্ষ ধূসর নয় — cream
+        * পটভূমিতে নীলচে ধূসর ঠান্ডা আর বেমানান দেখায়।
+        */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
+          checked ? "bg-[#FF8A3D]" : "bg-[#D9D2CC]"
+        }`}
+      >
+        {/**
+          * ⚠️ বন্ধ অবস্থায় গুটিটা **বাঁয়ে**, চালু অবস্থায় ডানে।
+          *
+          * Figma-র দুটো ছবিতেই ওটা ডানে আঁকা, কিন্তু সেটা অনুসরণ করা
+          * যায় না: switch-এর গুটির অবস্থানই তার অবস্থা বলে দেয়, আর
+          * দুই অবস্থায় এক জায়গায় থাকলে রঙই একমাত্র সংকেত — যা
+          * বর্ণান্ধ ব্যবহারকারীর কাছে কোনো সংকেতই নয়।
+          */}
+        {/**
+          * ⚠️ `left-0.5` বাদ দেওয়া যাবে না।
+          *
+          * absolute element-এ `left` না দিলে ব্রাউজার তার **static
+          * position** ধরে — অর্থাৎ flow-তে যেখানে বসত। <button>-এর
+          * UA stylesheet-এ `text-align: center` থাকে, তাই সেই
+          * অবস্থানটা track-এর মাঝখান, বাঁ কিনারা নয়। তার উপর
+          * translate যোগ হয়ে গুটিটা track ছাড়িয়ে বাইরে বেরিয়ে যেত।
+          *
+          * হিসাবটা: track ৪০, গুটি ১৮, দু'পাশে ২ করে ফাঁক।
+          * বন্ধ → 2..20, চালু → (2 + 18) = 20..38।
+          */}
+        <span
+          aria-hidden="true"
+          className={`absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform ${
+            checked ? "translate-x-[18px]" : "translate-x-0"
+          }`}
         />
-        <span className="text-sm text-gray-700">{label}</span>
-      </label>
-      {help && <p className={`${helpClass} ml-6`}>{help}</p>}
+      </button>
     </div>
   );
 }
 
-export default function SettingsForm({ initialData }: { initialData: SettingsFormData }) {
+export default function SettingsForm({
+  initialData,
+  userName,
+  today,
+}: {
+  initialData: SettingsFormData;
+  /** Welcome শিরোনামের নাম — server থেকে, session-এর। */
+  userName: string;
+  /** ইতিমধ্যেই সাজানো তারিখ। কেন string, তার ব্যাখ্যা page.tsx-এ। */
+  today: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -328,12 +415,79 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {error && <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-md">{error}</div>}
-      {success && (
-        <div className="bg-green-50 text-green-700 text-sm px-3 py-2 rounded-md">
-          Settings saved successfully.
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/**
+        * Figma-তে "Save Change" বোতামটা উপরে-ডানে, পাতার নিচে নয় — আর
+        * সেটাই এখানে রাখা হয়েছে।
+        *
+        * ⚠️ আপস আছে: পাতাটা লম্বা, তাই নিচের zone গুলো সম্পাদনা করার
+        * পর সেভ করতে উপরে ফিরতে হয়। বার্তা দুটো (error/success) এই
+        * একই সারিতে বসে, বোতামের পাশেই — যাতে সেভ চেপে ফল দেখতে আবার
+        * চোখ সরাতে না হয়।
+        */}
+      {/* --- Welcome header — Orders/Kitchen/Categories-এর একই গড়ন --- */}
+      <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 md:leading-none lg:text-[26px] xl:text-[30px]">
+          Welcome Back,{" "}
+          <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
+            {userName}!
+          </span>
+        </h1>
+
+        {/**
+          * ⚠️ তারিখ আর Save **একই সারিতে** — Figma-র উপরের ডান কোণে
+          * যেভাবে "Jan 20, 2026" আর "Export Report" পাশাপাশি বসে।
+          *
+          * আগে তারিখটা page.tsx-এ আর বোতামটা form-এর ভেতরে ছিল,
+          * অর্থাৎ দুটো আলাদা block — তাই বোতামটা তারিখের নিচের সারিতে
+          * নেমে যেত।
+          *
+          * ৩২০px-এ দুটো পাশাপাশি ধরে না, তাই `justify-between` দিয়ে
+          * দুই প্রান্তে ছড়িয়ে দেওয়া হয় (Orders-এর header-এর হুবহু
+          * একই আচরণ)।
+          */}
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-end">
+          <span className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black min-[480px]:h-11 min-[480px]:px-4 min-[480px]:text-[14px]">
+            <Calendar
+              className="h-4 w-4 shrink-0 text-black/70 min-[480px]:h-5 min-[480px]:w-5"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
+            {today}
+          </span>
+
+          <button
+            type="submit"
+            disabled={isPending}
+            className={`${PRIMARY_BUTTON} h-10 shrink-0 min-[480px]:h-11`}
+          >
+            {isPending ? "Saving…" : "Save Change"}
+          </button>
         </div>
+      </div>
+
+      {/**
+        * ⚠️ বার্তা দুটো header-এর নিচে, নিজের সারিতে।
+        *
+        * বোতামের পাশে বসানো হয়েছিল, কিন্তু তাতে বার্তা এলে header-এর
+        * উচ্চতা বদলে যেত আর নিচের পুরো পাতাটা এক ঝটকায় নেমে যেত —
+        * যেটা ঠিক সেভ চাপার মুহূর্তে সবচেয়ে বিরক্তিকর।
+        */}
+      {/**
+        * ⚠️ কোনো wrapper <div> নেই — বার্তা না থাকলে DOM-এ কিছুই বসে
+        * না। খালি একটা div রাখলে form-এর `gap-4` তার জন্যও একটা ফাঁক
+        * ছাড়ত, অর্থাৎ header আর প্রথম কার্ডের মধ্যে বিনা কারণে বাড়তি
+        * জায়গা থাকত।
+        */}
+      {error && (
+        <p className="rounded-[12px] bg-[#D72A37]/10 px-3 py-2 font-sora text-[12px] leading-[1.5] text-[#D72A37]">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="rounded-[12px] bg-[#2C6252]/10 px-3 py-2 font-sora text-[12px] leading-[1.5] text-[#2C6252]">
+          Settings saved successfully.
+        </p>
       )}
 
       {/* ─────────────────────────── Hours ─────────────────────────── */}
@@ -342,51 +496,33 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         title="Opening hours"
         description="Decides when customers see “Kitchen available” on the site."
       >
-        <div>
-          <label className={labelClass}>Restaurant timezone</label>
-          <select
-            value={form.timezone}
-            onChange={(e) => set("timezone", e.target.value)}
-            className={inputClass}
-          >
-            {TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* ⚠️ native <select> নয়, modal-ui-র SelectField — বাকি প্রতিটা
+            admin পর্দায় dropdown গুলো ওটাই, আর native select-এর চেহারা
+            OS-ভেদে আলাদা বলে ওখানে cream ঘরের সাথে মিলত না। */}
+        <SelectField
+          id="settings-timezone"
+          label="Restaurant timezone"
+          value={form.timezone}
+          onChange={(value) => set("timezone", value)}
+          options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+        />
 
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <label className={labelClass}>Kitchen opens at</label>
-            <select
-              value={form.kitchenOpenHour}
-              onChange={(e) => set("kitchenOpenHour", parseInt(e.target.value, 10))}
-              className={inputClass}
-            >
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {formatHour(h)}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+          <SelectField
+            id="settings-open-hour"
+            label="Kitchen opens at"
+            value={String(form.kitchenOpenHour)}
+            onChange={(value) => set("kitchenOpenHour", parseInt(value, 10))}
+            options={HOURS.map((h) => ({ value: String(h), label: formatHour(h) }))}
+          />
 
-          <div className="flex-1">
-            <label className={labelClass}>Kitchen closes at</label>
-            <select
-              value={form.kitchenCloseHour}
-              onChange={(e) => set("kitchenCloseHour", parseInt(e.target.value, 10))}
-              className={inputClass}
-            >
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {formatHour(h)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="settings-close-hour"
+            label="Kitchen closes at"
+            value={String(form.kitchenCloseHour)}
+            onChange={(value) => set("kitchenCloseHour", parseInt(value, 10))}
+            options={HOURS.map((h) => ({ value: String(h), label: formatHour(h) }))}
+          />
         </div>
       </Section>
 
@@ -396,45 +532,33 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         title="Currency"
         description="Applies to new orders only. Past orders keep the currency they were placed in."
       >
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <label className={labelClass}>Currency</label>
-            <select
-              value={form.currency}
-              onChange={(e) => {
-                const picked = CURRENCIES.find((c) => c.code === e.target.value);
-                setForm((prev) => ({
-                  ...prev,
-                  currency: e.target.value,
-                  // দশমিক সংখ্যাটা currency-র সাথেই বসে যায় — দুটো আলাদা
-                  // রাখলে JPY-তে ১০০ গুণ ভুল চার্জ সম্ভব হতো।
-                  currencyMinorUnits: picked ? picked.minorUnits : prev.currencyMinorUnits,
-                }));
-                setSuccess(false);
-              }}
-              className={inputClass}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} — {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-[1fr_10rem]">
+          <SelectField
+            id="settings-currency"
+            label="Currency"
+            value={form.currency}
+            onChange={(value) => {
+              const picked = CURRENCIES.find((c) => c.code === value);
+              setForm((prev) => ({
+                ...prev,
+                currency: value,
+                // দশমিক সংখ্যাটা currency-র সাথেই বসে যায় — দুটো আলাদা
+                // রাখলে JPY-তে ১০০ গুণ ভুল চার্জ সম্ভব হতো।
+                currencyMinorUnits: picked ? picked.minorUnits : prev.currencyMinorUnits,
+              }));
+              setSuccess(false);
+            }}
+            options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
+          />
 
-          <div className="w-40">
-            <label className={labelClass}>Decimal places</label>
-            <select
-              value={form.currencyMinorUnits}
-              onChange={(e) => set("currencyMinorUnits", parseInt(e.target.value, 10))}
-              className={inputClass}
-            >
-              {[0, 1, 2, 3].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+          <div>
+            <SelectField
+              id="settings-minor-units"
+              label="Decimal places"
+              value={String(form.currencyMinorUnits)}
+              onChange={(value) => set("currencyMinorUnits", parseInt(value, 10))}
+              options={[0, 1, 2, 3].map((n) => ({ value: String(n), label: String(n) }))}
+            />
             <p className={helpClass}>Set for you. Change only if you know the currency.</p>
           </div>
         </div>
@@ -455,8 +579,8 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
 
         {form.taxEnabled && (
           <>
-            <div className="flex gap-4">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+              <div className="min-w-0">
                 <label className={labelClass}>What it&apos;s called</label>
                 <input
                   type="text"
@@ -471,16 +595,17 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                 </p>
               </div>
 
-              <div className="flex-1">
-                <label className={labelClass}>How prices work</label>
-                <select
+              <div className="min-w-0">
+                <SelectField
+                  id="settings-tax-mode"
+                  label="How prices work"
                   value={form.taxMode}
-                  onChange={(e) => set("taxMode", e.target.value as "INCLUSIVE" | "EXCLUSIVE")}
-                  className={inputClass}
-                >
-                  <option value="EXCLUSIVE">Added on top of menu prices</option>
-                  <option value="INCLUSIVE">Already included in menu prices</option>
-                </select>
+                  onChange={(value) => set("taxMode", value as "INCLUSIVE" | "EXCLUSIVE")}
+                  options={[
+                    { value: "EXCLUSIVE", label: "Added on top of menu prices" },
+                    { value: "INCLUSIVE", label: "Already included in menu prices" },
+                  ]}
+                />
                 <p className={helpClass}>
                   {form.taxMode === "INCLUSIVE"
                     ? "EU, UK, Japan, Australia, India. The total doesn't change — the bill just declares how much of it was tax."
@@ -489,8 +614,8 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+              <div className="min-w-0">
                 <label className={labelClass}>Dine-in rate (%)</label>
                 <input
                   type="number"
@@ -503,7 +628,7 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                 />
               </div>
 
-              <div className="flex-1">
+              <div className="min-w-0">
                 <label className={labelClass}>Delivery rate (%)</label>
                 <input
                   type="number"
@@ -533,8 +658,8 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         title="Service charge and delivery"
         description="Both optional. Leave at 0 to keep them off the bill entirely."
       >
-        <div className="flex gap-4">
-          <div className="flex-1">
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+          <div className="min-w-0">
             <label className={labelClass}>Service charge (%)</label>
             <input
               type="number"
@@ -551,16 +676,17 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
             </p>
           </div>
 
-          <div className="flex-1">
-            <label className={labelClass}>How the delivery fee is decided</label>
-            <select
+          <div className="min-w-0">
+            <SelectField
+              id="settings-delivery-mode"
+              label="How the delivery fee is decided"
               value={form.deliveryFeeMode}
-              onChange={(e) => set("deliveryFeeMode", e.target.value as "FLAT" | "DISTANCE")}
-              className={inputClass}
-            >
-              <option value="FLAT">One flat fee, every order</option>
-              <option value="DISTANCE">By distance from the restaurant</option>
-            </select>
+              onChange={(value) => set("deliveryFeeMode", value as "FLAT" | "DISTANCE")}
+              options={[
+                { value: "FLAT", label: "One flat fee, every order" },
+                { value: "DISTANCE", label: "By distance from the restaurant" },
+              ]}
+            />
             <p className={helpClass}>
               {form.deliveryFeeMode === "DISTANCE"
                 ? "The customer's address is looked up on the map at checkout, and the matching zone below sets the fee."
@@ -577,7 +703,7 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
           * যায়) এই ফি-টাই বসে আর অর্ডার এগোয়। লুকিয়ে রাখলে owner
           * জানতেনই না কোন সংখ্যাটা তখন ব্যবহার হচ্ছে।
           */}
-        <div className="flex-1">
+        <div className="min-w-0">
           <label className={labelClass}>
             {form.deliveryFeeMode === "DISTANCE"
               ? "Fallback delivery fee (flat)"
@@ -601,9 +727,9 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         {/* ───────────────────── Distance zones ───────────────────── */}
 
         {form.deliveryFeeMode === "DISTANCE" && (
-          <div className="space-y-3 border-t border-gray-200 pt-4">
+          <div className="space-y-3 border-t border-black/10 pt-4">
             <div>
-              <h3 className="text-sm font-medium text-gray-800">Distance zones</h3>
+              <h3 className="font-frank-ruhl text-[15px] font-semibold leading-none text-black">Distance zones</h3>
               <p className={helpClass}>
                 Each zone runs from where the one above it ended, so there can never be a gap.
                 Distances are straight-line, not driving distance — roads are usually 20–40%
@@ -612,7 +738,15 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              {/**
+                * ⚠️ শিরোনামের সারিটা ৫৬০-এর নিচে লুকোয়।
+                *
+                * ওখানে প্রতিটা ধাপ নিজেই একটা ছোট কার্ড হয়ে যায়, আর
+                * ঘরগুলোর নিজস্ব label উপরে বসে — তখন একটা আলাদা
+                * শিরোনাম-সারি কোন কলামের কথা বলছে, বোঝাই যেত না।
+                * Orders তালিকার Field()-এও ঠিক এই একই যুক্তি।
+                */}
+              <div className="hidden items-center gap-2 font-sora text-[11px] text-black/50 min-[560px]:flex">
                 <span className="w-32 shrink-0">Zone</span>
                 <span className="flex-1">Up to (km)</span>
                 <span className="flex-1">Fee</span>
@@ -624,34 +758,72 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                 const openEnded = zone.upToKm === null;
 
                 return (
-                  <div key={index} className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs text-gray-600">
+                  /**
+                   * ⚠️ ৫৬০-এর নিচে সারিটা ভেঙে একটা cream কার্ড হয়:
+                   * উপরে ধাপের নাম, নিচে দুটো ঘর পাশাপাশি।
+                   *
+                   * চারটে কলাম (নাম · Up to · Fee · ×) এক সারিতে
+                   * ধরাতে অন্তত ৩৮০px লাগে; ৩২০px পর্দায় কার্ডের
+                   * ভেতরে জায়গা থাকে ~২৪০px। জোর করলে ঘরদুটো ৪০px-এ
+                   * নেমে আসত, অর্থাৎ "12.5" লেখাই যেত না।
+                   */
+                  <div
+                    key={index}
+                    className="flex flex-col gap-2 rounded-[12px] bg-[#F9F6F3] p-3 min-[560px]:flex-row min-[560px]:items-center min-[560px]:rounded-none min-[560px]:bg-transparent min-[560px]:p-0"
+                  >
+                    <span className="font-frank-ruhl text-[13px] font-medium leading-none text-black min-[560px]:w-32 min-[560px]:shrink-0 min-[560px]:font-sora min-[560px]:text-[12px] min-[560px]:font-normal min-[560px]:text-black/70">
                       {zoneRangeLabel(index)}
                     </span>
 
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      // সীমাহীন শেষ ধাপে কোনো সংখ্যা নেই — ঘরটা বন্ধ,
-                      // আর placeholder-ই বলে দেয় কেন।
-                      disabled={isLast && openEnded}
-                      value={zone.upToKm ?? ""}
-                      placeholder={isLast && openEnded ? "no limit" : ""}
-                      onChange={(e) =>
-                        updateZone(index, { upToKm: parseFloat(e.target.value) || 0 })
-                      }
-                      className={`${inputClass} flex-1 disabled:bg-gray-50 disabled:text-gray-400`}
-                    />
+                    {/**
+                      * ⚠️ `min-[560px]:contents` — চওড়া পর্দায় এই
+                      * মোড়কটা DOM-এ থেকেও layout থেকে উবে যায়, তাই
+                      * ভেতরের তিনটে জিনিস সরাসরি বাইরের flex সারির
+                      * সন্তান হয়ে বসে।
+                      *
+                      * বিকল্প ছিল দুটো আলাদা markup লিখে একটাকে
+                      * লুকিয়ে রাখা — কিন্তু তাতে একই "×" বোতাম দুবার
+                      * DOM-এ থাকত, আর ভবিষ্যতে একটাতে বদল করে অন্যটায়
+                      * ভুলে যাওয়াটা সময়ের ব্যাপার মাত্র।
+                      */}
+                    <div className="flex items-end gap-2 min-[560px]:contents">
+                      <label className="flex min-w-0 flex-1 flex-col gap-1 min-[560px]:contents">
+                        {/* label-টা কেবল সরু পর্দায় — চওড়ায় শিরোনাম-সারি
+                            ওই কাজটা করে। */}
+                        <span className="font-sora text-[11px] leading-none text-black/50 min-[560px]:hidden">
+                          Up to (km)
+                        </span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          // সীমাহীন শেষ ধাপে কোনো সংখ্যা নেই — ঘরটা বন্ধ,
+                          // আর placeholder-ই বলে দেয় কেন।
+                          disabled={isLast && openEnded}
+                          value={zone.upToKm ?? ""}
+                          placeholder={isLast && openEnded ? "no limit" : ""}
+                          onChange={(e) =>
+                            updateZone(index, { upToKm: parseFloat(e.target.value) || 0 })
+                          }
+                          className={`${inputClass} flex-1 disabled:bg-black/[0.04] disabled:text-black/30`}
+                        />
+                      </label>
 
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={zone.fee}
-                      onChange={(e) => updateZone(index, { fee: parseFloat(e.target.value) || 0 })}
-                      className={`${inputClass} flex-1`}
-                    />
+                      <label className="flex min-w-0 flex-1 flex-col gap-1 min-[560px]:contents">
+                        <span className="font-sora text-[11px] leading-none text-black/50 min-[560px]:hidden">
+                          Fee
+                        </span>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={zone.fee}
+                          onChange={(e) =>
+                            updateZone(index, { fee: parseFloat(e.target.value) || 0 })
+                          }
+                          className={`${inputClass} flex-1`}
+                        />
+                      </label>
 
                     <button
                       type="button"
@@ -660,10 +832,14 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                       // সরিয়ে দিলে দূরের ঠিকানায় কোনো ধাপই মিলত না।
                       disabled={zones.length <= 1 || isLast}
                       aria-label={`Remove the ${zoneRangeLabel(index)} zone`}
-                      className="w-7 h-7 shrink-0 rounded text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                      // ⚠️ `mb-[9px]` কেবল সরু পর্দায়: ওখানে ঘরগুলোর
+                      // উপরে একটা label বসে, তাই বোতামটা না নামালে
+                      // label-এর সমান্তরালে ঝুলে থাকত, ঘরের নয়।
+                      className="mb-[9px] h-7 w-7 shrink-0 rounded-full text-black/40 transition-colors hover:bg-black/5 hover:text-[#D72A37] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black/40 min-[560px]:mb-0"
                     >
                       ×
                     </button>
+                    </div>
                   </div>
                 );
               })}
@@ -674,16 +850,16 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                 type="button"
                 onClick={addZone}
                 disabled={zones.length >= 8}
-                className="text-xs font-medium text-[#FF4C15] hover:underline disabled:opacity-40 disabled:no-underline"
+                className="font-sora text-[12px] font-semibold text-[#FF7100] hover:underline disabled:opacity-40 disabled:no-underline"
               >
                 + Add a zone
               </button>
               {zones.length >= 8 && (
-                <span className="text-xs text-gray-400">Eight is the maximum.</span>
+                <span className="font-sora text-[11px] text-black/40">Eight is the maximum.</span>
               )}
             </div>
 
-            <div className="border-t border-gray-200 pt-3">
+            <div className="border-t border-black/10 pt-3">
               <Toggle
                 checked={hasRadiusLimit}
                 onChange={toggleRadiusLimit}
@@ -696,8 +872,8 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
               />
             </div>
 
-            <div className="flex gap-4 border-t border-gray-200 pt-3">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 gap-4 border-t border-black/10 pt-3 min-[480px]:grid-cols-2">
+              <div className="min-w-0">
                 <label className={labelClass}>Restaurant latitude</label>
                 <input
                   type="text"
@@ -708,7 +884,7 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
                   placeholder="24.84491"
                 />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0">
                 <label className={labelClass}>Restaurant longitude</label>
                 <input
                   type="text"
@@ -783,26 +959,28 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
 
       {/* ─────────────────────────── Preview ───────────────────────── */}
 
-      <section className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-800">What a customer would see</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+      <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
+        <div className="flex flex-col items-start justify-between gap-3 min-[560px]:flex-row">
+          <div className="min-w-0">
+            <h2 className="font-frank-ruhl text-[20px] font-semibold leading-none text-black min-[480px]:text-[24px]">
+              What a customer would see
+            </h2>
+            <p className="mt-2 font-sora text-[12px] leading-[1.6] text-black/50">
               A sample order of 2 × {money("50")}, priced by the same code that prices real
               orders.
             </p>
           </div>
 
-          <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs shrink-0">
+          <div className="flex shrink-0 overflow-hidden rounded-full bg-[#F9F6F3] p-1">
             {(["dineIn", "delivery"] as const).map((type) => (
               <button
                 key={type}
                 type="button"
                 onClick={() => setPreviewType(type)}
-                className={`px-3 py-1.5 ${
+                className={`rounded-full px-4 py-1.5 font-sora text-[12px] font-medium leading-none transition-colors ${
                   previewType === type
-                    ? "bg-[#FF4C15] text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
+                    : "text-black/60 hover:text-black"
                 }`}
               >
                 {type === "dineIn" ? "Dine-in" : "Delivery"}
@@ -812,34 +990,34 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         </div>
 
         {previewError && (
-          <p className="text-xs text-amber-700">
+          <p className="rounded-[12px] bg-[#FF9540]/10 px-3 py-2 font-sora text-[12px] leading-[1.5] text-[#9A5B12]">
             Can&apos;t price these values — check the rates above.
           </p>
         )}
 
         {!previewError && line && preview && (
-          <dl className="text-sm space-y-1.5">
-            <div className="flex justify-between text-gray-600">
+          <dl className="flex flex-col gap-2 rounded-[16px] bg-[#F9F6F3] p-4 font-sora text-[13px]">
+            <div className="flex justify-between text-black/70">
               <dt>Subtotal</dt>
               <dd>{money(line.subtotal)}</dd>
             </div>
 
             {parseFloat(line.serviceCharge) > 0 && (
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-black/70">
                 <dt>Service charge</dt>
                 <dd>{money(line.serviceCharge)}</dd>
               </div>
             )}
 
             {parseFloat(line.deliveryFee) > 0 && (
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-black/70">
                 <dt>
                   Delivery
                   {/* ⚠️ preview-তে কোনো ঠিকানা নেই, তাই সবচেয়ে কাছের
                       ধাপটা ধরা হয়। কোনটা ধরা হয়েছে সেটা না লিখলে owner
                       এই একটা সংখ্যাকেই "সব অর্ডারের ফি" ভেবে বসতেন। */}
                   {preview.deliveryZoneLabel && (
-                    <span className="text-gray-400"> ({preview.deliveryZoneLabel})</span>
+                    <span className="text-black/40"> ({preview.deliveryZoneLabel})</span>
                   )}
                 </dt>
                 <dd>{money(line.deliveryFee)}</dd>
@@ -847,29 +1025,29 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
             )}
 
             {parseFloat(line.taxAmount) > 0 && (
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-black/70">
                 <dt>
                   {preview.taxName}
                   {preview.taxMode === "INCLUSIVE" && (
-                    <span className="text-gray-400"> (included above)</span>
+                    <span className="text-black/40"> (included above)</span>
                   )}
                 </dt>
                 <dd>{money(line.taxAmount)}</dd>
               </div>
             )}
 
-            <div className="flex justify-between font-medium text-gray-800 border-t border-gray-200 pt-1.5">
+            <div className="flex justify-between border-t border-black/10 pt-2 font-medium text-black">
               <dt>Bill total</dt>
               <dd>{money(line.grandTotal)}</dd>
             </div>
 
             {parseFloat(line.tipAmount) > 0 && (
               <>
-                <div className="flex justify-between text-gray-600">
+                <div className="flex justify-between text-black/70">
                   <dt>Tip ({preview.tipPercent}%)</dt>
                   <dd>{money(line.tipAmount)}</dd>
                 </div>
-                <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-200 pt-1.5">
+                <div className="flex justify-between border-t border-black/10 pt-2 font-semibold text-black">
                   <dt>Customer pays</dt>
                   <dd>{money(line.totalAmount)}</dd>
                 </div>
@@ -879,13 +1057,6 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
         )}
       </section>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="bg-[#FF4C15] text-white text-sm font-semibold px-5 py-2 rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
-      >
-        {isPending ? "Saving..." : "Save Settings"}
-      </button>
     </form>
   );
 }

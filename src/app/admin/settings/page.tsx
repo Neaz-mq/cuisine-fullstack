@@ -1,3 +1,4 @@
+import { requireStaff } from "@/lib/require-admin";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import SettingsForm from "./SettingsForm";
 import { normalizeDeliveryZones } from "@/lib/delivery-zones";
@@ -18,24 +19,65 @@ function toPercent(value: { toNumber(): number }): number {
   return Math.round(value.toNumber() * 100000) / 1000;
 }
 
+/**
+ * src/app/admin/settings/page.tsx
+ *
+ * ⚠️ এই পাতাটা আগে অ্যাপের নকশা-ব্যবস্থার বাইরে ছিল: `max-w-2xl mx-auto
+ * px-4 py-8` — নিজের একটা container, নিজের শিরোনাম, আর Tailwind-এর
+ * ডিফল্ট ধূসর; যেখানে বাকি সব admin পাতা AdminShell-এর ভেতরে cream/
+ * orange ব্যবস্থায় চলে। Kitchen, Categories, Menu আর Orders-এর
+ * ক্ষেত্রেও ঠিক এটাই হয়েছিল, আর সারানোটাও একই ছাঁদে: Welcome শিরোনাম
+ * → তারিখের pill → সাদা radius-20 কার্ডের সারি।
+ *
+ * ⚠️ `max-w-2xl` তুলে দেওয়া হয়েছে। ওটা থাকায় পাতাটা চওড়া পর্দাতেও
+ * সরু কলামে আটকে থাকত, অথচ delivery zone-এর সারিগুলোয় (Zone · Up to ·
+ * Fee · ×) চারটে কলাম পাশাপাশি বসাতে হয়। AdminShell নিজেই প্রস্থ ঠিক
+ * করে, ঠিক যেমন Orders-এ করে।
+ */
 export default async function AdminSettingsPage() {
-  const settings = await getRestaurantSettings();
+  // layout.tsx-ও `requireStaff("settings")` ডাকে; এখানে আবার ডাকা হয়
+  // session-টার জন্য (নাম দেখাতে), আর সেটাই একমাত্র কারণ — Orders-এর
+  // হুবহু একই ছাঁদ।
+  const [session, settings] = await Promise.all([
+    requireStaff("settings"),
+    getRestaurantSettings(),
+  ]);
+
+  /**
+   * ⚠️ তারিখটা এখানে **server-এ** সাজানো হয়, SettingsForm-এ নয়।
+   *
+   * SettingsForm একটা client component। ওখানে `new Date()` ডাকলে
+   * server render আর browser hydration দুই সময়ে দুটো আলাদা মান পেত —
+   * React সেটাকে hydration mismatch বলে ধরে, আর মাঝরাতের আশেপাশে
+   * তারিখটা সত্যিই আলাদা হতে পারত।
+   */
+  const today = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-2">Settings</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Operating hours, and how money works at your restaurant — currency,
-        tax, service charge and tipping. None of it is hardcoded, because
-        none of it is the same in any two countries.
-      </p>
+    <div className="space-y-4">
 
       {/*
         Decimal -> number boundary. SettingsForm একটা client component, আর
         Prisma Decimal JSON পেরোলে string হয়ে যায় ("0.05") — তখন form-এর
         number input খালি দেখাত। তাই এখানে স্পষ্টভাবে রূপান্তর।
       */}
+      {/**
+        * ⚠️ Welcome শিরোনাম, তারিখ আর "Save Change" — তিনটেই এখন
+        * SettingsForm-এর ভেতরে, যদিও শিরোনামটা server-এর তথ্য।
+        *
+        * কারণ Figma-তে তারিখ আর Save একই সারিতে বসে, অথচ Save একটা
+        * form submit বোতাম — ওটা <form>-এর বাইরে রাখলে ফর্মটা জমা
+        * দেওয়ার কোনো স্বাভাবিক পথ থাকে না, আর `isPending` অবস্থাটাও
+        * ওখানে পৌঁছয় না। তাই উল্টোটা করা হলো: নাম আর তারিখ prop
+        * হিসেবে ভেতরে পাঠানো, যেগুলো নিছক string।
+        */}
       <SettingsForm
+        userName={session.user.name ?? "there"}
+        today={today}
         initialData={{
           timezone: settings.timezone,
           kitchenOpenHour: settings.kitchenOpenHour,
