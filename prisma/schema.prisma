@@ -1035,6 +1035,28 @@ model RestaurantTable {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  /// ঐচ্ছিক ডাকনাম — "Window Table", "Corner Booth"।
+  ///
+  /// ⚠️ উপরের `label` (T-1) নয়, আর সেটাই মূল কথা: দুটো আলাদা জিনিস।
+  /// label QR কোডে যায় আর রান্নাঘরের টিকিটে ছাপা হয়, তাই সেটা ছোট আর
+  /// `@unique` থাকতেই হবে। name কেবল staff-এর চেনার সুবিধার জন্য —
+  /// দুটো টেবিলের ডাকনাম "Window Table" হওয়া স্বাভাবিক, তাই এখানে
+  /// কোনো unique নেই।
+  ///
+  /// nullable, কারণ এই কলামটা যোগ হওয়ার আগের প্রতিটা টেবিলের কোনো
+  /// ডাকনাম নেই — আর `@default("")` দিলে "নাম দেওয়া হয়নি" আর "নাম
+  /// ফাঁকা" দুটো একই দেখাত।
+  name String?
+
+  /// টেবিলের ছবি — Supabase Storage-এর public URL, ফাইল নয়।
+  ///
+  /// Figma-র "Add Table Image" modal থেকে আসে, আর তোলা হয়
+  /// /api/admin/upload-image দিয়ে — MenuItem.imageUrl আর
+  /// StaffProfile-এর ছবি যে route ব্যবহার করে, ঠিক সেটাই। আলাদা bucket
+  /// বা আলাদা RBAC বানানোর কোনো কারণ নেই, আর একই route মানে ২MB সীমা
+  /// আর ধরনের যাচাই এক জায়গাতেই থাকে।
+  imageUrl String?
+
   reservations Reservation[]
   // QR Table Ordering — DINE_IN orders placed against this table (see
   // Order.tableId above). A table with isActive = false should have its QR
