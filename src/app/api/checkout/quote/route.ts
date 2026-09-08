@@ -11,8 +11,9 @@ import {
 import { findValidGiftCard, calcGiftCardAmountToApply, type GiftCardInfo } from "@/lib/gift-cards";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption } from "@/lib/loyalty-redemption";
-import { getPricingSettings } from "@/lib/get-settings";
+import { getCheckoutSettings } from "@/lib/get-settings";
 import { calculateOrderPricing } from "@/lib/pricing";
+import { resolveDeliveryFee } from "@/lib/delivery-fee";
 import { ZERO, serializeMoney, type Money } from "@/lib/money";
 import { quoteSchema } from "@/lib/validations/checkout";
 import { parseBody } from "@/lib/validations/parse";
@@ -83,8 +84,17 @@ export async function POST(req: NextRequest) {
   const parsed = await parseBody(req, quoteSchema);
   if (parsed instanceof NextResponse) return parsed;
 
-  const { items, orderType, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent, phone } =
-    parsed;
+  const {
+    items,
+    orderType,
+    couponCode,
+    giftCardCode,
+    redeemPoints,
+    tipAmount,
+    tipPercent,
+    phone,
+    deliveryAddress,
+  } = parsed;
 
   // কোড সঙ্গে থাকলে এটা কার্যত একটা validate call, তাই সেই endpoint-
   // গুলোর সমান বাজেট — আলাদা scope, যাতে উপরের উদার bucket-টা এই
@@ -108,7 +118,31 @@ export async function POST(req: NextRequest) {
   }
   const resolvedItems = resolution.items;
 
-  const pricingSettings = await getPricingSettings();
+  const { pricing: pricingSettings, delivery: deliverySettings } =
+    await getCheckoutSettings();
+
+  /**
+   * ⚠️ DINE_IN-এ ডাকাই হয় না — কিছু কোথাও যাচ্ছে না, তাই দূরত্বেরও
+   * প্রশ্ন নেই, আর অকারণে একটা geocode call খরচ হতো।
+   */
+  const deliveryQuote =
+    orderType === "DELIVERY"
+      ? await resolveDeliveryFee(deliveryAddress ?? {}, deliverySettings)
+      : null;
+
+  /**
+   * ⚠️ 409, 400 নয়। ঠিকানাটা গঠনগতভাবে ঠিকই আছে — শুধু ওখানে আমরা
+   * পৌঁছাই না। resolveOrderItems-এর "item unavailable" ঠিক একই কারণে
+   * 409 ফেরায়: অনুরোধটা বৈধ, বর্তমান অবস্থার সাথে খাপ খাচ্ছে না।
+   *
+   * geocode ব্যর্থ হলে এখানে আসেই না — সেক্ষেত্রে flat ফি বসে আর
+   * quote স্বাভাবিকভাবেই ফেরে (কারণটা lib/delivery-fee.ts-এ)।
+   */
+  if (deliveryQuote && !deliveryQuote.ok) {
+    return NextResponse.json({ error: deliveryQuote.error }, { status: 409 });
+  }
+
+  const deliveryFeeOverride = deliveryQuote?.ok ? deliveryQuote.fee : undefined;
 
   const session = await auth();
   const customerKey = getCustomerKey(session?.user?.id, phone);
@@ -143,7 +177,13 @@ export async function POST(req: NextRequest) {
   // ── দুই ধাপে দাম হিসাব ────────────────────────────────────────────────
   // কেন দুই ধাপ, তার পূর্ণ ব্যাখ্যা /api/orders/route.ts-এ।
   const beforePrepaid = calculateOrderPricing(
-    { orderType, items: resolvedItems, couponDiscount: discountAmount, tierDiscountPercent },
+    {
+      orderType,
+      items: resolvedItems,
+      couponDiscount: discountAmount,
+      tierDiscountPercent,
+      deliveryFeeOverride,
+    },
     pricingSettings
   );
 
@@ -182,6 +222,9 @@ export async function POST(req: NextRequest) {
       pointsRedeemedRequested,
       tipAmount,
       tipPercent,
+      // ⚠️ দুটো হিসাবেই একই override — একটাতে দিয়ে অন্যটায় ভুলে গেলে
+      // gift card/point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
+      deliveryFeeOverride,
     },
     pricingSettings
   );
@@ -216,6 +259,31 @@ export async function POST(req: NextRequest) {
 
     tipAmount: m(priced.tipAmount),
     totalAmount: m(priced.totalAmount),
+
+    /**
+     * দূরত্ব-ভিত্তিক ফি কীভাবে এলো — Carts.tsx চাইলে গ্রাহককেও
+     * দেখাতে পারে ("3–5 Km · 3.9 km away")।
+     *
+     * ⚠️ FLAT mode-এ, DINE_IN-এ, আর geocode ব্যর্থ হলে তিনটেই null।
+     * অর্থাৎ null মানে "ধাপ প্রযোজ্য নয়", "ফি নেই" নয় — deliveryFee
+     * উপরে আলাদা করে আছেই।
+     */
+    deliveryDistanceKm: deliveryQuote?.ok ? deliveryQuote.distanceKm : null,
+    deliveryZoneLabel: deliveryQuote?.ok ? (deliveryQuote.zone?.label ?? null) : null,
+
+    /**
+     * ⚠️ mode-টা client-কে জানানো দরকার, নইলে সে "Free" আর "এখনো
+     * হিসাব হয়নি" — দুটোর পার্থক্য করতে পারে না।
+     *
+     * FLAT mode-এ ফি শূন্য মানে সত্যিই বিনামূল্যে। DISTANCE mode-এ
+     * ঠিকানা অসম্পূর্ণ থাকলেও ফি শূন্য আসে (geocode হয়নি), অথচ সেটা
+     * "Free" নয় — সেটা "এখনো জানি না"। দুটোকে এক দেখানো মানে
+     * গ্রাহককে ভুল দাম দেখিয়ে checkout-এ পাঠানো, আর সেটাই এই feature
+     * চালু করার পর প্রথম যে bug-টা ধরা পড়েছিল।
+     *
+     * ⚠️ গোপন কিছু নয় — ধাপের দামগুলো এমনিতেই গ্রাহকের দেখার জিনিস।
+     */
+    deliveryFeeMode: deliverySettings.deliveryFeeMode,
 
     // client যা চেয়েছিল তার সাথে server কী মেনে নিল, তা মেলানোর জন্য।
     appliedCouponCode: couponInfo?.code ?? null,

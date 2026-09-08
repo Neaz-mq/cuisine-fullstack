@@ -116,6 +116,20 @@ export interface PricingInput {
 
   /** discountedSubtotal-এর শতাংশ হিসেবে tip (১৫ = ১৫%)। */
   tipPercent?: number;
+
+  /**
+   * দূরত্ব-ভিত্তিক delivery charge — lib/delivery-fee.ts যা ঠিক করেছে।
+   *
+   * ⚠️ ছেড়ে দিলে settings.deliveryFeeFlat-ই বসে, অর্থাৎ FLAT mode-এ চলা
+   * দোকানের আচরণ হুবহু অপরিবর্তিত। এই একটা ঐচ্ছিক field-ই পুরো
+   * distance-zone feature-টার সাথে এই file-এর একমাত্র সংযোগ, আর সেটাই
+   * উদ্দেশ্য: pricing.ts জানে না দূরত্ব কী, geocode কী, বা কোন ধাপ
+   * মিলেছে — সে শুধু একটা সংখ্যা নেয়।
+   *
+   * ⚠️ DINE_IN-এ উপেক্ষিত। নিচের শর্তটা আগের মতোই orderType দেখে, তাই
+   * ভুল করে dine-in অর্ডারে পাঠালেও ফি বসবে না।
+   */
+  deliveryFeeOverride?: Money | number | string;
 }
 
 export interface PricedOrder {
@@ -201,8 +215,14 @@ export function calculateOrderPricing(
   );
 
   // DINE_IN order-এ delivery fee নেই — কোনো কিছু কোথাও যাচ্ছে না।
+  //
+  // ⚠️ override এলে সেটাই, নইলে settings-এর flat ফি। রাউন্ডিং, কর আর
+  // grandTotal — নিচের সবকিছু আগের মতোই চলে, কারণ ফি-টা যেখান থেকেই
+  // আসুক পরের ধাপগুলোর কাছে সেটা একই একটা Money।
   const deliveryFee =
-    input.orderType === "DELIVERY" ? round(toMoney(settings.deliveryFeeFlat)) : ZERO;
+    input.orderType === "DELIVERY"
+      ? round(toMoney(input.deliveryFeeOverride ?? settings.deliveryFeeFlat))
+      : ZERO;
 
   // ── কর ────────────────────────────────────────────────────────────────
   // করযোগ্য ভিত্তি: খাবার সবসময়, বাকি দুটো settings অনুযায়ী। VAT

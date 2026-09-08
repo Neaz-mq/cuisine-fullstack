@@ -415,17 +415,6 @@ model Order {
 
   taxMode TaxMode @default(EXCLUSIVE)
 
-  /// অর্ডারের সময়কার পুরো সিঁড়িটা, হুবহু।
-  ///
-  /// ⚠️ কেবল মিলে যাওয়া ধাপটা নয়, **গোটা তালিকা** — কারণ owner
-  /// আগামীকাল দাম বদলাবেন, আর তখন গতকালের অর্ডারের modal-এ আজকের
-  /// তালিকা দেখানো মানে মিথ্যা বলা: "এই অর্ডারে $7 বসেছিল" লেখা
-  /// থাকবে অথচ পাশের চিপে $9।
-  ///
-  /// taxRate, taxName আর currencyMinorUnits ঠিক এই একই কারণে Order-এ
-  /// snapshot করা আছে। এটা সেই ধারারই ধারাবাহিকতা।
-  deliveryZones Json?
-
   // DELIVERY (default) = existing checkout flow, unchanged. DINE_IN = QR
   // Table Ordering — customer scans a QR code at a physical table, orders
   // are tied to `table` below instead of a delivery address, and are paid
@@ -485,6 +474,20 @@ model Order {
   /// ⚠️ এটা না রাখলে staff কখনো জানতেন না কোন অর্ডারে ফি-টা মাপা আর
   /// কোনটায় অনুমান — dispatch modal-এ দুটো হুবহু এক দেখাত।
   deliveryZoneFallback Boolean @default(false)
+
+  /// অর্ডারের সময়কার পুরো সিঁড়িটা, হুবহু।
+  ///
+  /// ⚠️ উপরের deliveryZoneLabel এই তালিকারই একটা ধাপের নাম — দুটো
+  /// আলাদা জায়গায় রাখলে label পড়ে কেউ বুঝতেন না কোন তালিকার কথা।
+  ///
+  /// ⚠️ কেবল মিলে যাওয়া ধাপটা নয়, **গোটা তালিকা** — কারণ owner
+  /// আগামীকাল দাম বদলাবেন, আর তখন গতকালের অর্ডারের modal-এ আজকের
+  /// তালিকা দেখানো মানে মিথ্যা বলা: "এই অর্ডারে $7 বসেছিল" লেখা
+  /// থাকবে অথচ পাশের চিপে $9।
+  ///
+  /// taxRate, taxName আর currencyMinorUnits ঠিক এই একই কারণে Order-এ
+  /// snapshot করা আছে। এটা সেই ধারারই ধারাবাহিকতা।
+  deliveryZones Json?
 
   // OPTIONAL as of QR Table Ordering — irrelevant for orderType = DINE_IN
   // (nothing is being shipped). Still required in practice for DELIVERY

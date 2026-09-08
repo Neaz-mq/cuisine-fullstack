@@ -24,8 +24,9 @@ import {
 } from "@/lib/gift-cards";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
-import { getPricingSettings } from "@/lib/get-settings";
+import { getCheckoutSettings } from "@/lib/get-settings";
 import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
+import { resolveDeliveryFee, deliveryFieldsForOrder } from "@/lib/delivery-fee";
 import { ZERO, type Money } from "@/lib/money";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
@@ -211,7 +212,37 @@ export async function POST(request: Request) {
     // কর, service charge, delivery fee, currency, tip — সব এখান থেকে।
     // কোনোটাই কোডে hardcode করা নেই, কারণ কোনোটাই রেস্তোরাঁ সম্পর্কে
     // সত্য নয়; সবগুলোই রেস্তোরাঁটা কোন দেশে সেই সম্পর্কে সত্য।
-    const pricingSettings = await getPricingSettings();
+    const { pricing: pricingSettings, delivery: deliverySettings } =
+      await getCheckoutSettings();
+
+    /**
+     * ⚠️ ফি-টা quote-এর মতো ঠিক এখানেই **আবার** হিসাব হয়, client যা
+     * পাঠিয়েছে তা থেকে নয়। quote শুধু দেখানোর জন্য; সত্যটা server-এ,
+     * প্রতিবার নতুন করে — ঠিক যে কারণে দাম, coupon আর gift card
+     * কোনোটাই client-এর সংখ্যা থেকে নেওয়া হয় না।
+     *
+     * ⚠️ geocode-এর ফল cache হয় (lib/delivery-fee.ts), তাই quote-এ
+     * যে ঠিকানাটা একবার খোঁজা হয়েছে সেটা এখানে আর network call
+     * খরচ করে না — একই উত্তর, বিনা দেরিতে।
+     */
+    const deliveryQuote =
+      orderType === "DELIVERY"
+        ? await resolveDeliveryFee(billing, deliverySettings)
+        : null;
+
+    /**
+     * ⚠️ 409, 400 নয় — ঠিকানাটা গঠনগতভাবে ঠিকই আছে, শুধু ওখানে আমরা
+     * পৌঁছাই না। উপরের resolveOrderItems-ও ঠিক একই কারণে 409 দেয়।
+     *
+     * এখানে থামা হয় কারণ এটা বাইরের কোনো সেবার ব্যর্থতা নয়, owner-এর
+     * নিজের নিয়ম। geocode ব্যর্থ হলে বরং থামা হয় না — flat ফি বসে আর
+     * অর্ডার এগোয় (কারণটা lib/delivery-fee.ts-এ)।
+     */
+    if (deliveryQuote && !deliveryQuote.ok) {
+      return NextResponse.json({ error: deliveryQuote.error }, { status: 409 });
+    }
+
+    const deliveryFeeOverride = deliveryQuote?.ok ? deliveryQuote.fee : undefined;
 
     const session = await auth();
     const customerKey = getCustomerKey(session?.user?.id, billing.phone);
@@ -272,6 +303,7 @@ export async function POST(request: Request) {
         items: resolvedItems,
         couponDiscount: discountAmount,
         tierDiscountPercent,
+        deliveryFeeOverride,
       },
       pricingSettings
     );
@@ -323,6 +355,9 @@ export async function POST(request: Request) {
         pointsRedeemedRequested: pointsRedeemedAmount,
         tipAmount: tipAmount,
         tipPercent: tipPercent,
+        // ⚠️ দুটো হিসাবেই একই override — একটাতে দিয়ে অন্যটায় ভুলে গেলে
+        // gift card/point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
+        deliveryFeeOverride,
       },
       pricingSettings
     );
@@ -339,6 +374,10 @@ export async function POST(request: Request) {
         data: {
           status: "PLACED",
           ...pricingToOrderFields(priced),
+          // ⚠️ স্থানাঙ্ক, দূরত্ব আর **পুরো ধাপের তালিকা** snapshot হয় —
+          // owner কাল দাম বদলালে গতকালের অর্ডারের modal যেন আজকের
+          // তালিকা না দেখায় (কারণটা lib/delivery-fee.ts-এ)।
+          ...(deliveryQuote?.ok ? deliveryFieldsForOrder(deliveryQuote) : {}),
           orderType,
           firstName: billing.firstName,
           lastName: billing.lastName,

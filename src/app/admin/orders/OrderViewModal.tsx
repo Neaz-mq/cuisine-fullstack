@@ -1,6 +1,7 @@
 "use client";
 
 import { FIELD, LABEL, ModalShell } from "@/components/admin/modal-ui";
+import { type OrderDeliverySnapshot } from "@/lib/delivery-zones";
 
 export type OrderViewData = {
   id: string;
@@ -21,6 +22,23 @@ export type OrderViewData = {
   deliveryFeeLabel: string;
   /** আগে কোনো rider বসানো থাকলে তার id — dropdown-এ আগে থেকে বাছা থাকে। */
   riderId: string | null;
+  /**
+   * দূরত্বের ধাপ + মাপা দূরত্ব — "Ready to Delivery" modal-এর
+   * Delivery Charge অংশটার জন্য (Figma-র চিপ আর "Distance to
+   * customer" বার)।
+   *
+   * ⚠️ ঐচ্ছিক, আর সেটাই থাকতে হবে: FLAT mode-এ চলা দোকান আর এই
+   * feature চালুর আগের **প্রতিটা** অর্ডারে এটা null। required করে
+   * দিলে পুরোনো অর্ডারগুলোর modal ভেঙে যেত। DeliveryZoneBreakdown
+   * নিজেই সেই ক্ষেত্রে চিপ ছাড়া সরল "Delivery Charge Applied"
+   * সারিটায় নেমে আসে — অর্থাৎ "কখন কোনটা" সিদ্ধান্তটা এক জায়গাতেই।
+   *
+   * ⚠️ এই modal-টা নিজে এটা ব্যবহার করে না। type-টা এখানে থাকে কারণ
+   * দুটো modal-ই একই `OrderViewData` নেয় — page.tsx-এর viewData()
+   * সারি প্রতি একবারই সাজায়, তারপর OrderRowActions দুটোকেই একই
+   * object পাঠায়।
+   */
+  delivery?: OrderDeliverySnapshot | null;
 };
 
 /**

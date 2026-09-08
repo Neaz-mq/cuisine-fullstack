@@ -80,6 +80,8 @@ type Preview = {
   taxName: string;
   taxMode: "INCLUSIVE" | "EXCLUSIVE";
   tipPercent: number;
+  /** DISTANCE mode-এ preview কোন ধাপ ধরে কষা হয়েছে; FLAT-এ null। */
+  deliveryZoneLabel: string | null;
   dineIn: PreviewLine;
   delivery: PreviewLine;
 };
@@ -99,6 +101,17 @@ export interface SettingsFormData {
   serviceChargeTaxable: boolean;
   deliveryFeeFlat: number;
   deliveryFeeTaxable: boolean;
+  deliveryFeeMode: "FLAT" | "DISTANCE";
+  /**
+   * দূরত্বের সিঁড়ি। শেষ ধাপের `upToKm` null = "এর পরে যত দূরই হোক"।
+   *
+   * ⚠️ কেবল `upToKm` রাখা হয়, `fromKm` নয় — আগের ধাপের সীমা থেকেই সেটা
+   * বেরিয়ে আসে। দুটো সীমা হাতে লিখতে দিলে owner একদিন 0–3 আর 5–8
+   * বসাবেন, আর ৪ কিমি দূরের অর্ডারে কোনো ধাপই মিলত না।
+   */
+  deliveryZones: { upToKm: number | null; fee: number }[];
+  restaurantLat: number | null;
+  restaurantLng: number | null;
   tipEnabled: boolean;
   tipPresetPercents: number[];
 }
@@ -244,6 +257,75 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
   const money = (value: string) =>
     formatAmount(value, form.currency, form.currencyMinorUnits);
   const line = preview ? preview[previewType] : null;
+
+  // ─────────────────────── Delivery zones ───────────────────────────
+
+  const zones = form.deliveryZones;
+
+  /**
+   * শেষ ধাপটার একটা সীমা আছে কিনা — অর্থাৎ owner কি একটা delivery
+   * radius ঠিক করেছেন?
+   *
+   * ⚠️ এটা আলাদা কোনো field নয়, শেষ ধাপের `upToKm` থেকেই বের করা।
+   * আলাদা boolean রাখলে সেটা আর সিঁড়িটা একদিন আলাদা কথা বলত।
+   */
+  const hasRadiusLimit = zones.length > 0 && zones[zones.length - 1].upToKm !== null;
+
+  const setZones = (next: SettingsFormData["deliveryZones"]) =>
+    set("deliveryZones", next);
+
+  const updateZone = (index: number, patch: Partial<{ upToKm: number | null; fee: number }>) =>
+    setZones(zones.map((zone, i) => (i === index ? { ...zone, ...patch } : zone)));
+
+  /**
+   * নতুন ধাপ **শেষেরটার আগে** বসে।
+   *
+   * ⚠️ একেবারে শেষে বসালে সীমাহীন ধাপটা আর শেষে থাকত না, আর তার পরের
+   * ধাপগুলো কখনো মিলতই না — normalizeDeliveryZones() সেগুলো নীরবে বাদ
+   * দিত, অর্থাৎ owner একটা ধাপ যোগ করে Save চেপে দেখতেন সেটা উধাও।
+   */
+  const addZone = () => {
+    const last = zones[zones.length - 1];
+    const previous = zones.length > 1 ? zones[zones.length - 2] : null;
+    const base = previous?.upToKm ?? 0;
+    const inserted = { upToKm: base + 2, fee: last?.fee ?? 0 };
+    setZones([...zones.slice(0, -1), inserted, ...zones.slice(-1)]);
+  };
+
+  const removeZone = (index: number) => setZones(zones.filter((_, i) => i !== index));
+
+  /**
+   * "এর বাইরে delivery করি না" — শেষ ধাপে সীমা বসানো বা তুলে নেওয়া।
+   *
+   * সীমা বসালে তার বাইরের ঠিকানায় checkout **থামে** (cart-এ লাল
+   * বার্তা, Confirm বন্ধ)। তুলে নিলে যত দূরই হোক শেষ ধাপের দামে
+   * অর্ডার নেওয়া হয়।
+   */
+  const toggleRadiusLimit = (limited: boolean) => {
+    if (zones.length === 0) return;
+    const previous = zones.length > 1 ? zones[zones.length - 2] : null;
+    const fallback = (previous?.upToKm ?? 0) + 5;
+    setZones(
+      zones.map((zone, i) =>
+        i === zones.length - 1 ? { ...zone, upToKm: limited ? fallback : null } : zone
+      )
+    );
+  };
+
+  /** "0–1 km", "3–5 km", "8 km and beyond" — সিঁড়ি থেকে derived। */
+  const zoneRangeLabel = (index: number) => {
+    const from = index === 0 ? 0 : (zones[index - 1].upToKm ?? 0);
+    const to = zones[index].upToKm;
+    return to === null ? `${from} km and beyond` : `${from}–${to} km`;
+  };
+
+  /** খালি ঘর = null, নাহলে সংখ্যা। "" আর 0 আলাদা রাখতে হয়। */
+  const parseCoord = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const parsed = parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -470,18 +552,180 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
           </div>
 
           <div className="flex-1">
-            <label className={labelClass}>Delivery fee (flat)</label>
-            <input
-              type="number"
-              step="0.001"
-              min="0"
-              value={form.deliveryFeeFlat}
-              onChange={(e) => set("deliveryFeeFlat", parseFloat(e.target.value) || 0)}
+            <label className={labelClass}>How the delivery fee is decided</label>
+            <select
+              value={form.deliveryFeeMode}
+              onChange={(e) => set("deliveryFeeMode", e.target.value as "FLAT" | "DISTANCE")}
               className={inputClass}
-            />
-            <p className={helpClass}>Charged on delivery orders only.</p>
+            >
+              <option value="FLAT">One flat fee, every order</option>
+              <option value="DISTANCE">By distance from the restaurant</option>
+            </select>
+            <p className={helpClass}>
+              {form.deliveryFeeMode === "DISTANCE"
+                ? "The customer's address is looked up on the map at checkout, and the matching zone below sets the fee."
+                : "The same fee on every delivery order, however far it goes."}
+            </p>
           </div>
         </div>
+
+        {/**
+          * ⚠️ flat ফির ঘরটা DISTANCE mode-এও থাকে, লুকানো হয় না।
+          *
+          * কারণ ওটা তখন **ব্যাকআপ**: ঠিকানাটা মানচিত্রে খুঁজে পাওয়া না
+          * গেলে (Nominatim বাইরের একটা বিনামূল্যের সেবা, মাঝেমধ্যে বসে
+          * যায়) এই ফি-টাই বসে আর অর্ডার এগোয়। লুকিয়ে রাখলে owner
+          * জানতেনই না কোন সংখ্যাটা তখন ব্যবহার হচ্ছে।
+          */}
+        <div className="flex-1">
+          <label className={labelClass}>
+            {form.deliveryFeeMode === "DISTANCE"
+              ? "Fallback delivery fee (flat)"
+              : "Delivery fee (flat)"}
+          </label>
+          <input
+            type="number"
+            step="0.001"
+            min="0"
+            value={form.deliveryFeeFlat}
+            onChange={(e) => set("deliveryFeeFlat", parseFloat(e.target.value) || 0)}
+            className={inputClass}
+          />
+          <p className={helpClass}>
+            {form.deliveryFeeMode === "DISTANCE"
+              ? "Used only when an address can't be found on the map. The order still goes through — it's charged this instead of a zone fee, and the dispatch screen marks it as a flat rate."
+              : "Charged on delivery orders only."}
+          </p>
+        </div>
+
+        {/* ───────────────────── Distance zones ───────────────────── */}
+
+        {form.deliveryFeeMode === "DISTANCE" && (
+          <div className="space-y-3 border-t border-gray-200 pt-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-800">Distance zones</h3>
+              <p className={helpClass}>
+                Each zone runs from where the one above it ended, so there can never be a gap.
+                Distances are straight-line, not driving distance — roads are usually 20–40%
+                longer, so set the prices with that in mind.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="w-32 shrink-0">Zone</span>
+                <span className="flex-1">Up to (km)</span>
+                <span className="flex-1">Fee</span>
+                <span className="w-7 shrink-0" />
+              </div>
+
+              {zones.map((zone, index) => {
+                const isLast = index === zones.length - 1;
+                const openEnded = zone.upToKm === null;
+
+                return (
+                  <div key={index} className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs text-gray-600">
+                      {zoneRangeLabel(index)}
+                    </span>
+
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      // সীমাহীন শেষ ধাপে কোনো সংখ্যা নেই — ঘরটা বন্ধ,
+                      // আর placeholder-ই বলে দেয় কেন।
+                      disabled={isLast && openEnded}
+                      value={zone.upToKm ?? ""}
+                      placeholder={isLast && openEnded ? "no limit" : ""}
+                      onChange={(e) =>
+                        updateZone(index, { upToKm: parseFloat(e.target.value) || 0 })
+                      }
+                      className={`${inputClass} flex-1 disabled:bg-gray-50 disabled:text-gray-400`}
+                    />
+
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={zone.fee}
+                      onChange={(e) => updateZone(index, { fee: parseFloat(e.target.value) || 0 })}
+                      className={`${inputClass} flex-1`}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeZone(index)}
+                      // ⚠️ শেষ ধাপটা মোছা যায় না। ওটাই সিঁড়ির তলা —
+                      // সরিয়ে দিলে দূরের ঠিকানায় কোনো ধাপই মিলত না।
+                      disabled={zones.length <= 1 || isLast}
+                      aria-label={`Remove the ${zoneRangeLabel(index)} zone`}
+                      className="w-7 h-7 shrink-0 rounded text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={addZone}
+                disabled={zones.length >= 8}
+                className="text-xs font-medium text-[#FF4C15] hover:underline disabled:opacity-40 disabled:no-underline"
+              >
+                + Add a zone
+              </button>
+              {zones.length >= 8 && (
+                <span className="text-xs text-gray-400">Eight is the maximum.</span>
+              )}
+            </div>
+
+            <div className="border-t border-gray-200 pt-3">
+              <Toggle
+                checked={hasRadiusLimit}
+                onChange={toggleRadiusLimit}
+                label="Refuse orders beyond the furthest zone"
+                help={
+                  hasRadiusLimit
+                    ? "Addresses outside that distance are turned away at checkout, before the customer pays."
+                    : "Right now any address is accepted, however far — the furthest zone's fee applies."
+                }
+              />
+            </div>
+
+            <div className="flex gap-4 border-t border-gray-200 pt-3">
+              <div className="flex-1">
+                <label className={labelClass}>Restaurant latitude</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.restaurantLat ?? ""}
+                  onChange={(e) => set("restaurantLat", parseCoord(e.target.value))}
+                  className={inputClass}
+                  placeholder="24.84491"
+                />
+              </div>
+              <div className="flex-1">
+                <label className={labelClass}>Restaurant longitude</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.restaurantLng ?? ""}
+                  onChange={(e) => set("restaurantLng", parseCoord(e.target.value))}
+                  className={inputClass}
+                  placeholder="89.37532"
+                />
+              </div>
+            </div>
+            <p className={helpClass}>
+              Where distances are measured from. Leave both empty to use the address built into
+              the app. Right-click your restaurant on Google Maps to copy its coordinates.
+            </p>
+          </div>
+        )}
 
         {form.taxEnabled && (
           <div className="space-y-2 pt-1">
@@ -589,7 +833,15 @@ export default function SettingsForm({ initialData }: { initialData: SettingsFor
 
             {parseFloat(line.deliveryFee) > 0 && (
               <div className="flex justify-between text-gray-600">
-                <dt>Delivery</dt>
+                <dt>
+                  Delivery
+                  {/* ⚠️ preview-তে কোনো ঠিকানা নেই, তাই সবচেয়ে কাছের
+                      ধাপটা ধরা হয়। কোনটা ধরা হয়েছে সেটা না লিখলে owner
+                      এই একটা সংখ্যাকেই "সব অর্ডারের ফি" ভেবে বসতেন। */}
+                  {preview.deliveryZoneLabel && (
+                    <span className="text-gray-400"> ({preview.deliveryZoneLabel})</span>
+                  )}
+                </dt>
                 <dd>{money(line.deliveryFee)}</dd>
               </div>
             )}

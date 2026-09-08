@@ -64,6 +64,9 @@ export async function POST(
       state: true,
       zip: true,
       country: true,
+      // checkout-এ মাপা স্থানাঙ্ক — নিচে দ্বিতীয় geocode এড়াতে।
+      deliveryLat: true,
+      deliveryLng: true,
     },
   });
   if (!order) {
@@ -116,7 +119,28 @@ export async function POST(
     return NextResponse.json({ error: "This rider account is deactivated" }, { status: 400 });
   }
 
-  const geocoded = await geocodeAddress(order);
+  /**
+   * ⚠️ checkout-এ ঠিকানাটা ইতিমধ্যেই geocode হয়ে Order-এ বসে থাকলে
+   * সেটাই ব্যবহার হয় — এক অর্ডারে দুবার Nominatim ডাকার কারণ নেই।
+   *
+   * দুটো লাভ, আর দ্বিতীয়টাই বড়:
+   *
+   *   ১. dispatch তাৎক্ষণিক হয়, কয়েক সেকেন্ড অপেক্ষা নয়।
+   *      lib/geocode.ts ব্যর্থ হলে ৯ ধাপ পর্যন্ত fallback করে, মাঝে
+   *      ১.১s করে ঘুম — কঠিন ঠিকানায় সেটা প্রায় ৯ সেকেন্ড।
+   *   ২. এই call-টাই মাঝেমধ্যে ব্যর্থ হয়ে rider পাঠানো আটকে দিত,
+   *      অথচ ঠিকানাটা checkout-এ ঠিকই খুঁজে পাওয়া গিয়েছিল। একই
+   *      অর্ডারে দুটো আলাদা ফল আসার সুযোগটাই এখন বন্ধ।
+   *
+   * ⚠️ null হলে আগের মতোই geocode — FLAT mode-এ চলা দোকান আর এই
+   * feature-এর আগের অর্ডারগুলোতে ওই column খালি, তাই fallback-টা
+   * থাকতেই হবে।
+   */
+  const geocoded =
+    order.deliveryLat !== null && order.deliveryLng !== null
+      ? { lat: order.deliveryLat, lng: order.deliveryLng }
+      : await geocodeAddress(order);
+
   if (!geocoded) {
     return NextResponse.json(
       { error: "Could not locate this address on the map — check it and try again" },

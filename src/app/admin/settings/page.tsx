@@ -1,5 +1,6 @@
 import { getRestaurantSettings } from "@/lib/get-settings";
 import SettingsForm from "./SettingsForm";
+import { normalizeDeliveryZones } from "@/lib/delivery-zones";
 
 /**
  * ভগ্নাংশ (DB) -> শতাংশ (form)।
@@ -54,6 +55,23 @@ export default async function AdminSettingsPage() {
 
           deliveryFeeFlat: settings.deliveryFeeFlat.toNumber(),
           deliveryFeeTaxable: settings.deliveryFeeTaxable,
+
+          deliveryFeeMode: settings.deliveryFeeMode,
+          /**
+           * ⚠️ normalize করে পাঠানো হয় — column-টা Json, তাই DB-তে
+           * এলোমেলো বা অসম্পূর্ণ কিছু থাকতে পারে (হাতে লেখা SQL, বা
+           * migration চালানোর আগের row)। form যেন সবসময় একটা বৈধ
+           * সিঁড়ি নিয়ে শুরু করে।
+           *
+           * label/fromKm/id ফেলে দেওয়া হয়: ওগুলো derived, আর form-এ
+           * রাখলে owner ধাপ বদলানোর পর ওরা বাসি হয়ে যেত।
+           */
+          deliveryZones: normalizeDeliveryZones(settings.deliveryZones).map((zone) => ({
+            upToKm: zone.upToKm,
+            fee: zone.fee,
+          })),
+          restaurantLat: settings.restaurantLat,
+          restaurantLng: settings.restaurantLng,
 
           tipEnabled: settings.tipEnabled,
           tipPresetPercents: settings.tipPresetPercents,

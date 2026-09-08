@@ -7,6 +7,11 @@ import { formatOrderId } from "@/lib/format-order-id";
 import { orderSearchFilter } from "@/lib/order-search";
 import { formatAmount } from "@/lib/currency-format";
 import {
+  normalizeDeliveryZones,
+  distanceBarRatio,
+  type OrderDeliverySnapshot,
+} from "@/lib/delivery-zones";
+import {
   DEFAULT_OVERVIEW_PERIOD,
   isOverviewPeriod,
   type OverviewPeriod,
@@ -350,6 +355,54 @@ export default async function AdminOrdersPage({
  * কোনগুলো `null` (dine-in অর্ডারে প্রায় সবই) সেটা এক জায়গায় ঠিক করা
  * থাকলে দুই জায়গায় দুরকম ফল হয় না।
  */
+/**
+ * Order-এর delivery snapshot → dispatch modal যা বোঝে সেই আকার।
+ *
+ * ⚠️ ফি-গুলো **এখানেই** সাজানো হয়, client component-এ নয়। currency
+ * চিহ্ন আর দশমিক সংখ্যা order-এর নিজের snapshot থেকে আসে (কারণটা
+ * lib/currency-format.ts-এ), আর সেটা জানে server। client-কে
+ * সিদ্ধান্তটা নিতে দিলে একই পাতায় দুই রকম দশমিক দেখা যেত।
+ *
+ * ⚠️ তালিকাটা `normalizeDeliveryZones()` দিয়ে যায়, যদিও এটা আমাদের
+ * নিজেরই লেখা JSON — কারণ column-টা `Json`, অর্থাৎ database-স্তরে
+ * কোনো আকৃতির নিশ্চয়তা নেই। হাতে লেখা SQL বা পুরোনো row যা-ই থাক,
+ * একটা নোংরা মান যেন গোটা admin পাতা crash না করায়।
+ */
+function deliverySnapshot(order: {
+  currency: string;
+  currencyMinorUnits: number;
+  deliveryFee: Prisma.Decimal;
+  deliveryZones: Prisma.JsonValue | null;
+  deliveryDistanceKm: number | null;
+  deliveryZoneLabel: string | null;
+  deliveryZoneFallback: boolean;
+}): OrderDeliverySnapshot | null {
+  // ধাপের তালিকা নেই = FLAT mode-এ বসা অর্ডার, বা এই feature-এর আগের।
+  // দুটোতেই modal সরল "Delivery Charge Applied" সারিটাই দেখাবে।
+  if (!order.deliveryZones) return null;
+
+  const zones = normalizeDeliveryZones(order.deliveryZones);
+
+  return {
+    zones: zones.map((zone) => ({
+      id: zone.id,
+      label: zone.label,
+      feeLabel: formatAmount(zone.fee, order.currency, order.currencyMinorUnits),
+      // ⚠️ label মিলিয়ে, fee মিলিয়ে নয় — দুটো ধাপের ফি সমান হতে পারে
+      // ("0–1 Km $5" আর "1–3 Km $5"), তখন fee দিয়ে মেলালে দুটোই
+      // একসাথে highlight হতো।
+      active: zone.label === order.deliveryZoneLabel,
+    })),
+    distanceKm: order.deliveryDistanceKm,
+    barRatio:
+      order.deliveryDistanceKm === null
+        ? 0
+        : distanceBarRatio(order.deliveryDistanceKm, zones),
+    appliedFeeLabel: money(order, order.deliveryFee),
+    fellBackToFlat: order.deliveryZoneFallback,
+  };
+}
+
 function viewData(order: {
   id: string;
   email: string | null;
@@ -367,6 +420,10 @@ function viewData(order: {
   currencyMinorUnits: number;
   totalAmount: Prisma.Decimal;
   deliveryFee: Prisma.Decimal;
+  deliveryZones: Prisma.JsonValue | null;
+  deliveryDistanceKm: number | null;
+  deliveryZoneLabel: string | null;
+  deliveryZoneFallback: boolean;
   table: { label: string } | null;
   deliveryTracking: { riderId: string } | null;
   items: {
@@ -402,6 +459,7 @@ function viewData(order: {
     totalLabel: money(order, order.totalAmount),
     deliveryFeeLabel: money(order, order.deliveryFee),
     riderId: order.deliveryTracking?.riderId ?? null,
+    delivery: deliverySnapshot(order),
   };
 }
 

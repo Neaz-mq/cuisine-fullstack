@@ -61,6 +61,21 @@ type Quote = {
   totalAmount: string;
   appliedCouponCode: string | null;
   appliedGiftCardCode: string | null;
+
+  /**
+   * Delivery charge কীভাবে ঠিক হয়েছে।
+   *
+   * ⚠️ `deliveryFeeMode` ছাড়া এই component "Free" আর "এখনো হিসাব হয়নি"
+   * — দুটোর পার্থক্য করতে পারে না। DISTANCE mode-এ ঠিকানা অসম্পূর্ণ
+   * থাকলে ফি শূন্যই আসে (geocode হয়নি), অথচ সেটা বিনামূল্যে নয়।
+   * দুটোকে এক দেখানো মানে গ্রাহককে ভুল দাম দেখিয়ে checkout-এ পাঠানো।
+   *
+   * `deliveryZoneLabel` ("3–5 Km") কেবল ব্যাখ্যার জন্য — ফি-টা কেন
+   * এই অঙ্ক, সেটা এক নজরে বোঝাতে।
+   */
+  deliveryFeeMode: "FLAT" | "DISTANCE";
+  deliveryDistanceKm: number | null;
+  deliveryZoneLabel: string | null;
   // giftCardBalance ইচ্ছাকৃতভাবে নেই — server আর পাঠায় না। কার্ডে কত
   // পড়ে আছে সেটা এই পাতার দরকার হয় না (giftCardAmount বলে দেয় এই
   // বিলে কতটা কাটছে), আর কেউ কোড অনুমান করে ফেললে তাকে বাড়তি কিছু
@@ -307,6 +322,17 @@ const Carts = () => {
   const [customTip, setCustomTip] = useState("");
 
   const [quote, setQuote] = useState<Quote | null>(null);
+  /**
+   * Quote endpoint যখন 409 দেয় — কার্যত একটাই কারণ: ঠিকানাটা
+   * delivery zone-এর বাইরে ("we only deliver within 8 km")।
+   *
+   * ⚠️ আগে `if (!res.ok) return;` দিয়ে চুপচাপ উপেক্ষা করা হতো, ফলে
+   * পুরোনো bill পর্দায় থেকে যেত আর গ্রাহক দিব্যি order দিয়ে দিতেন —
+   * শুধু /api/orders সেটা প্রত্যাখ্যান করত, তখন কারণটা আর cart-এ
+   * দেখা যেত না। এখন কারণটা এখানেই দেখানো হয় আর Confirm বোতাম বন্ধ
+   * থাকে।
+   */
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
 
   useEffect(() => {
@@ -344,6 +370,81 @@ const Carts = () => {
 
   const tipPresets = settings?.tipEnabled ? settings.tipPresetPercents : [];
   const showTipping = tipPresets.length > 0 && cartItems.length > 0;
+
+  /**
+   * ঠিকানা → quote, কিন্তু **নিজস্ব, দীর্ঘতর** debounce-এ।
+   *
+   * নিচের quote effect-টার debounce ৩০০ms — quantity বা tip-এর জন্য
+   * ঠিক আছে, কারণ ওগুলো ক্লিক, টাইপিং নয়। ঠিকানা টাইপ করা হয়, আর
+   * প্রতিটা থেমে-যাওয়ায় server একটা করে **geocode** চালায়।
+   *
+   * Nominatim-এর public instance সেকেন্ডে ~১টা request নেয়, আর
+   * lib/geocode.ts ব্যর্থ হলে ৯ ধাপ পর্যন্ত fallback করে (মাঝে ১.১s
+   * করে ঘুম)। "Bogura" লিখতে গিয়ে B → Bo → Bog … প্রতিটাতে quote
+   * গেলে একজন গ্রাহকই ওই সীমা ছাড়িয়ে যেতেন।
+   *
+   * তাই ঠিকানা আলাদা করে ৮০০ms ধরে থিতু হয়, তারপর quote effect তার
+   * ৩০০ms — মোট ~১.১s। cart বা tip বদলালে সেই দেরিটা লাগে না।
+   */
+  const addressForQuote = isDineIn
+    ? null
+    : {
+        country: selectedCountry?.label ?? "",
+        address: formData.address,
+        apartment: formData.apartment,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+      };
+
+  const [debouncedAddress, setDebouncedAddress] = useState<typeof addressForQuote>(null);
+
+  // ⚠️ object নয়, একটা string-কে dependency করা হয়েছে। object প্রতি
+  // render-এ নতুন reference পায়, তাই সেটা dep করলে effect-টা প্রতিবার
+  // চলত আর debounce-এর কোনো মানেই থাকত না।
+  const addressKey = addressForQuote ? Object.values(addressForQuote).join("|") : "";
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAddress(addressForQuote), 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressKey]);
+
+  /**
+   * ঠিকানাটা geocode করার মতো যথেষ্ট ভরা কিনা — lib/delivery-fee.ts-এর
+   * isGeocodable()-এর হুবহু একই নিয়ম (শহর + দেশ)।
+   *
+   * ⚠️ দুই জায়গায় একই নিয়ম লেখা আছে, আর সেটা জেনেশুনে: server-এরটাই
+   * সিদ্ধান্ত নেয়, এটা কেবল ঠিক করে পর্দায় "Free" লিখব নাকি "Enter
+   * address"। নিয়ম দুটো আলাদা হয়ে গেলে সবচেয়ে খারাপ যা হবে — এক
+   * মুহূর্তের জন্য ভুল placeholder। কোনো টাকার সিদ্ধান্ত এখান থেকে
+   * হয় না।
+   */
+  const hasGeocodableAddress = Boolean(selectedCountry && formData.city.trim());
+
+  /**
+   * DISTANCE mode, অথচ ঠিকানা এখনো অসম্পূর্ণ — অর্থাৎ ফি-টা এখনো
+   * **জানা যায়নি**, শূন্য নয়।
+   */
+  const deliveryFeePending =
+    !isDineIn && bill?.deliveryFeeMode === "DISTANCE" && !hasGeocodableAddress;
+
+  /**
+   * তিনটে shipping কার্ডের ডানদিকে যা লেখা থাকবে।
+   *
+   * ⚠️ আগে তিন জায়গাতেই আক্ষরিক "Free" hardcode করা ছিল। DISTANCE
+   * mode চালু হওয়ার পর সেটা সরাসরি মিথ্যা — গ্রাহক "Free" পড়ে
+   * অর্ডার দিতেন আর $2 কাটা হতো।
+   *
+   * ⚠️ তিনটে কার্ডেই একই লেখা, আর সেটা ঠিক আছে: ফি-টা দূরত্বের উপর
+   * নির্ভর করে, কে পৌঁছে দিচ্ছে তার উপর নয়। কখনো courier-ভেদে আলাদা
+   * ফি দরকার হলে সেটা delivery zone নয়, একটা আলাদা ধারণা।
+   */
+  const shippingFeeLabel = deliveryFeePending
+    ? "—"
+    : bill && isPositive(bill.deliveryFee)
+      ? money(bill.deliveryFee)
+      : "Free";
 
   /**
    * The bill is computed by the server, not here.
@@ -385,6 +486,10 @@ const Carts = () => {
               quantity: item.quantity,
             })),
             orderType: isDineIn ? "DINE_IN" : "DELIVERY",
+            // দূরত্ব-ভিত্তিক delivery charge quote করার জন্য। অসম্পূর্ণ
+            // হলে server নিজেই flat ফিতে নেমে আসে (isGeocodable), তাই
+            // আধা-ভরা ঠিকানা পাঠানো নিরাপদ।
+            deliveryAddress: debouncedAddress ?? undefined,
             // Optional, but it decides per-customer coupon limits — without
             // it the quote could promise a discount the order then refuses.
             phone: formData.phoneNumber || undefined,
@@ -396,9 +501,20 @@ const Carts = () => {
               tipPercent === null && customTip ? Number(customTip) || undefined : undefined,
           }),
         });
-        if (!res.ok) return;
-        const data: Quote = await res.json();
-        if (!cancelled) setQuote(data);
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (!res.ok) {
+          // ⚠️ 409 = "এই ঠিকানায় আমরা পৌঁছাই না" — গ্রাহককে বলার মতো
+          // কথা, চুপ করে থাকার মতো নয়। বাকি status গুলো (429, 500)
+          // ক্ষণস্থায়ী, তাই সেখানে আগের bill-ই থাকতে দেওয়া হয় আর
+          // পরের পরিবর্তনে আবার চেষ্টা হয়।
+          if (res.status === 409) setQuoteError(data?.error ?? "We can't deliver to this address.");
+          return;
+        }
+
+        setQuoteError(null);
+        setQuote(data as Quote);
       } catch {
         // Keep showing the last known bill; the next change retries.
       }
@@ -411,6 +527,7 @@ const Carts = () => {
   }, [
     cartItems,
     isDineIn,
+    debouncedAddress,
     formData.phoneNumber,
     appliedCoupon?.code,
     appliedGiftCard?.code,
@@ -436,6 +553,14 @@ const Carts = () => {
         pauseOnHover: true,
         draggable: true,
       });
+      return;
+    }
+
+    // ⚠️ বোতামটা এমনিতেই disabled, কিন্তু guard-টা এখানেও থাকে —
+    // disabled শুধু UI, আর এই handler কীবোর্ড বা অন্য পথেও ডাকা
+    // যেতে পারে।
+    if (quoteError) {
+      toast.error(quoteError, { position: "top-center", autoClose: 3000 });
       return;
     }
 
@@ -910,7 +1035,7 @@ const Carts = () => {
             </div>
           </div>
           <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
-            Free
+            {shippingFeeLabel}
             <input
               type="radio"
               name={`shipping-${idSuffix}`}
@@ -950,7 +1075,7 @@ const Carts = () => {
             </div>
           </div>
           <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
-            Free
+            {shippingFeeLabel}
             <input
               type="radio"
               name={`shipping-${idSuffix}`}
@@ -991,7 +1116,7 @@ const Carts = () => {
             </div>
           </div>
           <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
-            Free
+            {shippingFeeLabel}
             <input
               type="radio"
               name={`shipping-${idSuffix}`}
@@ -1130,11 +1255,15 @@ const Carts = () => {
         </div>
       )}
 
+      {/* ⚠️ zone-এর বাইরের ঠিকানায় বোতামটা বন্ধ — কারণটা পাশেই লেখা
+          থাকে (totals-এর উপরের banner), তাই গ্রাহক জানেন কী বদলাতে
+          হবে। বোতাম খোলা রাখলে চাপার পর /api/orders একই কথা বলত,
+          শুধু অনেক পরে আর কম স্পষ্ট করে। */}
       <button
         onClick={handleConfirmOrder}
-        disabled={isSubmitting}
+        disabled={isSubmitting || !!quoteError}
         className={`bg-[#2C6252] text-white w-full py-3 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs mt-4 ${
-          isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+          isSubmitting || quoteError ? "opacity-60 cursor-not-allowed" : ""
         }`}
       >
         {isSubmitting
@@ -1636,9 +1765,28 @@ const Carts = () => {
                   </div>
                 )}
 
+                {/**
+                  * ⚠️ তিনটে আলাদা অবস্থা, তিন রকম লেখা — আর এই
+                  * পার্থক্যটাই এখানে আসল কাজ:
+                  *
+                  *   "Enter address"  ফি এখনো **জানা যায়নি**
+                  *   "$2.00"          ধাপ থেকে বসা ফি
+                  *   "Free"           সত্যিই বিনামূল্যে
+                  *
+                  * প্রথমটাকে "Free" দেখানো হতো আগে, আর সেটাই ছিল
+                  * সবচেয়ে বাজে ভুল: গ্রাহক Free পড়ে order দিতেন,
+                  * আর server (যে পুরো ঠিকানাটা পায়) $2 বসিয়ে দিত।
+                  */}
                 <div className="flex justify-between">
-                  <span>{isDineIn ? "Table service" : "Delivery charges"}</span>
-                  {bill && isPositive(bill.deliveryFee) ? (
+                  <span>
+                    {isDineIn ? "Table service" : "Delivery charges"}
+                    {bill?.deliveryZoneLabel && (
+                      <span className="text-gray-400"> · {bill.deliveryZoneLabel}</span>
+                    )}
+                  </span>
+                  {deliveryFeePending ? (
+                    <span className="text-gray-400">Enter address</span>
+                  ) : bill && isPositive(bill.deliveryFee) ? (
                     <span>{money(bill.deliveryFee)}</span>
                   ) : (
                     <span className="text-[#2C6252]">Free</span>
@@ -1690,6 +1838,22 @@ const Carts = () => {
                   {bill ? money(bill.totalAmount) : `${currency} ${subtotal.toFixed(2)}`}
                 </span>
               </div>
+
+              {/* ⚠️ ফি এখনো জানা না গেলে Total-ও অসম্পূর্ণ। সেটা না
+                  লিখলে গ্রাহক এই অঙ্কটাকেই চূড়ান্ত ধরে নিতেন। */}
+              {deliveryFeePending && (
+                <p className="text-[11px] text-gray-400 -mt-6">
+                  Delivery charge is added once you enter your city and country.
+                </p>
+              )}
+
+              {/* ⚠️ zone-এর বাইরের ঠিকানা — Confirm বোতামও একই সাথে
+                  বন্ধ হয়ে যায় (renderPaymentMethodSection দ্রষ্টব্য)। */}
+              {quoteError && (
+                <div className="border border-red-200 bg-red-50 px-4 py-3 rounded -mt-6">
+                  <p className="text-xs text-red-700">{quoteError}</p>
+                </div>
+              )}
             </div>
           </div>
 

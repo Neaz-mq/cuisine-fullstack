@@ -95,7 +95,9 @@ describe("resolveDeliveryZone", () => {
   });
 
   it("puts anything past the last bounded step in the open-ended one", () => {
-    expect(resolveDeliveryZone(8.01, zones).ok && resolveDeliveryZone(8.01, zones)).toBeTruthy();
+    const justOver = resolveDeliveryZone(8.01, zones);
+    expect(justOver.ok && justOver.zone.label).toBe("8+ Km");
+
     const far = resolveDeliveryZone(120, zones);
     expect(far.ok && far.zone.fee).toBe(14);
   });
@@ -117,8 +119,14 @@ describe("resolveDeliveryZone", () => {
   });
 
   it("treats a nonsense distance as zero rather than throwing", () => {
-    expect(resolveDeliveryZone(Number.NaN, zones).ok).toBe(true);
-    expect(resolveDeliveryZone(-3, zones).ok && resolveDeliveryZone(-3, zones)).toBeTruthy();
+    // ⚠️ শূন্য ধরা হয় বলে সবচেয়ে **সস্তা** ধাপটা বসে, সবচেয়ে দামিটা
+    // নয়। খারাপ ডেটার কারণে খদ্দেরকে বেশি চার্জ করার চেয়ে কম চার্জ
+    // করা ভালো — ভুলটা তখন দোকানের ক্ষতি, খদ্দেরের নয়।
+    const nan = resolveDeliveryZone(Number.NaN, zones);
+    expect(nan.ok && nan.zone.label).toBe("0–1 Km");
+
+    const negative = resolveDeliveryZone(-3, zones);
+    expect(negative.ok && negative.zone.label).toBe("0–1 Km");
   });
 });
 

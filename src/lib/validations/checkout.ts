@@ -86,6 +86,23 @@ export const quoteSchema = z.object({
   items: z.array(incomingItemSchema).min(1, "Cart is empty"),
   orderType: z.enum(ORDER_TYPES).default("DELIVERY"),
   phone: z.string().trim().optional(),
+
+  /**
+   * ঠিকানা — দূরত্ব-ভিত্তিক delivery charge quote করার জন্য।
+   *
+   * ⚠️ ঐচ্ছিক, আর প্রতিটা মাঠও ঐচ্ছিক (`.partial()`), আর সেটাই মূল
+   * কথা: উপরের comment যে কারণে billing বাদ দিয়েছে, ঠিক সেই কারণেই
+   * এটা আলগা — গ্রাহক তখনো টাইপ করছেন, অথচ বিলটা তার আগেই দেখাতে
+   * হবে। শহর/দেশ ভরার আগ পর্যন্ত lib/delivery-fee.ts-এর
+   * isGeocodable() false দেয়, তাই flat ফি দেখানো হয় আর ঠিকানা
+   * সম্পূর্ণ হলে quote নিজে থেকেই ঠিক হয়ে যায়।
+   *
+   * ⚠️ এটা কোনো authoritative ফি নয়। /api/orders আর
+   * /api/checkout/create-session নিজেরাই আবার হিসাব করে — client যা
+   * পাঠিয়েছে তা থেকে নয়, ঠিক যেভাবে দাম, coupon বা gift card
+   * কোনোটাই client-এর সংখ্যা থেকে নেওয়া হয় না।
+   */
+  deliveryAddress: billingSchema.partial().optional(),
   couponCode: z.string().trim().optional(),
   giftCardCode: z.string().trim().optional(),
   redeemPoints: z.number().int().nonnegative().optional(),
