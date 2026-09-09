@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { ImagePlus, QrCode } from "lucide-react";
 import { toast } from "react-toastify";
 import QRCode from "qrcode";
+import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import FilterMenu, { type FilterMenuOption } from "@/components/admin/FilterMenu";
 import {
   DANGER_BUTTON,
@@ -93,6 +93,43 @@ export default function TablesBoard({ tables }: { tables: TableRow[] }) {
   const [imaging, setImaging] = useState<TableRow | null>(null);
 
   /**
+   * মোছার নিশ্চিতকরণ — **একটাই** dialog, পুরো গ্রিডের জন্য।
+   *
+   * ⚠️ কোন টেবিলটা, সেটা এখানে রাখা হয় (`confirming`), প্রতিটা কার্ডে
+   * নিজের dialog রাখা হয় না। ২৪টা টেবিলে ২৪টা dialog DOM-এ বসে থাকত,
+   * সবগুলোই বন্ধ — অকারণ ভার, আর একসাথে দুটো খুলে যাওয়ার সুযোগও।
+   */
+  const [confirming, setConfirming] = useState<TableRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!confirming) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/tables/${confirming.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Couldn't delete this table.");
+      }
+      toast.success(`${confirming.label} deleted.`);
+      setConfirming(null);
+      router.refresh();
+    } catch (err) {
+      /**
+       * ⚠️ ব্যর্থ হলে dialog **খোলাই থাকে**, বন্ধ হয়ে যায় না।
+       *
+       * route-টা reservation বা DINE_IN অর্ডার থাকা টেবিল মুছতে দেয় না
+       * (৪০৯ ফেরায়)। dialog বন্ধ করে দিলে toast-টা মিলিয়ে যাওয়ার পর
+       * staff ভাবতেন কাজটা হয়ে গেছে — অথচ টেবিলটা তালিকায় রয়েই গেছে।
+       */
+      toast.error(err instanceof Error ? err.message : "Couldn't delete this table.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  /**
    * ⚠️ এখানে কেবল **অবস্থার** ছাঁকনি। নাম/নম্বর দিয়ে খোঁজাটা
    * TablesToolbar-এ, URL-এর `?q=` ধরে — অর্থাৎ `tables` prop-টা
    * ইতিমধ্যেই খোঁজা-ছাঁকা হয়ে আসে।
@@ -178,6 +215,8 @@ export default function TablesBoard({ tables }: { tables: TableRow[] }) {
                 table={table}
                 onEdit={() => setEditing(table)}
                 onImage={() => setImaging(table)}
+                onDelete={() => setConfirming(table)}
+                deleting={deleting && confirming?.id === table.id}
               />
             ))}
           </div>
@@ -230,6 +269,35 @@ export default function TablesBoard({ tables }: { tables: TableRow[] }) {
         />
       )}
 
+      {/**
+        * ⚠️ browser-এর `confirm()` নয় — Menu, Categories আর Staff
+        * পাতায় যে ConfirmDialog চলে, এটাও সেটাই।
+        *
+        * `confirm()`-এর তিনটে সমস্যা (component-এর header-এ বিস্তারিত):
+        * চেহারাটা browser-এর, পর্দার উপরে "localhost:3000 says" লেখা
+        * সহ; JS thread আটকে থাকে বলে কোনো loading অবস্থা দেখানো যায়
+        * না; আর ডিফল্ট focus থাকে **OK**-তে, অর্থাৎ অভ্যাসবশত Enter
+        * চাপলেই টেবিলটা মুছে যায়।
+        *
+        * ⚠️ বার্তাটায় reservation-এর কথা আলাদা করে বলা — টেবিল মুছলে
+        * তার সব বুকিংও যায়, আর সেটা "Delete T-1?" পড়ে কেউ অনুমান
+        * করবেন না।
+        */}
+      <ConfirmDialog
+        open={confirming !== null}
+        title={`Delete ${confirming?.label ?? ""}?`}
+        message="This removes the table and every reservation linked to it. This cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        pending={deleting}
+        onConfirm={confirmDelete}
+        // ⚠️ মোছা চলাকালীন বন্ধ করা যায় না — request পাঠিয়ে দিয়ে
+        // dialog সরিয়ে ফেললে ফলটা কোথাও দেখানোর জায়গা থাকত না।
+        onCancel={() => {
+          if (!deleting) setConfirming(null);
+        }}
+      />
+
       {imaging && (
         <TableImageModal
           table={imaging}
@@ -270,13 +338,16 @@ function TableCard({
   table,
   onEdit,
   onImage,
+  onDelete,
+  deleting,
 }: {
   table: TableRow;
   onEdit: () => void;
   onImage: () => void;
+  onDelete: () => void;
+  /** এই কার্ডটাই এই মুহূর্তে মোছা হচ্ছে কিনা। */
+  deleting: boolean;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [downloading, setDownloading] = useState(false);
 
   /**
@@ -305,23 +376,6 @@ function TableCard({
     } finally {
       setDownloading(false);
     }
-  }
-
-  function remove() {
-    // ⚠️ confirm() — এই একটা কাজ ফেরানো যায় না, আর টেবিলের সাথে তার
-    // reservation-ও যায়। পুরোনো DeleteTableButton-এও এটাই ছিল।
-    if (!window.confirm(`Delete ${table.label}? This can't be undone.`)) return;
-
-    startTransition(async () => {
-      const res = await fetch(`/api/admin/tables/${table.id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success(`${table.label} deleted.`);
-        router.refresh();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error ?? "Couldn't delete this table.");
-      }
-    });
   }
 
   return (
@@ -373,20 +427,22 @@ function TableCard({
         </div>
       </div>
 
-      {/* ছবি থাকলে — Figma-তে নেই, কিন্তু ছবি বসানোর সুযোগ দেওয়ার পর
-          সেটা কোথাও দেখানো না হলে বসানোর মানেই থাকে না। */}
-      {table.imageUrl && (
-        <div className="relative h-20 w-full overflow-hidden rounded-[12px] bg-black/5">
-          <Image
-            src={table.imageUrl}
-            alt={`${table.label}`}
-            fill
-            sizes="(min-width: 1280px) 20vw, (min-width: 560px) 40vw, 90vw"
-            className="object-cover"
-          />
-        </div>
-      )}
-
+      {/**
+        * ⚠️ ছবিটা কার্ডে দেখানো হয় না, ইচ্ছাকৃতভাবে — Figma-তে নেই।
+        *
+        * আগে দেখানো হতো এই যুক্তিতে যে "ছবি বসানোর সুযোগ দিয়ে সেটা
+        * কোথাও না দেখালে বসানোর মানে থাকে না"। যুক্তিটা ভুল ছিল:
+        * ছবিটা "Add Table Image" modal-এ থাম্বনেইল হিসেবে দেখাই যায়,
+        * অর্থাৎ অদৃশ্য নয় — শুধু কার্ডে নেই।
+        *
+        * আর কার্ডে থাকলে ক্ষতিই বেশি: যে টেবিলে ছবি আছে সেটা লম্বা
+        * হয়ে যায়, ফলে একই সারির কার্ডগুলোর উচ্চতা মেলে না আর গ্রিডটা
+        * এবড়োখেবড়ো দেখায়। এই পর্দার কাজ ২৪টা টেবিল এক নজরে স্ক্যান
+        * করা, ছবি দেখা নয়।
+        *
+        * `imageUrl` তবু TableRow-তে থাকে — modal-টা খোলার সময় বর্তমান
+        * ছবিটা দেখাতে ওটা লাগে।
+        */}
       {/* reservation সারি — সাদা pill। */}
       <div className="flex items-center gap-2 rounded-full bg-white px-2 py-1.5">
         <span
@@ -410,13 +466,17 @@ function TableCard({
         >
           Edit
         </button>
+        {/* ⚠️ মোছার কাজটা এখানে হয় না — শুধু ডাকটা উপরে যায়, আর
+            TablesBoard একটাই ConfirmDialog দেখায়। প্রতিটা কার্ডে
+            নিজের dialog রাখলে ২৪টা টেবিলে ২৪টা dialog DOM-এ বসে
+            থাকত, সবগুলোই বন্ধ। */}
         <button
           type="button"
-          onClick={remove}
-          disabled={isPending}
+          onClick={onDelete}
+          disabled={deleting}
           className={`${DANGER_BUTTON} h-9 flex-1 text-[13px] min-[640px]:text-[13px]`}
         >
-          {isPending ? "Deleting…" : "Delete"}
+          {deleting ? "Deleting…" : "Delete"}
         </button>
       </div>
     </article>
