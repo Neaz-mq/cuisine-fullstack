@@ -257,11 +257,14 @@ export default function ReservationBooking({
     Boolean(phone.trim()) &&
     Boolean(email.trim()) &&
     Boolean(reservedAt) &&
-    Boolean(tableId) &&
-    Boolean(guests);
+    Boolean(tableId);
+  // ⚠️ `guests` ইচ্ছাকৃতভাবে এই তালিকায় নেই (ইউজারের অনুরোধে) — Guests
+  // ফিল্ড থেকে required তারা সরানো হয়েছে, তাই বোতামটা এখন আর গ্রাহক
+  // guests না বাছালে নিভে থাকবে না। না বাছালে submit()-এ ডিফল্ট ১
+  // অতিথি ধরে নেওয়া হয় (নিচে দ্রষ্টব্য)।
 
   async function submit() {
-    if (!fullName.trim() || !phone.trim() || !email.trim() || !reservedAt || !tableId || !guests) {
+    if (!fullName.trim() || !phone.trim() || !email.trim() || !reservedAt || !tableId) {
       toast.error("Please fill in every required field.");
       return;
     }
@@ -284,8 +287,11 @@ export default function ReservationBooking({
       return;
     }
 
-    const guestCount = Number(guests);
-    if (!guests || !Number.isInteger(guestCount) || guestCount < 1) {
+    // ⚠️ Guests ঐচ্ছিক — গ্রাহক না বাছলে ডিফল্ট ১ জন ধরে নেওয়া হয়,
+    // যাতে server-এর guestCount ফিল্ড (যেটা এখনও একটা বৈধ সংখ্যা
+    // চায়) খালি না পায়। বাছা থাকলে তার যাচাই যথারীতি হয়।
+    const guestCount = guests ? Number(guests) : 1;
+    if (!Number.isInteger(guestCount) || guestCount < 1) {
       toast.error("Please select the number of guests.");
       return;
     }
@@ -626,15 +632,15 @@ export default function ReservationBooking({
             </div>
 
             <div className="min-w-0">
-              {/* ⚠️ আগে এখানে তারা (required mark) ছিল না, কারণ ঘরটার
-                  একটা লুকোনো ডিফল্ট মান (২) ছিল আর কখনো খালি হতো না।
-                  এখন খালি অবস্থা থেকে শুরু হয় ("Select guests"),
-                  তাই বাকি সব required ঘরের মতোই তারা চিহ্ন আছে —
-                  গ্রাহক নিজে না বাছালে এগোনো যাবে না। */}
+              {/* ⚠️ ভিজ্যুয়াল required তারা (*) ইচ্ছাকৃতভাবে বাদ দেওয়া
+                  হয়েছে (ইউজারের অনুরোধে) — কিন্তু ঘরটা এখনও প্রকৃতপক্ষে
+                  বাধ্যতামূলক থাকছে, কারণ `required` prop এখানে শুধুই
+                  চিহ্ন, যাচাই নয়। আসল validation `canSubmit` আর submit()
+                  উভয় জায়গাতেই `guests` state-এর উপর ভিত্তি করে হয় (উপরে
+                  দ্রষ্টব্য), তারা প্রপ সরালেও অক্ষত থাকে। */}
               <SelectField
                 id="res-guests"
                 label="Guests"
-                required
                 value={guests}
                 onChange={setGuests}
                 options={guestOptions}
