@@ -577,6 +577,7 @@ export function DateField({
   value,
   onChange,
   required = false,
+  minDate,
 }: {
   id: string;
   label: string;
@@ -584,11 +585,26 @@ export function DateField({
   onChange: (value: string) => void;
   /** SelectField-এর একই prop, একই কারণে — উপরে দ্রষ্টব্য। */
   required?: boolean;
+  /**
+   * ⚠️ এর আগে DateField কোনো তারিখই আটকাত না — অতীতের তারিখ বাছা
+   * সম্ভব ছিল, ধরাটা হতো কেবল পরে, submit-এ একটা toast দিয়ে।
+   * Reservation পাতায় সেটা বিরক্তিকর: গ্রাহক গতকালের তারিখ বেছে,
+   * সময় বেছে, টেবিল বেছে, তারপর Submit চেপে জানতে পারতেন ভুল হয়েছে।
+   *
+   * `minDate` না দিলে (যেমন Staff-এর "Join Date") আগের মতোই সব
+   * তারিখ খোলা থাকে — কর্মী অতীতে join করেছেন এটা লেখারই তো কথা।
+   * শুধু যেখানে ডাকা হয় `minDate` দিয়ে (Reservation-এর Date), সেখানেই
+   * ওই তারিখের আগের দিনগুলো ধূসর আর click-অযোগ্য হয়।
+   */
+  minDate?: Date;
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(CALENDAR_HEIGHT);
 
   const selected = parseISODate(value);
   const today = new Date();
+  const minSelectable = minDate
+    ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+    : null;
 
   const [viewMonth, setViewMonth] = useState(() => {
     const base = selected ?? today;
@@ -669,8 +685,17 @@ export function DateField({
                 <button
                   type="button"
                   onClick={() => shiftMonth(-1)}
+                  disabled={
+                    /* ⚠️ minSelectable-এর মাসেই আটকে থাকলে "আগের মাসে"
+                       যাওয়ার কোনো মানে নেই — সেখানে একটাও ক্লিক-করার
+                       মতো দিন থাকবে না। শুধু এই একটা মাস আটকানো, পুরো
+                       বোতামটা চিরকাল বন্ধ করে দেওয়া নয়। */
+                    minSelectable != null &&
+                    year === minSelectable.getFullYear() &&
+                    month === minSelectable.getMonth()
+                  }
                   aria-label="Previous month"
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F9F6F3] text-black transition-colors hover:bg-black/[0.08]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F9F6F3] text-black transition-colors hover:bg-black/[0.08] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#F9F6F3]"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
                 </button>
@@ -708,27 +733,37 @@ export function DateField({
                 const date = new Date(year, month, day);
                 const isSelected = selected ? isSameDay(date, selected) : false;
                 const isToday = isSameDay(date, today);
+                const isDisabled = minSelectable != null && date < minSelectable;
 
                 return (
                   <button
                     key={day}
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => {
                       onChange(toISODate(date));
                       setOpen(false);
                     }}
                     aria-label={formatDisplayDate(date)}
                     aria-current={isSelected ? "date" : undefined}
+                    aria-disabled={isDisabled || undefined}
                     className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full font-sora text-[13px] font-normal leading-none transition-colors ${
-                      isSelected
-                        ? // পাতার pagination-এর active পাতাটার মতোই কালো +
-                          // সাদা লেখা। FilterMenu-র cream pill এখানে যথেষ্ট
-                          // নয়: ৩০টা ঘরের ভেতরে cream আর "আজ"-এর চিহ্ন
-                          // আলাদা করা যেত না।
-                          "bg-black text-white"
-                        : isToday
-                          ? "bg-[#F9F6F3] text-black"
-                          : "text-[#121212] hover:bg-black/[0.04]"
+                      isDisabled
+                        ? // ⚠️ শুধু ধূসর করাই যথেষ্ট নয় — `disabled` attribute-টাই
+                          // আসল আটকানো, রঙটা কেবল সেটার ইঙ্গিত। এই দুটো এক
+                          // জায়গায় না রাখলে (যেমন শুধু CSS দিয়ে ধূসর করা)
+                          // keyboard/screen-reader ব্যবহারকারী তবু ক্লিক করতে
+                          // পারতেন।
+                          "cursor-not-allowed text-black/25"
+                        : isSelected
+                          ? // পাতার pagination-এর active পাতাটার মতোই কালো +
+                            // সাদা লেখা। FilterMenu-র cream pill এখানে যথেষ্ট
+                            // নয়: ৩০টা ঘরের ভেতরে cream আর "আজ"-এর চিহ্ন
+                            // আলাদা করা যেত না।
+                            "bg-black text-white"
+                          : isToday
+                            ? "bg-[#F9F6F3] text-black"
+                            : "text-[#121212] hover:bg-black/[0.04]"
                     }`}
                   >
                     {day}
@@ -739,11 +774,12 @@ export function DateField({
 
             <button
               type="button"
+              disabled={minSelectable != null && today < minSelectable}
               onClick={() => {
                 onChange(toISODate(new Date()));
                 setOpen(false);
               }}
-              className="mt-3 w-full rounded-[12px] py-2 text-center font-sora text-[13px] font-normal leading-none text-black/70 transition-colors hover:bg-black/[0.04]"
+              className="mt-3 w-full rounded-[12px] py-2 text-center font-sora text-[13px] font-normal leading-none text-black/70 transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             >
               Today
             </button>

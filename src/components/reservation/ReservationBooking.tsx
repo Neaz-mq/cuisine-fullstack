@@ -108,7 +108,13 @@ export default function ReservationBooking({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [tableId, setTableId] = useState("");
-  const [guests, setGuests] = useState("2");
+  /**
+   * ⚠️ আগে ডিফল্ট মান ছিল "2" — মানে গ্রাহক dropdown-টা স্পর্শ না
+   * করলেও ফর্ম চুপচাপ "2 guests" পাঠিয়ে দিত। এখন খালি ("") থেকে
+   * শুরু, আর নিচে "Select guests" একটা placeholder option আছে —
+   * গ্রাহককে নিজে থেকেই বাছতে হয়, কোনো লুকোনো ডিফল্ট নেই।
+   */
+  const [guests, setGuests] = useState("");
   const [requests, setRequests] = useState("");
 
   /**
@@ -201,10 +207,13 @@ export default function ReservationBooking({
    */
   const guestOptions = useMemo(() => {
     const max = selectedTable?.capacity ?? 10;
-    return Array.from({ length: max }, (_, i) => ({
-      value: String(i + 1),
-      label: `${i + 1} ${i === 0 ? "guest" : "guests"}`,
-    }));
+    return [
+      { value: "", label: "Select guests" },
+      ...Array.from({ length: max }, (_, i) => ({
+        value: String(i + 1),
+        label: `${i + 1} ${i === 0 ? "guest" : "guests"}`,
+      })),
+    ];
   }, [selectedTable]);
 
   /**
@@ -248,10 +257,11 @@ export default function ReservationBooking({
     Boolean(phone.trim()) &&
     Boolean(email.trim()) &&
     Boolean(reservedAt) &&
-    Boolean(tableId);
+    Boolean(tableId) &&
+    Boolean(guests);
 
   async function submit() {
-    if (!fullName.trim() || !phone.trim() || !email.trim() || !reservedAt || !tableId) {
+    if (!fullName.trim() || !phone.trim() || !email.trim() || !reservedAt || !tableId || !guests) {
       toast.error("Please fill in every required field.");
       return;
     }
@@ -275,8 +285,8 @@ export default function ReservationBooking({
     }
 
     const guestCount = Number(guests);
-    if (!Number.isInteger(guestCount) || guestCount < 1) {
-      toast.error("Guest count must be at least 1.");
+    if (!guests || !Number.isInteger(guestCount) || guestCount < 1) {
+      toast.error("Please select the number of guests.");
       return;
     }
 
@@ -559,9 +569,19 @@ export default function ReservationBooking({
                 required
                 value={date}
                 onChange={setDate}
+                /**
+                 * ⚠️ আগে অতীতের তারিখও calendar-এ বাছা যেত — ধরা পড়ত
+                 * শুধু Submit চাপার পরে, একটা toast দিয়ে। `minDate`
+                 * দেওয়ায় আজকের আগের দিনগুলো এখন calendar-এই ধূসর আর
+                 * ক্লিক-অযোগ্য, তাই ভুলটা টাইপ করার আগেই আটকে যায়।
+                 *
+                 * submit()-এর `reservedAt.getTime() < Date.now()` চেকটা
+                 * তাও থেকে যাচ্ছে ইচ্ছাকৃতভাবে — client-side আটকানো
+                 * কেবল সৌজন্য, dev tools দিয়ে state জোর করে বসানো
+                 * এখনো সম্ভব, তাই আসল যাচাইটা submit + server-এই।
+                 */
+                minDate={new Date()}
               />
-              {/* ⚠️ অতীতের তারিখ DateField নিজে আটকায় না, তাই বার্তাটা
-                  submit-এ (আর server-এও, সেটাই আসল)। */}
             </div>
 
             <div className="min-w-0">
@@ -606,12 +626,15 @@ export default function ReservationBooking({
             </div>
 
             <div className="min-w-0">
-              {/* ⚠️ তারা নেই — Figma-তেও "Ext. Guests"-এ নেই। ঘরটার
-                  একটা ডিফল্ট মান (২) আছে আর কখনো খালি হতে পারে না,
-                  তাই "required" চিহ্নটা অর্থহীন হতো। */}
+              {/* ⚠️ আগে এখানে তারা (required mark) ছিল না, কারণ ঘরটার
+                  একটা লুকোনো ডিফল্ট মান (২) ছিল আর কখনো খালি হতো না।
+                  এখন খালি অবস্থা থেকে শুরু হয় ("Select guests"),
+                  তাই বাকি সব required ঘরের মতোই তারা চিহ্ন আছে —
+                  গ্রাহক নিজে না বাছালে এগোনো যাবে না। */}
               <SelectField
                 id="res-guests"
                 label="Guests"
+                required
                 value={guests}
                 onChange={setGuests}
                 options={guestOptions}
