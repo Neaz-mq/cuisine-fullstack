@@ -15,7 +15,7 @@ import { toast } from "react-toastify";
  * নামটা বিভ্রান্তিকর, সেটা ঠিক — ফাইলটা `components/ui/`-তে সরানো
  * যেতে পারে, কিন্তু সেটা ৩০+ import ছোঁয়া একটা আলাদা কাজ।
  */
-import { DateField, SelectField } from "@/components/admin/modal-ui";
+import { DateField, RequiredMark, SelectField } from "@/components/admin/modal-ui";
 import CountryCodeSelect, {
   DEFAULT_COUNTRY,
   type Country,
@@ -495,8 +495,19 @@ export default function ReservationBooking({
                 * ⚠️ `overflow-hidden` ইচ্ছাকৃতভাবে নেই: থাকলে দেশের
                 * dropdown-টা ঘরের কিনারায় কেটে যেত।
                 */}
-              <div className="flex h-[46px] items-stretch rounded-[12px] border border-black/10 bg-white pl-3 focus-within:[outline:2px_solid_#FF9540] focus-within:[outline-offset:-2px]">
-                <div className="flex shrink-0 items-stretch [&_button]:border-r-0 [&_button]:px-0 [&_button]:text-[13px]">
+              {/**
+                * ⚠️ বাইরের বাক্সে `pl-3` নেই, padding-টা ভেতরের
+                * বোতামে (`[&_button]:pl-3`)।
+                *
+                * কারণ CountryCodeSelect-এর dropdown-টা `absolute
+                * left-0`, অর্থাৎ **তার নিজের** মোড়ক ধরে বসে। বাইরে
+                * padding দিলে ওই মোড়কটা ১২px ভেতরে সরে যেত, আর
+                * dropdown-ও সেই ১২px ডানে — ঘরের বাঁ কিনারার সাথে আর
+                * মিলত না। padding ভেতরে নিলে মোড়কটা ঠিক ঘরের কিনারা
+                * থেকেই শুরু হয়, তাই `left-0` মানেই সারিবদ্ধ।
+                */}
+              <div className="flex h-[46px] items-stretch rounded-[12px] border border-black/10 bg-white focus-within:[outline:2px_solid_#FF9540] focus-within:[outline-offset:-2px]">
+                <div className="flex shrink-0 items-stretch [&_button]:border-r-0 [&_button]:pl-3 [&_button]:pr-0 [&_button]:text-[13px]">
                   <CountryCodeSelect value={country} onChange={setCountry} />
                 </div>
                 <span className="my-auto ml-3 h-7 w-px shrink-0 bg-[#D9D9D9]" aria-hidden="true" />
@@ -539,9 +550,13 @@ export default function ReservationBooking({
             */}
           <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
             <div className="min-w-0">
+              {/* ⚠️ label-এ হাতে `*` লেখা ছিল — সেটা সাধারণ লেখা, তাই
+                  কালো দেখাত। `required` prop লাল তারাটা বসায়, আর সেই
+                  একই তারা এখন Field()-এও (নিচে) — দুটো এক রঙ। */}
               <DateField
                 id="res-date"
-                label="Date *"
+                label="Date"
+                required
                 value={date}
                 onChange={setDate}
               />
@@ -552,7 +567,8 @@ export default function ReservationBooking({
             <div className="min-w-0">
               <SelectField
                 id="res-time"
-                label="Time *"
+                label="Time"
+                required
                 value={time}
                 onChange={setTime}
                 options={[{ value: "", label: "Select a time" }, ...timeOptions]}
@@ -573,7 +589,8 @@ export default function ReservationBooking({
                 */}
               <SelectField
                 id="res-table"
-                label="Table Number *"
+                label="Table Number"
+                required
                 value={tableId}
                 onChange={setTableId}
                 options={[
@@ -772,11 +789,7 @@ function Field({
         {label}
         {/* ⚠️ তারাটা `aria-hidden` — screen reader-এ "asterisk" শোনার
             কোনো মানে নেই, আর ঘরগুলোয় এমনিতেই টেক্সট আছে। */}
-        {required && (
-          <span className="ml-0.5 text-[#D72A37]" aria-hidden="true">
-            *
-          </span>
-        )}
+        {required && <RequiredMark />}
         {optional && <span className="ml-1 font-normal text-black/40">(Optional)</span>}
       </label>
       {children}

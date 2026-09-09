@@ -69,6 +69,25 @@ export const TEXTAREA =
  * Number" এক লাইনে থাকায় দুটো ঘর উঁচু-নিচু হয়ে যেত। ১৩px-এ ওটা
  * ১১৫.৯px, ১২০-এর ভেতরে স্বস্তিতে আঁটে।
  */
+/**
+ * বাধ্যতামূলক ঘরের লাল তারা।
+ *
+ * ⚠️ `aria-hidden` — screen reader-এ "asterisk" শোনার মানে নেই।
+ * বাধ্যতামূলক হওয়ার তথ্যটা ইনপুটের `required`/`aria-required` বহন
+ * করে; তারাটা নিছক দৃশ্যমান সংকেত।
+ *
+ * ⚠️ আলাদা component, যাতে রঙটা এক জায়গায় থাকে — SelectField,
+ * DateField আর হাতে-লেখা label, তিন জায়গায় `#D72A37` টাইপ করলে
+ * একদিন একটা অন্য লাল হয়ে যেত।
+ */
+export function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-[#D72A37]" aria-hidden="true">
+      *
+    </span>
+  );
+}
+
 export const LABEL =
   "mb-1.5 block font-frank-ruhl text-[13px] font-medium leading-[1.6] text-black min-[640px]:text-[14px]";
 
@@ -390,6 +409,7 @@ export function SelectField({
   value,
   onChange,
   options,
+  required = false,
   className = "",
 }: {
   id: string;
@@ -397,6 +417,16 @@ export function SelectField({
   value: string;
   onChange: (value: string) => void;
   options: readonly { value: string; label: string }[];
+  /**
+   * label-এর পাশে লাল তারা। ঐচ্ছিক আর ডিফল্ট false, তাই বিদ্যমান
+   * ৩০+ ব্যবহার অপরিবর্তিত থাকে।
+   *
+   * ⚠️ এটা কেবল **চিহ্ন**, কোনো যাচাই নয়। SelectField-এর সবসময় একটা
+   * মান থাকে (অজানা হলে প্রথম option), তাই "খালি" অবস্থাই নেই —
+   * "কিছু বাছা হয়নি" বোঝাতে হলে একটা খালি-মানের option দিতে হয়, আর
+   * সেটা caller-এর দায়িত্ব।
+   */
+  required?: boolean;
   /**
    * grid-এ ঘরটা কতটা জায়গা নেবে। StaffFormModal-এর "Shift" আর
    * "Status" ৬৪০-এর নিচে পুরো প্রস্থ জোড়ে (Figma-র বিন্যাস), তাই
@@ -417,6 +447,7 @@ export function SelectField({
           অসামঞ্জস্যপূর্ণ। সম্পর্কটা বরং aria-labelledby দিয়ে বাঁধা। */}
       <span id={`${id}-label`} className={LABEL}>
         {label}
+        {required && <RequiredMark />}
       </span>
 
       <div className="relative" ref={wrapperRef}>
@@ -545,11 +576,14 @@ export function DateField({
   label,
   value,
   onChange,
+  required = false,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** SelectField-এর একই prop, একই কারণে — উপরে দ্রষ্টব্য। */
+  required?: boolean;
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(CALENDAR_HEIGHT);
 
@@ -595,6 +629,7 @@ export function DateField({
     <div>
       <span id={`${id}-label`} className={LABEL}>
         {label}
+        {required && <RequiredMark />}
       </span>
 
       <div className="relative" ref={wrapperRef}>
