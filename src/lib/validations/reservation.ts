@@ -20,6 +20,26 @@ export const createReservationSchema = z.object({
   phone: nonEmptyString("Phone"),
   guestCount: z.coerce.number().int().positive("Guest count must be at least 1"),
   reservedAt: nonEmptyString("Reservation date/time"),
+
+  /**
+   * Figma-র "Email Address" ঘর — নকশায় লাল তারা দেওয়া, কিন্তু এখানে
+   * ঐচ্ছিক, আর সেটা ইচ্ছাকৃত।
+   *
+   * এই কলামটা যোগ হওয়ার আগে করা প্রতিটা reservation-এ কোনো email নেই,
+   * আর /admin/reservations থেকে staff যখন একটা booking সম্পাদনা করেন
+   * তখনও ঘরটা ভরা থাকে না। required করলে পুরোনো row গুলো আর সেভই করা
+   * যেত না। ফর্মে required রাখা হয়েছে client-এ — যেখানে নিয়মটা
+   * সত্যিই প্রযোজ্য।
+   */
+  email: z.string().trim().email("Enter a valid email address").nullable().optional(),
+
+  /** Figma-র "Special Requests (Optional)" — জন্মদিন, হুইলচেয়ার, জানালার পাশে। */
+  specialRequests: z
+    .string()
+    .trim()
+    .max(500, "Please keep special requests under 500 characters")
+    .nullable()
+    .optional(),
 });
 
 /** PATCH /api/reservations/[id] — staff moving a reservation through its

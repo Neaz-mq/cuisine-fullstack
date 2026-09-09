@@ -84,6 +84,30 @@ export async function POST(request: Request) {
           break;
         }
 
+        /**
+         * Reservation-এর অগ্রিম। gift card-এর মতোই কোনো Order জড়িত
+         * নয়, তাই আলাদা path।
+         *
+         * ⚠️ দাবিটা updateMany দিয়ে, `status: "PENDING"` শর্ত সহ —
+         * Stripe একই event একাধিকবার পাঠাতে পারে (at-least-once), আর
+         * দ্বিতীয়বার এলে count 0 আসে বলে কিছুই ঘটে না। findFirst করে
+         * `if (status === "PENDING")` লিখলে দুটো delivery একসাথে এসে
+         * দুটোই পাশ করত।
+         */
+        const reservationId = session.metadata?.reservationId;
+        if (session.metadata?.purpose === "reservation_deposit" && reservationId) {
+          const claimed = await prisma.reservation.updateMany({
+            where: { id: reservationId, status: "PENDING" },
+            data: { status: "CONFIRMED", depositPaidAt: new Date() },
+          });
+          if (claimed.count === 0) {
+            // হয় duplicate delivery, নয় ইতিমধ্যে বাতিল — দুটোই
+            // স্বাভাবিক, তাই error নয়।
+            console.log("Reservation deposit already settled", reservationId);
+          }
+          break;
+        }
+
         const orderId = session.metadata?.orderId;
         if (orderId) {
           await handleOrderPaid(orderId, session);
@@ -130,6 +154,30 @@ export async function POST(request: Request) {
 
       case "checkout.session.expired": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        /**
+         * ⚠️ গ্রাহক টাকা না দিয়ে Stripe-এর পাতা ছেড়ে গেছেন — ধরে রাখা
+         * টেবিলটা এখনই ছাড়তে হবে।
+         *
+         * না ছাড়লে একটা PENDING reservation ওই slot-টা চিরকাল আটকে
+         * রাখত (isTableAvailable বাতিল ছাড়া সব status-কে দখল ধরে),
+         * অথচ কেউ কোনোদিন টাকা দেয়নি। order-এর ক্ষেত্রে নিচে ঠিক এই
+         * একই যুক্তিতে cancelOrder ডাকা হয়।
+         *
+         * এখানে stock/coupon/gift card ফেরানোর কিছু নেই, তাই একটা
+         * সরল status বদলই যথেষ্ট — তবে দাবিটা আবারও updateMany দিয়ে,
+         * যাতে completed event-এর সাথে race লাগলে ইতিমধ্যে CONFIRMED
+         * হয়ে যাওয়া booking বাতিল না হয়ে যায়।
+         */
+        const expiredReservationId = session.metadata?.reservationId;
+        if (session.metadata?.purpose === "reservation_deposit" && expiredReservationId) {
+          await prisma.reservation.updateMany({
+            where: { id: expiredReservationId, status: "PENDING" },
+            data: { status: "CANCELLED" },
+          });
+          break;
+        }
+
         const orderId = session.metadata?.orderId;
 
         if (orderId) {

@@ -100,7 +100,8 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, createReservationSchema);
     if (parsed instanceof NextResponse) return parsed;
-    const { tableId, customerName, phone, guestCount, reservedAt } = parsed;
+    const { tableId, customerName, phone, guestCount, reservedAt, email, specialRequests } =
+      parsed;
 
     const parsedDate = new Date(reservedAt);
     if (Number.isNaN(parsedDate.getTime())) {
@@ -168,6 +169,10 @@ export async function POST(request: Request) {
             reservedAt: parsedDate,
             status: "CONFIRMED",
             userId: session?.user?.id ?? null,
+            // ⚠️ ফাঁকা string নয়, null — "দেওয়া হয়নি" আর "ফাঁকা দেওয়া
+            // হয়েছে" DB-তে একই হওয়া উচিত।
+            email: email || null,
+            specialRequests: specialRequests || null,
           },
           include: { table: true },
         });

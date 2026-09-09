@@ -1099,6 +1099,51 @@ model Reservation {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
+  /// Figma-র "Email Address" ঘর — নিশ্চিতকরণ পাঠানোর জন্য।
+  ///
+  /// ⚠️ nullable, যদিও ফর্মে required (লাল তারা দেওয়া)। এই কলামটা যোগ
+  /// হওয়ার আগের প্রতিটা booking-এ কোনো email নেই, আর staff
+  /// /admin/reservations থেকে হাতে একটা booking তুললেও ঘরটা ফাঁকা
+  /// থাকতে পারে। required করলে পুরনো row গুলো আর সেভই করা যেত না।
+  /// নিয়মটা তাই client-এ, যেখানে সেটা সত্যিই প্রযোজ্য।
+  ///
+  /// ⚠️ `User.email`-এর সাথে গুলিয়ে ফেলার নয়। reservation করতে login
+  /// লাগে না (নিচের userId nullable), তাই যিনি বুক করছেন তাঁর কোনো
+  /// account নাও থাকতে পারে — এটা সেই booking-এর নিজের যোগাযোগের
+  /// ঠিকানা, কোনো account-এর নয়। Order.email-ও ঠিক একই কারণে আলাদা।
+  email String?
+
+  /// Figma-র "Special Requests (Optional)" — জন্মদিন, হুইলচেয়ার,
+  /// জানালার পাশে বসা।
+  ///
+  /// মুক্ত লেখা, enum নয়: অনুরোধগুলো আগে থেকে তালিকাবদ্ধ করা যায় না,
+  /// আর waiter/রান্নাঘর এটা পড়েই ব্যবস্থা নেন — কোনো হিসাবে ঢোকে না।
+  specialRequests String?
+
+  /// অগ্রিমের অঙ্ক (Figma-র "Advance Payment"), booking-এর সময় যা ছিল।
+  ///
+  /// ⚠️ RestaurantSettings থেকে পড়া হয় না, snapshot করা হয় — owner
+  /// কাল অঙ্কটা বদলালে গতকালের booking-এ ভুল অঙ্ক দেখাত। Order-এর
+  /// taxRate/taxName/currencyMinorUnits ঠিক এই একই কারণে snapshot করা।
+  ///
+  /// null = অগ্রিম ছাড়া booking (settings-এ ০ ছিল)।
+  depositAmount Decimal? @db.Decimal(12, 3)
+
+  /// টাকাটা কখন সত্যিই এসেছে।
+  ///
+  /// ⚠️ শুধু Stripe webhook এটা লেখে। ফর্ম থেকে ফেরত আসা মানেই টাকা
+  /// এসেছে নয় — success_url-এ যে কেউ হাতে গিয়ে বসতে পারেন। Order-এর
+  /// paymentStatus-এও একই যুক্তি।
+  depositPaidAt DateTime?
+
+  /// Stripe Checkout Session-এর id।
+  ///
+  /// ⚠️ `@unique`, আর সেটাই webhook-এর idempotency-র ভিত্তি: Stripe
+  /// at-least-once পাঠায়, তাই একই session দুবার এলে দ্বিতীয়বার কিছু
+  /// ঘটা উচিত নয়। GiftCard.stripeSessionId-এও হুবহু একই constraint,
+  /// একই কারণে।
+  stripeSessionId String? @unique
+
   table   RestaurantTable @relation(fields: [tableId], references: [id])
   tableId String
 
@@ -1232,6 +1277,21 @@ model RestaurantSettings {
   /// করেই)।
   restaurantLat Float?
   restaurantLng Float?
+
+  // --- Reservations --------------------------------------------------------
+
+  /// টেবিল বুক করতে কত অগ্রিম লাগবে (Figma-র "Advance Payment")।
+  ///
+  /// ⚠️ ০ মানে **অগ্রিম বন্ধ**, আর সেটাই ডিফল্ট। তখন /reservation-এর
+  /// ফর্ম সরাসরি /api/reservations-এ যায় আর booking সাথে সাথে
+  /// CONFIRMED হয় — অর্থাৎ এই কলাম যোগ হওয়ার আগের আচরণ হুবহু
+  /// অপরিবর্তিত। migration চালানোমাত্র কোনো চালু রেস্তোরাঁর গ্রাহক
+  /// হঠাৎ payment পাতায় গিয়ে পড়বেন না; owner নিজে অঙ্কটা বসালে তবেই
+  /// চালু হয়।
+  ///
+  /// ⚠️ এটা মোট বিলের অংশ নয়, নিছক একটা জামানত — বাকিটা টেবিলে
+  /// মেটানো হয়। তাই lib/pricing.ts-এর কোনো হিসাবে এটা ঢোকে না।
+  reservationDepositAmount Decimal @default(0) @db.Decimal(12, 3)
 
   // --- Tipping -------------------------------------------------------------
 
