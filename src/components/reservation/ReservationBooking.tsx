@@ -666,20 +666,23 @@ export default function ReservationBooking({
           </Field>
 
           {/**
-            * ⚠️ Figma-তে বোতামে লেখা "Advance Payment", কিন্তু এখানে
-            * "Confirm Reservation" — আর এই বিচ্যুতিটা ইচ্ছাকৃত।
+            * বোতামের লেখা আর ফল `needsDeposit` (depositAmount > 0)
+            * থেকে সিদ্ধান্ত হয়, হার্ডকোড নয়:
             *
-            * কোনো টাকা নেওয়া হয় না। reservation তৈরি হয়ে সরাসরি
-            * CONFIRMED হয়ে যায় (দেখুন /api/reservations POST), Stripe
-            * ছোঁয়াই হয় না। "Advance Payment" লেখা একটা বোতাম চেপে
-            * কোনো payment পর্দা না এলে গ্রাহক ভাববেন কিছু ভেঙেছে —
-            * অথবা, আরও খারাপ, ভাববেন টাকা কেটে গেছে।
+            * - admin/settings-এ Reservation deposit > 0 হলে →
+            *   "Advance Payment · <amount>", আর submit() গ্রাহককে
+            *   /api/reservations/deposit-session হয়ে Stripe-এর
+            *   hosted checkout-এ পাঠায়। টাকা দেওয়ার পরই webhook
+            *   (`checkout.session.completed`) reservation-টা
+            *   PENDING → CONFIRMED করে।
+            * - deposit = 0 (ডিফল্ট) হলে → "Confirm Reservation", আর
+            *   সরাসরি /api/reservations ডাকা হয়, Stripe ছোঁয়াই হয়
+            *   না — reservation-টা তখনই CONFIRMED।
             *
-            * সত্যিই অগ্রিম নিতে হলে যা লাগবে: Reservation-এ একটা
-            * paymentStatus + stripeSessionId, একটা checkout session
-            * route, আর webhook-এ সেটা মেলানো — অর্থাৎ gift card-এর
-            * প্রবাহটার মতোই একটা আলাদা feature। সেটা না বানিয়ে শুধু
-            * লেখাটা বসিয়ে দেওয়া মিথ্যা বলা।
+            * দুই পথেই শেষে একই Congratulations modal (নিচে
+            * SuccessModal) — অগ্রিম-পথে Stripe থেকে ফেরার পর
+            * `?booked=` দেখে খোলে, সরাসরি-পথে state থেকে (উপরে
+            * `setShowSuccess(true)`)।
             */}
           <button
             type="button"

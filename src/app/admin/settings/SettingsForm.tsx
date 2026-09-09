@@ -116,6 +116,14 @@ export interface SettingsFormData {
   restaurantLng: number | null;
   tipEnabled: boolean;
   tipPresetPercents: number[];
+  /**
+   * 0 = "Advance Payment" বন্ধ। reservation ফর্মের বোতাম তখন
+   * "Confirm Reservation" দেখায় আর সরাসরি বুক করে, Stripe ছোঁয় না।
+   * 0-এর বেশি বসালেই বোতামটা "Advance Payment · <amount>" হয়ে
+   * যায় এবং গ্রাহককে Stripe-এর hosted checkout-এ পাঠায় — দেখুন
+   * /api/reservations/deposit-session।
+   */
+  reservationDepositAmount: number;
 }
 
 /**
@@ -417,13 +425,15 @@ export default function SettingsForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {/**
-        * Figma-তে "Save Change" বোতামটা উপরে-ডানে, পাতার নিচে নয় — আর
-        * সেটাই এখানে রাখা হয়েছে।
+        * ⚠️ "Save Change" এখন পাতার নিচে, header-এ নয় — Categories/
+        * Orders/Kitchen-এর মতো header-এ শুধু তারিখের pill থাকে, কোনো
+        * form-submit বোতাম নয়। এটাই industry-standard long-form
+        * প্যাটার্ন: owner উপর থেকে নিচে পুরো ফর্মটা পড়ে/বদলে শেষে
+        * সেভ করেন, মাঝপথে বোতাম খুঁজতে উপরে ফিরতে হয় না।
         *
-        * ⚠️ আপস আছে: পাতাটা লম্বা, তাই নিচের zone গুলো সম্পাদনা করার
-        * পর সেভ করতে উপরে ফিরতে হয়। বার্তা দুটো (error/success) এই
-        * একই সারিতে বসে, বোতামের পাশেই — যাতে সেভ চেপে ফল দেখতে আবার
-        * চোখ সরাতে না হয়।
+        * বার্তা দুটো (error/success) header-এর ঠিক নিচেই রয়ে গেছে,
+        * বদলায়নি — সেভ করার পর ফলটা এখনো পাতার শুরুতেই দেখা যাবে,
+        * নিচেও Save বোতামের পাশে (নিচে দ্রষ্টব্য)।
         */}
       {/* --- Welcome header — Orders/Kitchen/Categories-এর একই গড়ন --- */}
       <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
@@ -435,18 +445,13 @@ export default function SettingsForm({
         </h1>
 
         {/**
-          * ⚠️ তারিখ আর Save **একই সারিতে** — Figma-র উপরের ডান কোণে
-          * যেভাবে "Jan 20, 2026" আর "Export Report" পাশাপাশি বসে।
-          *
-          * আগে তারিখটা page.tsx-এ আর বোতামটা form-এর ভেতরে ছিল,
-          * অর্থাৎ দুটো আলাদা block — তাই বোতামটা তারিখের নিচের সারিতে
-          * নেমে যেত।
-          *
-          * ৩২০px-এ দুটো পাশাপাশি ধরে না, তাই `justify-between` দিয়ে
-          * দুই প্রান্তে ছড়িয়ে দেওয়া হয় (Orders-এর header-এর হুবহু
-          * একই আচরণ)।
+          * ⚠️ কেবল তারিখের pill — Categories/Orders/Kitchen-এর header-এর
+          * ডান পাশে যেমন থাকে (ওদের ক্ষেত্রে পাশে একটা Export বোতামও
+          * থাকে, Settings-এ সেটার সমতুল্য কিছু নেই)। `justify-end`-ই
+          * যথেষ্ট এখন — আগে এখানে বোতামও ছিল বলে `justify-between`
+          * লাগত, দুই প্রান্তে ছড়ানোর জন্য।
           */}
-        <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-end">
+        <div className="flex w-full shrink-0 items-center justify-end gap-2 md:w-auto">
           <span className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black min-[480px]:h-11 min-[480px]:px-4 min-[480px]:text-[14px]">
             <Calendar
               className="h-4 w-4 shrink-0 text-black/70 min-[480px]:h-5 min-[480px]:w-5"
@@ -455,14 +460,6 @@ export default function SettingsForm({
             />
             {today}
           </span>
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className={`${PRIMARY_BUTTON} h-10 shrink-0 min-[480px]:h-11`}
-          >
-            {isPending ? "Saving…" : "Save Change"}
-          </button>
         </div>
       </div>
 
@@ -957,6 +954,46 @@ export default function SettingsForm({
         )}
       </Section>
 
+      {/* ───────────────────── Reservation deposit ─────────────────── */}
+
+      <Section
+        title="Reservation deposit"
+        description="An advance payment held on Stripe when a table is booked, so a no-show doesn't cost the restaurant an empty table for the night."
+      >
+        <div className="min-w-0">
+          <label className={labelClass}>Deposit amount</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.reservationDepositAmount}
+            onChange={(e) =>
+              set("reservationDepositAmount", parseFloat(e.target.value) || 0)
+            }
+            className={inputClass}
+          />
+          <p className={helpClass}>
+            {form.reservationDepositAmount > 0 ? (
+              <>
+                Guests pay{" "}
+                <strong className="font-semibold text-black/70">
+                  {formatAmount(
+                    form.reservationDepositAmount,
+                    form.currency,
+                    form.currencyMinorUnits
+                  )}
+                </strong>{" "}
+                on Stripe&apos;s secure page before the table is confirmed. The rest is settled
+                at the restaurant. Set to 0 to turn this off — reservations are then confirmed
+                immediately, with no payment step.
+              </>
+            ) : (
+              "Currently 0, so the reservation form confirms a table instantly and never sends guests to Stripe. Set an amount above to require a deposit."
+            )}
+          </p>
+        </div>
+      </Section>
+
       {/* ─────────────────────────── Preview ───────────────────────── */}
 
       <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
@@ -1056,6 +1093,26 @@ export default function SettingsForm({
           </dl>
         )}
       </section>
+
+      {/**
+        * ─────────────────────── Save (footer) ───────────────────────
+        * ⚠️ পাতার একদম শেষে, নিজের সারিতে — header-এর pill-এর মতো
+        * নয়, এটা এখন পুরো width জুড়ে একটা শেষ কার্ড। border-t দিয়ে
+        * শেষ Section-টা থেকে আলাদা করা, যাতে বোতামটা কোনো card-এর
+        * ভেতরের একটা field মনে না হয়, বরং পুরো ফর্মের উপসংহার মনে হয়।
+        *
+        * মোবাইলে বোতাম পুরো width নেয় (`w-full`) — বাকি ফর্মের ভেতরের
+        * অন্যান্য বোতামের মতোই থাম্বের নাগালে বড় target।
+        */}
+      <div className="flex justify-end border-t border-black/10 pt-6">
+        <button
+          type="submit"
+          disabled={isPending}
+          className={`${PRIMARY_BUTTON} h-11 w-full min-[480px]:w-auto min-[480px]:px-10`}
+        >
+          {isPending ? "Saving…" : "Save Change"}
+        </button>
+      </div>
 
     </form>
   );

@@ -117,6 +117,8 @@ export default async function AdminSettingsPage() {
 
           tipEnabled: settings.tipEnabled,
           tipPresetPercents: settings.tipPresetPercents,
+
+          reservationDepositAmount: settings.reservationDepositAmount.toNumber(),
         }}
       />
     </div>

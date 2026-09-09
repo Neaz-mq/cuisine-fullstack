@@ -39,8 +39,13 @@ export async function PATCH(req: NextRequest) {
     serviceChargeTaxable,
     deliveryFeeFlat,
     deliveryFeeTaxable,
+    deliveryFeeMode,
+    deliveryZones,
+    restaurantLat,
+    restaurantLng,
     tipEnabled,
     tipPresetPercents,
+    reservationDepositAmount,
   } = parsed;
 
   // Owner শতাংশ টাইপ করে ("5"), DB ভগ্নাংশ রাখে (0.05). রূপান্তরটা ঠিক
@@ -63,11 +68,24 @@ export async function PATCH(req: NextRequest) {
     serviceChargeTaxable,
     deliveryFeeFlat: toMoney(deliveryFeeFlat),
     deliveryFeeTaxable,
+    deliveryFeeMode,
+    // ⚠️ এখানে normalizeDeliveryZones() দিয়ে পাস করানো হয় না, ইচ্ছাকৃতভাবে —
+    // ওটা read-path-এর কাজ (lib/delivery-fee.ts-এর resolveDeliveryFee)।
+    // owner যা লিখেছেন হুবহু তাই Json হিসেবে বসে; সাজানো/সংশোধন করা রূপ
+    // লিখলে raw input আর পরের বার form-এ যা ফিরে দেখানো হয় তার মধ্যে
+    // অমিল হতো (id, fromKm, label — এসব derived, storage-এ নেই)।
+    deliveryZones: deliveryZones as unknown as object,
+    restaurantLat,
+    restaurantLng,
     tipEnabled,
     // বড় থেকে ছোট নয় — ছোট থেকে বড় করে সাজানো, যাতে checkout-এ
     // button গুলো স্বাভাবিক ক্রমে বসে। ডুপ্লিকেট বাদ, কারণ একই শতাংশ
     // দুবার দেখানো নিছক বিভ্রান্তি।
     tipPresetPercents: [...new Set(tipPresetPercents)].sort((a, b) => a - b),
+    // ⚠️ toMoney দিয়ে, অন্য টাকার ঘরগুলোর মতোই — ভাসমান বিন্দুর ভুল
+    // এখানেও ঠিক ততটাই বিপজ্জনক (Stripe-এ পাঠানো হয় এই মান থেকেই,
+    // দেখুন /api/reservations/deposit-session)।
+    reservationDepositAmount: toMoney(reservationDepositAmount),
   };
 
   const updated = await prisma.restaurantSettings.upsert({

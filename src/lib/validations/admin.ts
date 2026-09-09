@@ -193,6 +193,13 @@ export const updateSettingsSchema = z
     // সর্বোচ্চ ৪টা button — এর বেশি হলে checkout-এ বেছে নেওয়া কঠিন হয়ে
     // যায়, বিশেষত মোবাইলে। ০% preset অর্থহীন, তাই min 1.
     tipPresetPercents: z.array(z.number().int().min(1).max(100)).max(4),
+
+    // 0 = "Advance Payment" বন্ধ — reservation ফর্ম তখন সরাসরি
+    // CONFIRMED করে, Stripe ছোঁয় না। 0-এর বেশি হলেই
+    // /api/reservations/deposit-session পথটা চালু হয় (দেখুন সেই
+    // route-এর মন্তব্য) এবং no-show প্রতিরোধে টেবিলটা টাকা ছাড়া
+    // ধরে রাখা হয় না।
+    reservationDepositAmount: z.number().min(0, "Deposit can't be negative"),
   })
   .refine((data) => data.kitchenOpenHour !== data.kitchenCloseHour, {
     message: "Kitchen open and close hour can't be the same",
