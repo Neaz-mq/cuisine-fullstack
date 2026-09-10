@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -8,7 +8,7 @@ import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
 import Select, { SingleValue } from "react-select";
-import { Truck } from "lucide-react";
+import { Trash2, Truck } from "lucide-react";
 import { toast } from "react-toastify";
 import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -117,6 +117,36 @@ const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
 
 /** A money string is "nothing" if it parses to zero — "0", "0.00", "0.000". */
 const isPositive = (value: string | null | undefined) => !!value && parseFloat(value) > 0;
+
+/**
+ * ── বাঁ কলামের অভিন্ন চেহারা ─────────────────────────────────────────
+ *
+ * Figma "Web/Checkout": প্রতিটা অংশ একটা cream কার্ড (radius 20,
+ * padding 30), ভেতরে Frank Ruhl শিরোনাম + Sora উপশিরোনাম, তারপর
+ * সাদা ঘর।
+ *
+ * ⚠️ এগুলো এক জায়গায় রাখা হয়েছে কারণ তিনটে অংশ (Billing, Shipping,
+ * Payment) হুবহু একই খোলস ভাগ করে। আগে প্রতিটায় হাতে লেখা ছিল
+ * `3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl
+ * sm:text-lg` — ছয়টা breakpoint-এ একই মান, আর বদলাতে গেলে তিন
+ * জায়গায় হাত দিতে হতো।
+ *
+ * ⚠️ `components/admin/modal-ui.tsx`-এর FIELD/LABEL ব্যবহার করা
+ * হয়নি, যদিও চেহারা কাছাকাছি। ওগুলোর ঘর cream (`#F9F6F3`), কারণ
+ * ওরা সাদা modal-এ বসে। এখানে উল্টো — কার্ডটাই cream, তাই ঘর সাদা
+ * হতে হবে, নাহলে ঘরের কিনারা দেখাই যেত না।
+ */
+const CARD = "flex flex-col gap-5 rounded-[20px] bg-[#F9F6F3] p-4 md:p-6 xl:p-[30px]";
+
+const CARD_TITLE =
+  "font-frank-ruhl text-[20px] font-semibold leading-none text-black md:text-[24px] xl:text-[28px]";
+
+const CARD_SUBTITLE = "mt-2 font-sora text-[12px] leading-[1.6] text-black/50";
+
+/** ফর্মের ঘর — সাদা, radius 12, উচ্চতা 46। */
+const FIELD_INPUT =
+  "h-[46px] w-full rounded-[12px] bg-white px-3.5 font-sora text-[13px] leading-none text-black placeholder:text-black/35 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
+
 
 const Carts = () => {
   const router = useRouter();
@@ -348,6 +378,19 @@ const Carts = () => {
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /**
+   * Figma-র "Congratulations!" — অর্ডার হয়ে যাওয়ার পর।
+   *
+   * ⚠️ আগে সরাসরি `/track/<id>`-এ redirect হতো, কোনো পর্দা ছাড়াই।
+   * দ্রুত, কিন্তু গ্রাহক এক ঝটকায় অন্য পাতায় গিয়ে পড়তেন আর "সত্যিই
+   * হলো তো?" প্রশ্নটা রয়ে যেত — toast ততক্ষণে মিলিয়ে যায়।
+   *
+   * ⚠️ modal-টা redirect **আটকায় না, পিছিয়ে দেয়**: "Order Tracker"
+   * চাপলে সেই একই পাতায় যায়। id-টা এখানে রাখা থাকে, তাই কেউ modal
+   * ছেড়ে চলে গেলেও অর্ডারটা হারায় না।
+   */
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+
   // Only used before the first quote lands, and to give
   // /api/gift-cards/validate a rough figure for its toast. No money
   // decision is ever made from it.
@@ -367,6 +410,31 @@ const Carts = () => {
   const maxAffordablePoints = loyaltyInfo
     ? Math.floor(Math.max(subtotal, 0) / loyaltyInfo.redemption.rate)
     : 0;
+
+  /**
+   * Figma-র loyalty চিপগুলো — slider-এর বদলে গোনা কয়েকটা বিকল্প।
+   *
+   * ⚠️ সংখ্যাগুলো hardcode করা হয়নি (Figma-তে ১০ আর ২০)। ধাপ শুরু হয়
+   * `redemption.minPoints` থেকে, তারপর তার গুণিতক — কারণ ওই সীমার
+   * নিচে server কিছুই কাটে না, আর মাঝের কোনো সংখ্যা বাছতে দিলে সেটা
+   * নীরবে নিচে গোল হয়ে যেত।
+   *
+   * ⚠️ চারটের বেশি নয়, আর গ্রাহকের কাছে যত পয়েন্ট আছে বা এই অর্ডারে
+   * যতটা কাজে লাগে — যেটা কম, তার বেশি নয়। "৫০০ পয়েন্ট" চিপটা
+   * দেখিয়ে চাপার পর "আপনার অত নেই" বলা অর্থহীন।
+   */
+  const pointOptions = useMemo(() => {
+    if (!loyaltyInfo?.redemption.canRedeem) return [];
+
+    const step = loyaltyInfo.redemption.minPoints;
+    const ceiling = Math.min(loyaltyInfo.points, maxAffordablePoints);
+    const out: { points: number; value: number }[] = [];
+
+    for (let points = step; points <= ceiling && out.length < 4; points += step) {
+      out.push({ points, value: points * loyaltyInfo.redemption.rate });
+    }
+    return out;
+  }, [loyaltyInfo, maxAffordablePoints]);
 
   const tipPresets = settings?.tipEnabled ? settings.tipPresetPercents : [];
   const showTipping = tipPresets.length > 0 && cartItems.length > 0;
@@ -685,7 +753,9 @@ const Carts = () => {
         // second order in the same tab requires a fresh QR scan, rather
         // than silently reusing this table forever.
         clearTable();
-        router.push(`/track/${data.id}`);
+        // ⚠️ redirect-এর বদলে modal — ওখানকার "Order Tracker" বোতামটাই
+        // এই পাতায় নিয়ে যায়।
+        setPlacedOrderId(data.id);
         return;
       }
 
@@ -810,7 +880,7 @@ const Carts = () => {
       setCustomTip("");
 
       clearCart();
-      router.push(`/track/${data.id}`);
+      setPlacedOrderId(data.id);
     } catch (err) {
       console.error("Order submission failed:", err);
       toast.error("Something went wrong placing your order. Please try again.", {
@@ -996,12 +1066,15 @@ const Carts = () => {
   // Not rendered at all for dine-in orders — see shippingMethodSectionDesktop
   // / shippingMethodSectionMobile below, which are set to null when isDineIn.
   const renderShippingMethodSection = (idSuffix: string) => (
-    <div className="space-y-4">
-      <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
-        Available Shipping Method
-      </h4>
+    <div className={CARD}>
+      <div>
+        <h4 className={CARD_TITLE}>Available Shipping Method</h4>
+        <p className={CARD_SUBTITLE}>
+          Select your preferred shipping method for fast and reliable delivery.
+        </p>
+      </div>
 
-      <div className="space-y-4">
+      <div className="flex flex-col gap-3">
         {/* Uber Eats */}
         <label
           className={`flex items-center justify-between border 3xl:px-4 3xl:py-3 2xl:px-4 2xl:py-3 xl:px-4 xl:py-3 lg:px-4 lg:py-3 md:px-4 md:py-3 sm:px-2 sm:py-1 cursor-pointer ${
@@ -1137,10 +1210,13 @@ const Carts = () => {
   // option for a dine-in order.
   const renderPaymentMethodSection = (idSuffix: string) => (
     <>
-      <div className="space-y-4">
-        <h4 className="3xl:text-2xl 2xl:text-2xl xl:text-2xl lg:text-2xl md:text-2xl sm:text-lg font-semibold text-gray-800 mb-2 pt-8">
-          Payment Method
-        </h4>
+      <div className={CARD}>
+        <div>
+          <h4 className={CARD_TITLE}>Payment Method</h4>
+          <p className={CARD_SUBTITLE}>
+            Choose your preferred payment method to complete your order securely.
+          </p>
+        </div>
 
         {isDineIn ? (
           <div className="space-y-3 bg-gray-50 p-4 rounded-md">
@@ -1259,11 +1335,12 @@ const Carts = () => {
           থাকে (totals-এর উপরের banner), তাই গ্রাহক জানেন কী বদলাতে
           হবে। বোতাম খোলা রাখলে চাপার পর /api/orders একই কথা বলত,
           শুধু অনেক পরে আর কম স্পষ্ট করে। */}
+      {/* Figma: gradient pill, উচ্চতা ৫০, radius 100। */}
       <button
         onClick={handleConfirmOrder}
         disabled={isSubmitting || !!quoteError}
-        className={`bg-[#2C6252] text-white w-full py-3 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs mt-4 ${
-          isSubmitting || quoteError ? "opacity-60 cursor-not-allowed" : ""
+        className={`mt-4 flex h-[50px] w-full items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 md:text-[16px] ${
+          isSubmitting || quoteError ? "cursor-not-allowed opacity-50" : ""
         }`}
       >
         {isSubmitting
@@ -1281,35 +1358,102 @@ const Carts = () => {
   const paymentMethodSectionDesktop = renderPaymentMethodSection("desktop");
   const paymentMethodSectionMobile = renderPaymentMethodSection("mobile");
 
+  const successModal = placedOrderId ? (
+    /**
+     * ⚠️ backdrop-এ ক্লিকে বন্ধ হয় না — অর্ডার হয়ে গেছে, আর ভুল করে
+     * বাইরে ট্যাপ করে পর্দাটা হারিয়ে ফেললে tracker-এর লিঙ্কটাও যেত।
+     * বন্ধ করার পথ দুটোই স্পষ্ট বোতাম।
+     */
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="order-success-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    >
+      <div className="flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]">
+        <span
+          aria-hidden="true"
+          className="flex h-[140px] w-[140px] items-center justify-center rounded-full bg-[#FEF0E3] md:h-[194px] md:w-[194px]"
+        >
+          <svg
+            className="h-[70px] w-[70px] md:h-[96px] md:w-[96px]"
+            viewBox="0 0 100 100"
+            fill="none"
+            stroke="#FA7F12"
+            strokeWidth="9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M50 6 66 14l18 2 2 18 8 16-8 16-2 18-18 2-16 8-16-8-18-2-2-18L4 66l8-16-2-18 18-2z" />
+            <path d="M33 51l12 12 22-24" />
+          </svg>
+        </span>
+
+        <div className="flex flex-col items-center gap-4 md:gap-5">
+          <h2
+            id="order-success-title"
+            className="font-frank-ruhl text-[30px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[46px]"
+          >
+            Congratulations!
+          </h2>
+          <p className="font-sora text-[14px] leading-[1.6] text-black/70 md:text-[16px]">
+            Your order has been successfully placed. We&apos;re preparing your meal with fresh
+            ingredients.
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 min-[420px]:flex-row">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="flex h-[46px] flex-1 items-center justify-center rounded-full border border-black font-sora text-[16px] font-semibold text-black transition-colors hover:bg-black hover:text-white"
+          >
+            Go to Home
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/track/${placedOrderId}`)}
+            className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Order Tracker
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <Container>
+      {successModal}
       <div className="bg-white min-h-screen px-4 py-8 md:px-6 3xl:px-[4.2rem] xl:px-14 lg:px-0 2xl:px-4 3xl:mb-36 2xl:mb-28 xl:mb-28 lg:mb-24 sm:mb-10 lg:-ml-2 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 md:-ml-20 sm:-ml-36 -mt-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h3 className="3xl:text-3xl 2xl:text-3xl xl:text-3xl lg:text-3xl md:text-2xl sm:text-lg font-semibold text-gray-800">
-                  {isDineIn ? "Your Details" : "Billing Details"}
-                </h3>
-                {isDineIn && tableLabel && (
-                  <span className="bg-[#2C6252] text-white text-xs font-semibold px-3 py-1 rounded-full">
-                    Table {tableLabel}
-                  </span>
-                )}
-              </div>
-              {isDineIn && (
-                <p className="text-sm text-gray-500 -mt-2">
-                  Just your name and phone number — your order goes straight to the kitchen for this table.
+          <div className="flex flex-col gap-4 lg:col-span-2">
+            <div className={CARD}>
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className={CARD_TITLE}>
+                    {isDineIn ? "Your Details" : "Billing Details"}
+                  </h3>
+                  {isDineIn && tableLabel && (
+                    <span className="rounded-full bg-black px-3 py-1.5 font-sora text-[11px] font-medium leading-none text-white">
+                      Table {tableLabel}
+                    </span>
+                  )}
+                </div>
+                <p className={CARD_SUBTITLE}>
+                  {isDineIn
+                    ? "Just your name and phone number — your order goes straight to the kitchen for this table."
+                    : "Enter your billing information to complete your order securely."}
                 </p>
-              )}
+              </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <input
                   name="firstName"
                   type="text"
                   placeholder="First name"
-                  className="border border-gray-300 px-4 py-2 rounded 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                  className={FIELD_INPUT}
                   value={formData.firstName}
                   onChange={handleChange}
                 />
@@ -1317,7 +1461,7 @@ const Carts = () => {
                   name="lastName"
                   type="text"
                   placeholder="Last name"
-                  className="border border-gray-300 px-4 py-2 rounded 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                  className={FIELD_INPUT}
                   value={formData.lastName}
                   onChange={handleChange}
                 />
@@ -1352,7 +1496,7 @@ const Carts = () => {
                     name="address"
                     type="text"
                     placeholder="Address line 1 and 2 example"
-                    className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    className={FIELD_INPUT}
                     value={formData.address}
                     onChange={handleChange}
                   />
@@ -1362,7 +1506,7 @@ const Carts = () => {
                     name="apartment"
                     type="text"
                     placeholder="Apartment suite etc (optional)"
-                    className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    className={FIELD_INPUT}
                     value={formData.apartment}
                     onChange={handleChange}
                   />
@@ -1372,7 +1516,7 @@ const Carts = () => {
                       name="city"
                       type="text"
                       placeholder="City"
-                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      className={FIELD_INPUT}
                       value={formData.city}
                       onChange={handleChange}
                     />
@@ -1380,7 +1524,7 @@ const Carts = () => {
                       name="state"
                       type="text"
                       placeholder="State"
-                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      className={FIELD_INPUT}
                       value={formData.state}
                       onChange={handleChange}
                     />
@@ -1388,7 +1532,7 @@ const Carts = () => {
                       name="zip"
                       type="text"
                       placeholder="Zip"
-                      className="border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]"
+                      className={FIELD_INPUT}
                       value={formData.zip}
                       onChange={handleChange}
                     />
@@ -1401,7 +1545,7 @@ const Carts = () => {
                     type="email"
                     name="email"
                     placeholder="Email address"
-                    className="w-full border border-gray-300 px-4 py-2 rounded 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                    className={FIELD_INPUT}
                     value={formData.email}
                     onChange={handleChange}
                   />
@@ -1430,7 +1574,7 @@ const Carts = () => {
                 inputMode="numeric"
                 maxLength={16}
                 placeholder="Phone number"
-                className="w-full border border-gray-300 px-4 py-2 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
+                className={FIELD_INPUT}
                 value={formData.phoneNumber}
                 onChange={handlePhoneChange}
               />
@@ -1443,15 +1587,39 @@ const Carts = () => {
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="bg-gray-50 p-6 border border-gray-200 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Order summary</h3>
-            <div className="space-y-4">
+          {/**
+            * ── ডান কলাম: Order summary ───────────────────────────────
+            *
+            * Figma "Web/Checkout"-এর ডান পাশটা: cream মোড়ক (radius 20,
+            * padding 30), ভেতরে প্রতিটা পদ একটা সাদা কার্ড — ছবি,
+            * নাম, বর্ণনা, দাম, ডানে মোছার আইকন আর নিচে − ০১ + stepper।
+            *
+            * ⚠️ পুরোনো markup-টা `3xl:text-sm 2xl:text-sm xl:text-sm
+            * lg:text-sm md:text-sm sm:text-[10px]` ধাঁচে লেখা ছিল —
+            * ছয়টা breakpoint-এ একই মান, শুধু সবচেয়ে ছোটটায় আলাদা।
+            * ওটা কার্যত `text-sm sm:text-[10px]`, কিন্তু পড়া যেত না
+            * আর বদলাতে গেলে ছয় জায়গায় হাত দিতে হতো। বাকি প্রজেক্ট
+            * mobile-first (`text-[13px] md:text-sm`), তাই এখানেও সেটাই।
+            *
+            * ⚠️ যা **যোগ করা হয়নি**: Figma-তে দামের পাশে একটা কাটা
+            * পুরোনো দাম (`$21.78 $20.10`) দেখানো আছে। আমাদের কোনো
+            * "আগের দাম" নেই — ছাড় আসে coupon/gift card/points থেকে,
+            * আর সেগুলো নিচে নিজের নিজের সারিতে দেখানো হয়। একটা কাটা
+            * সংখ্যা বানিয়ে দেখালে সেটা মিথ্যা হতো।
+            */}
+          <div className="flex flex-col gap-4 rounded-[20px] bg-[#F9F6F3] p-4 md:p-5 xl:p-[30px]">
+            <h3 className="font-frank-ruhl text-[18px] font-semibold leading-none text-black md:text-[20px]">
+              Order summary
+            </h3>
+
+            <div className="flex flex-col gap-3">
               {cartItems.length === 0 ? (
-                <p className="text-sm text-gray-500">Your cart is empty.</p>
+                <p className="rounded-[14px] bg-white px-4 py-8 text-center font-sora text-[13px] text-black/50">
+                  Your cart is empty.
+                </p>
               ) : (
                 cartItems.map((item) => (
-                  <div key={item.id} className="flex items-start sm:gap-2 md:gap-4 3xl:gap-4 2xl:gap-4 xl:gap-4 lg:gap-4">
+                  <div key={item.id} className="flex gap-3 rounded-[14px] bg-white p-3">
                     {item.imageUrl && (
                       <Image
                         src={item.imageUrl}
@@ -1459,45 +1627,62 @@ const Carts = () => {
                         width={64}
                         height={64}
                         unoptimized
-                        className="3xl:w-16 3xl:h-16 2xl:w-16 2xl:h-16 xl:w-16 xl:h-16 lg:w-16 lg:h-16 md:w-16 md:h-16 sm:w-10 sm:h-10 object-cover"
+                        className="h-14 w-14 shrink-0 rounded-[10px] object-cover md:h-16 md:w-16"
                       />
                     )}
-                    <div className="flex-1">
-                      <p className="font-medium 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[10px] text-gray-800">
-                        {item.title}
-                      </p>
+
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 font-frank-ruhl text-[14px] font-semibold leading-[1.3] text-black md:text-[15px]">
+                          {item.title}
+                        </p>
+                        {/* ⚠️ Figma-র ট্র্যাশ আইকন। `×` ছিল — ছোট
+                            পর্দায় ওটা "গুণ" চিহ্নের মতো দেখাত, আর
+                            tap target-ও ছোট ছিল। */}
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          aria-label={`Remove ${item.title} from cart`}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-black/40 transition-colors hover:bg-[#D72A37]/10 hover:text-[#D72A37]"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                        </button>
+                      </div>
+
                       {item.description && (
-                        <p className="3xl:text-xs 2xl:text-xs xl:text-xs lg:text-xs md:text-xs sm:text-[7px] text-gray-500">
+                        <p className="line-clamp-2 font-sora text-[11px] leading-[1.5] text-black/50">
                           {item.description}
                         </p>
                       )}
-                      <div className="flex items-center mt-2 space-x-2">
-                        <button
-                          onClick={() => decreaseQty(item.id)}
-                          className="bg-gray-200 px-2 py-1 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                        >
-                          −
-                        </button>
-                        <span className="text-sm">{item.quantity}</span>
-                        <button
-                          onClick={() => increaseQty(item.id)}
-                          className="bg-gray-200 px-2 py-1 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                        >
-                          +
-                        </button>
+
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="font-frank-ruhl text-[15px] font-semibold leading-none text-black">
+                          {currency} {(item.price * item.quantity).toFixed(2)}
+                        </span>
+
+                        {/* Figma-র stepper: − ০১ +, ডানেরটা কালো গোল। */}
+                        <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            onClick={() => decreaseQty(item.id)}
+                            aria-label={`Decrease ${item.title} quantity`}
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F9F6F3] font-sora text-[14px] leading-none text-black transition-colors hover:bg-black/10"
+                          >
+                            −
+                          </button>
+                          <span className="min-w-[18px] text-center font-sora text-[13px] font-medium tabular-nums text-black">
+                            {/* ⚠️ Figma-তে "01" — দুই অঙ্কে প্যাড করা,
+                                যাতে ১ থেকে ১০-এ গেলে stepper-টা লাফিয়ে
+                                চওড়া না হয়। `tabular-nums`-ও সেই কারণেই। */}
+                            {String(item.quantity).padStart(2, "0")}
+                          </span>
+                          <button
+                            onClick={() => increaseQty(item.id)}
+                            aria-label={`Increase ${item.title} quantity`}
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-black font-sora text-[14px] leading-none text-white transition-opacity hover:opacity-80"
+                          >
+                            +
+                          </button>
+                        </span>
                       </div>
-                    </div>
-                    <div className="sm:flex sm:flex-col sm:items-end 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row items-center">
-                      <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs font-semibold text-gray-800 whitespace-nowrap">
-                        {currency} {(item.price * item.quantity).toFixed(2)}
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="ml-2 text-red-600 hover:text-red-800 font-bold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs"
-                        aria-label={`Remove ${item.title} from cart`}
-                      >
-                        ×
-                      </button>
                     </div>
                   </div>
                 ))
@@ -1592,35 +1777,99 @@ const Carts = () => {
                   totals block below. */}
               {loyaltyInfo && loyaltyInfo.redemption.canRedeem && (
                 <div className="mb-4 border border-gray-200 rounded px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-800">
-                      Use your points ({loyaltyInfo.points} available)
+                  {/**
+                    * Figma "Redeem Loyalty Points" — চিপ, slider নয়।
+                    *
+                    * ⚠️ আগে একটা `<input type="range">` ছিল। দুটো
+                    * সমস্যা ছিল ওতে:
+                    *
+                    *   • কত পয়েন্টে কত ছাড়, সেটা টেনে না দেখা পর্যন্ত
+                    *     জানা যেত না — অথচ সিদ্ধান্তটা ঠিক ওই তথ্যের
+                    *     উপরেই নির্ভর করে
+                    *   • ছোঁয়া-পর্দায় slider-এর নির্ভুলতা খারাপ, আর
+                    *     `step` = minPoints হওয়ায় ভুল টানে ২০০ পয়েন্ট
+                    *     লাফিয়ে যেত
+                    *
+                    * চিপে দুটোই মেটে: প্রতিটায় পয়েন্ট **আর** টাকার
+                    * অঙ্ক লেখা, আর ট্যাপ নির্ভুল।
+                    *
+                    * ⚠️ ছাড়ের অঙ্কটা এখানে `points × rate` দিয়ে
+                    * দেখানো হয় — কিন্তু সেটা কেবল **প্রাক্কলন**।
+                    * সত্যিকারের অঙ্ক আসে /api/checkout/quote থেকে
+                    * (নিচের সবুজ লেখাটা), কারণ server সেটাকে
+                    * subtotal-এর সীমায় কেটেও দিতে পারে।
+                    */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-frank-ruhl text-[15px] font-semibold leading-none text-black">
+                      Redeem Loyalty Points
                     </span>
+                    <span className="shrink-0 rounded-full bg-black px-3 py-1.5 font-sora text-[11px] font-medium leading-none text-white">
+                      {loyaltyInfo.points} Points
+                    </span>
+                  </div>
+
+                  <p className="mt-1.5 font-sora text-[11px] leading-[1.5] text-black/50">
+                    Use your points to get an instant discount on this order.
+                  </p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {pointOptions.map((option) => {
+                      const selected = redeemedPoints === option.points;
+                      return (
+                        <button
+                          key={option.points}
+                          type="button"
+                          onClick={() => setRedeemedPoints(option.points)}
+                          aria-pressed={selected}
+                          className={`flex flex-col items-start gap-1 rounded-[12px] p-3 text-left transition-colors ${
+                            selected
+                              ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
+                              : "bg-white text-black hover:bg-black/[0.04]"
+                          }`}
+                        >
+                          <span className="font-frank-ruhl text-[14px] font-semibold leading-none">
+                            {option.points} Points
+                          </span>
+                          <span
+                            className={`font-sora text-[10px] leading-[1.4] ${
+                              selected ? "text-white/80" : "text-black/50"
+                            }`}
+                          >
+                            Saves {currency} {option.value.toFixed(2)} on this order
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Figma-র "Don't use points this time"। */}
+                  <button
+                    type="button"
+                    onClick={() => setRedeemedPoints(0)}
+                    aria-pressed={redeemedPoints === 0}
+                    className={`mt-2 flex w-full items-center justify-between rounded-[12px] p-3 text-left font-sora text-[12px] transition-colors ${
+                      redeemedPoints === 0
+                        ? "bg-black text-white"
+                        : "bg-white text-black/60 hover:bg-black/[0.04]"
+                    }`}
+                  >
+                    Don&apos;t use points this time
                     {bill && isPositive(bill.pointsRedeemedAmount) && (
-                      <span className="text-xs font-semibold text-[#2C6252]">
+                      <span className="shrink-0 font-semibold text-[#2C6252]">
                         -{money(bill.pointsRedeemedAmount)}
                       </span>
                     )}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.min(loyaltyInfo.points, maxAffordablePoints)}
-                    step={loyaltyInfo.redemption.minPoints}
-                    value={redeemedPoints}
-                    onChange={(e) => setRedeemedPoints(Number(e.target.value))}
-                    className="w-full accent-[#FF4C15]"
-                  />
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span>0 pts</span>
-                    <span>
-                      {cappedRedeemedPoints} pts
+                  </button>
+
+                  {/* ⚠️ server যা সত্যিই কাটবে — উপরের চিপের অঙ্ক নয়। */}
+                  {cappedRedeemedPoints > 0 && (
+                    <p className="mt-2 font-sora text-[11px] leading-[1.5] text-[#2C6252]">
+                      {cappedRedeemedPoints} pts applied
                       {bill && isPositive(bill.pointsRedeemedAmount)
-                        ? ` = ${money(bill.pointsRedeemedAmount)} off`
+                        ? ` — ${money(bill.pointsRedeemedAmount)} off`
                         : ""}
-                    </span>
-                    <span>{Math.min(loyaltyInfo.points, maxAffordablePoints)} pts</span>
-                  </div>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1630,7 +1879,22 @@ const Carts = () => {
                   first without needing to remove it first. */}
               {(!appliedCoupon || !appliedGiftCard) && (
                 <>
-                  <div className="flex mb-2">
+                  {/**
+                    * Figma-র "Enter your voucher" সারি: সাদা pill,
+                    * ভেতরে ডানদিকে gradient "Apply Now" বোতাম।
+                    *
+                    * ⚠️ placeholder-টা কী কী প্রয়োগ করা যাবে তার সাথে
+                    * বদলায় ("Gift card code" / "Discount code" /
+                    * দুটোই) — Figma-তে একটাই স্থির লেখা, কিন্তু এখানে
+                    * দুটো আলাদা স্লট আছে আর দুটোই একসাথে ভরে যেতে
+                    * পারে। কোনটা এখনো খালি সেটা না বললে গ্রাহক
+                    * বারবার ভুল কোড দিতেন।
+                    *
+                    * ⚠️ বোতামটা ঘরের **ভেতরে** (`pr-1.5` + absolute
+                    * নয়, flex)। বাইরে বসালে সরু পর্দায় ইনপুটটা
+                    * ~৯০px-এ নেমে আসত, আর কোড টাইপ করাই কঠিন হতো।
+                    */}
+                  <div className="flex h-[50px] items-center rounded-full bg-white pl-4 pr-1.5 focus-within:[outline:2px_solid_#FF9540] focus-within:[outline-offset:-2px]">
                     <input
                       type="text"
                       placeholder={
@@ -1638,24 +1902,30 @@ const Carts = () => {
                           ? "Gift card code"
                           : appliedGiftCard
                             ? "Discount code"
-                            : "Gift card or discount code"
+                            : "Enter your voucher"
                       }
-                      className="flex-1 border border-gray-300 3xl:px-4 2xl:px-4 xl:px-2 lg:px-2 py-2 md:px-2 sm:px-2 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="min-w-0 flex-1 bg-transparent font-sora text-[13px] leading-none text-black placeholder:text-black/40 focus:outline-none"
                       value={discountCode}
                       onChange={handleDiscountCodeChange}
                     />
                     <button
                       onClick={applyDiscount}
                       disabled={isApplyingCoupon || isApplyingGiftCard}
-                      className="bg-gray-400 text-white 3xl:px-6 2xl:px-6 xl:px-2 lg:px-2 md:px-2 sm:px-2 py-2 font-semibold 3xl:text-sm 2xl:text-sm xl:text-[12px] lg:text-[11px] md:text-[11px] sm:text-[8px] hover:bg-gray-500 transition-colors disabled:opacity-50"
+                      className="h-[38px] shrink-0 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-none text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
-                      {isApplyingCoupon || isApplyingGiftCard ? "Checking…" : "Apply"}
+                      {isApplyingCoupon || isApplyingGiftCard ? "Checking…" : "Apply Now"}
                     </button>
                   </div>
+
+                  {/* ⚠️ আগে ভুল হলে `mb-8`, না হলে একটা খালি `mb-4` div
+                      বসত — অর্থাৎ ফাঁকটা দুই অবস্থায় দুরকম, আর বার্তা
+                      এলে নিচের সবকিছু লাফাত। এখন ফাঁকটা বাইরের
+                      `gap`-এ, তাই বার্তা এলে-গেলে কিছু নড়ে না। */}
                   {couponError && (
-                    <p className="text-xs text-red-500 mb-8">{couponError}</p>
+                    <p className="mt-2 font-sora text-[12px] leading-[1.5] text-[#D72A37]">
+                      {couponError}
+                    </p>
                   )}
-                  {!couponError && <div className="mb-4" />}
                 </>
               )}
 
@@ -1731,14 +2001,72 @@ const Carts = () => {
                 </div>
               )}
             </div>
-            <div className="space-y-10 bg-white p-6">
-              {/*
-                Every figure below comes from /api/checkout/bill — the same
-                code that prices the order when it is actually created.
-                Nothing here is computed in the browser, so what the customer
-                reads is what the card is charged.
+            {/**
+              * ── হিসাবের সারিগুলো ─────────────────────────────────────
+              *
+              * Figma: সাদা কার্ড, radius 14, ভেতরে Subtotal / Standard
+              * delivery / Vat, নিচে একটা রেখা, তারপর "Total Price(2)"।
+              *
+              * নিচের প্রতিটা সংখ্যা আসে /api/checkout/quote থেকে — সেই
+              * একই কোড যা অর্ডার তৈরির সময় দাম কষে। ব্রাউজারে কিছুই
+              * হিসাব হয় না, তাই গ্রাহক যা পড়েন কার্ডে ঠিক সেটাই কাটে।
+              *
+              * ⚠️ `space-y-10` ছিল — ৪০px ফাঁক, অথচ Figma-তে ১২px।
+              * সারিগুলো এত দূরে থাকলে কোনটা কীসের যোগফল সেটা চোখে ধরা
+              * পড়ে না; হিসাবের তালিকা ঘন হওয়াই স্বাভাবিক।
               */}
-              <div className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px] text-gray-700 space-y-5">
+            <div className="flex flex-col gap-3 rounded-[14px] bg-white p-4">
+              {/**
+                * Figma-র "1p. Beef Pizza — $12.99" সারিগুলো: প্রতিটার
+                * বাঁয়ে একটা কমলা টিক।
+                *
+                * ⚠️ উপরের কার্ডগুলোতেও একই পদ, একই দাম — তাহলে দুবার
+                * কেন? কারণ দুটোর কাজ আলাদা: উপরেরটা **সম্পাদনার**
+                * জায়গা (stepper, মোছা), আর এটা **রসিদ** — যা যাচ্ছে
+                * তার চূড়ান্ত তালিকা, ঠিক Subtotal-এর উপরে। টিকগুলো
+                * সেই "নিশ্চিত হয়েছে" ভাবটাই দেয়।
+                *
+                * ⚠️ `1p.` মানে "1 piece" — Figma-র লেখা। পরিমাণ ১-এর
+                * বেশি হলে সেটাই বসে (`3p.`), নাহলে সংখ্যাটা কোথাও
+                * দেখা যেত না আর দুটো তালিকা অমিল লাগত।
+                */}
+              {cartItems.length > 0 && (
+                <div className="flex flex-col gap-2.5 border-b border-black/10 pb-3">
+                  {cartItems.map((item) => (
+                    <div
+                      key={`recap-${item.id}`}
+                      className="flex items-center justify-between gap-3 font-sora text-[13px]"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#FF9540] text-white"
+                        >
+                          <svg
+                            className="h-2.5 w-2.5"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M2.5 6.5 5 9l4.5-5.5" />
+                          </svg>
+                        </span>
+                        <span className="truncate text-black">
+                          {item.quantity}p. {item.title}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-medium text-black">
+                        {currency} {(item.price * item.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 font-sora text-[13px] text-black/70">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
                   <span>{bill ? money(bill.subtotal) : `${currency} ${subtotal.toFixed(2)}`}</span>
@@ -1831,9 +2159,22 @@ const Carts = () => {
                 )}
               </div>
 
-              <div className="border-t border-dashed border-gray-300 my-4"></div>
-              <div className="flex justify-between 3xl:text-md 2xl:text-md xl:text-md lg:text-md md:text-md sm:text-xs font-bold pt-2">
-                <span>Total</span>
+              <div className="border-t border-black/10"></div>
+
+              {/**
+                * ⚠️ Figma-তে লেখা "Total Price(2)" — বন্ধনীর সংখ্যাটা
+                * cart-এ কয়টা **পদ**, কয়টা ইউনিট নয়। দুটোর পার্থক্য
+                * আছে: এক পদের তিনটে কপি থাকলে ওখানে "(1)" বসে।
+                *
+                * `cartItems.length` সেটাই দেয়, তাই আলাদা হিসাব লাগেনি।
+                */}
+              <div className="flex items-baseline justify-between gap-3 font-sora text-[14px] font-semibold text-black">
+                <span>
+                  Total Price
+                  {cartItems.length > 0 && (
+                    <span className="text-black/50">({cartItems.length})</span>
+                  )}
+                </span>
                 <span className="text-[#2C6252]">
                   {bill ? money(bill.totalAmount) : `${currency} ${subtotal.toFixed(2)}`}
                 </span>

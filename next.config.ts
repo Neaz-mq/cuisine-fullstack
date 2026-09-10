@@ -169,8 +169,46 @@ const supabaseHostname = supabaseOrigin
   ? new URL(supabaseOrigin).hostname
   : undefined;
 
+/**
+ * ⚠️ Next 16-এর image optimizer fetch করার **আগে** hostname resolve
+ * করে দেখে ঠিকানাটা public কিনা — private/loopback হলে আটকে দেয়।
+ * সুরক্ষাটা দরকারি: optimizer যেকোনো remote URL টানতে পারে, তাই ওটাই
+ * SSRF-এর প্রধান দরজা।
+ *
+ * কিন্তু কিছু নেটওয়ার্কে (Cloudflare WARP, মোবাইল হটস্পট, কিছু ISP)
+ * DNS **NAT64** ব্যবহার করে — আসল IPv4 ঠিকানাটা `64:ff9b::/96`
+ * prefix দিয়ে IPv6-এ মুড়ে দেয়। যেমন Supabase-এর host resolve হয়
+ * `64:ff9b::ac40:95f6`-তে (আসলে 172.64.149.246, Cloudflare)। optimizer
+ * ওই আকারটা চেনে না, তাই "private IP" ধরে নিয়ে প্রতিটা ছবি আটকে দেয়:
+ *
+ *   ⨯ upstream image … hostname resolved to private IP ["64:ff9b::…"]
+ *
+ * ফলটা বিভ্রান্তিকর — live সাইটে ছবি ঠিকই আসে (Vercel-এর DNS
+ * স্বাভাবিক), শুধু ডেভেলপারের মেশিনে আসে না।
+ *
+ * ⚠️ তাই শুধু development-এ শিথিল করা হয়, `true` লিখে নয়। production-এ
+ * সুরক্ষাটা চালু থাকতেই হবে।
+ *
+ * ⚠️ এটা আসল সমাধান নয়, উপশম। মূল কারণ মেশিনের DNS — WARP বন্ধ করলে
+ * বা DNS 1.1.1.1/8.8.8.8-এ বদলালে এই লাইনটার আর দরকারই নেই।
+ */
+const allowLocalIPInDev = process.env.NODE_ENV === "development";
+
 const nextConfig: NextConfig = {
   images: {
+    dangerouslyAllowLocalIP: allowLocalIPInDev,
+
+    /**
+     * ⚠️ ছবির URL ভুল বা অগম্য হলে optimizer ৫০০ ফেরায়, আর `next/image`
+     * তখন একটা ফাঁকা বাক্স রেখে দেয় — ঠিক যেমনটা এই bug-এ দেখা গেছে।
+     * ৬০ সেকেন্ডের cache TTL মানে ঠিক করার পর ষাট সেকেন্ডের মধ্যেই
+     * ফল দেখা যায়, ঘণ্টার পর ঘণ্টা বাসি ভুল নয়।
+     *
+     * (ডিফল্ট ৬০, কিন্তু স্পষ্ট করে লেখা — নাহলে পরে কেউ দীর্ঘ TTL
+     * বসিয়ে দিলে এই ফাঁদটা আবার তৈরি হয়।)
+     */
+    minimumCacheTTL: 60,
+
     remotePatterns: [
       // Marketing/content images (chef photos, menu banners, etc.) hosted
       // on Cloudinary under this project's original cloud name.
