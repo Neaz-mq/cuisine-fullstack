@@ -83,8 +83,19 @@ export default function MenuComboCta({
            * ওখানে ৪৪px সাদা গোলটা বসে, আর সেটার নিজের ঘেরই ফাঁক তৈরি
            * করে। সমান padding দিলে বোতামটা ডান দিকে অকারণ চওড়া লাগত।
            */}
+          {/**
+            * ⚠️ আগে এখানে `/reservations` লেখা ছিল, আর সেটা ভুল —
+            * বোতামের লেখা "Book a Table", অর্থাৎ গন্তব্য বুক করার
+            * **ফর্ম**, তালিকা নয়। ওই route-টা তখন ছিলই না, তাই
+            * ক্লিক করলে ৪০৪ আসত।
+            *
+            * এখন `/my-reservations` নামে একটা তালিকা-পাতা আছে, তাই
+            * পুরোনো নামটা রেখে দিলে ভুলটা ৪০৪ থেকে বদলে **নীরব** হয়ে
+            * যেত — গ্রাহক "Book a Table" চেপে নিজের পুরোনো booking-এর
+            * তালিকায় গিয়ে পড়তেন।
+            */}
           <Link
-            href="/reservations"
+            href="/reservation"
             className={`flex h-[52px] items-center justify-center gap-3 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] py-[14px] pl-6 pr-1.5 font-sora text-[15px] font-semibold leading-[1.6] text-white transition-opacity hover:opacity-90 xl:h-14 ${FOCUS_RING}`}
           >
             Book a Table

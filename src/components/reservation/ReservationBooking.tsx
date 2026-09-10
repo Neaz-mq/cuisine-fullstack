@@ -100,6 +100,15 @@ export default function ReservationBooking({
    * অগ্রিম ছাড়া পথেও একই URL বসানো হয়, যাতে দুটো পথের শেষটা এক থাকে।
    */
   const [showSuccess, setShowSuccess] = useState(Boolean(bookedId));
+
+  /**
+   * অগ্রিম ছাড়া পথে তৈরি হওয়া booking-এর id।
+   *
+   * ⚠️ অগ্রিম নেওয়ার পথে এটা লাগে না — ওখানে গ্রাহক Stripe-এ যান আর
+   * `?booked=<id>` নিয়ে ফেরেন, অর্থাৎ id-টা URL-এই থাকে। এটা কেবল
+   * সেই ক্ষেত্রের জন্য যেখানে পাতা ছেড়ে যাওয়াই হয় না।
+   */
+  const [justBookedId, setJustBookedId] = useState<string | null>(null);
   const [tables, setTables] = useState<ApiTable[]>([]);
   const [loadingTables, setLoadingTables] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -409,6 +418,7 @@ export default function ReservationBooking({
       }
 
       toast.success(`${data.table.label} is booked. We've sent the details to ${email.trim()}.`);
+      setJustBookedId(data.id ?? null);
       setShowSuccess(true);
 
       setFullName("");
@@ -851,7 +861,17 @@ export default function ReservationBooking({
         </motion.div>
       </div>
 
-      {showSuccess && <SuccessModal onClose={() => setShowSuccess(false)} />}
+      {/**
+        * ⚠️ `bookedId` আসে URL-এর `?booked=` থেকে (Stripe-এর পরে), আর
+        * `justBookedId` অগ্রিম ছাড়া পথে submit()-এর উত্তর থেকে। দুটোর
+        * যেটাই থাকুক, "Reservation Details" লিঙ্কে সেটাই বসে।
+        */}
+      {showSuccess && (
+        <SuccessModal
+          onClose={() => setShowSuccess(false)}
+          reservationId={bookedId ?? justBookedId}
+        />
+      )}
     </section>
   );
 }
@@ -865,7 +885,18 @@ export default function ReservationBooking({
  * চাইলে Figma থেকে SVG export করে `public/`-এ রেখে এখানে <Image>
  * বসিয়ে দিলেই হবে; বাকি layout বদলাতে হবে না।
  */
-function SuccessModal({ onClose }: { onClose: () => void }) {
+function SuccessModal({
+  onClose,
+  reservationId,
+}: {
+  onClose: () => void;
+  /**
+   * কোন booking-এর জন্য — "Reservation Details" লিঙ্কে `?ref=` হয়ে
+   * যায়। null হলে লিঙ্কটা কেবল `/my-reservations`-এ নিয়ে যায়, যা
+   * login করা গ্রাহকের জন্য ঠিকই কাজ করে।
+   */
+  reservationId: string | null;
+}) {
   return (
     <div
       role="dialog"
@@ -910,14 +941,33 @@ function SuccessModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        {/* ⚠️ Link, বোতাম নয় — এটা সত্যিই অন্য পাতায় নিয়ে যায়, তাই
-            middle-click বা "নতুন ট্যাবে খুলুন" কাজ করা উচিত। */}
-        <Link
-          href="/"
-          className="flex h-[46px] w-full items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          Go to Home
-        </Link>
+        {/**
+          * ⚠️ Link, বোতাম নয় — এগুলো সত্যিই অন্য পাতায় নিয়ে যায়, তাই
+          * middle-click বা "নতুন ট্যাবে খুলুন" কাজ করা উচিত।
+          *
+          * ⚠️ "Reservation Details"-এ `?ref=<id>` — এটাই অতিথি
+          * booking-এর একমাত্র চাবি। login ছাড়া বুক করলে
+          * `/my-reservations` জানে না কোন booking দেখাতে হবে, আর ওই
+          * পাতাটা `userId: null` হলেই কেবল ref মানে (অন্য কারও
+          * account-এর booking-এর id হাতে পেলেও খোলা যাবে না)।
+          *
+          * login করা থাকলে ref-টা অতিরিক্ত, ক্ষতিকর নয় — পাতাটা তখন
+          * userId ধরে পুরো তালিকাই দেখায়।
+          */}
+        <div className="flex w-full flex-col gap-2 min-[420px]:flex-row">
+          <Link
+            href="/"
+            className="flex h-[46px] flex-1 items-center justify-center rounded-full border border-black font-sora text-[16px] font-semibold text-black transition-colors hover:bg-black hover:text-white"
+          >
+            Go to Home
+          </Link>
+          <Link
+            href={reservationId ? `/my-reservations?ref=${reservationId}` : "/my-reservations"}
+            className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Reservation Details
+          </Link>
+        </div>
       </div>
     </div>
   );
