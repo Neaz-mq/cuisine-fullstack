@@ -134,6 +134,20 @@ export default function ReservationBooking({
    * হয়; সেটা আলাদা নকশার সিদ্ধান্ত।
    */
   const [previewId, setPreviewId] = useState<string | null>(null);
+
+  /**
+   * ⚠️ preview-টা এখন **গ্রিডের** উপরে ভাসে, প্রতিটা টাইলের সাথে
+   * সাঁটা নয় — Figma-তেও তাই।
+   *
+   * আগে প্রতিটা টাইলের ভেতরে একটা করে preview ছিল, `top-full` দিয়ে
+   * ঠিক নিচে। তাতে দুটো সমস্যা: শেষ সারিতে ওটা গ্রিড ছাড়িয়ে
+   * ফর্মের উপরে গিয়ে পড়ত, আর ছবিটা টাইলের প্রস্থে বাঁধা থাকায়
+   * Figma-র ৪৬৬px কার্ডটা বসানোই যেত না।
+   *
+   * এখন একটাই preview, গ্রিডের কেন্দ্রে — কোন টেবিলের, সেটা
+   * `previewId` বলে।
+   */
+  const previewTable = previewId ? (tables.find((t) => t.id === previewId) ?? null) : null;
   /**
    * ⚠️ এটা **অতিরিক্ত** অতিথির সংখ্যা, মোট নয় — Figma-র label
    * "Ext. Guests"। যিনি বুক করছেন তিনি এর বাইরে, তাই ০ মানে "শুধু
@@ -427,7 +441,8 @@ export default function ReservationBooking({
             * অন্তত ৬৪০px; সরু পর্দায় জোর করলে টাইলগুলো ~৫০px হতো আর
             * "T-10" লেখাটাই আঁটত না।
             */}
-          <div className="grid grid-cols-3 gap-3 min-[480px]:grid-cols-4 md:grid-cols-5 md:gap-4">
+          {/* ⚠️ `relative` — নিচের preview এই বাক্সটা ধরে কেন্দ্রে বসে। */}
+          <div className="relative grid grid-cols-3 gap-3 min-[480px]:grid-cols-4 md:grid-cols-5 md:gap-4">
             {loadingTables && tables.length === 0
               ? Array.from({ length: 10 }, (_, i) => (
                   <div
@@ -500,54 +515,52 @@ export default function ReservationBooking({
                       {table.label}
                     </motion.button>
 
-                    {/**
-                      * Figma Frame 2147225236 — ছবি ৪৬৬×৩২৪, radius ১৭,
-                      * উপরে কালো gradient।
-                      *
-                      * ⚠️ Figma-তে তীর, বিন্দু আর বন্ধ করার বোতামও আছে —
-                      * অর্থাৎ একাধিক ছবির carousel। schema-য়
-                      * `RestaurantTable.imageUrl` একটাই string, তাই
-                      * ওগুলো বসানো হয়নি: যে বোতাম চাপলে কিছু হয় না,
-                      * সেটা না থাকার চেয়ে খারাপ।
-                      *
-                      * সত্যিই carousel চাইলে `imageUrl` → `imageUrls
-                      * String[]` করতে হবে, সাথে migration আর admin
-                      * modal-এ একাধিক ছবি তোলার ব্যবস্থা।
-                      *
-                      * ⚠️ `pointer-events-none` — preview-টা নিজে
-                      * mouse ধরলে পাশের টাইলে যাওয়ার পথে ওটার উপর দিয়ে
-                      * গেলে hover ভেঙে ঝিকিমিকি করত।
-                      *
-                      * ⚠️ নিচে বসে (`top-full`), উপরে নয় — প্রথম
-                      * সারির টাইলে উপরে বসালে section-এর বাইরে গিয়ে
-                      * কেটে যেত।
-                      */}
-                    {table.imageUrl && previewId === table.id && (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-[240px] -translate-x-1/2 overflow-hidden rounded-[17px] bg-[#F8F8F8] shadow-xl min-[480px]:w-[320px] md:w-[400px]">
-                        <div className="relative aspect-[466/324] w-full">
-                          <Image
-                            src={table.imageUrl}
-                            alt={`${table.label}`}
-                            fill
-                            sizes="(min-width: 768px) 400px, (min-width: 480px) 320px, 240px"
-                            className="object-cover"
-                          />
-                          {/* Rectangle 34628975 — উপর থেকে কালো gradient,
-                              যাতে নামটা যেকোনো ছবির উপরেই পড়া যায়। */}
-                          <div
-                            aria-hidden="true"
-                            className="absolute inset-x-0 top-0 h-[58px] bg-gradient-to-b from-black/70 to-transparent"
-                          />
-                          <span className="absolute left-3 top-2.5 font-sora text-[12px] font-medium leading-none text-white">
-                            {table.label}
-                            {table.name ? ` · ${table.name}` : ""}
-                          </span>
-                        </div>
-                      </div>
-                    )}
                     </div>
                   );
                 })}
+
+            {/**
+              * Figma Frame 2147225236 — ছবি ৪৬৬×৩২৪, radius ১৭, উপরে
+              * কালো gradient। গ্রিডের ঠিক মাঝখানে ভাসে।
+              *
+              * ⚠️ Figma-তে তীর, বিন্দু আর বন্ধ করার বোতামও আছে —
+              * অর্থাৎ একাধিক ছবির carousel। schema-য়
+              * `RestaurantTable.imageUrl` একটাই string, তাই ওগুলো
+              * বসানো হয়নি: যে বোতাম চাপলে কিছু হয় না, সেটা না থাকার
+              * চেয়ে খারাপ। carousel চাইলে `imageUrl` → `imageUrls
+              * String[]` করতে হবে, সাথে migration আর admin modal-এ
+              * একাধিক ছবি তোলার ব্যবস্থা।
+              *
+              * ⚠️ `pointer-events-none` — preview-টা নিজে mouse ধরলে
+              * তার নিচের টাইলগুলোর hover ভেঙে যেত, আর ছবিটা ঠিক
+              * ওদের উপরেই বসে।
+              *
+              * ⚠️ `max-w-full` — গ্রিডের চেয়ে চওড়া হতে পারে না,
+              * নাহলে ৩২০px পর্দায় ৪৬৬px কার্ডটা দুই পাশে বেরিয়ে যেত।
+              */}
+            {previewTable?.imageUrl && (
+              <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] max-w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[17px] bg-[#F8F8F8] shadow-2xl min-[480px]:w-[360px] md:w-[466px]">
+                <div className="relative aspect-[466/324] w-full">
+                  <Image
+                    src={previewTable.imageUrl}
+                    alt={previewTable.label}
+                    fill
+                    sizes="(min-width: 768px) 466px, (min-width: 480px) 360px, 280px"
+                    className="object-cover"
+                  />
+                  {/* Rectangle 34628975 — উপর থেকে কালো gradient, যাতে
+                      নামটা যেকোনো ছবির উপরেই পড়া যায়। */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-x-0 top-0 h-[58px] bg-gradient-to-b from-black/70 to-transparent"
+                  />
+                  <span className="absolute left-3 top-2.5 font-sora text-[12px] font-medium leading-none text-white">
+                    {previewTable.label}
+                    {previewTable.name ? ` · ${previewTable.name}` : ""}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/**
