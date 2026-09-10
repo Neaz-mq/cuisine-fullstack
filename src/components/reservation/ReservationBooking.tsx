@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
@@ -27,9 +28,20 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 type ApiTable = {
   id: string;
   label: string;
+  /** ঐচ্ছিক ডাকনাম ("Window Table") — preview-তে label-এর পাশে বসে। */
+  name: string | null;
   capacity: number;
   /** `?reservedAt=` ছাড়া ডাকলে null — অর্থাৎ "এখনো জানি না"। */
   available: boolean | null;
+  /**
+   * টেবিলের ছবি (admin-এর "Add Table Image" modal থেকে)।
+   *
+   * ⚠️ API-তে কিছু বদলাতে হয়নি — `/api/tables` পুরো Prisma row
+   * spread করে (`{ ...t, available }`), তাই `imageUrl` আগে থেকেই
+   * আসছিল; কেবল এই type-এ লেখা ছিল না বলে TypeScript ওটা দেখতে
+   * পেত না।
+   */
+  imageUrl: string | null;
 };
 
 /**
@@ -108,13 +120,42 @@ export default function ReservationBooking({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [tableId, setTableId] = useState("");
+
   /**
-   * ⚠️ আগে ডিফল্ট মান ছিল "2" — মানে গ্রাহক dropdown-টা স্পর্শ না
-   * করলেও ফর্ম চুপচাপ "2 guests" পাঠিয়ে দিত। এখন খালি ("") থেকে
-   * শুরু, আর নিচে "Select guests" একটা placeholder option আছে —
-   * গ্রাহককে নিজে থেকেই বাছতে হয়, কোনো লুকোনো ডিফল্ট নেই।
+   * কোন টাইলের ছবিটা এখন দেখানো হচ্ছে।
+   *
+   * ⚠️ hover **আর** focus, দুটোতেই — কীবোর্ড দিয়ে টাইলে পৌঁছালেও
+   * ছবিটা আসা উচিত। mouse ছাড়া কোনো ব্যবহারকারীর কাছে feature-টা
+   * অস্তিত্বহীন হয়ে যাওয়া চলে না।
+   *
+   * ⚠️ টাচ-পর্দায় hover নেই, তাই ওখানে ছবিটা দেখা যাবে না — একটা
+   * ট্যাপ টেবিল বাছার জন্য, আর সেটাই বেশি জরুরি কাজ। ছবিটা মোবাইলেও
+   * দরকার হলে টাইলের কোণে একটা ছোট আইকন বসিয়ে সেটায় ট্যাপ করালে
+   * হয়; সেটা আলাদা নকশার সিদ্ধান্ত।
    */
-  const [guests, setGuests] = useState("");
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  /**
+   * ⚠️ এটা **অতিরিক্ত** অতিথির সংখ্যা, মোট নয় — Figma-র label
+   * "Ext. Guests"। যিনি বুক করছেন তিনি এর বাইরে, তাই ০ মানে "শুধু
+   * আমি", "কেউ নেই" নয়।
+   *
+   * ── কেন খালি ("") থেকে ডিফল্ট ০-তে ফেরা ─────────────────────────
+   *
+   * খালি রাখার উদ্দেশ্যটা ঠিক ছিল — "2" চুপচাপ পাঠিয়ে দেওয়া একটা
+   * লুকোনো ডিফল্ট। কিন্তু ওটা লুকোনো ডিফল্টটা সরায়নি, শুধু সরিয়েছে:
+   * গ্রাহক না বাছলে submit() নিজে ১ ধরে নিত। অর্থাৎ পর্দায় "Select
+   * guests" লেখা থাকত, আর booking হতো ১ জনের — একই জিনিস, শুধু
+   * অদৃশ্য জায়গায়।
+   *
+   * ০ ডিফল্ট রাখলে সেটা আর লুকোনো থাকে না: ঘরে "Just me" লেখা,
+   * নিচে "Table for 1 person" লেখা। গ্রাহক যা দেখছেন সেটাই যাচ্ছে।
+   *
+   * ⚠️ DB-র `guestCount` মোট সংখ্যা ধরে আর সেখানে ০ অবৈধ (schema-য়
+   * `.positive()`) — টেবিলটা অন্তত একজনের জন্য। তাই submit-এ +১ করা
+   * হয়, আর সেই যোগটা ঘরের নিচে লিখেও দেওয়া হয়।
+   */
+  const [extraGuests, setExtraGuests] = useState("0");
+  const totalGuests = Number(extraGuests) + 1;
   const [requests, setRequests] = useState("");
 
   /**
@@ -205,16 +246,17 @@ export default function ReservationBooking({
    * ধরা পড়ত Submit চাপার পরে। তালিকায় সেই সুযোগই নেই — আর Figma-তেও
    * "Ext. Guests" একটা dropdown।
    */
-  const guestOptions = useMemo(() => {
-    const max = selectedTable?.capacity ?? 10;
-    return [
-      { value: "", label: "Select guests" },
-      ...Array.from({ length: max }, (_, i) => ({
-        value: String(i + 1),
-        label: `${i + 1} ${i === 0 ? "guest" : "guests"}`,
+  // ০ থেকে (আসন − ১) — মোট (অতিরিক্ত + ১) আসনের বেশি হতে পারে না।
+  const maxExtraGuests = (selectedTable?.capacity ?? 10) - 1;
+
+  const guestOptions = useMemo(
+    () =>
+      Array.from({ length: maxExtraGuests + 1 }, (_, i) => ({
+        value: String(i),
+        label: i === 0 ? "Just me" : `+${i} ${i === 1 ? "guest" : "guests"}`,
       })),
-    ];
-  }, [selectedTable]);
+    [maxExtraGuests]
+  );
 
   /**
    * ⚠️ টেবিল বদলে ছোট আসনের একটা বাছলে অতিথির সংখ্যা কমিয়ে আনা।
@@ -228,9 +270,8 @@ export default function ReservationBooking({
    * সেটা react-hooks/set-state-in-effect ভাঙে আর একটা বাড়তি render
    * pass চায়।
    */
-  const maxGuests = selectedTable?.capacity ?? 10;
-  if (Number(guests) > maxGuests) {
-    setGuests(String(maxGuests));
+  if (Number(extraGuests) > maxExtraGuests) {
+    setExtraGuests(String(maxExtraGuests));
   }
 
   /**
@@ -258,10 +299,9 @@ export default function ReservationBooking({
     Boolean(email.trim()) &&
     Boolean(reservedAt) &&
     Boolean(tableId);
-  // ⚠️ `guests` ইচ্ছাকৃতভাবে এই তালিকায় নেই (ইউজারের অনুরোধে) — Guests
-  // ফিল্ড থেকে required তারা সরানো হয়েছে, তাই বোতামটা এখন আর গ্রাহক
-  // guests না বাছালে নিভে থাকবে না। না বাছালে submit()-এ ডিফল্ট ১
-  // অতিথি ধরে নেওয়া হয় (নিচে দ্রষ্টব্য)।
+  // ⚠️ `extraGuests` ইচ্ছাকৃতভাবে এই তালিকায় নেই — ঘরটার সবসময় একটা
+  // বৈধ মান থাকে (ডিফল্ট ০ = "শুধু আমি"), তাই "বাছা হয়নি" অবস্থাই
+  // নেই। এই কারণেই label-এ তারাও নেই।
 
   async function submit() {
     if (!fullName.trim() || !phone.trim() || !email.trim() || !reservedAt || !tableId) {
@@ -287,14 +327,8 @@ export default function ReservationBooking({
       return;
     }
 
-    // ⚠️ Guests ঐচ্ছিক — গ্রাহক না বাছলে ডিফল্ট ১ জন ধরে নেওয়া হয়,
-    // যাতে server-এর guestCount ফিল্ড (যেটা এখনও একটা বৈধ সংখ্যা
-    // চায়) খালি না পায়। বাছা থাকলে তার যাচাই যথারীতি হয়।
-    const guestCount = guests ? Number(guests) : 1;
-    if (!Number.isInteger(guestCount) || guestCount < 1) {
-      toast.error("Please select the number of guests.");
-      return;
-    }
+    // ⚠️ +১ এখানেই — DB-র guestCount মোট সংখ্যা, আর ঘরটা "অতিরিক্ত"।
+    const guestCount = totalGuests;
 
     /**
      * ⚠️ এই যাচাইটা server-এও আছে (route ৪০০ ফেরায়), আর এখানেও রাখা
@@ -409,8 +443,25 @@ export default function ReservationBooking({
                   const selected = table.id === tableId;
 
                   return (
-                    <motion.button
+                    /**
+                     * ⚠️ hover-টা মোড়ক `div`-এ, বোতামে নয়।
+                     *
+                     * বুক হয়ে যাওয়া টাইলের বোতামটা `disabled`, আর
+                     * disabled element-এ browser mouse event পাঠায়ই
+                     * না (Firefox আর Safari-তে নির্ভরযোগ্যভাবে নয়)।
+                     * বোতামে বসালে ঠিক ওই টেবিলগুলোর ছবি দেখা যেত না —
+                     * অথচ "কোন টেবিলটা বুকড" জানার পর গ্রাহকের ছবিটা
+                     * দেখতে চাওয়াটাই স্বাভাবিক।
+                     */
+                    <div
                       key={table.id}
+                      className="relative"
+                      onMouseEnter={() => setPreviewId(table.id)}
+                      onMouseLeave={() => setPreviewId(null)}
+                      onFocus={() => setPreviewId(table.id)}
+                      onBlur={() => setPreviewId(null)}
+                    >
+                    <motion.button
                       type="button"
                       initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
                       whileInView={{ opacity: 1, scale: 1 }}
@@ -428,7 +479,17 @@ export default function ReservationBooking({
                        * ⚠️ উপরের skeleton-এর উচ্চতাও একই — দুটো আলাদা
                        * হলে ছবি লোড হওয়ার মুহূর্তে গ্রিডটা লাফাত।
                        */
-                      className={`flex h-[88px] items-center justify-center rounded-[14px] font-frank-ruhl text-[22px] font-semibold transition-colors md:h-[116px] md:text-[26px] ${
+                      /**
+                       * ⚠️ `w-full` বাদ দেওয়া যাবে না।
+                       *
+                       * আগে বোতামটাই সরাসরি grid-এর সন্তান ছিল, তাই
+                       * কলামের পুরো প্রস্থ পেত। এখন hover ধরার জন্য
+                       * একটা `relative` মোড়ক এসেছে — সেই মোড়কটাই
+                       * এখন grid item, আর বোতামটা তার ভেতরে একটা
+                       * সাধারণ block-level element। প্রস্থ না দিলে সে
+                       * লেখার মাপে সঙ্কুচিত হয়ে সরু ফালি হয়ে যায়।
+                       */
+                      className={`flex h-[88px] w-full items-center justify-center rounded-[14px] font-frank-ruhl text-[22px] font-semibold transition-colors md:h-[116px] md:text-[26px] ${
                         booked
                           ? "cursor-not-allowed bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white opacity-90"
                           : selected
@@ -438,6 +499,53 @@ export default function ReservationBooking({
                     >
                       {table.label}
                     </motion.button>
+
+                    {/**
+                      * Figma Frame 2147225236 — ছবি ৪৬৬×৩২৪, radius ১৭,
+                      * উপরে কালো gradient।
+                      *
+                      * ⚠️ Figma-তে তীর, বিন্দু আর বন্ধ করার বোতামও আছে —
+                      * অর্থাৎ একাধিক ছবির carousel। schema-য়
+                      * `RestaurantTable.imageUrl` একটাই string, তাই
+                      * ওগুলো বসানো হয়নি: যে বোতাম চাপলে কিছু হয় না,
+                      * সেটা না থাকার চেয়ে খারাপ।
+                      *
+                      * সত্যিই carousel চাইলে `imageUrl` → `imageUrls
+                      * String[]` করতে হবে, সাথে migration আর admin
+                      * modal-এ একাধিক ছবি তোলার ব্যবস্থা।
+                      *
+                      * ⚠️ `pointer-events-none` — preview-টা নিজে
+                      * mouse ধরলে পাশের টাইলে যাওয়ার পথে ওটার উপর দিয়ে
+                      * গেলে hover ভেঙে ঝিকিমিকি করত।
+                      *
+                      * ⚠️ নিচে বসে (`top-full`), উপরে নয় — প্রথম
+                      * সারির টাইলে উপরে বসালে section-এর বাইরে গিয়ে
+                      * কেটে যেত।
+                      */}
+                    {table.imageUrl && previewId === table.id && (
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-[240px] -translate-x-1/2 overflow-hidden rounded-[17px] bg-[#F8F8F8] shadow-xl min-[480px]:w-[320px] md:w-[400px]">
+                        <div className="relative aspect-[466/324] w-full">
+                          <Image
+                            src={table.imageUrl}
+                            alt={`${table.label}`}
+                            fill
+                            sizes="(min-width: 768px) 400px, (min-width: 480px) 320px, 240px"
+                            className="object-cover"
+                          />
+                          {/* Rectangle 34628975 — উপর থেকে কালো gradient,
+                              যাতে নামটা যেকোনো ছবির উপরেই পড়া যায়। */}
+                          <div
+                            aria-hidden="true"
+                            className="absolute inset-x-0 top-0 h-[58px] bg-gradient-to-b from-black/70 to-transparent"
+                          />
+                          <span className="absolute left-3 top-2.5 font-sora text-[12px] font-medium leading-none text-white">
+                            {table.label}
+                            {table.name ? ` · ${table.name}` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    </div>
                   );
                 })}
           </div>
@@ -632,24 +740,31 @@ export default function ReservationBooking({
             </div>
 
             <div className="min-w-0">
-              {/* ⚠️ ভিজ্যুয়াল required তারা (*) ইচ্ছাকৃতভাবে বাদ দেওয়া
-                  হয়েছে (ইউজারের অনুরোধে) — কিন্তু ঘরটা এখনও প্রকৃতপক্ষে
-                  বাধ্যতামূলক থাকছে, কারণ `required` prop এখানে শুধুই
-                  চিহ্ন, যাচাই নয়। আসল validation `canSubmit` আর submit()
-                  উভয় জায়গাতেই `guests` state-এর উপর ভিত্তি করে হয় (উপরে
-                  দ্রষ্টব্য), তারা প্রপ সরালেও অক্ষত থাকে। */}
+              {/* ⚠️ তারা নেই, আর এবার সেটা আচরণের সাথেও মেলে: ঘরটার
+                  সবসময় একটা বৈধ মান থাকে (ডিফল্ট ০ = "শুধু আমি"), তাই
+                  "বাছা হয়নি" অবস্থাই নেই। আগে তারা সরানো হয়েছিল অথচ
+                  submit() ভেতরে চুপচাপ ১ ধরে নিত — চিহ্নটা আর আচরণ
+                  একে অপরের সাথে মিথ্যা বলছিল। */}
               <SelectField
                 id="res-guests"
-                label="Guests"
-                value={guests}
-                onChange={setGuests}
+                label="Ext. Guests"
+                value={extraGuests}
+                onChange={setExtraGuests}
                 options={guestOptions}
               />
-              {selectedTable && (
-                <p className="mt-1.5 font-sora text-[11px] text-black/50">
-                  {selectedTable.label} seats up to {selectedTable.capacity}.
-                </p>
-              )}
+
+              {/**
+                * ⚠️ মোট সংখ্যাটা লিখে দেওয়া হয়, যোগটা লুকানো হয় না।
+                *
+                * "Ext." মানে যিনি বুক করছেন তিনি এর বাইরে — কিন্তু সেটা
+                * সবাই ধরে নেবেন না। "+২" বেছে টেবিলে গিয়ে দেখলেন
+                * দুজনের জায়গা, অথচ তাঁরা তিনজন — সেই ভুলটা ঠেকাতে
+                * সংখ্যাটা এখানেই বলা।
+                */}
+              <p className="mt-1.5 font-sora text-[11px] leading-[1.5] text-black/50">
+                Table for {totalGuests} {totalGuests === 1 ? "person" : "people"}
+                {selectedTable ? ` · ${selectedTable.label} seats ${selectedTable.capacity}` : ""}
+              </p>
             </div>
           </div>
 
