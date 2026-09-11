@@ -7,10 +7,13 @@ import Image from "next/image";
 import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
-import Select, { SingleValue } from "react-select";
 import { Trash2, Truck } from "lucide-react";
+import CountryCodeSelect, {
+  DEFAULT_COUNTRY,
+  type Country,
+} from "@/components/CountryCodeSelect";
+import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
-import { COUNTRY_OPTIONS, type CountryOption } from "@/data/countries";
 import { formatMinutes } from "@/lib/kitchen-eta";
 
 const ETA_POLL_INTERVAL_MS = 15000; // same cadence as KitchenBoard / OrderTrackingTimeline
@@ -100,7 +103,7 @@ interface BillingFormData {
   phoneNumber: string;
 }
 
-type BillingErrors = Partial<Record<keyof BillingFormData | "selectedCountry", string>>;
+type BillingErrors = Partial<Record<keyof BillingFormData, string>>;
 type PaymentErrors = Partial<Record<"isAgreedToTerms", string>>;
 
 const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY"> = {
@@ -144,6 +147,8 @@ const CARD_TITLE =
 const CARD_SUBTITLE = "mt-2 font-sora text-[12px] leading-[1.6] text-black/50";
 
 /** ফর্মের ঘর — সাদা, radius 12, উচ্চতা 46। */
+const FIELD_LABEL = "mb-1.5 block font-sora text-[12px] font-medium leading-none text-black";
+
 const FIELD_INPUT =
   "h-[46px] w-full rounded-[12px] bg-white px-3.5 font-sora text-[13px] leading-none text-black placeholder:text-black/35 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
@@ -272,7 +277,16 @@ const Carts = () => {
   };
 
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
-  const [selectedCountry, setSelectedCountry] = useState<CountryOption | null>(null);
+  /**
+   * ⚠️ পুরোনো `selectedCountry` (react-select) বাদ। দেশটা এখন ফোনের
+   * পতাকা থেকেই আসে — register পাতা আর Staff modal-এর মতো।
+   *
+   * `billing.country` তবু পাঠানো হয়, কারণ সেটা delivery zone-এর
+   * geocoding-এ যায় (lib/delivery-fee.ts)। সুতোটা ছিঁড়লে দূরত্ব-ভিত্তিক
+   * ফি নীরবে flat-এ নেমে আসত।
+   */
+  const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
+
   const [formData, setFormData] = useState<BillingFormData>({
     email: "",
     firstName: "",
@@ -375,6 +389,31 @@ const Carts = () => {
   }, []);
 
   const [errors, setErrors] = useState<BillingErrors>({});
+
+  /**
+   * Figma-র একটাই "Full Name" ঘর।
+   *
+   * ⚠️ শেষ space-এ ভাগ — "Kawsar Ahmed Ridoy" → first "Kawsar Ahmed",
+   * last "Ridoy"। space না থাকলে পুরোটা firstName-এ যায় আর lastName
+   * ফাঁকা থাকে, যা schema এখন মেনে নেয়।
+   *
+   * ⚠️ state-এ দুটো মাঠই রয়ে গেছে (Order-এ দুটো কলাম), কিন্তু পর্দায়
+   * একটাই ঘর — তাই দেখানোর সময় আবার জোড়া লাগানো হয়। জোড়া-ভাগ-জোড়া
+   * করলে একটানা space হারায়, তাই `.trim()` ছাড়া কিছু করা হয় না।
+   */
+  const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(" ");
+
+  const handleFullNameChange = (value: string) => {
+    const trimmed = value.trimStart();
+    const cut = trimmed.lastIndexOf(" ");
+    setFormData((prev) => ({
+      ...prev,
+      firstName: cut === -1 ? trimmed : trimmed.slice(0, cut),
+      lastName: cut === -1 ? "" : trimmed.slice(cut + 1),
+    }));
+    setErrors((prev) => ({ ...prev, firstName: undefined, lastName: undefined }));
+  };
+
   const [paymentErrors, setPaymentErrors] = useState<PaymentErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -457,7 +496,7 @@ const Carts = () => {
   const addressForQuote = isDineIn
     ? null
     : {
-        country: selectedCountry?.label ?? "",
+        country: phoneCountry.name,
         address: formData.address,
         apartment: formData.apartment,
         city: formData.city,
@@ -488,7 +527,7 @@ const Carts = () => {
    * মুহূর্তের জন্য ভুল placeholder। কোনো টাকার সিদ্ধান্ত এখান থেকে
    * হয় না।
    */
-  const hasGeocodableAddress = Boolean(selectedCountry && formData.city.trim());
+  const hasGeocodableAddress = Boolean(phoneCountry && formData.city.trim());
 
   /**
    * DISTANCE mode, অথচ ঠিকানা এখনো অসম্পূর্ণ — অর্থাৎ ফি-টা এখনো
@@ -635,10 +674,24 @@ const Carts = () => {
     const newErrors: BillingErrors = {};
     const newPaymentErrors: PaymentErrors = {};
 
-    // firstName/lastName/phone are required for both order types — staff
+    // firstName/phone are required for both order types — staff
     // still need a name to call out at the table for dine-in orders.
-    if (!formData.firstName.trim()) newErrors.firstName = "First name is required.";
-    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required.";
+    /**
+     * ⚠️ শুধু firstName — `lastName` আর বাধ্যতামূলক নয়।
+     *
+     * পর্দায় একটাই "Full Name" ঘর, আর সেটা শেষ space-এ ভাগ হয়।
+     * "gazi" লিখলে পুরোটা firstName-এ যায় আর lastName ফাঁকা থাকে —
+     * সেটাই স্বাভাবিক, কারণ একক নাম পৃথিবীর বড় অংশে সাধারণ।
+     *
+     * server-এও একই নিয়ম (lib/validations/checkout.ts-এ
+     * `lastName: z.string().trim().default("")`, আর
+     * order-checkout-shared.ts-এর alwaysRequired থেকে বাদ) — দুটো
+     * আলাদা হলে একটা পাশ করে অন্যটা আটকাত।
+     *
+     * ⚠️ বার্তাটাও "First name" নয়, "Full name" — ঘরটার লেখা ওটাই,
+     * আর গ্রাহক "First name" খুঁজে পেতেন না।
+     */
+    if (!formData.firstName.trim()) newErrors.firstName = "Full name is required.";
     if (!formData.phoneNumber.trim()) {
       newErrors.phoneNumber = "Phone number is required.";
     } else if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
@@ -654,7 +707,8 @@ const Carts = () => {
       if (!formData.city.trim()) newErrors.city = "City is required.";
       if (!formData.state.trim()) newErrors.state = "State is required.";
       if (!formData.zip.trim()) newErrors.zip = "Zip code is required.";
-      if (!selectedCountry) newErrors.selectedCountry = "Country is required.";
+      // ⚠️ দেশ আর আলাদা করে যাচাই হয় না — পতাকা-select-এর সবসময় একটা
+      // মান থাকে (ডিফল্ট বাংলাদেশ), তাই "বাছা হয়নি" অবস্থাই নেই।
 
       if (paymentMethod === "online") {
         if (!isAgreedToTerms) newPaymentErrors.isAgreedToTerms = "You must agree to the condition.";
@@ -764,7 +818,7 @@ const Carts = () => {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phoneNumber,
-        country: selectedCountry?.label ?? "",
+        country: phoneCountry.name,
         address: formData.address,
         apartment: formData.apartment || undefined,
         city: formData.city,
@@ -867,7 +921,8 @@ const Carts = () => {
         zip: "",
         phoneNumber: "",
       });
-      setSelectedCountry(null);
+      // ⚠️ `phoneCountry` reset করা হয় না — একই গ্রাহক পরের অর্ডারেও
+      // একই দেশ থেকেই দেবেন।
       setErrors({});
       setIsAgreedToTerms(false);
       setMarketingConsent(false);
@@ -1425,7 +1480,27 @@ const Carts = () => {
   return (
     <Container>
       {successModal}
-      <div className="bg-white min-h-screen px-4 py-8 md:px-6 3xl:px-[4.2rem] xl:px-14 lg:px-0 2xl:px-4 3xl:mb-36 2xl:mb-28 xl:mb-28 lg:mb-24 sm:mb-10 lg:-ml-2 3xl:-ml-0 2xl:-ml-0 xl:-ml-0 md:-ml-20 sm:-ml-36 -mt-4">
+      {/**
+        * ⚠️ এখানে আগে ছিল:
+        *
+        *   -mt-4  lg:-ml-2  md:-ml-20  sm:-ml-36
+        *   3xl:px-[4.2rem]  xl:px-14  lg:px-0  2xl:px-4
+        *   3xl:mb-36  2xl:mb-28  xl:mb-28  lg:mb-24  sm:mb-10
+        *
+        * `-mt-4` পাতাটাকে উপরে টেনে **navbar-এর উপরে** বসিয়ে দিত, আর
+        * ঋণাত্মক left margin গুলো নির্দিষ্ট কিছু প্রস্থে "ঠিক" দেখাত,
+        * বাকি সব জায়গায় Container-এর কেন্দ্র থেকে সরিয়ে দিত। Our
+        * Chefs পাতাতেও হুবহু এই ধাঁচটাই ছিল, আর সেটাই ওখানকার
+        * এলোমেলো layout-এর কারণ ছিল।
+        *
+        * এখন বাকি (main) পাতাগুলোর একই section-padding — Reservation,
+        * Our Chefs, Menu CTA সবাই যেটা ব্যবহার করে। কোনো ঋণাত্মক
+        * margin নেই, তাই কোনো প্রস্থেই কিছু উপচে পড়ে না।
+        *
+        * ⚠️ `min-h-screen` বাদ। cart খালি থাকলে ওটা একটা লম্বা সাদা
+        * ফাঁকা জায়গা তৈরি করত, আর footer পর্দার অনেক নিচে চলে যেত।
+        */}
+      <div className="bg-white px-4 py-10 md:px-6 md:py-14 xl:py-[70px]">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column */}
           <div className="flex flex-col gap-4 lg:col-span-2">
@@ -1448,137 +1523,241 @@ const Carts = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  name="firstName"
-                  type="text"
-                  placeholder="First name"
-                  className={FIELD_INPUT}
-                  value={formData.firstName}
-                  onChange={handleChange}
-                />
-                <input
-                  name="lastName"
-                  type="text"
-                  placeholder="Last name"
-                  className={FIELD_INPUT}
-                  value={formData.lastName}
-                  onChange={handleChange}
-                />
+              {/**
+                * ── Figma-র ফর্ম ────────────────────────────────────────
+                *
+                *   Full Name *      |  Phone Number *   (এক সারি)
+                *   Email Address
+                *   Address *
+                *   City | States | Zip                 (এক সারি)
+                *
+                * ⚠️ "First name / Last name" দুটো ঘর ছিল, এখন একটাই
+                * "Full Name" — Figma তাই বলে, আর সেটাই industry
+                * standard (Shopify, Stripe Checkout দুটোই একটামাত্র
+                * নাম রাখে)।
+                *
+                * নাম দু'ভাগে ভাগ করা ভঙ্গুর: পৃথিবীর বড় অংশে
+                * "first/last" ধারণাটাই নেই। ঘরটা শেষ space-এ ভাগ হয়,
+                * আর space না থাকলে পুরোটা firstName-এ যায় —
+                * lastName তখন ফাঁকা, যেটা এখন schema মেনে নেয়
+                * (lib/validations/checkout.ts দ্রষ্টব্য)।
+                *
+                * ⚠️ "Select country" dropdown-টা বাদ। দেশটা এখন ফোনের
+                * পতাকা থেকেই আসে, তাই দুবার জিজ্ঞেস করার মানে নেই —
+                * আর ওই react-select ঘরটাই পাতার একমাত্র বেমানান
+                * উপাদান ছিল।
+                *
+                * ⚠️ কিন্তু `billing.country` **delivery zone-এর
+                * geocoding-এ** যায়। তাই সেটা এখন `selectedCountry`
+                * থেকে নয়, ফোনের দেশ থেকে বসে — নিচের `setFormData`
+                * দ্রষ্টব্য। সুতোটা ছিঁড়লে দূরত্ব-ভিত্তিক ফি নীরবে
+                * flat-এ নেমে আসত।
+                */}
+              <div className="grid grid-cols-1 gap-4 min-[560px]:grid-cols-2">
+                <div className="min-w-0">
+                  <label htmlFor="checkout-name" className={FIELD_LABEL}>
+                    Full Name <span className="text-[#D72A37]">*</span>
+                  </label>
+                  <input
+                    id="checkout-name"
+                    type="text"
+                    placeholder="Your full name"
+                    className={FIELD_INPUT}
+                    value={fullName}
+                    onChange={(e) => handleFullNameChange(e.target.value)}
+                  />
+                  {(errors.firstName || errors.lastName) && (
+                    <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
+                      {errors.firstName ?? errors.lastName}
+                    </p>
+                  )}
+                </div>
+
+                {!isDineIn && (
+                  <div className="min-w-0">
+                    <label htmlFor="checkout-phone" className={FIELD_LABEL}>
+                      Phone Number <span className="text-[#D72A37]">*</span>
+                    </label>
+                    {/* register পাতা আর Staff modal-এর হুবহু একই গড়ন। */}
+                    <div className="flex h-[46px] items-stretch rounded-[12px] bg-white focus-within:[outline:2px_solid_#FF9540] focus-within:[outline-offset:-2px]">
+                      <div className="flex shrink-0 items-stretch [&_button]:border-r-0 [&_button]:pl-3 [&_button]:pr-0 [&_button]:text-[13px]">
+                        <CountryCodeSelect value={phoneCountry} onChange={setPhoneCountry} />
+                      </div>
+                      <span className="my-auto ml-3 h-7 w-px shrink-0 bg-[#E6E1DC]" aria-hidden="true" />
+                      <input
+                        id="checkout-phone"
+                        name="phoneNumber"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder={examplePhone(phoneCountry.code) || "Phone number"}
+                        className="min-w-0 flex-1 rounded-r-[12px] bg-transparent px-3 font-sora text-[13px] leading-none text-black placeholder:text-black/35 focus:outline-none"
+                        value={formData.phoneNumber}
+                        onChange={handlePhoneChange}
+                      />
+                    </div>
+                    {errors.phoneNumber && (
+                      <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
+                        {errors.phoneNumber}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {isDineIn && (
+                  <div className="min-w-0">
+                    <label htmlFor="checkout-phone" className={FIELD_LABEL}>
+                      Phone Number <span className="text-[#D72A37]">*</span>
+                    </label>
+                    <input
+                      id="checkout-phone"
+                      name="phoneNumber"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={16}
+                      placeholder="Phone number"
+                      className={FIELD_INPUT}
+                      value={formData.phoneNumber}
+                      onChange={handlePhoneChange}
+                    />
+                    {errors.phoneNumber && (
+                      <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
+                        {errors.phoneNumber}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              {errors.firstName && <p className="text-red-500 text-xs">{errors.firstName}</p>}
-              {errors.lastName && <p className="text-red-500 text-xs">{errors.lastName}</p>}
 
               {!isDineIn && (
                 <>
-                  <Select<CountryOption>
-                    inputId="country-select"
-                    instanceId="country-select"
-                    options={COUNTRY_OPTIONS}
-                    value={selectedCountry}
-                    onChange={(option: SingleValue<CountryOption>) => setSelectedCountry(option)}
-                    placeholder="Select country"
-                    styles={{
-                      menuList: (base) => ({ ...base, maxHeight: 220 }),
-                      control: (base) => ({
-                        ...base,
-                        borderColor: "#d1d5db",
-                        minHeight: "38px",
-                        fontSize: "0.875rem",
-                      }),
-                    }}
-                  />
-                  {errors.selectedCountry && (
-                    <p className="text-red-500 text-xs">{errors.selectedCountry}</p>
-                  )}
-
-                  <input
-                    name="address"
-                    type="text"
-                    placeholder="Address line 1 and 2 example"
-                    className={FIELD_INPUT}
-                    value={formData.address}
-                    onChange={handleChange}
-                  />
-                  {errors.address && <p className="text-red-500 text-xs">{errors.address}</p>}
-
-                  <input
-                    name="apartment"
-                    type="text"
-                    placeholder="Apartment suite etc (optional)"
-                    className={FIELD_INPUT}
-                    value={formData.apartment}
-                    onChange={handleChange}
-                  />
-
-                  <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="checkout-email" className={FIELD_LABEL}>
+                      Email Address <span className="text-[#D72A37]">*</span>
+                    </label>
                     <input
-                      name="city"
-                      type="text"
-                      placeholder="City"
+                      id="checkout-email"
+                      name="email"
+                      type="email"
+                      placeholder="you@example.com"
                       className={FIELD_INPUT}
-                      value={formData.city}
+                      value={formData.email}
                       onChange={handleChange}
                     />
+                    {errors.email && (
+                      <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">{errors.email}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="checkout-address" className={FIELD_LABEL}>
+                      Address <span className="text-[#D72A37]">*</span>
+                    </label>
                     <input
-                      name="state"
+                      id="checkout-address"
+                      name="address"
                       type="text"
-                      placeholder="State"
+                      placeholder="1250 Market Street"
                       className={FIELD_INPUT}
-                      value={formData.state}
+                      value={formData.address}
                       onChange={handleChange}
                     />
+                    {errors.address && (
+                      <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
+                        {errors.address}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* ⚠️ Figma-তে নেই, কিন্তু রাখা হলো: billingSchema-য়
+                      আছে আর অর্ডারে সংরক্ষিত হয়। সরালে ফ্ল্যাট/স্যুটের
+                      নম্বরটা হারিয়ে যেত, আর রাইডার দরজা খুঁজে পেতেন না। */}
+                  <div>
+                    <label htmlFor="checkout-apartment" className={FIELD_LABEL}>
+                      Apartment, suite etc{" "}
+                      <span className="font-normal text-black/40">(optional)</span>
+                    </label>
                     <input
-                      name="zip"
+                      id="checkout-apartment"
+                      name="apartment"
                       type="text"
-                      placeholder="Zip"
+                      placeholder="Apt 8B"
                       className={FIELD_INPUT}
-                      value={formData.zip}
+                      value={formData.apartment}
                       onChange={handleChange}
                     />
                   </div>
-                  {errors.city && <p className="text-red-500 text-xs">{errors.city}</p>}
-                  {errors.state && <p className="text-red-500 text-xs">{errors.state}</p>}
-                  {errors.zip && <p className="text-red-500 text-xs">{errors.zip}</p>}
 
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="Email address"
-                    className={FIELD_INPUT}
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                  {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
+                  <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-3">
+                    <div className="min-w-0">
+                      <label htmlFor="checkout-city" className={FIELD_LABEL}>
+                        City <span className="text-[#D72A37]">*</span>
+                      </label>
+                      <input
+                        id="checkout-city"
+                        name="city"
+                        type="text"
+                        placeholder="Dhaka"
+                        className={FIELD_INPUT}
+                        value={formData.city}
+                        onChange={handleChange}
+                      />
+                      {errors.city && (
+                        <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">{errors.city}</p>
+                      )}
+                    </div>
 
-                  {/* Marketing opt-in — delivery orders only, since dine-in
-                      never collects an email to sync to Resend. Unchecked
-                      by default; never pre-selected. */}
-                  <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="min-w-0">
+                      <label htmlFor="checkout-state" className={FIELD_LABEL}>
+                        States <span className="text-[#D72A37]">*</span>
+                      </label>
+                      <input
+                        id="checkout-state"
+                        name="state"
+                        type="text"
+                        placeholder="Dhaka Division"
+                        className={FIELD_INPUT}
+                        value={formData.state}
+                        onChange={handleChange}
+                      />
+                      {errors.state && (
+                        <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
+                          {errors.state}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <label htmlFor="checkout-zip" className={FIELD_LABEL}>
+                        Zip <span className="text-[#D72A37]">*</span>
+                      </label>
+                      <input
+                        id="checkout-zip"
+                        name="zip"
+                        type="text"
+                        placeholder="1205"
+                        className={FIELD_INPUT}
+                        value={formData.zip}
+                        onChange={handleChange}
+                      />
+                      {errors.zip && (
+                        <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">{errors.zip}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <label className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
                       checked={marketingConsent}
                       onChange={(e) => setMarketingConsent(e.target.checked)}
-                      className="form-checkbox h-4 w-4 text-green-600 rounded"
+                      className="h-4 w-4 rounded border-black/20 accent-[#FF9540]"
                     />
-                    <span className="text-gray-700 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]">
+                    <span className="font-sora text-[12px] text-black/70">
                       Email me about special offers and discounts
                     </span>
                   </label>
                 </>
               )}
-
-              <input
-                name="phoneNumber"
-                type="tel"
-                inputMode="numeric"
-                maxLength={16}
-                placeholder="Phone number"
-                className={FIELD_INPUT}
-                value={formData.phoneNumber}
-                onChange={handlePhoneChange}
-              />
-              {errors.phoneNumber && <p className="text-red-500 text-xs">{errors.phoneNumber}</p>}
 
               <div className="hidden lg:block">
                 {shippingMethodSectionDesktop}
@@ -2183,7 +2362,7 @@ const Carts = () => {
               {/* ⚠️ ফি এখনো জানা না গেলে Total-ও অসম্পূর্ণ। সেটা না
                   লিখলে গ্রাহক এই অঙ্কটাকেই চূড়ান্ত ধরে নিতেন। */}
               {deliveryFeePending && (
-                <p className="text-[11px] text-gray-400 -mt-6">
+                <p className="font-sora text-[11px] leading-[1.5] text-black/50">
                   Delivery charge is added once you enter your city and country.
                 </p>
               )}
@@ -2191,8 +2370,10 @@ const Carts = () => {
               {/* ⚠️ zone-এর বাইরের ঠিকানা — Confirm বোতামও একই সাথে
                   বন্ধ হয়ে যায় (renderPaymentMethodSection দ্রষ্টব্য)। */}
               {quoteError && (
-                <div className="border border-red-200 bg-red-50 px-4 py-3 rounded -mt-6">
-                  <p className="text-xs text-red-700">{quoteError}</p>
+                <div className="rounded-[12px] bg-[#D72A37]/10 px-3 py-2">
+                  <p className="font-sora text-[12px] leading-[1.5] text-[#D72A37]">
+                    {quoteError}
+                  </p>
                 </div>
               )}
             </div>

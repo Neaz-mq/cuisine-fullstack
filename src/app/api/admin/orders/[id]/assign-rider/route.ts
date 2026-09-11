@@ -194,6 +194,8 @@ export async function POST(
       data: {
         status: "OUT_FOR_DELIVERY",
         shippingMethod: "OWN_DELIVERY",
+        // tracking পাতার timeline-এ "Out for Delivery · 12:00"।
+        dispatchedAt: new Date(),
       },
     }),
   ]);

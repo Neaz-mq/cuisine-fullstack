@@ -40,7 +40,22 @@ export const incomingItemSchema = z.object({
 export const billingSchema = z.object({
   email: z.string().trim().optional(),
   firstName: nonEmptyString("First name"),
-  lastName: nonEmptyString("Last name"),
+  /**
+   * ⚠️ ঐচ্ছিক, আর সেটাই ইচ্ছাকৃত।
+   *
+   * চেকআউট ফর্মে এখন একটাই "Full Name" ঘর (Figma), আর সেটা শেষ
+   * space-এ ভাগ করা হয়। কেউ শুধু "Ridoy" লিখলে ভাগ করার কিছু থাকে
+   * না — তখন পুরোটা firstName-এ যায় আর এটা ফাঁকা।
+   *
+   * নাম দু'ভাগে ভাগ করাটা এমনিতেই ভঙ্গুর: পৃথিবীর বড় অংশে
+   * "first/last" ধারণাটাই নেই, আর Shopify বা Stripe Checkout দুটোই
+   * একটামাত্র নাম রাখে। এখানে দুটো কলাম রয়ে গেছে কেবল পুরোনো
+   * অর্ডারের সাথে সঙ্গতির জন্য।
+   *
+   * ⚠️ `.default("")` — Prisma-র কলামটা `String`, তাই null নয়, খালি
+   * string। কোনো migration লাগে না।
+   */
+  lastName: z.string().trim().default(""),
   phone: nonEmptyString("Phone"),
   country: z.string().trim().optional(),
   address: z.string().trim().optional(),

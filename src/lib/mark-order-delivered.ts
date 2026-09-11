@@ -58,7 +58,13 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.update({
       where: { id: orderId },
-      data: { status: "DELIVERED" },
+      /**
+       * ⚠️ `DeliveryTracking.deliveredAt`-এর নকল নয়। ওটা কেবল
+       * OWN_DELIVERY অর্ডারে থাকে (rider assign হলে তবেই row তৈরি হয়),
+       * আর dine-in বা Uber Eats অর্ডারে কিছুই থাকে না। timeline-টা
+       * প্রতিটা অর্ডারে দেখাতে হয়, তাই Order-এর নিজের কলাম।
+       */
+      data: { status: "DELIVERED", deliveredAt: new Date() },
       select: { id: true, status: true },
     });
 

@@ -43,6 +43,12 @@ export default async function TrackOrderPage({
       createdAt: true,
       updatedAt: true,
 
+      // প্রতিটা ধাপে পৌঁছনোর সময় — timeline-এ "Preparing · 11:40"।
+      // এই কলামগুলোর আগের অর্ডারে null, তাই সময় ছাড়াই দেখানো হয়।
+      preparingAt: true,
+      dispatchedAt: true,
+      deliveredAt: true,
+
       // Access সিদ্ধান্তের জন্য — client component-এ কখনো যায় না।
       userId: true,
 
@@ -67,6 +73,7 @@ export default async function TrackOrderPage({
 
       firstName: true,
       city: true,
+      address: true,
       orderType: true,
       shippingMethod: true,
       table: { select: { label: true } },
@@ -140,8 +147,12 @@ export default async function TrackOrderPage({
             // জন্য পড়া হয়েছে, দেখানোর জন্য নয়।
             id: order.id,
             status: order.status,
+            preparingAt: order.preparingAt?.toISOString() ?? null,
+            dispatchedAt: order.dispatchedAt?.toISOString() ?? null,
+            deliveredAt: order.deliveredAt?.toISOString() ?? null,
             firstName: order.firstName,
             city: order.city,
+            address: order.address,
             orderType: order.orderType,
             shippingMethod: order.shippingMethod,
             table: order.table,

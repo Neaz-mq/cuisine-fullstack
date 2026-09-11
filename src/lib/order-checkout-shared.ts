@@ -28,7 +28,7 @@ export interface Billing {
 }
 
 /**
- * firstName/lastName/phone are always required (staff still need a name to
+ * firstName/phone are always required (staff still need a name to
  * call out at the table for DINE_IN orders). email/country/address/city/
  * state/zip are only required for DELIVERY — a DINE_IN order skips them
  * entirely since nothing is being shipped anywhere.
@@ -49,7 +49,15 @@ export function validateBilling(
   billing: Billing,
   orderType: OrderTypeValue = "DELIVERY"
 ): string | null {
-  const alwaysRequired: RequiredBillingField[] = ["firstName", "lastName", "phone"];
+  /**
+   * ⚠️ "lastName" এখানে **নেই**, আর সেটা ইচ্ছাকৃত।
+   *
+   * ফর্মে একটাই "Full Name" ঘর; একক নামের ক্ষেত্রে পুরোটা firstName-এ
+   * যায় আর lastName ফাঁকা থাকে। বাধ্যতামূলক রাখলে "Ridoy" লিখলে
+   * অর্ডারই নেওয়া যেত না। কারণটা বিস্তারিত
+   * lib/validations/checkout.ts-এ।
+   */
+  const alwaysRequired: RequiredBillingField[] = ["firstName", "phone"];
   const deliveryOnlyRequired: RequiredBillingField[] = [
     "email",
     "country",

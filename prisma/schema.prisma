@@ -585,6 +585,27 @@ model Order {
   // Reset to null by lib/cancel-order.ts is deliberately NOT done — the
   // RETURN movements are the reversal record, and leaving this set
   // prevents a cancelled-then-reinstated order from double-deducting.
+  /**
+   * ⚠️ প্রতিটা ধাপে পৌঁছনোর সময় — tracking পাতার timeline-এ
+   * "Preparing · 11:40" জাতীয় লেখার জন্য।
+   *
+   * `updatedAt` দিয়ে চলত না: ওটা প্রতিটা লেখায় বদলায় — rider assign,
+   * refund, chat, যেকোনো কিছুতে। "কখন ওই ধাপে পৌঁছেছিল" প্রশ্নের
+   * উত্তর তাই আলাদা কলাম ছাড়া উদ্ধার করা যায় না।
+   *
+   * ⚠️ `deliveredAt` — `DeliveryTracking.deliveredAt`-এর নকল নয়। ওটা
+   * কেবল OWN_DELIVERY অর্ডারে থাকে (rider assign হলে তবেই row তৈরি
+   * হয়); dine-in বা Uber Eats অর্ডারে কিছুই থাকে না। timeline প্রতিটা
+   * অর্ডারে দেখাতে হয়, তাই Order-এর নিজের কলাম।
+   *
+   * তিনটেই nullable — অর্ডার এখনো ওই ধাপে না পৌঁছলে null, আর এই
+   * কলামগুলো যোগ হওয়ার আগের প্রতিটা অর্ডারেও null। tracking পাতা
+   * তখন সময় ছাড়া শুধু ধাপের নামটাই দেখায়।
+   */
+  preparingAt  DateTime?
+  dispatchedAt DateTime?
+  deliveredAt  DateTime?
+
   stockDeductedAt DateTime?
 
   // Tracks real payment confirmation for ONLINE orders via Stripe Checkout

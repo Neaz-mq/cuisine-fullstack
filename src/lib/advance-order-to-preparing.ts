@@ -93,7 +93,15 @@ export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceR
     async (tx) => {
       const order = await tx.order.update({
         where: { id: orderId },
-        data: { status: "PREPARING" },
+        /**
+         * ⚠️ `preparingAt` এখানেই বসে, `updatedAt`-এর উপর ভরসা করে নয়।
+         *
+         * `updatedAt` প্রতিটা লেখায় বদলায় — rider assign, refund,
+         * chat, যেকোনো কিছুতে। tracking পাতায় "Preparing · 11:40"
+         * দেখাতে হলে ঠিক **ওই ধাপে পৌঁছনোর** মুহূর্তটা লাগে, আর
+         * সেটা আলাদা কলাম ছাড়া উদ্ধার করা যায় না।
+         */
+        data: { status: "PREPARING", preparingAt: new Date() },
         select: { id: true, status: true },
       });
 
