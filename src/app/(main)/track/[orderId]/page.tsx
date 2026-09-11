@@ -1,8 +1,10 @@
 import { notFound, redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import Container from "@/components/Container";
 import OrderTrackingTimeline from "./OrderTrackingTimeline";
-import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
+import MenuCTA from "@/components/chefs/MenuCTA";
+import { resolveOrderAccess } from "@/lib/order-access";
+import { findOrderForTracking, serializeTrackedOrder } from "@/lib/track-order";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
 
 /**
  * /track/[orderId]
@@ -14,7 +16,8 @@ import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
  * render করে, poll endpoint-টাকে ছোঁয়ও না প্রথম বার। শুধু API বন্ধ
  * করলে দরজায় তালা লাগিয়ে জানালা খোলা রাখা হতো।
  *
- * তাই দুটোই এখন এক নিয়মে চলে — lib/order-access.ts।
+ * তাই দুটোই এখন এক নিয়মে চলে — lib/order-access.ts। আর select ও
+ * serialize-ও এখন এক জায়গায় — lib/track-order.ts (কারণ ওখানে দেখুন)।
  *
  * ── 404 নয়, login redirect কেন ────────────────────────────────────────
  *
@@ -26,8 +29,18 @@ import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
  * তাই callbackUrl সহ /login-এ পাঠানো হয়: log in করলে সে ঠিক এই
  * পাতাতেই ফিরে আসবে। Guest order কখনো এই শাখায় পৌঁছায় না, কারণ
  * মালিকহীন order-এ bearer access সবসময় পাশ করে।
+ *
+ * ── Figma "Web/Order Tracking" ─────────────────────────────────────────
+ *
+ *   cream পটভূমি (#F9F6F3), 1280 চওড়া, section-গুলোর মাঝে 60px:
+ *     ১. Order ID + অবস্থা + ৪ ধাপের timeline      (সাদা কার্ড)
+ *     ২. Map — "Arriving in"                         (শুধু delivery)
+ *     ৩. Order Information  |  পদ + বিল               (672 · 60 · 548)
+ *   তারপর সাদা পটভূমিতে "Craving Something Else?" CTA।
+ *
+ * ⚠️ CTA-টা নতুন করে লেখা হয়নি — Our Chefs পাতার `MenuCTA`, কারণ Figma-র
+ * frame দুটো হুবহু এক (64px শিরোনাম, 636px বিবরণ, gradient বোতাম)।
  */
-
 export default async function TrackOrderPage({
   params,
 }: {
@@ -35,69 +48,7 @@ export default async function TrackOrderPage({
 }) {
   const { orderId } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-
-      // প্রতিটা ধাপে পৌঁছনোর সময় — timeline-এ "Preparing · 11:40"।
-      // এই কলামগুলোর আগের অর্ডারে null, তাই সময় ছাড়াই দেখানো হয়।
-      preparingAt: true,
-      dispatchedAt: true,
-      deliveredAt: true,
-
-      // Access সিদ্ধান্তের জন্য — client component-এ কখনো যায় না।
-      userId: true,
-
-      // পূর্ণ চালান — প্রতিটাই order-এর নিজস্ব snapshot, আজকের settings
-      // নয়। তাই হার বদলালেও পুরোনো চালান অবিকৃত থাকে।
-      subtotal: true,
-      discountAmount: true,
-      tierDiscountAmount: true,
-      serviceCharge: true,
-      deliveryFee: true,
-      taxAmount: true,
-      taxName: true,
-      taxMode: true,
-      tipAmount: true,
-      grandTotal: true,
-      totalAmount: true,
-      currency: true,
-      currencyMinorUnits: true,
-      giftCardAmount: true,
-      pointsRedeemed: true,
-      pointsRedeemedAmount: true,
-
-      firstName: true,
-      city: true,
-      address: true,
-      orderType: true,
-      shippingMethod: true,
-      table: { select: { label: true } },
-      items: {
-        select: {
-          id: true,
-          quantity: true,
-          price: true,
-          menuItem: { select: { title: true } },
-        },
-      },
-      deliveryTracking: {
-        select: {
-          riderLat: true,
-          riderLng: true,
-          riderLocationUpdatedAt: true,
-          destLat: true,
-          destLng: true,
-          deliveredAt: true,
-        },
-      },
-    },
-  });
-
+  const order = await findOrderForTracking(orderId);
   if (!order) {
     notFound();
   }
@@ -107,105 +58,44 @@ export default async function TrackOrderPage({
     redirect(`/login?callbackUrl=${encodeURIComponent(`/track/${orderId}`)}`);
   }
 
-  // Rider-এর স্থানাঙ্ক কেবল ডেলিভারির জানালাটুকুতেই। বাইরে গেলে
-  // object টা থাকে (chat panel-এর "চ্যাট বন্ধ" বার্তার জন্য) কিন্তু
-  // coordinate গুলো null — কারণ শেষ হয়ে যাওয়া ডেলিভারির rider কোথায়
-  // আছে, সেটা আর tracking নয়।
-  const showRiderLocation = canSeeRiderLocation(order);
-
-  // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয় — একটা
-  // পুরোনো ইয়েন চালান আজ টাকার সেটিংয়ে দুই দশমিকে দেখানো ভুল হতো।
-  const units = order.currencyMinorUnits;
-  const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
+  /**
+   * Map-এর শুরুর পিন — রেস্তোরাঁ।
+   *
+   * ⚠️ Settings-এর স্থানাঙ্ক আগে, কারণ দূরত্ব-ভিত্তিক delivery ফি ঠিক ওটা
+   * থেকেই মাপা হয়; map আর ফি একই বিন্দু থেকে শুরু হওয়া উচিত। admin সেটা
+   * না বসিয়ে থাকলে RESTAURANT_LOCATION, যেখান থেকে assign-rider rider-এর
+   * প্রথম অবস্থানও বসায়।
+   *
+   * poll-এ এটা আসে না, শুধু এখানে একবার — রেস্তোরাঁ তো নড়ে না।
+   */
+  const settings = await getRestaurantSettings();
+  const origin =
+    settings.restaurantLat !== null && settings.restaurantLng !== null
+      ? { lat: settings.restaurantLat, lng: settings.restaurantLng }
+      : { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
 
   return (
-    <Container>
-      <div className="bg-white min-h-screen px-4 py-8 md:px-6 max-w-2xl mx-auto">
-        {/*
-          ⚠️ আগে এখানে JSON.parse(JSON.stringify(order)) ছিল।
+    <>
+      <section className="bg-[#F9F6F3]">
+        {/**
+          * ⚠️ padding হুবহু SiteNavbar-এর (`px-4 md:px-10 xl:px-0`), Carts
+          * পাতার মতোই — কার্ডের কিনারা logo আর cart বোতামের সাথে এক
+          * রেখায় থাকে, 1366px ল্যাপটপেও।
+          */}
+        <div className="mx-auto w-full max-w-[1280px] px-4 py-8 md:px-10 md:py-12 xl:px-0 xl:py-[60px]">
+          <OrderTrackingTimeline
+            initialOrder={await serializeTrackedOrder(order)}
+            origin={origin}
+          />
+        </div>
+      </section>
 
-          Date-গুলো serialize করাই ছিল উদ্দেশ্য, কিন্তু পার্শ্বপ্রতিক্রিয়া
-          হিসেবে এটা পুরো object-টাকে `any` করে দিত — tsc-এর কাছে সব
-          ধরনের তথ্য হারিয়ে যেতো।
-
-          money model আসার পর সেটা আর নিরীহ নয়: JSON.stringify একটা
-          Prisma Decimal-কে string বানায় ("1050"), তাই client-এ
-          totalAmount.toFixed(2) crash করত আর price * quantity NaN দিত —
-          অথচ tsc একটা শব্দও বলত না, কারণ সে `any` দেখছিল।
-
-          তাই স্পষ্টভাবে map করা হচ্ছে। এখন client component-এর prop
-          type-এর সাথে গরমিল হলে tsc সাথে সাথে ধরবে।
-        */}
-        <OrderTrackingTimeline
-          initialOrder={{
-            // ⚠️ `...order` spread নয়, প্রতিটা field হাতে লেখা।
-            //
-            // client component-এ যা পাঠানো হয় তা RSC payload-এ চলে
-            // যায়, অর্থাৎ browser-এ পড়া যায়। spread করলে উপরের
-            // select-এ যোগ হওয়া যেকোনো নতুন field নীরবে সেখানে পৌঁছে
-            // যেতো — `userId` সহ, যেটা কেবল resolveOrderAccess-এর
-            // জন্য পড়া হয়েছে, দেখানোর জন্য নয়।
-            id: order.id,
-            status: order.status,
-            preparingAt: order.preparingAt?.toISOString() ?? null,
-            dispatchedAt: order.dispatchedAt?.toISOString() ?? null,
-            deliveredAt: order.deliveredAt?.toISOString() ?? null,
-            firstName: order.firstName,
-            city: order.city,
-            address: order.address,
-            orderType: order.orderType,
-            shippingMethod: order.shippingMethod,
-            table: order.table,
-            currency: order.currency,
-            taxName: order.taxName,
-            taxMode: order.taxMode,
-            pointsRedeemed: order.pointsRedeemed,
-
-            createdAt: order.createdAt.toISOString(),
-            updatedAt: order.updatedAt.toISOString(),
-            // Decimal -> string, currency-র নিজের দশমিক সংখ্যায়।
-            //
-            // number-এ নামানো হয় না, কারণ তাহলে ইয়েনে ১২০০ হয়ে যেতো
-            // "1200.00" আর দিনারে ১২.৩৪৫ হারাতো তার শেষ অঙ্ক। string-এ
-            // পাঠালে client শুধু দেখায়, হিসাব করে না।
-            subtotal: money(order.subtotal),
-            discountAmount: money(order.discountAmount),
-            tierDiscountAmount: money(order.tierDiscountAmount),
-            serviceCharge: money(order.serviceCharge),
-            deliveryFee: money(order.deliveryFee),
-            taxAmount: money(order.taxAmount),
-            tipAmount: money(order.tipAmount),
-            grandTotal: money(order.grandTotal),
-            totalAmount: money(order.totalAmount),
-            giftCardAmount: money(order.giftCardAmount),
-            pointsRedeemedAmount: money(order.pointsRedeemedAmount),
-            items: order.items.map((item) => ({
-              ...item,
-              // ⚠️ লাইন-মোট, একক দাম নয়।
-              //
-              // আগে এখানে শুধু item.price পাঠানো হতো, ফলে "Juicy Burger x3"
-              // এর পাশে ৯.৪৯ লেখা থাকতো ২৮.৪৭ এর বদলে — গ্রাহক লাইনগুলো
-              // যোগ করলে subtotal-এর সাথে মিলতো না। রসিদে সেটা সবচেয়ে
-              // দ্রুত আস্থা নষ্ট করে।
-              //
-              // গুণটা server-এ Decimal-এ হয়, client-এ number-এ নয়।
-              price: money(item.price.times(item.quantity)),
-            })),
-            deliveryTracking: order.deliveryTracking
-              ? {
-                  riderLat: showRiderLocation ? order.deliveryTracking.riderLat : null,
-                  riderLng: showRiderLocation ? order.deliveryTracking.riderLng : null,
-                  destLat: showRiderLocation ? order.deliveryTracking.destLat : null,
-                  destLng: showRiderLocation ? order.deliveryTracking.destLng : null,
-                  riderLocationUpdatedAt: showRiderLocation
-                    ? order.deliveryTracking.riderLocationUpdatedAt.toISOString()
-                    : null,
-                  deliveredAt: order.deliveryTracking.deliveredAt?.toISOString() ?? null,
-                }
-              : null,
-          }}
-        />
-      </div>
-    </Container>
+      <MenuCTA
+        title="Craving Something Else?"
+        description="Start Your Next Order While You Wait — We'll Prepare It Fresh with the Same Care, Quality, and Flavor as the One You're Enjoying Now."
+        buttonLabel="Order Again"
+        href="/menu"
+      />
+    </>
   );
 }

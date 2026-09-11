@@ -1,150 +1,111 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { CheckCircle2, ChefHat, Truck, PackageCheck, Circle, XCircle } from "lucide-react";
+import Image from "next/image";
 import { formatOrderId } from "@/lib/format-order-id";
 import ChatPanel from "@/components/ChatPanel";
 import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
+import type { TrackedOrder } from "@/lib/track-order";
 
-// Leaflet touches `window` at import time, which breaks SSR — loaded
-// client-side only, same pattern as any other browser-only widget in a
-// Next.js App Router page.
+// Leaflet `window` ছোঁয় import-এর মুহূর্তেই, তাই SSR-এ ভাঙে — শুধু
+// browser-এ load হয়। Placeholder-টা আসল কার্ডের হুবহু মাপের, যাতে map
+// এলে নিচের section-গুলো লাফিয়ে না নামে।
 const LiveDeliveryMap = dynamic(() => import("@/components/LiveDeliveryMap"), {
   ssr: false,
-  loading: () => <div className="mb-8 h-64 w-full animate-pulse rounded-[20px] bg-[#F9F6F3]" />,
+  loading: () => (
+    <div className="h-[300px] w-full animate-pulse rounded-[20px] bg-black/5 md:h-[440px] xl:h-[573px]" />
+  ),
 });
 
 const POLL_INTERVAL_MS = 15000; // same cadence as the admin Kitchen board
 
-type OrderItem = {
-  id: string;
-  quantity: number;
-  /** Already formatted to this order's currency by the server — a string,
-   *  never a number, so the client can't accidentally re-round it. */
-  price: string;
-  menuItem: { title: string };
-};
+type LatLng = { lat: number; lng: number };
 
-/**
- * ⚠️ স্থানাঙ্কগুলো nullable, এবং সেটা ইচ্ছাকৃত।
- *
- * Server (page.tsx আর GET /api/orders/[id] — দুটোই lib/order-access.ts-এর
- * canSeeRiderLocation ব্যবহার করে) rider-এর অবস্থান কেবল তখনই পাঠায় যখন
- * order সত্যিই পথে আছে। ডেলিভারি শেষ হলে বা এখনো শুরু না হলে এই পাঁচটা
- * field null হয়ে আসে।
- *
- * object টা তবু null হয় না, কারণ নিচের chat panel deliveredAt দেখে
- * "এই ডেলিভারি শেষ — চ্যাট বন্ধ" বার্তাটা দেখায়।
- */
-type DeliveryTracking = {
-  riderLat: number | null;
-  riderLng: number | null;
-  riderLocationUpdatedAt: string | null;
-  destLat: number | null;
-  destLng: number | null;
-  deliveredAt: string | null;
-};
+// Figma-র রং।
+const TICK_DONE = "#0ECF00";
+const TICK_PENDING = "rgba(0, 0, 0, 0.4)";
 
-type TrackedOrder = {
-  id: string;
-  status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
-  createdAt: string;
-  updatedAt: string;
-
-  /**
-   * প্রতিটা ধাপে পৌঁছনোর সময়, ISO string।
-   *
-   * ⚠️ null হতে পারে দুটো কারণে: অর্ডার এখনো ওই ধাপে পৌঁছয়নি, অথবা
-   * এই কলামগুলো যোগ হওয়ার **আগের** অর্ডার। দ্বিতীয়টার জন্যই
-   * timeline-এ সময়টা শর্তসাপেক্ষে দেখানো হয় — পুরোনো অর্ডারে শুধু
-   * ধাপের নামটাই থাকে, আর সেটাই ঠিক।
-   */
-  preparingAt: string | null;
-  dispatchedAt: string | null;
-  deliveredAt: string | null;
-
-  // ── The invoice ─────────────────────────────────────────────────────
-  //
-  // Every figure is a SNAPSHOT taken when the order was placed, not a
-  // recomputation against today's settings. If the restaurant changes its
-  // VAT rate next month, this bill still shows what the customer actually
-  // paid — which is the whole reason an Order carries its own taxRate,
-  // taxName and currency.
-  //
-  // All strings, formatted server-side to this order's currency: 0 decimal
-  // places for yen, 3 for Kuwaiti dinar. Parsing them back into numbers
-  // would undo exactly that.
-  subtotal: string;
-  discountAmount: string;
-  tierDiscountAmount: string;
-  serviceCharge: string;
-  deliveryFee: string;
-  taxAmount: string;
-  taxName: string;
-  taxMode: "INCLUSIVE" | "EXCLUSIVE";
-  tipAmount: string;
-  grandTotal: string;
-  totalAmount: string;
-  currency: string;
-  giftCardAmount: string;
-  pointsRedeemed: number;
-  pointsRedeemedAmount: string;
-
-  firstName: string;
-  city: string | null;
-  /** Figma-র "Address" ঘরের জন্য — dine-in অর্ডারে null। */
-  address: string | null;
-  orderType: "DELIVERY" | "DINE_IN";
-  shippingMethod: "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY" | null;
-  table: { label: string } | null;
-  items: OrderItem[];
-  deliveryTracking: DeliveryTracking | null;
-};
-
-// A dine-in order was never "out for delivery" — same backend status value,
-// just a different customer-facing label/icon story for that step (see
-// project notes on Order.status).
-function stepsFor(orderType: "DELIVERY" | "DINE_IN") {
+function stepsFor(orderType: TrackedOrder["orderType"]) {
   return [
-    { key: "PLACED", label: "Order Placed", icon: CheckCircle2 },
-    { key: "PREPARING", label: "Preparing", icon: ChefHat },
-    {
-      key: "OUT_FOR_DELIVERY",
-      label: orderType === "DINE_IN" ? "Ready to Serve" : "Out for Delivery",
-      icon: orderType === "DINE_IN" ? PackageCheck : Truck,
-    },
-    { key: "DELIVERED", label: orderType === "DINE_IN" ? "Served" : "Delivered", icon: PackageCheck },
+    { key: "PLACED", label: "Order Placed" },
+    { key: "PREPARING", label: "Preparing" },
+    { key: "OUT_FOR_DELIVERY", label: orderType === "DINE_IN" ? "Ready to Serve" : "Out for Delivery" },
+    { key: "DELIVERED", label: orderType === "DINE_IN" ? "Served" : "Delivered" },
   ] as const;
 }
 
-/**
- * Type guard — TypeScript-কে বোঝায় যে স্থানাঙ্কগুলো এখানে number,
- * null নয়, যাতে LiveDeliveryMap-এ non-null assertion (`!`) লিখতে না হয়।
- */
-function hasRiderLocation(
-  tracking: DeliveryTracking | null
-): tracking is DeliveryTracking & {
-  riderLat: number;
-  riderLng: number;
-  destLat: number;
-  destLng: number;
-  riderLocationUpdatedAt: string;
-} {
-  return (
-    tracking !== null &&
-    tracking.deliveredAt === null &&
-    tracking.riderLat !== null &&
-    tracking.riderLng !== null &&
-    tracking.destLat !== null &&
-    tracking.destLng !== null &&
-    tracking.riderLocationUpdatedAt !== null
-  );
+function shippingLabel(method: TrackedOrder["shippingMethod"]) {
+  if (method === "UBER_EATS") return "Uber Eats";
+  if (method === "FOOD_PANDA") return "Food Panda";
+  if (method === "OWN_DELIVERY") return "Our Own Delivery";
+  return "—";
 }
 
-export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: TrackedOrder }) {
+/**
+ * ⚠️ তারিখগুলো কেবল browser-এ লেখা হয়।
+ *
+ * সময় দেখানো হয় দর্শকের ঘড়িতে (গ্রাহক জানতে চান **তাঁর** কখন অর্ডারটা
+ * গেছে)। কিন্তু server — Vercel-এ — UTC-তে চলে, তাই আগে server-এর HTML
+ * আর browser-এর render-এ সময় আলাদা হতো, আর React hydration mismatch
+ * দিত। প্রথম render-এ (server + hydration) একটা ফাঁকা জায়গা, mount-এর
+ * পর আসল সময় — mismatch-এর কোনো সুযোগই থাকে না।
+ */
+const noopSubscribe = () => () => {};
+function useIsClient() {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
+
+const MONTH = (d: Date) => d.toLocaleString("en-US", { month: "short" });
+const TIME_24 = (d: Date) =>
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+/** "Jul 12, 2026 at 7:42 PM" — Figma-র "Placed on …"। */
+function fmtPlaced(iso: string) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${MONTH(d)} ${d.getDate()}, ${d.getFullYear()} at ${time}`;
+}
+
+/** "7 Jul, 11:30" — timeline-এর প্রতিটা ধাপ। */
+function fmtStep(iso: string) {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MONTH(d)}, ${TIME_24(d)}`;
+}
+
+/** "7 Jul, 2024" — Order Information-এর ঘর। */
+function fmtDay(iso: string) {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MONTH(d)}, ${d.getFullYear()}`;
+}
+
+/**
+ * "25-30 min"। server অনুমানটা পাঠায় মিনিটে (lib/track-order.ts)।
+ * পথের সময় পেরিয়ে গেলে মান শূন্যে থামে — তখন একটা ঋণাত্মক বা "0-0 min"
+ * দেখানোর বদলে সৎ কথাটা বলা হয়।
+ */
+function formatEta(eta: { min: number; max: number }) {
+  if (eta.max <= 0) return "Any minute now";
+  if (eta.min <= 0) return `Under ${eta.max} min`;
+  return `${eta.min}-${eta.max} min`;
+}
+
+function hasRiderLocation(tracking: TrackedOrder["deliveryTracking"]): LatLng | null {
+  if (!tracking || tracking.deliveredAt !== null) return null;
+  if (tracking.riderLat === null || tracking.riderLng === null) return null;
+  return { lat: tracking.riderLat, lng: tracking.riderLng };
+}
+
+export default function OrderTrackingTimeline({
+  initialOrder,
+  origin,
+}: {
+  initialOrder: TrackedOrder;
+  /** রেস্তোরাঁর স্থানাঙ্ক — poll-এ বদলায় না, তাই আলাদা prop। */
+  origin: LatLng;
+}) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder);
+  const isClient = useIsClient();
 
   useEffect(() => {
     if (order.status === "DELIVERED" || order.status === "CANCELLED") return;
@@ -153,7 +114,10 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
       try {
         const res = await fetch(`/api/orders/${order.id}`);
         if (!res.ok) return;
-        const data = await res.json();
+        // ⚠️ পাতা আর endpoint এখন একই serializer ব্যবহার করে
+        // (lib/track-order.ts), তাই এই object-টা initialOrder-এর হুবহু
+        // আকৃতির — কোনো field poll-এর পর হারিয়ে যায় না।
+        const data: TrackedOrder = await res.json();
         setOrder(data);
       } catch {
         // network error — silently retry on the next poll
@@ -164,223 +128,190 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
   }, [order.id, order.status]);
 
   const isDineIn = order.orderType === "DINE_IN";
+  const isCancelled = order.status === "CANCELLED";
   const STEPS = stepsFor(order.orderType);
-
-  // Formatted against THIS order's currency, not the restaurant's current
-  // one — see the invoice note on TrackedOrder above.
-  const money = (value: string) => formatAmount(value, order.currency);
-
-  /**
-   * "Jul 12, 2026 at 7:42 PM" — Figma-র "Placed on …" লাইনটা।
-   *
-   * ⚠️ দর্শকের ঘড়িতে সাজানো হয়, রেস্তোরাঁর timezone-এ নয়। এখানে
-   * সেটাই ঠিক: গ্রাহক জানতে চান **তাঁর** কখন অর্ডারটা গেছে। admin
-   * পাতাগুলোয় উল্টোটা (রেস্তোরাঁর সময়), কারণ ওখানে staff রান্নাঘরের
-   * ঘড়ি ধরে কাজ করেন।
-   */
-  const fmtFull = (iso: string) =>
-    new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-
-  const fmtShort = (iso: string) =>
-    new Date(iso).toLocaleString("en-GB", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-
-  const placedLabel = fmtFull(order.createdAt).replace(" at ", " at ");
-
-  /**
-   * প্রতিটা ধাপের সময়, `STEPS`-এর ক্রম মেনে।
-   *
-   * ⚠️ dine-in আর delivery-তে ধাপের সংখ্যা এক নয় (`stepsFor`), কিন্তু
-   * ক্রমটা একই — Placed → Preparing → (পথে/পরিবেশনের জন্য প্রস্তুত)
-   * → শেষ। তাই একটাই array দুটোতেই খাটে।
-   */
-  const stepTimes = [
-    fmtShort(order.createdAt),
-    order.preparingAt ? fmtShort(order.preparingAt) : null,
-    order.dispatchedAt ? fmtShort(order.dispatchedAt) : null,
-    order.deliveredAt ? fmtShort(order.deliveredAt) : null,
-  ];
-
-  if (order.status === "CANCELLED") {
-    return (
-      <div>
-        <h1 className="mb-2 font-frank-ruhl text-[30px] font-semibold leading-none text-black md:text-[40px]">
-          {formatOrderId(order.id)}
-        </h1>
-        <div className="mt-6 flex items-center gap-3 rounded-[20px] bg-[#D72A37]/10 p-6">
-          <XCircle className="w-8 h-8 text-red-500 shrink-0" />
-          <div>
-            <p className="font-semibold text-red-700">This order was cancelled</p>
-            <p className="text-sm text-red-500">
-              If this wasn&apos;t expected, please contact us for help.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const currentStepIndex = STEPS.findIndex((s) => s.key === order.status);
 
+  const money = (value: string) => formatAmount(value, order.currency);
+  const when = (iso: string | null, fmt: (iso: string) => string) =>
+    iso && isClient ? fmt(iso) : "\u00A0";
+
+  const stepTimes = [order.createdAt, order.preparingAt, order.dispatchedAt, order.deliveredAt];
+
+  const rider = hasRiderLocation(order.deliveryTracking);
+  const showMap =
+    order.orderType === "DELIVERY" &&
+    (order.status === "PLACED" || order.status === "PREPARING" || order.status === "OUT_FOR_DELIVERY");
+
+  const showChat =
+    order.orderType === "DELIVERY" &&
+    order.shippingMethod === "OWN_DELIVERY" &&
+    order.deliveryTracking !== null;
+
   return (
-    <div>
+    <div className="flex flex-col gap-6 md:gap-10 xl:gap-[60px]">
       {/**
-        * Figma: সাদা কার্ড (radius 20), বাঁয়ে Order ID + কখন দেওয়া
-        * হয়েছে, ডানে অবস্থার pill, নিচে ৪ ধাপের timeline।
+        * ── ১. Order ID + timeline ─────────────────────────────────────
+        * Figma "Frame 2147236139": সাদা, padding 30, gap 40, radius 20।
         *
-        * ⚠️ "Hi {firstName}" লাইনটা রাখা হয়েছে যদিও Figma-তে নেই।
-        * অতিথি হিসেবে অর্ডার করলে এই পাতাটাই একমাত্র প্রমাণ যে ঠিক
-        * **তাঁর** অর্ডারটা দেখা হচ্ছে — লিঙ্কটা কেউ ভুল করে পাঠালেও
-        * নামটা দেখে ধরা পড়ে।
+        * ⚠️ বাদ গেছে: "Hi {firstName}, here's the live status…" আর
+        * "This page updates automatically" — কোনোটাই Figma-তে নেই। পাতা
+        * এখনো ১৫ সেকেন্ডে নিজে থেকেই বদলায়; শুধু সেটা ঘোষণা করা হয় না।
         */}
-      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-6 xl:p-[30px]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-frank-ruhl text-[22px] font-semibold leading-none tracking-[-0.01em] text-black md:text-[26px]">
-              Order ID: {formatOrderId(order.id)}
+      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 md:gap-8 md:p-6 xl:gap-10 xl:p-[30px]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-2 md:gap-3">
+            {/* ⚠️ দুই রঙের শিরোনাম: Figma-তে "Order ID:" black/70 medium,
+                নম্বরটা কালো আর গাঢ়। */}
+            <h1 className="font-frank-ruhl text-[24px] leading-[1.3] md:text-[30px] xl:text-[36px]">
+              <span className="font-medium text-black/70">Order ID: </span>
+              <span className="font-semibold text-black">{formatOrderId(order.id)}</span>
             </h1>
-            <p className="mt-2 font-sora text-[12px] leading-[1.5] text-black/50">
-              Placed on {placedLabel}
-            </p>
-            <p className="mt-1 font-sora text-[12px] leading-[1.5] text-black/50">
-              Hi {order.firstName}, here&apos;s the live status of your order.
+            <p className="font-sora text-[14px] leading-[1.3] text-black/70 md:text-[16px] xl:text-[18px]">
+              Placed on {when(order.createdAt, fmtPlaced)}
             </p>
           </div>
 
-          {/* Figma-র ডানদিকের pill — বর্তমান ধাপের নাম। */}
           <span
-            className={`shrink-0 rounded-full px-3.5 py-2 font-sora text-[12px] font-semibold leading-none ${
-              order.status === "DELIVERED"
-                ? "bg-[#2C6252]/10 text-[#2C6252]"
-                : "bg-[#FF9540]/15 text-[#B75B00]"
+            className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.3] md:h-[46px] md:px-5 md:text-[16px] ${
+              isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : "bg-[#E5EDFF] text-[#0090FF]"
             }`}
           >
-            {STEPS[currentStepIndex]?.label ?? "Order Placed"}
+            {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
           </span>
         </div>
 
-      {/* Timeline */}
-      <div className="mt-8 flex items-start justify-between md:mt-10">
-        {STEPS.map((step, index) => {
-          const Icon = step.icon;
-          const isComplete = index < currentStepIndex;
-          const isCurrent = index === currentStepIndex;
-          const isUpcoming = index > currentStepIndex;
+        {isCancelled ? (
+          <p className="rounded-[12px] bg-[#D72A37]/5 px-4 py-3 font-sora text-[14px] leading-[1.6] text-[#D72A37]">
+            This order was cancelled. If this wasn&apos;t expected, please contact us for help.
+          </p>
+        ) : (
+          /**
+           * Timeline — Figma "Frame 2147236156"।
+           *
+           *   ধাপগুলো space-between: প্রথম লেখার বাঁ কিনারা কার্ডের বাঁয়ে,
+           *   শেষটার ডান কিনারা ডানে। পিছনে 2px #D9D9D9 রেখা, প্রথম আইকনের
+           *   কেন্দ্র থেকে শেষ আইকনের কেন্দ্র পর্যন্ত।
+           *
+           * ⚠️ রেখার দুই মাথা স্থির px-এ বসানো যায় না — ধাপের চওড়াই লেখার
+           * দৈর্ঘ্যে ঠিক হয় ("Delivered" বনাম "Served")। তাই: রেখাটা প্রথম
+           * ধাপের কেন্দ্র থেকে অনেক দূর পর্যন্ত যায়, শেষ ধাপ নিজের কেন্দ্র
+           * থেকে ডানে একটা সাদা পর্দা টানে, আর `overflow-hidden` বাকিটা
+           * কাটে। যেকোনো লেখা, যেকোনো প্রস্থে দুই মাথা ঠিক কেন্দ্রে থাকে।
+           *
+           * ⚠️ রেখা পুরোটাই ধূসর, অগ্রগতিতে রং বদলায় না — Figma তাই দেখায়।
+           * কোথায় আছি সেটা বলে আইকনের সবুজ।
+           *
+           * ⚠️ সময় কেবল পেরোনো ধাপে। Figma-তে চারটেতেই সময় আঁকা, কিন্তু
+           * অর্ডার "Preparing"-এ না পৌঁছলে "Out for Delivery 12:00" লেখা
+           * মানে একটা প্রতিশ্রুতি, যা রাখার ভিত্তি নেই।
+           */
+          <ol className="relative flex items-start justify-between gap-2 overflow-hidden">
+            {STEPS.map((step, index) => {
+              const reached = index <= currentStepIndex;
+              const isFirst = index === 0;
+              const isLast = index === STEPS.length - 1;
 
-          return (
-            <div key={step.key} className="flex-1 flex flex-col items-center relative">
-              {index > 0 && (
-                <div
-                  /* ⚠️ সংযোগ-রেখাটা gradient-এ, কঠিন সবুজে নয় — ধাপ
-                     পেরোনোর অনুভূতিটা তাতে স্পষ্ট হয়, আর রঙটা বাকি
-                     অ্যাপের সাথেও মেলে। */
-                  className={`absolute top-5 right-1/2 -z-10 h-[3px] w-full ${
-                    index <= currentStepIndex
-                      ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)]"
-                      : "bg-black/10"
-                  }`}
-                />
-              )}
-              <div
-                /**
-                 * ⚠️ পেরিয়ে-আসা আর **চলতি** ধাপ আলাদা দেখায় এখন।
-                 *
-                 * আগে দুটোই একই সবুজ কিনারা পেত, তাই "এখন কোথায় আছি"
-                 * বোঝা যেত কেবল pulse animation থেকে — আর
-                 * `prefers-reduced-motion` চালু থাকলে সেটাও থাকত না।
-                 * এখন চলতি ধাপটা ভরাট gradient, পেরোনোগুলো হালকা।
-                 */
-                className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  isCurrent
-                    ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
-                    : isComplete
-                      ? "bg-[#FF9540]/15 text-[#FA7F12]"
-                      : "bg-black/[0.06] text-black/25"
-                }`}
-              >
-                {isComplete ? (
-                  <CheckCircle2 className="w-5 h-5" />
-                ) : isUpcoming ? (
-                  <Circle className="w-4 h-4" />
-                ) : (
-                  <Icon className="w-5 h-5" />
-                )}
-              </div>
-              <p
-                className={`mt-2.5 px-1 text-center font-sora text-[11px] leading-[1.3] md:text-[12px] ${
-                  isComplete || isCurrent ? "font-medium text-black" : "text-black/40"
-                }`}
-              >
-                {step.label}
-              </p>
+              return (
+                <li key={step.key} className="relative flex min-w-0 flex-col items-center gap-2 md:gap-3">
+                  {isFirst && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-1/2 top-[13px] h-[2px] w-[9999px] bg-[#D9D9D9] md:top-[17px]"
+                    />
+                  )}
+                  {isLast && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-1/2 top-0 h-7 w-[9999px] bg-white md:h-9"
+                    />
+                  )}
 
-              {/**
-                * ⚠️ সময়টা কেবল **পেরোনো** ধাপে দেখানো হয়, ভবিষ্যতের
-                * ধাপে নয়। Figma-তে চারটেতেই সময় আঁকা, কিন্তু সেটা একটা
-                * নমুনা-নকশা — অর্ডার এখনো "Preparing"-এ না পৌঁছলে
-                * "Out for Delivery 12:00" লেখা মানে একটা প্রতিশ্রুতি
-                * দেওয়া, যা রাখার কোনো ভিত্তি নেই।
-                *
-                * ⚠️ `stepTimes[index]` null হতে পারে পুরোনো অর্ডারেও
-                * (কলামগুলো যোগ হওয়ার আগের)। তখন শুধু নামটাই থাকে।
-                */}
-              {stepTimes[index] && (isComplete || isCurrent) && (
-                <p className="mt-1 text-center font-sora text-[10px] leading-none text-black/40">
-                  {stepTimes[index]}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  <TickCircle
+                    color={reached ? TICK_DONE : TICK_PENDING}
+                    className="relative z-[1] h-7 w-7 shrink-0 md:h-9 md:w-9"
+                  />
 
-      </div>
-
-      {order.status !== "DELIVERED" && (
-        <p className="mt-6 text-center font-sora text-[12px] leading-none text-black/40">
-          This page updates automatically — no need to refresh.
-        </p>
-      )}
-      {order.status === "DELIVERED" && (
-        <p className="mt-8 text-center font-sora text-[13px] font-medium leading-none text-[#2C6252]">
-          {isDineIn ? "Served — enjoy your meal! 🎉" : "Delivered — enjoy your meal! 🎉"}
-        </p>
-      )}
-
-{/*
-        Map টা কেবল তখনই, যখন server আসলেই স্থানাঙ্ক পাঠিয়েছে।
-        status/deliveredAt check গুলো রেখে দেওয়া হয়েছে — server ওই একই
-        নিয়মই প্রয়োগ করে, কিন্তু client-এ দ্বিতীয়বার যাচাই করলে server
-        আর UI-র নিয়ম কখনো আলাদা হয়ে গেলে খালি map-এর বদলে কিছুই দেখাবে
-        না। hasRiderLocation-ই আসল রক্ষী; বাকিগুলো পাঠককে উদ্দেশ্যটা
-        মনে করিয়ে দেয়।
-      */}
-      {order.status === "OUT_FOR_DELIVERY" &&
-        order.orderType === "DELIVERY" &&
-        hasRiderLocation(order.deliveryTracking) && (
-          <LiveDeliveryMap
-            rider={{ lat: order.deliveryTracking.riderLat, lng: order.deliveryTracking.riderLng }}
-            destination={{ lat: order.deliveryTracking.destLat, lng: order.deliveryTracking.destLng }}
-            lastUpdatedAt={order.deliveryTracking.riderLocationUpdatedAt}
-          />
+                  <div className="relative z-[1] flex flex-col items-center gap-1 text-center md:gap-2">
+                    <span
+                      className={`max-w-[80px] font-sora text-[12px] leading-[1.3] md:max-w-none md:text-[16px] ${
+                        reached ? "text-black" : "text-black/40"
+                      }`}
+                    >
+                      {step.label}
+                    </span>
+                    {reached && stepTimes[index] && (
+                      <span className="whitespace-nowrap font-sora text-[10px] leading-[1.3] text-black/70 md:text-[12px]">
+                        {when(stepTimes[index], fmtStep)}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         )}
+      </div>
 
-      {order.orderType === "DELIVERY" &&
-        order.shippingMethod === "OWN_DELIVERY" &&
-        order.deliveryTracking && (
-          <div className="mb-8">
+      {/**
+        * ── ২. Map ────────────────────────────────────────────────────
+        * কেবল চলমান delivery অর্ডারে। dine-in-এ map অর্থহীন, আর পৌঁছে
+        * যাওয়া বা বাতিল অর্ডারে "Arriving in" বলার কিছু নেই।
+        */}
+      {showMap && (
+        <LiveDeliveryMap
+          origin={origin}
+          destination={order.destination}
+          rider={rider}
+          riderUpdatedAt={rider ? order.deliveryTracking?.riderLocationUpdatedAt ?? null : null}
+          caption={order.eta ? "Arriving in" : "Order status"}
+          headline={order.eta ? formatEta(order.eta) : (STEPS[currentStepIndex]?.label ?? "")}
+        />
+      )}
+
+      {/**
+        * ── ৩. Order Information | পদ + বিল ───────────────────────────
+        * Figma "Frame 2147236137": 672 · 60 · 548, দুই কলাম উপরে সাঁটা
+        * (বাঁ কার্ডটা ছোট, টানা হয় না)। `fr` — Carts পাতার মতোই, যাতে
+        * 1280-এর নিচে অনুপাত ঠিক থেকে দুটোই ছোট হয়।
+        */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,672fr)_minmax(0,548fr)] lg:gap-8 xl:gap-[60px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Figma "Frame 2147236139" (বাঁ): সাদা, padding 30, gap 40। */}
+          <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 md:p-6 xl:gap-10 xl:p-[30px]">
+            <div className="flex flex-col gap-2">
+              <h2 className="font-frank-ruhl text-[24px] font-medium leading-[1.3] text-black md:text-[30px] xl:text-[36px]">
+                Order Information
+              </h2>
+              <p className="font-sora text-[12px] leading-[1.6] text-black/70">
+                Review your order details before completing your purchase.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2">
+              <InfoCell label="Order Date">{when(order.createdAt, fmtDay)}</InfoCell>
+              {/* ⚠️ আমাদের কোনো প্রতিশ্রুত delivery তারিখ সংরক্ষিত হয় না।
+                  পৌঁছে গেলে আসল তারিখ; নইলে "In progress" — বানানো তারিখ
+                  একটা প্রতিশ্রুতি হয়ে দাঁড়াত। */}
+              <InfoCell label={isDineIn ? "Served" : "Delivery Date"}>
+                {order.deliveredAt ? when(order.deliveredAt, fmtDay) : isCancelled ? "—" : "In progress"}
+              </InfoCell>
+              <InfoCell label={isDineIn ? "Table" : "Shipping Method"}>
+                {isDineIn ? (order.table?.label ?? "—") : shippingLabel(order.shippingMethod)}
+              </InfoCell>
+              <InfoCell label="Address">
+                {isDineIn ? "Dine-in" : [order.address, order.city].filter(Boolean).join(", ") || "—"}
+              </InfoCell>
+            </div>
+          </div>
+
+          {/**
+            * ⚠️ Rider chat Figma-তে নেই, কিন্তু কাজের একটা feature — বাদ
+            * দিলে own-delivery-র গ্রাহক rider-কে বার্তা পাঠাতে পারতেন না।
+            * বাঁ কলামের নিচে বসানো হয়েছে, যেখানে Figma-তে ফাঁকা জায়গা; তাই
+            * নকশার বাকি কিছু সরে না।
+            */}
+          {showChat && order.deliveryTracking && (
             <ChatPanel
               orderId={order.id}
               viewerRole="CUSTOMER"
@@ -394,226 +325,226 @@ export default function OrderTrackingTimeline({ initialOrder }: { initialOrder: 
                   : "Chat opens once your rider is on the way."
               }
             />
-          </div>
-        )}
-
-      {/* Order summary */}
-      {/* ⚠️ সাদা কার্ড + ধূসর border ছিল; এখন cream, radius 20 —
-          Reservation, Our Chefs আর checkout-এর একই খোলস। */}
-      <div className="mt-8 flex flex-col gap-4 rounded-[20px] bg-[#F9F6F3] p-5 md:p-6">
-        <h2 className="font-frank-ruhl text-[18px] font-semibold leading-none text-black md:text-[20px]">
-          Order Summary
-        </h2>
-        <div className="flex flex-col gap-2">
-          {order.items.map((item) => (
-            <div
-              key={item.id}
-              className="flex justify-between gap-3 font-sora text-[13px] text-black"
-            >
-              <span className="min-w-0">
-                {item.menuItem.title} <span className="text-black/40">×{item.quantity}</span>
-              </span>
-              {/* Unit price × quantity was computed server-side; this is the
-                  line total, already in this order's currency. */}
-              <span>{money(item.price)}</span>
-            </div>
-          ))}
+          )}
         </div>
 
-        {/* ── The bill ──────────────────────────────────────────────────
-            Zero lines are hidden rather than shown as "0.00", so a plain
-            order stays a short receipt. Tax is the exception worth being
-            loud about: in the EU showing it separately is a legal
-            requirement, not a nicety. */}
-        <div className="flex flex-col gap-2 border-t border-black/10 pt-3 font-sora text-[13px]">
-          <div className="flex justify-between gap-3 text-black/60">
-            <span>Subtotal</span>
-            <span>{money(order.subtotal)}</span>
+        {/* Figma "Frame 2147236140" (ডান): সাদা, padding 30, gap 30। */}
+        <div className="flex min-w-0 flex-col gap-4 rounded-[20px] bg-white p-4 md:gap-6 md:p-6 xl:gap-[30px] xl:p-[30px]">
+          <div className="flex flex-col gap-2">
+            {order.items.map((item) => (
+              <OrderItemCard key={item.id} item={item} money={money} />
+            ))}
           </div>
 
-          {isPositiveAmount(order.discountAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Discount</span>
-              <span className="text-[#2C6252]">-{money(order.discountAmount)}</span>
-            </div>
-          )}
+          {/**
+            * বিল — Figma "Frame 2147236146": cream, padding 16, radius 20।
+            *
+            * ⚠️ শূন্য লাইনগুলো লুকানো থাকে (Figma-তে চারটেই সারি, কারণ নমুনা
+            * অর্ডারে ছাড় বা tip নেই)। ব্যতিক্রম delivery: শূন্য হলে "Free"
+            * লেখা হয়, ঠিক Figma-র মতো — ওটা গ্রাহকের জানার মতো তথ্য।
+            */}
+          <div className="flex flex-col gap-5 rounded-[20px] bg-[#F9F6F3] p-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
+                {order.items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-[11px]">
+                      <TickCircle color="#FF9540" className="h-6 w-6 shrink-0" />
+                      <span className="min-w-0 truncate font-sora text-[14px] leading-[1.6] text-black/70 md:text-[16px]">
+                        {item.quantity}p. {item.title}
+                      </span>
+                    </span>
+                    <Amount>{money(item.price)}</Amount>
+                  </div>
+                ))}
+              </div>
 
-          {isPositiveAmount(order.tierDiscountAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Tier discount</span>
-              <span className="text-[#2C6252]">-{money(order.tierDiscountAmount)}</span>
-            </div>
-          )}
+              <hr className="border-0 border-t border-[#D9D9D9]" />
 
-          {isPositiveAmount(order.serviceCharge) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Service charge</span>
-              <span>{money(order.serviceCharge)}</span>
-            </div>
-          )}
+              <div className="flex flex-col gap-4">
+                <BillRow label="Subtotal">{money(order.subtotal)}</BillRow>
 
-          {isPositiveAmount(order.deliveryFee) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Delivery</span>
-              <span>{money(order.deliveryFee)}</span>
-            </div>
-          )}
-
-          {isPositiveAmount(order.taxAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>
-                {order.taxName}
-                {/* INCLUSIVE: the tax sits inside the prices above, so the
-                    total does NOT go up. Saying so is the difference
-                    between an EU-style bill and a customer who thinks
-                    they've been charged twice. */}
-                {order.taxMode === "INCLUSIVE" && (
-                  <span className="text-black/40"> (included)</span>
+                {isPositiveAmount(order.discountAmount) && (
+                  <BillRow label="Discount" credit>-{money(order.discountAmount)}</BillRow>
                 )}
+                {isPositiveAmount(order.tierDiscountAmount) && (
+                  <BillRow label="Tier discount" credit>-{money(order.tierDiscountAmount)}</BillRow>
+                )}
+                {isPositiveAmount(order.serviceCharge) && (
+                  <BillRow label="Service charge">{money(order.serviceCharge)}</BillRow>
+                )}
+                {!isDineIn && (
+                  <BillRow label="Standard delivery">
+                    {isPositiveAmount(order.deliveryFee) ? money(order.deliveryFee) : "Free"}
+                  </BillRow>
+                )}
+                {isPositiveAmount(order.taxAmount) && (
+                  <BillRow
+                    label={
+                      <>
+                        {order.taxName}
+                        {/* INCLUSIVE: কর উপরের দামের ভেতরেই, মোট বাড়ে না —
+                            না বললে গ্রাহক ভাববেন দুবার কাটা হয়েছে। */}
+                        {order.taxMode === "INCLUSIVE" && (
+                          <span className="text-black/40"> (included)</span>
+                        )}
+                      </>
+                    }
+                  >
+                    {money(order.taxAmount)}
+                  </BillRow>
+                )}
+                {isPositiveAmount(order.giftCardAmount) && (
+                  <BillRow label="Gift card" credit>-{money(order.giftCardAmount)}</BillRow>
+                )}
+                {isPositiveAmount(order.pointsRedeemedAmount) && (
+                  <BillRow label={`Points (${order.pointsRedeemed} pts)`} credit>
+                    -{money(order.pointsRedeemedAmount)}
+                  </BillRow>
+                )}
+                {isPositiveAmount(order.tipAmount) && (
+                  <BillRow label="Tip">{money(order.tipAmount)}</BillRow>
+                )}
+              </div>
+
+              <hr className="border-0 border-t border-[#D9D9D9]" />
+            </div>
+
+            <div className="flex flex-col gap-[14px]">
+              <span className="text-center font-sora text-[14px] leading-none text-black/70">
+                Total Price({order.itemCount})
               </span>
-              <span>{money(order.taxAmount)}</span>
+              <div className="flex items-center justify-center gap-3">
+                {order.undiscountedTotal && (
+                  <span className="font-frank-ruhl text-[18px] font-medium leading-none text-black/40 line-through">
+                    {money(order.undiscountedTotal)}
+                  </span>
+                )}
+                <span className="font-frank-ruhl text-[18px] font-semibold leading-none text-black">
+                  {money(order.totalAmount)}
+                </span>
+              </div>
             </div>
-          )}
-
-          {isPositiveAmount(order.giftCardAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Gift card</span>
-              <span className="text-[#2C6252]">-{money(order.giftCardAmount)}</span>
-            </div>
-          )}
-
-          {isPositiveAmount(order.pointsRedeemedAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Points redeemed ({order.pointsRedeemed} pts)</span>
-              <span className="text-[#2C6252]">-{money(order.pointsRedeemedAmount)}</span>
-            </div>
-          )}
-
-          {isPositiveAmount(order.tipAmount) && (
-            <div className="flex justify-between gap-3 text-black/60">
-              <span>Tip</span>
-              <span>{money(order.tipAmount)}</span>
-            </div>
-          )}
+          </div>
         </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-black/10 pt-3">
-          <span className="min-w-0 font-sora text-[12px] leading-[1.4] text-black/50">
-            {isDineIn
-              ? `Table ${order.table?.label ?? "—"}`
-              : `${
-                  order.shippingMethod === "UBER_EATS"
-                    ? "Uber Eats"
-                    : order.shippingMethod === "OWN_DELIVERY"
-                    ? "Our Own Delivery"
-                    : "Food Panda"
-                } \u00b7 ${order.city ?? ""}`}
-          </span>
-          <span className="shrink-0 font-frank-ruhl text-[20px] font-semibold leading-none text-black">
-            {money(order.totalAmount)}
-          </span>
-        </div>
-      </div>
-
-      {/**
-        * Figma-র "Order Information" — ২×২ গ্রিড।
-        *
-        * ⚠️ "Delivery Date" ঘরটা Figma-তে আছে, কিন্তু আমাদের কোনো
-        * প্রতিশ্রুত তারিখ সংরক্ষিত হয় না। অর্ডার পৌঁছে গেলে আসল
-        * সময়টা দেখানো হয়; না পৌঁছলে "In progress" — একটা বানানো
-        * তারিখ দেখানোর চেয়ে ভালো, কারণ সেটা প্রতিশ্রুতি হয়ে দাঁড়াত।
-        */}
-      <div className="mt-6 flex flex-col gap-4 rounded-[20px] bg-white p-5 md:p-6">
-        <div>
-          <h2 className="font-frank-ruhl text-[18px] font-semibold leading-none text-black md:text-[20px]">
-            Order Information
-          </h2>
-          <p className="mt-2 font-sora text-[12px] leading-[1.5] text-black/50">
-            Review your order details before completing your purchase.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
-          <InfoCell label="Order Date">{fmtShort(order.createdAt)}</InfoCell>
-          <InfoCell label={isDineIn ? "Served" : "Delivery Date"}>
-            {order.deliveredAt ? fmtShort(order.deliveredAt) : "In progress"}
-          </InfoCell>
-          <InfoCell label={isDineIn ? "Table" : "Shipping Method"}>
-            {isDineIn
-              ? (order.table?.label ?? "—")
-              : order.shippingMethod === "UBER_EATS"
-                ? "Uber Eats"
-                : order.shippingMethod === "OWN_DELIVERY"
-                  ? "Our Own Delivery"
-                  : "Food Panda"}
-          </InfoCell>
-          <InfoCell label="Address">
-            {isDineIn ? "Dine-in" : [order.address, order.city].filter(Boolean).join(", ") || "—"}
-          </InfoCell>
-        </div>
-      </div>
-
-      {/**
-        * Figma Frame — "Craving Something Else?"
-        *
-        * ⚠️ "← Back to menu" লিঙ্কটার জায়গায় এটা। একই গন্তব্য
-        * (`/menu`), কিন্তু ডাকটা ভিন্ন: অর্ডার শেষ হওয়ার পর গ্রাহককে
-        * "ফিরে যান" বলার চেয়ে "আবার অর্ডার করুন" বলাই স্বাভাবিক, আর
-        * সেটাই Figma-র উদ্দেশ্য।
-        */}
-      <div className="mt-10 flex flex-col items-center gap-5 py-6 text-center md:mt-14 md:gap-6 md:py-10">
-        <div className="flex flex-col items-center gap-3">
-          <h2 className="max-w-[720px] font-frank-ruhl text-[26px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[36px] xl:text-[44px]">
-            Craving Something Else?
-          </h2>
-          <p className="max-w-[560px] font-sora text-[13px] leading-[1.6] text-black/60 md:text-[14px]">
-            Start your next order while you wait — we&apos;ll prepare it fresh with the same care,
-            quality and flavor as the one you&apos;re enjoying now.
-          </p>
-        </div>
-
-        <Link
-          href="/menu"
-          className="flex items-center gap-3 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] py-2 pl-6 pr-2 transition-opacity hover:opacity-90"
-        >
-          <span className="font-sora text-[14px] font-semibold leading-[1.6] text-white md:text-[15px]">
-            Order Again
-          </span>
-          <span
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white"
-          >
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 18 18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3.5 9h11M10 4.5 14.5 9 10 13.5" />
-            </svg>
-          </span>
-        </Link>
       </div>
     </div>
   );
 }
 
 /**
- * Figma-র "Order Information" গ্রিডের একটা ঘর — cream, radius 12।
+ * Figma "Checkout card" — cream, padding 16, gap 12, radius 20; ছবি 106px।
  *
- * ⚠️ আলাদা component, কারণ চারটে ঘর হুবহু এক। inline লিখলে একটায়
- * padding বদলে অন্য তিনটেয় ভুলে যাওয়া নিশ্চিত।
+ * ⚠️ Figma-র trash আইকন আর − ০১ + stepper **রাখা হয়নি**। নকশাটা checkout
+ * পাতার কার্ড থেকে নেওয়া, কিন্তু এখানে অর্ডার ইতিমধ্যে দেওয়া হয়ে গেছে —
+ * মোছা বা পরিমাণ বদলানোর কোনো backend নেই, আর থাকা উচিতও নয় (টাকা কাটা
+ * হয়ে গেছে)। কাজ-না-করা বোতাম দেখানো মানে গ্রাহককে বিভ্রান্ত করা। তার
+ * জায়গায় একই সাদা pill-এ কেবল পরিমাণটা।
  */
-function InfoCell({ label, children }: { label: string; children: React.ReactNode }) {
+function OrderItemCard({
+  item,
+  money,
+}: {
+  item: TrackedOrder["items"][number];
+  money: (value: string) => string;
+}) {
   return (
-    <div className="min-w-0 rounded-[12px] bg-[#F9F6F3] p-3.5">
-      <span className="block font-sora text-[11px] leading-none text-black/50">{label}</span>
-      <span className="mt-1.5 block truncate font-sora text-[13px] font-semibold leading-[1.4] text-black">
-        {children}
-      </span>
+    <div className="flex gap-3 rounded-[20px] bg-[#F9F6F3] p-3 md:p-4">
+      {item.imageUrl && (
+        <Image
+          src={item.imageUrl}
+          alt={item.title}
+          width={106}
+          height={106}
+          unoptimized
+          className="h-20 w-20 shrink-0 rounded-[14px] object-cover md:h-[106px] md:w-[106px] md:rounded-[20px]"
+        />
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <p className="min-w-0 truncate font-frank-ruhl text-[17px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[20px]">
+            {item.title}
+          </p>
+          {item.description && (
+            <p className="line-clamp-2 font-sora text-[12px] leading-[1.5] text-black/70">
+              {item.description}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-frank-ruhl text-[16px] font-semibold leading-[1.3] text-black">
+            {money(item.unitPrice)}
+          </span>
+          <span className="inline-flex h-[34px] shrink-0 items-center rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black">
+            <span className="text-black/50">Qty&nbsp;</span>
+            <span className="tabular-nums">{String(item.quantity).padStart(2, "0")}</span>
+          </span>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function BillRow({
+  label,
+  credit = false,
+  children,
+}: {
+  label: ReactNode;
+  /** ছাড়/পরিশোধ — সবুজ, আগের রসিদের মতোই। */
+  credit?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="min-w-0 font-sora text-[14px] leading-[1.6] text-black/70 md:text-[16px]">{label}</span>
+      <Amount className={credit ? "text-[#2C6252]" : undefined}>{children}</Amount>
+    </div>
+  );
+}
+
+function Amount({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      className={`shrink-0 text-right font-frank-ruhl text-[16px] font-semibold leading-none ${
+        className ?? "text-black"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Figma-র "Order Information" ঘর — cream, padding 8×12, radius 12।
+ *
+ * ⚠️ Figma-তে শিরোনাম বড় (16px, কালো) আর মান ছোট (12px, black/70) —
+ * আগের সংস্করণে উল্টো ছিল।
+ */
+function InfoCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2 rounded-[12px] bg-[#F9F6F3] px-3 py-2">
+      <span className="font-sora text-[16px] leading-[1.3] text-black">{label}</span>
+      <span className="truncate font-sora text-[12px] leading-[1.3] text-black/70">{children}</span>
+    </div>
+  );
+}
+
+/** vuesax/bold/tick-circle — ভরাট গোল, ভেতরে সাদা টিক। */
+function TickCircle({ color, className }: { color: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill={color} />
+      <path
+        d="M7.75 12.2 10.58 15l5.67-5.66"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

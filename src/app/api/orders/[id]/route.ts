@@ -7,7 +7,8 @@ import { markOrderDelivered } from "@/lib/mark-order-delivered";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { cancelOrder } from "@/lib/cancel-order";
 import { transitionError } from "@/lib/order-state-machine";
-import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
+import { resolveOrderAccess } from "@/lib/order-access";
+import { findOrderForTracking, serializeTrackedOrder } from "@/lib/track-order";
 
 /**
  * GET /api/orders/[id] — /track/[orderId] পাতার poll endpoint.
@@ -20,9 +21,13 @@ import { resolveOrderAccess, canSeeRiderLocation } from "@/lib/order-access";
  * ওই file-এ বিস্তারিত; সংক্ষেপে: guest order-এ id-ই টিকিট, কিন্তু
  * order-এর একজন মালিক থাকলে তাকে (বা staff-কে) log in করতে হবে।
  *
- * Field নির্বাচন আগের মতোই সংকীর্ণ — phone, পুরো ঠিকানা, email কখনোই
- * যায় না। deliveryTracking-এ rider-এর id/নাম/ফোনও কখনো select হয় না,
- * শুধু map-এর জন্য দরকারি স্থানাঙ্ক আর timestamp।
+ * Field নির্বাচন সংকীর্ণ — phone আর email কখনোই যায় না। deliveryTracking-এ
+ * rider-এর id/নাম/ফোনও কখনো select হয় না, শুধু map-এর স্থানাঙ্ক আর timestamp।
+ *
+ * ⚠️ ঠিকানা (`address`) এখন যায়। /track পাতা সেটা আগে থেকেই server-render
+ * করে একই দর্শককে দেখাত (Figma-র "Address" ঘর), শুধু এই endpoint পাঠাত
+ * না — ফলে প্রথম poll-এর পর ঘরটা বদলে যেত। একই access নিয়মে একই দর্শক,
+ * তাই দুই পথে দুই রকম উত্তর দেওয়ার কোনো নিরাপত্তা-লাভ ছিল না।
  */
 export async function GET(
   _req: NextRequest,
@@ -30,63 +35,11 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      totalAmount: true,
-      firstName: true,
-      city: true,
-      orderType: true,
-      shippingMethod: true,
-
-      // Access সিদ্ধান্তের জন্য — client-এ কখনো পাঠানো হয় না, নিচে
-      // response বানানোর সময় ইচ্ছাকৃতভাবে বাদ দেওয়া হয়েছে।
-      userId: true,
-
-      // পূর্ণ চালান — /track পাতা প্রতি ১৫ সেকেন্ডে এটা poll করে, তাই
-      // এখানকার আকৃতি server-render করা প্রথম আকৃতির সাথে হুবহু মিলতে
-      // হবে; নইলে প্রথম poll-এর পরেই বিলের লাইনগুলো উধাও হয়ে যেতো।
-      subtotal: true,
-      discountAmount: true,
-      tierDiscountAmount: true,
-      serviceCharge: true,
-      deliveryFee: true,
-      taxAmount: true,
-      taxName: true,
-      taxMode: true,
-      tipAmount: true,
-      grandTotal: true,
-      currency: true,
-      currencyMinorUnits: true,
-      giftCardAmount: true,
-      pointsRedeemed: true,
-      pointsRedeemedAmount: true,
-
-      table: { select: { label: true } },
-      items: {
-        select: {
-          id: true,
-          quantity: true,
-          price: true,
-          menuItem: { select: { title: true } },
-        },
-      },
-      deliveryTracking: {
-        select: {
-          riderLat: true,
-          riderLng: true,
-          riderLocationUpdatedAt: true,
-          destLat: true,
-          destLng: true,
-          deliveredAt: true,
-        },
-      },
-    },
-  });
+  // ⚠️ select আর serialize দুটোই lib/track-order.ts থেকে — /track পাতাও
+  // হুবহু একই দুটো ব্যবহার করে। আগে এখানে আলাদা হাতে-লেখা map ছিল, যেটা
+  // পাতার থেকে সরে গিয়েছিল (preparingAt/dispatchedAt/deliveredAt/address
+  // পাঠাত না), ফলে প্রথম poll-এর পরেই timeline-এর সময়গুলো মুছে যেত।
+  const order = await findOrderForTracking(id);
 
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -99,89 +52,7 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  // Order-এর নিজের currency থেকে দশমিক, আজকের settings থেকে নয়।
-  const units = order.currencyMinorUnits;
-  const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
-
-  // ⚠️ `...order` spread করা হয় না ইচ্ছাকৃতভাবে।
-  //
-  // এটা একটা security boundary — কী কী বাইরে যাচ্ছে সেটা এখানে হাতে
-  // লেখা থাকলে ভবিষ্যতে কেউ উপরের select-এ একটা field যোগ করলে (ধরা
-  // যাক phone, বা access check-এর জন্য আরেকটা internal column) সেটা
-  // নিজে থেকে response-এ ঢুকে পড়বে না। spread হলে ঢুকতো, আর কেউ
-  // টেরও পেতো না।
-  //
-  // এ কারণেই `userId`-ও এখানে নেই: ওটা কেবল resolveOrderAccess-এর
-  // জন্য select করা হয়েছিল, দেখানোর জন্য নয়।
-  return NextResponse.json({
-    id: order.id,
-    status: order.status,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    firstName: order.firstName,
-    city: order.city,
-    orderType: order.orderType,
-    shippingMethod: order.shippingMethod,
-    table: order.table,
-
-    currency: order.currency,
-    taxName: order.taxName,
-    taxMode: order.taxMode,
-    pointsRedeemed: order.pointsRedeemed,
-
-    subtotal: money(order.subtotal),
-    discountAmount: money(order.discountAmount),
-    tierDiscountAmount: money(order.tierDiscountAmount),
-    serviceCharge: money(order.serviceCharge),
-    deliveryFee: money(order.deliveryFee),
-    taxAmount: money(order.taxAmount),
-    tipAmount: money(order.tipAmount),
-    grandTotal: money(order.grandTotal),
-    totalAmount: money(order.totalAmount),
-    giftCardAmount: money(order.giftCardAmount),
-    pointsRedeemedAmount: money(order.pointsRedeemedAmount),
-    // লাইন-মোট, একক দাম নয় — /track পাতার server-render করা আকৃতির সাথে
-    // হুবহু মিলতে হবে, নইলে প্রথম poll-এর পরেই অঙ্কগুলো বদলে যেতো।
-    items: order.items.map((item) => ({
-      ...item,
-      price: money(item.price.times(item.quantity)),
-    })),
-    deliveryTracking: serializeTracking(order),
-  });
-}
-
-/**
- * deliveryTracking → client-এর আকৃতি, স্থানাঙ্ক gate করে।
- *
- * Object টা রাখা হয় (null করা হয় না) কারণ /track পাতার chat panel
- * deliveredAt দেখে "এই ডেলিভারি শেষ — চ্যাট বন্ধ" বার্তাটা দেখায়।
- * কিন্তু delivery-র জানালা পেরিয়ে গেলে rider-এর স্থানাঙ্ক null হয়ে
- * যায় — কারণ তখন ওটা আর order tracking নয়।
- */
-function serializeTracking(order: {
-  status: string;
-  deliveryTracking: {
-    riderLat: number;
-    riderLng: number;
-    riderLocationUpdatedAt: Date;
-    destLat: number;
-    destLng: number;
-    deliveredAt: Date | null;
-  } | null;
-}) {
-  const tracking = order.deliveryTracking;
-  if (!tracking) return null;
-
-  const live = canSeeRiderLocation(order);
-
-  return {
-    riderLat: live ? tracking.riderLat : null,
-    riderLng: live ? tracking.riderLng : null,
-    riderLocationUpdatedAt: live ? tracking.riderLocationUpdatedAt.toISOString() : null,
-    destLat: live ? tracking.destLat : null,
-    destLng: live ? tracking.destLng : null,
-    deliveredAt: tracking.deliveredAt?.toISOString() ?? null,
-  };
+  return NextResponse.json(await serializeTrackedOrder(order));
 }
 
 /**

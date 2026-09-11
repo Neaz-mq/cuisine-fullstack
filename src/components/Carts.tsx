@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
 import { Trash2, Truck } from "lucide-react";
@@ -1478,7 +1477,22 @@ const Carts = () => {
   ) : null;
 
   return (
-    <Container>
+    /**
+     * ⚠️ `<Container>` বাদ — ওটার `xl:max-w-[1100px]` / `2xl:max-w-[1200px]`
+     * আর নিজস্ব `px-6`, তার ওপর ভেতরের `md:px-6` মিলে পাতাটা navbar-এর
+     * চেয়ে দুই পাশে অনেকটা সরু হয়ে যেত।
+     *
+     * Figma "Web/Checkout"-এ Billing কার্ডের বাঁ কিনারা logo-র সাথে আর
+     * Order summary-র ডান কিনারা cart বোতামের সাথে এক রেখায়। তাই মোড়কটা
+     * হুবহু SiteNavbar-এর মাপ নেয়: `max-w-[1280px] px-4 md:px-10 xl:px-0`।
+     *
+     * ⚠️ অন্য section-গুলো `xl:px-20` ব্যবহার করে, এখানে ইচ্ছাকৃতভাবে
+     * `xl:px-0`। 1280–1440px প্রস্থে (যেমন 1366px ল্যাপটপ) `xl:px-20`
+     * দিলে কার্ড দুটো navbar-এর চেয়ে প্রতি পাশে ~৪০px ভেতরে ঢুকে যেত।
+     * এই পাতার নিয়মটাই হলো "navbar-এর সাথে কিনারা মেলানো", তাই navbar-এর
+     * padding-ই নেওয়া হলো।
+     */
+    <div className="mx-auto w-full max-w-[1280px] px-4 md:px-10 xl:px-0">
       {successModal}
       {/**
         * ⚠️ এখানে আগে ছিল:
@@ -1500,10 +1514,25 @@ const Carts = () => {
         * ⚠️ `min-h-screen` বাদ। cart খালি থাকলে ওটা একটা লম্বা সাদা
         * ফাঁকা জায়গা তৈরি করত, আর footer পর্দার অনেক নিচে চলে যেত।
         */}
-      <div className="bg-white px-4 py-10 md:px-6 md:py-14 xl:py-[70px]">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="bg-white py-10 md:py-14 xl:py-[70px]">
+        {/**
+          * ── দুই কলামের অনুপাত ────────────────────────────────────
+          *
+          * Figma-তে (1280px কন্টেন্ট প্রস্থে): Billing 672 · ফাঁক 60 ·
+          * Order summary 548। আগে `lg:grid-cols-3` + `col-span-2` ছিল,
+          * অর্থাৎ ২:১ — ডান কলামটা ~৪১৬px-এ আটকে থাকত, Figma-র চেয়ে
+          * ~১৩০px সরু।
+          *
+          * স্থির px না লিখে `fr` দেওয়া হয়েছে, যাতে 1280-এর নিচে
+          * অনুপাতটা (৫৫:৪৫) ঠিক রেখে দুটোই সমানুপাতে ছোট হয়। 1280-এ
+          * হিসাব মেলে হুবহু: (1280 − 60) × 672/1220 = 672।
+          *
+          * `minmax(0, …)` দরকার — নাহলে ভেতরের লম্বা লেখা বা ফর্মের
+          * min-content কলামটাকে অনুপাতের বাইরে ঠেলে চওড়া করে দিত।
+          */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,672fr)_minmax(0,548fr)] xl:gap-[60px]">
           {/* Left Column */}
-          <div className="flex flex-col gap-4 lg:col-span-2">
+          <div className="flex flex-col gap-4">
             <div className={CARD}>
               <div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -2385,7 +2414,7 @@ const Carts = () => {
           </div>
         </div>
       </div>
-    </Container>
+    </div>
   );
 };
 

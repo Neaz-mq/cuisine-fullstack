@@ -1,21 +1,40 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
+import {
+  AttributionControl,
+  MapContainer,
+  Marker,
+  Polyline,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 /**
  * src/components/LiveDeliveryMap.tsx
  *
- * Renders on the customer's /track/[orderId] page whenever an order has
- * an active DeliveryTracking row (see OrderTrackingTimeline.tsx). Uses
- * OpenStreetMap tiles (free, no API key/billing — matches the free
- * Nominatim geocoder in lib/geocode.ts) rather than Google Maps, and
- * custom inline-SVG markers via L.divIcon instead of Leaflet's default
- * marker image assets, which sidesteps the well-known Leaflet + bundler
- * "marker icon path is broken" issue entirely — no need to copy
- * leaflet/dist/images/*.png into /public.
+ * Figma "Frame 2147225650" — /track পাতার map কার্ড।
+ *
+ *   1280 × 573, radius 20, নিচে ২৫৪px কালো gradient
+ *   বাঁ-নিচে: "Arriving in" (12px, white/70) + "25-30 min" (36px Frank Ruhl)
+ *   ডান-নিচে: 60px কালো গোল, gps আইকন
+ *   পথের রেখা: কালো, 3px
+ *
+ * ⚠️ Figma-র ছবিটা একটা স্থির নমুনা map; এখানে আসল OpenStreetMap, আর যা
+ * আঁকা হয় তা অর্ডারের অবস্থার উপর নির্ভর করে:
+ *
+ *   rider পথে (live স্থানাঙ্ক আছে) → rider থেকে গ্রাহক
+ *   এখনো রান্নাঘরে                → রেস্তোরাঁ থেকে গ্রাহক
+ *   গ্রাহকের স্থানাঙ্ক নেই          → শুধু রেস্তোরাঁ
+ *
+ * ⚠️ রেখাটা সোজা, রাস্তা ধরে নয় — আমাদের কোনো routing service নেই।
+ * রাস্তার একটা আঁকাবাঁকা পথ বানিয়ে দেখালে সেটা এমন নির্ভুলতার ভান করত
+ * যা আমাদের কাছে নেই।
+ *
+ * ⚠️ gps বোতামটা সাজসজ্জা নয়: ব্যবহারকারী map টেনে সরিয়ে দিলে সব পিন আবার
+ * পর্দায় ফিরিয়ে আনে।
  */
 
 type LatLng = { lat: number; lng: number };
@@ -23,7 +42,7 @@ type LatLng = { lat: number; lng: number };
 function riderDivIcon() {
   return L.divIcon({
     className: "",
-    html: `<div style="width:34px;height:34px;border-radius:9999px;background:#2C6252;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+    html: `<div style="width:34px;height:34px;border-radius:9999px;background:#000;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
         <path d="M15 18H9"/>
@@ -37,44 +56,80 @@ function riderDivIcon() {
   });
 }
 
-function destDivIcon() {
+/** রেস্তোরাঁ — Figma-র সবুজ পিনের জায়গায়, ব্র্যান্ডের কমলা। */
+function originDivIcon() {
   return L.divIcon({
     className: "",
-    html: `<div style="width:28px;height:28px;border-radius:9999px 9999px 9999px 0;transform:rotate(45deg);background:#FF4C15;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
+    html: `<div style="width:30px;height:30px;border-radius:9999px 9999px 9999px 0;transform:rotate(-45deg);background:#FF9540;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
   });
 }
 
-// Re-centers/fits the map whenever rider or destination position changes,
-// without remounting the whole MapContainer (which would flash/reset zoom
-// on every 15s poll).
-function FitBounds({ rider, dest }: { rider: LatLng; dest: LatLng }) {
+/** গ্রাহকের ঠিকানা — Figma-র লাল পিন। */
+function destDivIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:32px;height:32px;border-radius:9999px 9999px 9999px 0;transform:rotate(-45deg);background:#EA4335;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:9999px;background:#A50E0E;"></div></div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+  });
+}
+
+/**
+ * পিনগুলো পর্দায় আনে। `fitKey` বদলালে (gps বোতাম) আবার চলে।
+ *
+ * ⚠️ MapContainer remount না করে — ১৫ সেকেন্ডের প্রতিটা poll-এ remount
+ * হলে map ঝলসে উঠত আর zoom রিসেট হতো।
+ */
+function FitToPoints({ points, fitKey }: { points: LatLng[]; fitKey: number }) {
   const map = useMap();
+  const signature = points.map((p) => `${p.lat},${p.lng}`).join("|");
+
   useEffect(() => {
-    const bounds = L.latLngBounds([
-      [rider.lat, rider.lng],
-      [dest.lat, dest.lng],
-    ]);
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-  }, [rider.lat, rider.lng, dest.lat, dest.lng, map]);
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView([points[0].lat, points[0].lng], 15);
+      return;
+    }
+    map.fitBounds(
+      L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])),
+      { padding: [60, 60], maxZoom: 16 }
+    );
+    // `points` নিজে প্রতি render-এ নতুন array — `signature` দিয়েই তুলনা।
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, fitKey, map]);
+
   return null;
 }
 
 export default function LiveDeliveryMap({
-  rider,
+  origin,
   destination,
-  lastUpdatedAt,
+  rider,
+  riderUpdatedAt,
+  caption,
+  headline,
 }: {
-  rider: LatLng;
-  destination: LatLng;
-  lastUpdatedAt: string;
+  origin: LatLng;
+  destination: LatLng | null;
+  rider: LatLng | null;
+  riderUpdatedAt: string | null;
+  /** ছোট লেখা — "Arriving in"। */
+  caption: string;
+  /** বড় লেখা — "25-30 min"। */
+  headline: string;
 }) {
+  const [fitKey, setFitKey] = useState(0);
   const [relativeTime, setRelativeTime] = useState("");
 
   useEffect(() => {
+    if (!riderUpdatedAt) return;
     function tick() {
-      const seconds = Math.max(0, Math.floor((Date.now() - new Date(lastUpdatedAt).getTime()) / 1000));
+      const seconds = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(riderUpdatedAt as string).getTime()) / 1000)
+      );
       if (seconds < 60) setRelativeTime(`${seconds}s ago`);
       else if (seconds < 3600) setRelativeTime(`${Math.floor(seconds / 60)}m ago`);
       else setRelativeTime(`${Math.floor(seconds / 3600)}h ago`);
@@ -82,39 +137,96 @@ export default function LiveDeliveryMap({
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [lastUpdatedAt]);
+  }, [riderUpdatedAt]);
 
   const riderIcon = useMemo(() => riderDivIcon(), []);
+  const originIcon = useMemo(() => originDivIcon(), []);
   const destIcon = useMemo(() => destDivIcon(), []);
 
+  // পথ শুরু হয় rider থেকে (পথে থাকলে), নইলে রেস্তোরাঁ থেকে।
+  const start = rider ?? origin;
+  const points = [start, ...(destination ? [destination] : [])];
+
   return (
-    <div className="border border-gray-200 rounded-md overflow-hidden mb-8">
-      <div className="h-64 w-full relative">
-        <MapContainer
-          center={[rider.lat, rider.lng]}
-          zoom={14}
-          scrollWheelZoom={false}
-          style={{ height: "100%", width: "100%" }}
+    <div className="relative isolate h-[300px] w-full overflow-hidden rounded-[20px] bg-black/5 md:h-[440px] xl:h-[573px]">
+      <MapContainer
+        center={[start.lat, start.lng]}
+        zoom={14}
+        scrollWheelZoom={false}
+        attributionControl={false}
+        style={{ height: "100%", width: "100%" }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {/* ⚠️ Attribution উপরে-ডানে সরানো — ডিফল্ট জায়গা (নিচে-ডানে)
+            Figma-র gps বোতাম আর gradient-এর নিচে ঢাকা পড়ত। OSM-এর
+            শর্তে এটা দৃশ্যমান থাকতেই হবে। */}
+        <AttributionControl position="topright" />
+
+        {!rider && <Marker position={[origin.lat, origin.lng]} icon={originIcon} />}
+        {rider && <Marker position={[rider.lat, rider.lng]} icon={riderIcon} />}
+        {destination && (
+          <>
+            <Marker position={[destination.lat, destination.lng]} icon={destIcon} />
+            <Polyline
+              positions={[
+                [start.lat, start.lng],
+                [destination.lat, destination.lng],
+              ]}
+              pathOptions={{ color: "#000000", weight: 3 }}
+            />
+          </>
+        )}
+        <FitToPoints points={points} fitKey={fitKey} />
+      </MapContainer>
+
+      {/**
+        * Figma "Rectangle 34628975": 254/573 ≈ 44% উঁচু, নিচে পুরো কালো।
+        *
+        * ⚠️ `pointer-events-none` — নাহলে map-এর নিচের অর্ধেক টানা বা
+        * zoom করা যেত না। Leaflet-এর pane-গুলো z-index 400+ ব্যবহার করে,
+        * তাই overlay-কে z-[1000] দিতে হয়।
+        */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] h-[44%] bg-[linear-gradient(0.83deg,#000000_0.71%,rgba(0,0,0,0)_95.62%)]"
+      />
+
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 z-[1000] flex items-end justify-between gap-4 md:inset-x-6 md:bottom-6 xl:inset-x-9 xl:bottom-9">
+        <div className="flex min-w-0 flex-col gap-1 md:gap-2">
+          <span className="font-sora text-[12px] leading-[1.6] text-white/70">
+            {caption}
+            {riderUpdatedAt && relativeTime && ` · updated ${relativeTime}`}
+          </span>
+          <span className="font-frank-ruhl text-[24px] font-medium leading-[1.3] text-white md:text-[30px] xl:text-[36px]">
+            {headline}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFitKey((key) => key + 1)}
+          aria-label="Re-center map"
+          className="pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-white transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[60px] md:w-[60px]"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <Marker position={[rider.lat, rider.lng]} icon={riderIcon} />
-          <Marker position={[destination.lat, destination.lng]} icon={destIcon} />
-          <Polyline
-            positions={[
-              [rider.lat, rider.lng],
-              [destination.lat, destination.lng],
-            ]}
-            pathOptions={{ color: "#2C6252", weight: 3, dashArray: "6 6" }}
-          />
-          <FitBounds rider={rider} dest={destination} />
-        </MapContainer>
-      </div>
-      <div className="px-4 py-2 bg-gray-50 text-xs text-gray-500 flex items-center justify-between">
-        <span>🟢 Your rider is on the way</span>
-        <span>Updated {relativeTime}</span>
+          {/* vuesax/linear/gps */}
+          <svg
+            className="h-6 w-6 md:h-[30px] md:w-[30px]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="7.5" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v2.5M2 12h2.5M12 22v-2.5M22 12h-2.5" />
+          </svg>
+        </button>
       </div>
     </div>
   );
