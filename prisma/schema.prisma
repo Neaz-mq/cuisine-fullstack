@@ -115,6 +115,9 @@ model User {
   // Live + spent "forgot password" requests. Cascade-deleted with the
   // user, like every other owned row here.
   passwordResetTokens PasswordResetToken[]
+
+  /// এই গ্রাহকের দেওয়া order-স্তরের রিভিউগুলো।
+  orderReviews OrderReview[]
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"
@@ -702,6 +705,9 @@ model Order {
   @@index([userId, createdAt])
   @@index([status])
   @@index([createdAt])
+
+  /// অর্ডার শেষে দেওয়া অভিজ্ঞতার রিভিউ (OrderReview দ্রষ্টব্য)।
+  orderReview OrderReview?
 }
 
 enum OrderType {
@@ -1371,6 +1377,48 @@ enum DeliveryFeeMode {
 // NOTE: userId is required, so guest orders — the majority of delivery
 // orders, since checkout doesn't require login — can never leave a review.
 // ---------------------------------------------------------------------------
+/// অর্ডার শেষে গ্রাহকের "How Was Your Food Experience?" — Figma-র
+/// delivered-অবস্থার modal থেকে আসে।
+///
+/// ⚠️ এটা `Review`-র নকল নয়, আর দুটো এক করা যেত না:
+///   • `Review` একটা **পদের** রেটিং (rating বাধ্যতামূলক, userId বাধ্যতামূলক,
+///     আর @@unique([userId, menuItemId]))
+///   • এটা পুরো **অর্ডারের** অভিজ্ঞতা, রেটিং ছাড়া (Figma-তে কেবল একটা
+///     textarea), আর অতিথি অর্ডারেও দেওয়া যায় — যেখানে userId-ই নেই
+///
+/// Review-তে জোর করে বসাতে গেলে অর্ডারের প্রতিটা পদের জন্য একটা করে সারি
+/// লিখতে হতো একই লেখা দিয়ে, আর গ্রাহক আগে ওই পদ রিভিউ করে থাকলে unique
+/// constraint ভাঙত।
+model OrderReview {
+  id      String @id @default(cuid())
+  /// এক অর্ডারে একটাই রিভিউ — দুবার submit করলে দ্বিতীয়টা আগেরটাকেই
+  /// হালনাগাদ করে (upsert), নতুন সারি নয়।
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// লগইন করা গ্রাহক হলে তার id; অতিথি অর্ডারে null।
+  /// ⚠️ onDelete: SetNull — অ্যাকাউন্ট মুছলে রিভিউটা থেকে যায় (রেস্তোরাঁর
+  /// নিজস্ব রেকর্ড), কিন্তু ব্যক্তির সাথে সংযোগটা কাটে।
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// অর্ডারের সময়ের নাম, snapshot হিসেবে — user সারি বদলালে বা অতিথি
+  /// হলেও "— Asad" লেখা যায়।
+  authorName String
+
+  comment String
+
+  /// প্রকাশের আগে অনুমোদন — Review-র মতোই। PENDING রিভিউ কেবল admin
+  /// দেখেন, সাইটে যায় না।
+  status ReviewStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
 model Review {
   id        String       @id @default(cuid())
   rating    Int

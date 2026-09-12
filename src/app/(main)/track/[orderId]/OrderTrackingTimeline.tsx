@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { formatOrderId } from "@/lib/format-order-id";
 import ChatModal from "@/components/ChatModal";
+import OrderCelebration, { hasSeenCelebration } from "./OrderCelebration";
 import KitchenStatusCard from "./KitchenStatusCard";
 import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
 import type { TrackedOrder } from "@/lib/track-order";
@@ -22,6 +23,24 @@ const LiveDeliveryMap = dynamic(() => import("@/components/LiveDeliveryMap"), {
 const POLL_INTERVAL_MS = 15000; // same cadence as the admin Kitchen board
 
 type LatLng = { lat: number; lng: number };
+
+/**
+ * Figma-র চারটে অবস্থার pill — প্রতিটার নিজস্ব জোড়া রং।
+ *
+ * ⚠️ মানগুলো Figma export থেকে pixel মেপে নেওয়া, আন্দাজ করা নয়। আগে
+ * সব অবস্থাতেই নীলটা বসত, তাই "Delivered" আর "Order Placed" এক দেখাত
+ * আর pill-টা একটা লেবেল ছাড়া আর কিছুই বলত না।
+ *
+ * ⚠️ CANCELLED এখানে নেই — ওটা Figma-তে আঁকা নেই, আর উপরে আলাদা করে
+ * লাল রঙে দেখানো হয়, কারণ বাতিল হওয়া কোনো "ধাপ" নয়।
+ */
+const STATUS_PILL: Record<TrackedOrder["status"], string> = {
+  PLACED: "bg-[#E6EDFE] text-[#3A8DFA]",
+  PREPARING: "bg-[#FDF3DC] text-[#F3A42F]",
+  OUT_FOR_DELIVERY: "bg-[#E9E0FD] text-[#530EF8]",
+  DELIVERED: "bg-[#ECFEED] text-[#58CB2F]",
+  CANCELLED: "bg-[#D72A37]/10 text-[#D72A37]",
+};
 
 // Figma-র রং।
 const TICK_DONE = "#0ECF00";
@@ -107,6 +126,69 @@ export default function OrderTrackingTimeline({
 }) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder);
   const [chatOpen, setChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  /**
+   * শেষ কবে চ্যাটটা পড়া হয়েছে, epoch ms।
+   *
+   * ⚠️ বদলায় কেবল ব্যবহারকারীর ক্লিকে (নিচের `openChat`/`closeChat`) —
+   * effect-এ নয়। effect থেকে setState করলে cascading render হয়, আর
+   * প্রজেক্টের ESLint নিয়মটা ঠিক সেটাই আটকায়।
+   *
+   * ⚠️ শুরুর মানটা localStorage থেকে, lazy initializer-এ। server-এ
+   * `window` নেই, তাই সেখানে ০ — আর সেটা নিরাপদ, কারণ এই সংখ্যাটা
+   * কোনো HTML-এ যায় না, শুধু badge-এর হিসাবে লাগে।
+   */
+  const readKey = `chat-read:${initialOrder.id}:CUSTOMER`;
+  const [chatLastReadAt, setChatLastReadAt] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      return Number(window.localStorage.getItem(readKey)) || 0;
+    } catch {
+      return 0; // storage বন্ধ — সব পঠিত ধরে নেওয়া হয়
+    }
+  });
+
+  function markChatRead() {
+    const now = Date.now();
+    setChatLastReadAt(now);
+    try {
+      window.localStorage.setItem(readKey, String(now));
+    } catch {
+      // storage বন্ধ — এই session-এ ঠিক থাকবে, refresh-এ badge ফিরবে
+    }
+  }
+
+  function openChat() {
+    markChatRead();
+    setChatOpen(true);
+  }
+
+  function closeChat() {
+    // ⚠️ বন্ধ করার সময়েও — খোলা অবস্থায় আসা বার্তাগুলো চোখের সামনেই
+    // এসেছে, তাই বন্ধ করার পর সেগুলো অপঠিত হিসেবে ফিরে আসা উচিত নয়।
+    markChatRead();
+    setChatOpen(false);
+  }
+
+  /**
+   * পৌঁছে যাওয়ার অভিনন্দন — অর্ডারপ্রতি একবার।
+   *
+   * ⚠️ শুরুর মানটা lazy initializer-এ, effect-এ নয়। পাতা খোলার সময়ই
+   * অর্ডার DELIVERED থাকলে modal-টা প্রথম render-এই তৈরি; effect থেকে
+   * setState করলে একটা বাড়তি render চক্র হতো।
+   *
+   * ⚠️ poll-এর মধ্যে status বদলালে নিচের poll handler-টাই এটা চালু
+   * করে — সেটা একটা callback, effect body নয়, তাই setState সেখানে
+   * স্বাভাবিক।
+   */
+  const [celebrating, setCelebrating] = useState<boolean>(
+    () =>
+      initialOrder.status === "DELIVERED" &&
+      typeof window !== "undefined" &&
+      !hasSeenCelebration(initialOrder.id)
+  );
+
   const isClient = useIsClient();
 
   useEffect(() => {
@@ -121,6 +203,12 @@ export default function OrderTrackingTimeline({
         // আকৃতির — কোনো field poll-এর পর হারিয়ে যায় না।
         const data: TrackedOrder = await res.json();
         setOrder(data);
+
+        // পাতাটা খোলা অবস্থাতেই অর্ডার পৌঁছে গেলে অভিনন্দন তখনই —
+        // refresh করতে হয় না, যেটাই এই পাতার পুরো উদ্দেশ্য।
+        if (data.status === "DELIVERED" && !hasSeenCelebration(data.id)) {
+          setCelebrating(true);
+        }
       } catch {
         // network error — silently retry on the next poll
       }
@@ -196,7 +284,7 @@ export default function OrderTrackingTimeline({
 
           <span
             className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.3] md:h-[46px] md:px-5 md:text-[16px] ${
-              isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : "bg-[#E5EDFF] text-[#0090FF]"
+              isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : STATUS_PILL[order.status]
             }`}
           >
             {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
@@ -290,7 +378,8 @@ export default function OrderTrackingTimeline({
           headline={order.eta ? formatEta(order.eta) : (STEPS[currentStepIndex]?.label ?? "")}
           riderName={order.rider?.name}
           riderImage={order.rider?.image}
-          onOpenChat={canChat ? () => setChatOpen(true) : undefined}
+          onOpenChat={canChat ? openChat : undefined}
+          unreadCount={unreadCount}
         />
       )}
 
@@ -324,7 +413,8 @@ export default function OrderTrackingTimeline({
           ) : onTheWay && order.rider ? (
             <OnTheWayCard
               rider={order.rider}
-              onOpenChat={canChat ? () => setChatOpen(true) : undefined}
+              onOpenChat={canChat ? openChat : undefined}
+              unreadCount={unreadCount}
             />
           ) : (
           /* Figma "Frame 2147236139" (বাঁ): সাদা, padding 30, gap 40। */
@@ -472,10 +562,12 @@ export default function OrderTrackingTimeline({
       {canChat && (
         <ChatModal
           open={chatOpen}
-          onClose={() => setChatOpen(false)}
+          onClose={closeChat}
           orderId={order.id}
           riderName={order.rider?.name ?? "your rider"}
           active={chatActive}
+          lastReadAt={chatLastReadAt}
+          onUnreadChange={setUnreadCount}
           inactiveMessage={
             order.deliveryTracking?.deliveredAt
               ? "This delivery is complete — chat is now closed."
@@ -483,6 +575,12 @@ export default function OrderTrackingTimeline({
           }
         />
       )}
+
+      <OrderCelebration
+        open={celebrating}
+        orderId={order.id}
+        onClose={() => setCelebrating(false)}
+      />
     </div>
   );
 }
@@ -505,9 +603,11 @@ export default function OrderTrackingTimeline({
 function OnTheWayCard({
   rider,
   onOpenChat,
+  unreadCount = 0,
 }: {
   rider: NonNullable<TrackedOrder["rider"]>;
   onOpenChat?: () => void;
+  unreadCount?: number;
 }) {
   return (
     <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 md:p-6 xl:gap-10 xl:p-[30px]">
@@ -560,6 +660,14 @@ function OnTheWayCard({
             <path d="M8.5 19h-.5a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6v5a6 6 0 0 1-6 6h-.5l-3.5 2.5L8.5 19Z" />
           </svg>
           Chat with {rider.name.split(" ")[0]}
+          {/* ⚠️ এখানে badge-টা সংখ্যাসহ লেখাতেই — বোতামটা চওড়া, তাই
+              কোণার ছোট গোলের চেয়ে একটা pill বেশি স্বাভাবিক দেখায়। */}
+          {unreadCount > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#D72A37] px-1 font-sora text-[11px] font-semibold leading-none text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+              <span className="sr-only"> unread messages</span>
+            </span>
+          )}
         </button>
       )}
     </div>

@@ -114,6 +114,7 @@ export default function LiveDeliveryMap({
   riderName,
   riderImage,
   onOpenChat,
+  unreadCount = 0,
 }: {
   origin: LatLng;
   destination: LatLng | null;
@@ -133,6 +134,8 @@ export default function LiveDeliveryMap({
   riderName?: string | null;
   riderImage?: string | null;
   onOpenChat?: () => void;
+  /** rider-এর অপঠিত বার্তা — বোতামের কোণায় badge। */
+  unreadCount?: number;
 }) {
   const [fitKey, setFitKey] = useState(0);
   const [relativeTime, setRelativeTime] = useState("");
@@ -253,9 +256,16 @@ export default function LiveDeliveryMap({
                 <button
                   type="button"
                   onClick={onOpenChat}
-                  aria-label={`Chat with ${riderName}`}
-                  className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E5EDFF] text-[#0090FF] transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[72px] md:w-[72px]"
+                  /* ⚠️ অপঠিত সংখ্যাটা aria-label-এও — badge-টা কেবল
+                     চোখে দেখা যায়, screen reader ওটা পড়ে না। */
+                  aria-label={
+                    unreadCount > 0
+                      ? `Chat with ${riderName} — ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}`
+                      : `Chat with ${riderName}`
+                  }
+                  className="pointer-events-auto relative flex h-12 w-12 items-center justify-center rounded-full bg-[#E5EDFF] text-[#0090FF] transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[72px] md:w-[72px]"
                 >
+                  {unreadCount > 0 && <UnreadBadge count={unreadCount} />}
                   {/* vuesax/linear/message */}
                   <svg
                     className="h-6 w-6 md:h-9 md:w-9"
@@ -309,5 +319,22 @@ export default function LiveDeliveryMap({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * অপঠিত বার্তার badge — বোতামের উপরের-ডান কোণায়।
+ *
+ * ⚠️ ৯-এর বেশি হলে "9+"। সংখ্যাটা যত বড় হোক badge-এর মাপ এক থাকে, তাই
+ * ৩ অঙ্কের সংখ্যায় গোলটা ডিম্বাকার হয়ে বোতামের বাইরে বেরোয় না।
+ */
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#D72A37] px-1 font-sora text-[11px] font-semibold leading-none text-white ring-2 ring-white md:h-6 md:min-w-[24px] md:text-[12px]"
+    >
+      {count > 9 ? "9+" : count}
+    </span>
   );
 }

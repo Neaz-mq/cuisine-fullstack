@@ -53,6 +53,9 @@ export default function ChatPanel({
   active,
   inactiveMessage,
   chrome = "card",
+  visible = true,
+  lastReadAt = 0,
+  onUnreadChange,
 }: {
   orderId: string;
   viewerRole: "RIDER" | "CUSTOMER";
@@ -76,8 +79,29 @@ export default function ChatPanel({
    * দুবার লিখলে একটায় bug ঠিক করে অন্যটায় ভুলে যাওয়া নিশ্চিত।
    */
   chrome?: "card" | "bare";
+  /**
+   * ব্যবহারকারী এখন কথোপকথনটা **দেখছেন** কিনা (modal খোলা)।
+   *
+   * ⚠️ ChatPanel modal বন্ধ থাকলেও mount থাকে — না থাকলে Realtime
+   * subscription-ও থাকত না, আর তখন নতুন বার্তা আসার খবরই পাওয়া যেত না।
+   * তাই "দেখা হয়েছে" বোঝার জন্য এই prop-টা দরকার; শুধু mount হওয়া
+   * যথেষ্ট নয়।
+   */
+  visible?: boolean;
+  /**
+   * শেষ কবে কথোপকথনটা পড়া হয়েছে, epoch ms। ০ = কখনো নয়।
+   *
+   * ⚠️ মালিকানা caller-এর, ChatPanel-এর নয় — সময়টা বদলায় কেবল
+   * ব্যবহারকারীর ক্লিকে (চ্যাট খোলা/বন্ধ), আর সেটা একটা event, effect
+   * নয়। ChatPanel-এর ভেতরে state হিসেবে রাখলে effect থেকে setState
+   * করতে হতো, যা cascading render তৈরি করে (react-hooks/set-state-in-effect)।
+   */
+  lastReadAt?: number;
+  /** অপঠিত বার্তার সংখ্যা — চ্যাট বোতামের badge-এর জন্য। */
+  onUnreadChange?: (count: number) => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -173,6 +197,30 @@ export default function ChatPanel({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  /**
+   * অপঠিত = **অন্যজনের** পাঠানো, `lastReadAt`-এর পরে আসা বার্তা।
+   *
+   * ⚠️ নিজের পাঠানো বার্তা কখনো গোনা হয় না — নিজের কথা নিজের কাছে
+   * "নতুন খবর" নয়।
+   *
+   * ⚠️ চ্যাট খোলা থাকলে সবসময় ০। খোলা অবস্থায় বার্তাগুলো চোখের সামনেই
+   * আসছে, তাই সেগুলো গোনা মানে ব্যবহারকারীকে তাঁর সামনে থাকা জিনিসের
+   * জন্য badge দেখানো।
+   *
+   * ⚠️ এটা state নয়, প্রতি render-এ হিসাব — `lastReadAt` আর `messages`
+   * দুটোই ইতিমধ্যে আছে, তাই একই তথ্য দ্বিতীয়বার state-এ রাখলে দুটো
+   * আলাদা হয়ে যাওয়ার সুযোগ তৈরি হতো।
+   */
+  const unreadCount = visible
+    ? 0
+    : messages.filter(
+        (m) => m.senderRole !== viewerRole && parseTimestamp(m.createdAt).getTime() > lastReadAt
+      ).length;
+
+  useEffect(() => {
+    onUnreadChange?.(unreadCount);
+  }, [unreadCount, onUnreadChange]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();

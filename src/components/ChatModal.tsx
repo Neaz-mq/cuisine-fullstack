@@ -33,6 +33,8 @@ export default function ChatModal({
   riderName,
   active,
   inactiveMessage,
+  lastReadAt,
+  onUnreadChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -42,6 +44,10 @@ export default function ChatModal({
   riderName: string;
   active: boolean;
   inactiveMessage?: string;
+  /** শেষ কবে পড়া হয়েছে (epoch ms) — ChatPanel-এ pass-through। */
+  lastReadAt?: number;
+  /** ভেতরের ChatPanel থেকে আসা অপঠিত সংখ্যা — বোতামের badge-এর জন্য। */
+  onUnreadChange?: (count: number) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -123,6 +129,9 @@ export default function ChatModal({
           active={active}
           inactiveMessage={inactiveMessage}
           chrome="bare"
+          visible={open}
+          lastReadAt={lastReadAt}
+          onUnreadChange={onUnreadChange}
         />
       </div>
     </dialog>
