@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase-client";
 
 /**
@@ -52,6 +52,7 @@ export default function ChatPanel({
   otherPartyLabel,
   active,
   inactiveMessage,
+  chrome = "card",
 }: {
   orderId: string;
   viewerRole: "RIDER" | "CUSTOMER";
@@ -65,6 +66,16 @@ export default function ChatPanel({
   active: boolean;
   /** Shown in place of the input when `active` is false. */
   inactiveMessage?: string;
+  /**
+   * "card"  — নিজস্ব খোলস আর শিরোনাম (rider dashboard, আগের মতোই)
+   * "bare"  — খোলস নেই, শুধু কথোপকথন; ChatModal-এর ভেতরে এটা ব্যবহার
+   *           হয়, কারণ শিরোনাম আর close বোতাম তখন modal-এর দায়িত্ব।
+   *
+   * ⚠️ দুটো আলাদা component না বানিয়ে একটাই রাখা হয়েছে: Realtime
+   * subscription, reconnect backoff আর dedupe — এই তিনটে জটিল অংশ
+   * দুবার লিখলে একটায় bug ঠিক করে অন্যটায় ভুলে যাওয়া নিশ্চিত।
+   */
+  chrome?: "card" | "bare";
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -188,65 +199,132 @@ export default function ChatPanel({
     }
   }
 
-  return (
-    <div className="border border-gray-200 rounded-md bg-white flex flex-col">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-        <MessageCircle className="w-4 h-4 text-[#2C6252]" />
-        <span className="text-sm font-semibold text-gray-800">
-          Chat with {otherPartyLabel}
-        </span>
-      </div>
+  const bare = chrome === "bare";
 
-      <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 py-3 space-y-2">
+  return (
+    <div
+      className={
+        bare
+          ? "flex min-h-0 flex-1 flex-col gap-[22px]"
+          : "flex flex-col overflow-hidden rounded-[20px] border border-black/10 bg-white"
+      }
+    >
+      {!bare && (
+        <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3">
+          <MessageCircle className="h-4 w-4 text-[#FF9540]" aria-hidden="true" />
+          <span className="font-sora text-[13px] font-semibold leading-none text-black">
+            Chat with {otherPartyLabel}
+          </span>
+        </div>
+      )}
+
+      {/**
+        * বার্তার তালিকা — Figma "Frame 2147236489", gap 16।
+        *
+        * ⚠️ modal-এ উচ্চতা flex দিয়ে ঠিক হয় (`flex-1 min-h-0`), স্থির
+        * px-এ নয় — ছোট ফোনে Figma-র 413px চাপিয়ে দিলে input বাক্সটাই
+        * পর্দার বাইরে চলে যেত। `min-h-0` ছাড়া flex child কখনো scroll
+        * করে না, সে তার পুরো content-এর সমান উঁচু হয়ে যায়।
+        */}
+      <div
+        ref={scrollRef}
+        className={
+          bare
+            ? "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1"
+            : "flex max-h-64 flex-col gap-4 overflow-y-auto px-4 py-3"
+        }
+      >
         {loaded && messages.length === 0 && (
-          <p className="text-xs text-gray-400 text-center py-4">
+          <p className="py-6 text-center font-sora text-[12px] leading-none text-black/40">
             No messages yet — say hello!
           </p>
         )}
+
         {messages.map((m) => {
           const isOwn = m.senderRole === viewerRole;
           return (
-            <div key={m.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+            <div key={m.id} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+              {/**
+                * Figma "Chat Messege": নিজের বার্তা কমলা (#FF9540),
+                * radius 16 0 16 16; অন্যজনের cream, radius 0 16 16 16।
+                * কোণাটা কাটা থাকে যে পাশ থেকে বার্তাটা এসেছে।
+                */}
               <div
-                className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                  isOwn ? "bg-[#2C6252] text-white" : "bg-gray-100 text-gray-800"
+                className={`max-w-[80%] px-4 py-3 font-sora text-[14px] leading-[1.5] ${
+                  isOwn
+                    ? "rounded-[16px_0_16px_16px] bg-[#FF9540] text-white shadow-[0_4px_24px_rgba(132,132,132,0.1)]"
+                    : "rounded-[0_16px_16px_16px] bg-[#F9F6F3] text-black"
                 }`}
               >
-                <p>{m.message}</p>
-                <p className={`text-[10px] mt-0.5 ${isOwn ? "text-white/70" : "text-gray-400"}`}>
-                  {parseTimestamp(m.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
+                <p className="whitespace-pre-wrap break-words">{m.message}</p>
               </div>
+              {/* ⚠️ suppressHydrationWarning — সময়টা দর্শকের timezone-এ
+                  সাজানো, তাই server (UTC) আর browser আলাদা লিখতে পারে। */}
+              <span
+                className="mt-1 px-1 font-sora text-[10px] leading-none text-black/40"
+                suppressHydrationWarning
+              >
+                {parseTimestamp(m.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
             </div>
           );
         })}
       </div>
 
       {active ? (
-        <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 border-t border-gray-100">
+        /**
+         * Figma "Frame 2147235231": cream pill (radius 90), padding
+         * 14/6/14/24, ডানে 44px কালো গোল বোতামে send আইকন।
+         *
+         * ⚠️ `<form>` ইচ্ছাকৃত — Enter চেপে পাঠানো আর মোবাইল কিবোর্ডের
+         * "Send" বোতাম দুটোই এতে বিনা বাড়তি কোডে কাজ করে।
+         */
+        <form
+          onSubmit={handleSend}
+          className={`flex items-center gap-3 rounded-full bg-[#F9F6F3] py-[6px] pl-6 pr-[6px] ${
+            bare ? "" : "mx-3 mb-3"
+          }`}
+        >
           <input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Type a message…"
+            placeholder="Type here..."
             maxLength={1000}
-            className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 focus:border-[#2C6252]"
+            aria-label={`Message ${otherPartyLabel}`}
+            className="min-w-0 flex-1 bg-transparent font-sora text-[15px] leading-[1.6] text-black placeholder:text-black/40 focus:outline-none md:text-[16px]"
           />
           <button
             type="submit"
             disabled={sending || !draft.trim()}
-            className="shrink-0 bg-[#FF4C15] text-white rounded-md p-2.5 hover:bg-[#e6430f] transition-colors disabled:opacity-50"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-white transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] disabled:opacity-40"
             aria-label="Send message"
           >
-            <Send className="w-4 h-4" />
+            {/* vuesax/linear/send-2 */}
+            <svg
+              className="h-[18px] w-[18px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M10.11 13.87 20.92 3.06M11.42 16.58l2.06 5.31c.32.82 1.47.82 1.79 0l6.42-16.5c.29-.75-.44-1.48-1.19-1.19l-16.5 6.42c-.82.32-.82 1.47 0 1.79l5.31 2.06a1.5 1.5 0 0 1 .86.86Z" />
+            </svg>
           </button>
         </form>
       ) : (
         inactiveMessage && (
-          <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-400 text-center">
+          <p
+            className={`text-center font-sora text-[12px] leading-[1.5] text-black/40 ${
+              bare ? "" : "border-t border-black/5 px-4 py-3"
+            }`}
+          >
             {inactiveMessage}
           </p>
         )

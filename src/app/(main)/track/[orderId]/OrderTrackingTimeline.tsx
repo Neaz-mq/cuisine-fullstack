@@ -4,7 +4,8 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { formatOrderId } from "@/lib/format-order-id";
-import ChatPanel from "@/components/ChatPanel";
+import ChatModal from "@/components/ChatModal";
+import KitchenStatusCard from "./KitchenStatusCard";
 import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
 import type { TrackedOrder } from "@/lib/track-order";
 
@@ -105,6 +106,7 @@ export default function OrderTrackingTimeline({
   origin: LatLng;
 }) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder);
+  const [chatOpen, setChatOpen] = useState(false);
   const isClient = useIsClient();
 
   useEffect(() => {
@@ -139,14 +141,34 @@ export default function OrderTrackingTimeline({
   const stepTimes = [order.createdAt, order.preparingAt, order.dispatchedAt, order.deliveredAt];
 
   const rider = hasRiderLocation(order.deliveryTracking);
-  const showMap =
-    order.orderType === "DELIVERY" &&
-    (order.status === "PLACED" || order.status === "PREPARING" || order.status === "OUT_FOR_DELIVERY");
 
-  const showChat =
+  /**
+   * ⚠️ Map কেবল অর্ডার পথে থাকলে — আগে PLACED/PREPARING-এও দেখানো হতো।
+   *
+   * খাবার তখনো রান্নাঘরে, কেউ কোথাও যাচ্ছে না; map-টা কেবল রেস্তোরাঁ
+   * থেকে বাড়ি পর্যন্ত একটা স্থির রেখা দেখাত আর "54-69 min" লিখত, যেন
+   * ডেলিভারি চলছে। Figma ওই অবস্থায় map-এর জায়গায় রান্নাঘরের কার্ড
+   * দেখায় — সেটাই সত্যিকারের খবর।
+   */
+  const inKitchen = order.status === "PLACED" || order.status === "PREPARING";
+  const showMap = order.orderType === "DELIVERY" && order.status === "OUT_FOR_DELIVERY";
+
+  /**
+   * Chat কেবল নিজেদের rider-এর ক্ষেত্রে।
+   *
+   * ⚠️ Uber Eats / Food Panda-র অর্ডারে কোনো DeliveryTracking row নেই,
+   * তাই chat API-ও 404 দিত — বোতামটা দেখানো মানে একটা ভাঙা দরজা দেখানো।
+   */
+  const canChat =
     order.orderType === "DELIVERY" &&
     order.shippingMethod === "OWN_DELIVERY" &&
     order.deliveryTracking !== null;
+
+  const chatActive =
+    canChat && order.status === "OUT_FOR_DELIVERY" && !order.deliveryTracking?.deliveredAt;
+
+  // অর্ডার পথে আছে আর rider বসানো হয়েছে — Figma-র "on the way" অবস্থা।
+  const onTheWay = order.status === "OUT_FOR_DELIVERY" && order.rider !== null;
 
   return (
     <div className="flex flex-col gap-6 md:gap-10 xl:gap-[60px]">
@@ -266,6 +288,9 @@ export default function OrderTrackingTimeline({
           riderUpdatedAt={rider ? order.deliveryTracking?.riderLocationUpdatedAt ?? null : null}
           caption={order.eta ? "Arriving in" : "Order status"}
           headline={order.eta ? formatEta(order.eta) : (STEPS[currentStepIndex]?.label ?? "")}
+          riderName={order.rider?.name}
+          riderImage={order.rider?.image}
+          onOpenChat={canChat ? () => setChatOpen(true) : undefined}
         />
       )}
 
@@ -277,7 +302,32 @@ export default function OrderTrackingTimeline({
         */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,672fr)_minmax(0,548fr)] lg:gap-8 xl:gap-[60px]">
         <div className="flex min-w-0 flex-col gap-6">
-          {/* Figma "Frame 2147236139" (বাঁ): সাদা, padding 30, gap 40। */}
+          {/**
+            * ⚠️ বাঁ কলামটা status অনুযায়ী বদলায়, ঠিক Figma-র মতো।
+            *
+            *   রান্নাঘরে (PLACED/PREPARING) → "Preparing" কার্ড
+            *   rider পথে (OUT_FOR_DELIVERY)  → "on the way" কার্ড
+            *   বাকি সব                       → Order Information
+            *
+            * অর্থাৎ ঠিকানা আর shipping method চলাকালীন দেখা যায় না,
+            * ফিরে আসে অর্ডার পৌঁছে গেলে। Figma-র তিনটে frame ঠিক এটাই
+            * দেখায়: চলার সময় গ্রাহকের প্রশ্ন "কোথায়?", "ঠিকানা কী?" নয় —
+            * সেটা তিনি checkout-এ এইমাত্র লিখেছেন।
+            */}
+          {inKitchen ? (
+            <KitchenStatusCard
+              status={order.status === "PLACED" ? "PLACED" : "PREPARING"}
+              items={order.items}
+              itemCount={order.itemCount}
+              prepMinutesLeft={order.prepMinutesLeft}
+            />
+          ) : onTheWay && order.rider ? (
+            <OnTheWayCard
+              rider={order.rider}
+              onOpenChat={canChat ? () => setChatOpen(true) : undefined}
+            />
+          ) : (
+          /* Figma "Frame 2147236139" (বাঁ): সাদা, padding 30, gap 40। */
           <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 md:p-6 xl:gap-10 xl:p-[30px]">
             <div className="flex flex-col gap-2">
               <h2 className="font-frank-ruhl text-[24px] font-medium leading-[1.3] text-black md:text-[30px] xl:text-[36px]">
@@ -304,28 +354,8 @@ export default function OrderTrackingTimeline({
               </InfoCell>
             </div>
           </div>
-
-          {/**
-            * ⚠️ Rider chat Figma-তে নেই, কিন্তু কাজের একটা feature — বাদ
-            * দিলে own-delivery-র গ্রাহক rider-কে বার্তা পাঠাতে পারতেন না।
-            * বাঁ কলামের নিচে বসানো হয়েছে, যেখানে Figma-তে ফাঁকা জায়গা; তাই
-            * নকশার বাকি কিছু সরে না।
-            */}
-          {showChat && order.deliveryTracking && (
-            <ChatPanel
-              orderId={order.id}
-              viewerRole="CUSTOMER"
-              fetchUrl={`/api/orders/${order.id}/chat`}
-              sendUrl={`/api/orders/${order.id}/chat`}
-              otherPartyLabel="your rider"
-              active={order.status === "OUT_FOR_DELIVERY" && !order.deliveryTracking.deliveredAt}
-              inactiveMessage={
-                order.deliveryTracking.deliveredAt
-                  ? "This delivery is complete — chat is now closed."
-                  : "Chat opens once your rider is on the way."
-              }
-            />
           )}
+
         </div>
 
         {/* Figma "Frame 2147236140" (ডান): সাদা, padding 30, gap 30। */}
@@ -428,6 +458,110 @@ export default function OrderTrackingTimeline({
           </div>
         </div>
       </div>
+
+      {/**
+        * ⚠️ Modal সবসময় render হয়, শুধু `open` false থাকে।
+        *
+        * শর্তসাপেক্ষে mount করলে প্রতিবার খুলে বন্ধ করলে ChatPanel নতুন
+        * করে সব বার্তা fetch করত আর Supabase channel আবার জুড়ত — অথচ
+        * `<dialog>` বন্ধ থাকলে ব্রাউজার এমনিতেই কিছু দেখায় না।
+        *
+        * `canChat` false হলে (Uber Eats ইত্যাদি) একেবারেই render হয় না,
+        * কারণ তখন chat endpoint-ই নেই।
+        */}
+      {canChat && (
+        <ChatModal
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          orderId={order.id}
+          riderName={order.rider?.name ?? "your rider"}
+          active={chatActive}
+          inactiveMessage={
+            order.deliveryTracking?.deliveredAt
+              ? "This delivery is complete — chat is now closed."
+              : "Chat opens once your rider is on the way."
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Figma "on the way" — অর্ডার রাস্তায় থাকার সময় বাঁ কলামের কার্ড।
+ *
+ *   সাদা কার্ড, ভেতরে rider-এর ছবি + "Marcus is on the way with your
+ *   order!" + এক লাইন ব্যাখ্যা।
+ *
+ * ⚠️ Figma-তে ছবিটা একটা সাধারণ ডেলিভারি-ছবি; এখানে আসল rider-এর
+ * অবতার, থাকলে। যিনি দরজায় আসবেন তাঁর মুখটা আগে দেখা থাকলে দরজা
+ * খোলার মুহূর্তটা গ্রাহকের জন্য নিরাপদ লাগে — একটা stock ছবির চেয়ে
+ * সেটার মূল্য বেশি।
+ *
+ * ⚠️ chat বোতামটা Figma-র কার্ডে নেই, map-এ আছে। তবু এখানেও রাখা হয়েছে:
+ * মোবাইলে map-এর pill-টা ছোট, আর এটাই সবচেয়ে স্বাভাবিক জায়গা যেখানে
+ * গ্রাহক rider-কে খুঁজবেন।
+ */
+function OnTheWayCard({
+  rider,
+  onOpenChat,
+}: {
+  rider: NonNullable<TrackedOrder["rider"]>;
+  onOpenChat?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6 rounded-[20px] bg-white p-4 md:p-6 xl:gap-10 xl:p-[30px]">
+      <div className="flex gap-4 rounded-[20px] bg-[#F9F6F3] p-3 md:p-4">
+        {rider.image ? (
+          <Image
+            src={rider.image}
+            alt=""
+            width={72}
+            height={72}
+            aria-hidden="true"
+            className="h-14 w-14 shrink-0 rounded-[14px] object-cover md:h-[72px] md:w-[72px]"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] bg-[#FF9540] font-sora text-[20px] font-semibold text-white md:h-[72px] md:w-[72px]"
+          >
+            {rider.name.charAt(0).toUpperCase()}
+          </span>
+        )}
+
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h2 className="font-frank-ruhl text-[17px] font-semibold leading-[1.3] text-black md:text-[20px]">
+            {rider.name} is on the way with your order!
+          </h2>
+          <p className="font-sora text-[12px] leading-[1.6] text-black/70">
+            Your food left our kitchen hot and fresh — it&apos;s now heading straight to your
+            address.
+          </p>
+        </div>
+      </div>
+
+      {onOpenChat && (
+        <button
+          type="button"
+          onClick={onOpenChat}
+          className="flex h-12 items-center justify-center gap-2 self-start rounded-full bg-[#E5EDFF] px-6 font-sora text-[14px] font-semibold leading-none text-[#0090FF] transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+        >
+          <svg
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8.5 19h-.5a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6v5a6 6 0 0 1-6 6h-.5l-3.5 2.5L8.5 19Z" />
+          </svg>
+          Chat with {rider.name.split(" ")[0]}
+        </button>
+      )}
     </div>
   );
 }

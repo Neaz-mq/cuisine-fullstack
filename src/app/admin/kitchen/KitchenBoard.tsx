@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronDown } from "lucide-react";
 import { toast } from "react-toastify";
 import { formatOrderId } from "@/lib/format-order-id";
 import type { KitchenSort } from "@/lib/kitchen-status";
+import OrderViewModal, { type OrderViewData } from "@/app/admin/orders/OrderViewModal";
+import OrderDeliveryModal from "@/app/admin/orders/OrderDeliveryModal";
 
 const POLL_INTERVAL_MS = 15000; // NotificationBell-এর সাথে একই ছন্দ
 const URGENT_AFTER_MS = 15 * 60 * 1000; // ১৫ মিনিটের পুরনো অর্ডার লাল
@@ -25,6 +26,12 @@ type KitchenOrder = {
   createdAt: string;
   items: OrderItem[];
   table: { label: string } | null;
+  /**
+   * "View Order" আর "Ready to Delivery" modal-এর জন্য পুরো order —
+   * ঠিকানা, চালান, ফি-ধাপ, বসানো rider। server-এ সাজানো (lib/
+   * order-view-data.ts), orders টেবিল যেটা ব্যবহার করে ঠিক সেটাই।
+   */
+  view: OrderViewData;
 };
 
 /**
@@ -144,11 +151,13 @@ function OrderCard({
   nowMs,
   action,
   isPending,
+  onView,
 }: {
   order: KitchenOrder;
   nowMs: number;
   action: { label: string; onClick: () => void } | null;
   isPending: boolean;
+  onView: () => void;
 }) {
   const isUrgent =
     order.status !== "OUT_FOR_DELIVERY" &&
@@ -219,15 +228,21 @@ function OrderCard({
          * থেকে সেটা করলে অর্ডার ভুলভাবে শেষ হয়ে যেত আর রাইডারের
          * তালিকা থেকে হারিয়ে যেত।
          *
-         * তাই এখানে অর্ডারটা খোলার লিঙ্ক — export-এ ওই বোতামটার
-         * নমুনা লেখাও আসলে "View Order"।
+         * তাই এখানে অর্ডারটা খোলার বোতাম।
+         *
+         * ⚠️ আগে এটা `/admin/orders/<id>` পাতার একটা <Link> ছিল। সেই
+         * পাতাটা ছিল সাদামাটা, আর তার চেয়ে বড় কথা — বোতামটা রান্নাঘরের
+         * পর্দা থেকে staff-কে বের করে নিয়ে যেত। ব্যস্ত সময়ে ফিরে এসে
+         * আবার sort/filter বসানো মানে হারানো সেকেন্ড। এখন orders
+         * টেবিলের হুবহু একই modal, জায়গা ছেড়ে না গিয়েই।
          */
-        <Link
-          href={`/admin/orders/${order.id}`}
+        <button
+          type="button"
+          onClick={onView}
           className={`flex h-[34px] w-full items-center justify-center rounded-full border border-black px-4 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black hover:text-white ${FOCUS_RING}`}
         >
           View Order
-        </Link>
+        </button>
       )}
     </article>
   );
@@ -318,6 +333,17 @@ export default function KitchenBoard({
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * কোন অর্ডারটা কোন modal-এ খোলা — id, পুরো object নয়।
+   *
+   * ⚠️ কারণটা poll-এ: প্রতি ১৫ সেকেন্ডে পুরো তালিকা নতুন করে আসে। object
+   * ধরে রাখলে modal-টা একটা জমে যাওয়া কপি দেখাত — rider বসানোর পরেও
+   * dropdown ফাঁকা, ফি পুরনো। id ধরে রেখে প্রতি render-এ টাটকা তালিকা
+   * থেকে খুঁজে নিলে modal নিজে থেকেই হালনাগাদ থাকে।
+   */
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
+
   function advanceStatus(orderId: string, nextStatus: "PREPARING" | "OUT_FOR_DELIVERY") {
     const prevOrders = orders;
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
@@ -358,10 +384,30 @@ export default function KitchenBoard({
       key: "preparing",
       title: "Preparing",
       orders: sorted.filter((o) => o.status === "PREPARING"),
-      action: (order: KitchenOrder) => ({
-        label: "Make Ready",
-        onClick: () => advanceStatus(order.id, "OUT_FOR_DELIVERY"),
-      }),
+      /**
+       * ⚠️ ডেলিভারির অর্ডারে এটা সরাসরি status বদলায় না, modal খোলে।
+       *
+       * আগে এটা সোজা `OUT_FOR_DELIVERY`-তে PATCH করত, অর্থাৎ কোনো rider
+       * বসানো ছাড়াই অর্ডারটা "পথে" হয়ে যেত: DeliveryTracking তৈরি হতো
+       * না, তাই গ্রাহকের /track পাতায় কোনো map বা rider থাকত না, আর
+       * chat-ও খুলত না। দূরত্ব-ভিত্তিক delivery ফি-ও বসত না।
+       *
+       * এখন orders টেবিলের হুবহু একই modal — যেটা rider বসানো, ফি হিসাব
+       * আর status বদল তিনটেই এক request-এ করে (assign-rider route)।
+       *
+       * ⚠️ dine-in ব্যতিক্রম: ওখানে কোনো rider নেই, "Ready" মানে শুধু
+       * পরিবেশনের জন্য তৈরি। তাই ওটা আগের মতোই সরাসরি PATCH।
+       */
+      action: (order: KitchenOrder) =>
+        order.orderType === "DINE_IN"
+          ? {
+              label: "Mark Ready",
+              onClick: () => advanceStatus(order.id, "OUT_FOR_DELIVERY"),
+            }
+          : {
+              label: "Ready to Delivery",
+              onClick: () => setDispatchingId(order.id),
+            },
     },
     {
       key: "ready",
@@ -371,16 +417,27 @@ export default function KitchenBoard({
     },
   ];
 
+  /**
+   * ⚠️ প্রতি render-এ টাটকা তালিকা থেকে খুঁজে নেওয়া হয়, state-এ জমিয়ে
+   * রাখা হয় না — উপরে `viewingId`/`dispatchingId`-এর মন্তব্য দ্রষ্টব্য।
+   * খোলা অর্ডারটা যদি poll-এর পর তালিকা থেকে চলে যায় (যেমন "Ready"
+   * কলামের ১৫ মিনিটের জানালা পেরিয়ে গেল), modal নিজে থেকেই বন্ধ হয়ে
+   * যায় — একটা বাসি কপি খোলা রেখে দেওয়ার চেয়ে সেটাই ঠিক।
+   */
+  const viewing = orders.find((order) => order.id === viewingId) ?? null;
+  const dispatching = orders.find((order) => order.id === dispatchingId) ?? null;
+
   return (
-    /**
-     * Frame 2147236411: row, gap 12 — তিনটে কলাম।
-     *
-     * ⚠️ ১০২৪-এর নিচে এক কলামে নামে, পাশাপাশি নয়। ৩২০px-এ তিনটে কলাম
-     * মানে প্রতিটা ~৯০px — অর্ডার নম্বরটাও আঁটে না। ট্যাবলেটে দুই
-     * কলাম করা যেত, কিন্তু তাতে "Ready" নিচে একা পড়ে থাকত আর
-     * বোর্ডের বাঁ-থেকে-ডান পড়ার ক্রমটাই ভেঙে যেত।
-     */
-    <div className="grid gap-3 lg:grid-cols-3">
+    <>
+      {/**
+        * Frame 2147236411: row, gap 12 — তিনটে কলাম।
+        *
+        * ⚠️ ১০২৪-এর নিচে এক কলামে নামে, পাশাপাশি নয়। ৩২০px-এ তিনটে কলাম
+        * মানে প্রতিটা ~৯০px — অর্ডার নম্বরটাও আঁটে না। ট্যাবলেটে দুই
+        * কলাম করা যেত, কিন্তু তাতে "Ready" নিচে একা পড়ে থাকত আর
+        * বোর্ডের বাঁ-থেকে-ডান পড়ার ক্রমটাই ভেঙে যেত।
+        */}
+      <div className="grid gap-3 lg:grid-cols-3">
       {columns.map((column) => (
         /* Frame 2147236335: column, padding 16, gap 20, radius 16,
            BG #F9F6F3। */
@@ -406,6 +463,7 @@ export default function KitchenBoard({
                   nowMs={nowMs}
                   isPending={isPending}
                   action={column.action ? column.action(order) : null}
+                  onView={() => setViewingId(order.id)}
                 />
               ))
             )}
@@ -413,5 +471,66 @@ export default function KitchenBoard({
         </section>
       ))}
     </div>
+
+      {/**
+        * ⚠️ modal দুটো orders টেবিলের হুবহু একই component — নতুন করে লেখা
+        * হয়নি। "Ready to Delivery" চাপলে যা হয় তার পুরোটাই
+        * OrderDeliveryModal-এর ভেতরে: rider বাছা → POST /api/admin/orders/
+        * <id>/assign-rider → সেই একটা route-ই দূরত্ব মাপে, ফি বসায়,
+        * DeliveryTracking তৈরি করে আর অর্ডারকে OUT_FOR_DELIVERY-তে নেয়।
+        *
+        * ⚠️ সফল হলে `onDone` — board-এর নিজের তালিকা সাথে সাথে হালনাগাদ
+        * করা হয়, পরের poll-এর ১৫ সেকেন্ড অপেক্ষা না করে। নাহলে staff
+        * বোতাম চেপে কার্ডটাকে "Preparing" কলামেই বসে থাকতে দেখতেন আর
+        * দ্বিতীয়বার চাপতেন।
+        */}
+      <OrderViewModal
+        open={viewing !== null}
+        onClose={() => setViewingId(null)}
+        order={viewing?.view ?? EMPTY_VIEW}
+      />
+      {dispatching && (
+        <OrderDeliveryModal
+          open
+          onClose={() => setDispatchingId(null)}
+          orderId={dispatching.id}
+          order={dispatching.view}
+          onDone={() => {
+            setDispatchingId(null);
+            setOrders((prev) =>
+              prev.map((order) =>
+                order.id === dispatching.id
+                  ? { ...order, status: "OUT_FOR_DELIVERY" as const }
+                  : order
+              )
+            );
+          }}
+        />
+      )}
+      </>
   );
 }
+
+/**
+ * OrderViewModal সবসময় mount থাকে (`open` দিয়ে দেখানো/লুকানো), তাই
+ * বন্ধ অবস্থায় একটা খালি order লাগে।
+ *
+ * ⚠️ `open` false হলে modal কিছুই render করে না, তাই এই মানগুলো কখনো
+ * পর্দায় আসে না — কিন্তু `order` prop-টা optional করে দিলে ভেতরের
+ * প্রতিটা field-এ null check বসাতে হতো, যেটা আসল ব্যবহারের জায়গায়
+ * (orders টেবিল) কোনো কাজেই লাগত না।
+ */
+const EMPTY_VIEW: OrderViewData = {
+  id: "",
+  reference: "",
+  email: null,
+  phone: "",
+  address: null,
+  items: [],
+  channel: "",
+  paymentLabel: "",
+  totalLabel: "",
+  deliveryFeeLabel: "",
+  riderId: null,
+  delivery: null,
+};

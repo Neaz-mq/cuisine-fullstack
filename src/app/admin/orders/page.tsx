@@ -5,12 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { formatOrderId } from "@/lib/format-order-id";
 import { orderSearchFilter } from "@/lib/order-search";
-import { formatAmount } from "@/lib/currency-format";
-import {
-  normalizeDeliveryZones,
-  distanceBarRatio,
-  type OrderDeliverySnapshot,
-} from "@/lib/delivery-zones";
 import {
   DEFAULT_OVERVIEW_PERIOD,
   isOverviewPeriod,
@@ -27,65 +21,11 @@ import Pagination from "./Pagination";
 import OrdersToolbar from "./OrdersToolbar";
 import OrderStatusSelect from "./OrderStatusSelect";
 import OrderRowActions from "./OrderRowActions";
-import { type OrderViewData } from "./OrderViewModal";
+import { channelLabel, orderMoney, toOrderViewData } from "@/lib/order-view-data";
 
 export const metadata = { title: "Orders" };
 
 const PAGE_SIZE = 10;
-
-/**
- * প্রতিটা অর্ডার **নিজের** মুদ্রায় সাজানো হয়, আজকের settings-এর
- * মুদ্রায় নয়।
- *
- * ⚠️ এই তালিকায় একাধিক মুদ্রা মিশে থাকতে পারে — রেস্তোরাঁ মুদ্রা
- * বদলালে পুরনো অর্ডারগুলো যে মুদ্রায় বসেছিল সেটাই ধরে রাখে। তাই
- * পাতার একটা সাধারণ setting দিয়ে সব সাজালে পুরনো অঙ্কগুলো ভুল
- * মুদ্রায় দেখাত।
- */
-function money(
-  order: { currency: string; currencyMinorUnits: number },
-  value: { toFixed(dp: number): string }
-) {
-  return formatAmount(value.toFixed(order.currencyMinorUnits), order.currency);
-}
-
-/**
- * Figma-র "Order Status" কলামটা — যেখানে "Table - 2" বা "Online" লেখা।
- *
- * ⚠️ নামটা বিভ্রান্তিকর: ওই কলামে অর্ডারের **অবস্থা** নেই, আছে সেটা
- * কোন পথে এসেছে। পাশেই আবার আসল "Status" কলাম। তাই এখানে শিরোনাম
- * "Order Type" রাখা হয়েছে — একই পর্দায় দুটো "Status" থাকলে কোনটা কী
- * সেটা কেউ মনে রাখতে পারত না।
- *
- * ⚠️ `shippingMethod` এখন ঐচ্ছিক (dine-in অর্ডারে থাকে না), তাই
- * "Uber Eats নয় মানেই Food Panda" ধরে নেওয়া যায় না — আগে সেটা নিরাপদ
- * ছিল, এখন null মান ভুল করে "Food Panda" দেখাত।
- */
-/**
- * টাকা কীভাবে দেওয়া হবে/হয়েছে।
- *
- * ⚠️ dine-in-এ "Cash on Delivery" লেখাটা অর্থহীন — কিছু delivered
- * হচ্ছে না, খদ্দের টেবিলেই দেন। তাই একই `COD` মানের দুটো আলাদা লেখা।
- */
-function paymentLabel(order: {
-  orderType: "DELIVERY" | "DINE_IN";
-  paymentMethod: string;
-}) {
-  if (order.paymentMethod !== "COD") return "Online Payment";
-  return order.orderType === "DINE_IN" ? "Pay at Table" : "Cash on Delivery";
-}
-
-function channelLabel(order: {
-  orderType: "DELIVERY" | "DINE_IN";
-  shippingMethod: string | null;
-  table: { label: string } | null;
-}) {
-  if (order.orderType === "DINE_IN") return `Table - ${order.table?.label ?? "—"}`;
-  if (order.shippingMethod === "UBER_EATS") return "Uber Eats";
-  if (order.shippingMethod === "FOOD_PANDA") return "Food Panda";
-  if (order.shippingMethod === "OWN_DELIVERY") return "Our Own Delivery";
-  return "Online";
-}
 
 /**
  * src/app/admin/orders/page.tsx
@@ -272,7 +212,7 @@ export default async function AdminOrdersPage({
                    */}
                   <Field label="Total">
                     <span className="truncate font-frank-ruhl text-[15px] font-semibold leading-none text-black">
-                      {money(order, order.totalAmount)}
+                      {orderMoney(order, order.totalAmount)}
                     </span>
                   </Field>
 
@@ -304,7 +244,7 @@ export default async function AdminOrdersPage({
                     orderId={order.id}
                     status={order.status}
                     orderType={order.orderType}
-                    order={viewData(order)}
+                    order={toOrderViewData(order)}
                   />
                 </div>
               </div>
@@ -341,126 +281,6 @@ export default async function AdminOrdersPage({
       </div>
     </div>
   );
-}
-
-/**
- * সারির ডেটা → modal যা বোঝে সেই আকার।
- *
- * ⚠️ `Decimal`-গুলো এখানেই লেখা রূপে বদলে যায়। OrderRowActions একটা
- * client component, আর Prisma-র `Decimal` সরল object নয় — সরাসরি
- * পাঠালে Next.js throw করে ("Only plain objects can be passed to
- * Client Components")।
- *
- * ⚠️ ঠিকানাটা এখানেই জোড়া হয়, client-এ নয় — কোন অংশগুলো আছে আর
- * কোনগুলো `null` (dine-in অর্ডারে প্রায় সবই) সেটা এক জায়গায় ঠিক করা
- * থাকলে দুই জায়গায় দুরকম ফল হয় না।
- */
-/**
- * Order-এর delivery snapshot → dispatch modal যা বোঝে সেই আকার।
- *
- * ⚠️ ফি-গুলো **এখানেই** সাজানো হয়, client component-এ নয়। currency
- * চিহ্ন আর দশমিক সংখ্যা order-এর নিজের snapshot থেকে আসে (কারণটা
- * lib/currency-format.ts-এ), আর সেটা জানে server। client-কে
- * সিদ্ধান্তটা নিতে দিলে একই পাতায় দুই রকম দশমিক দেখা যেত।
- *
- * ⚠️ তালিকাটা `normalizeDeliveryZones()` দিয়ে যায়, যদিও এটা আমাদের
- * নিজেরই লেখা JSON — কারণ column-টা `Json`, অর্থাৎ database-স্তরে
- * কোনো আকৃতির নিশ্চয়তা নেই। হাতে লেখা SQL বা পুরোনো row যা-ই থাক,
- * একটা নোংরা মান যেন গোটা admin পাতা crash না করায়।
- */
-function deliverySnapshot(order: {
-  currency: string;
-  currencyMinorUnits: number;
-  deliveryFee: Prisma.Decimal;
-  deliveryZones: Prisma.JsonValue | null;
-  deliveryDistanceKm: number | null;
-  deliveryZoneLabel: string | null;
-  deliveryZoneFallback: boolean;
-}): OrderDeliverySnapshot | null {
-  // ধাপের তালিকা নেই = FLAT mode-এ বসা অর্ডার, বা এই feature-এর আগের।
-  // দুটোতেই modal সরল "Delivery Charge Applied" সারিটাই দেখাবে।
-  if (!order.deliveryZones) return null;
-
-  const zones = normalizeDeliveryZones(order.deliveryZones);
-
-  return {
-    zones: zones.map((zone) => ({
-      id: zone.id,
-      label: zone.label,
-      feeLabel: formatAmount(zone.fee, order.currency, order.currencyMinorUnits),
-      // ⚠️ label মিলিয়ে, fee মিলিয়ে নয় — দুটো ধাপের ফি সমান হতে পারে
-      // ("0–1 Km $5" আর "1–3 Km $5"), তখন fee দিয়ে মেলালে দুটোই
-      // একসাথে highlight হতো।
-      active: zone.label === order.deliveryZoneLabel,
-    })),
-    distanceKm: order.deliveryDistanceKm,
-    barRatio:
-      order.deliveryDistanceKm === null
-        ? 0
-        : distanceBarRatio(order.deliveryDistanceKm, zones),
-    appliedFeeLabel: money(order, order.deliveryFee),
-    fellBackToFlat: order.deliveryZoneFallback,
-  };
-}
-
-function viewData(order: {
-  id: string;
-  email: string | null;
-  phone: string;
-  address: string | null;
-  apartment: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  country: string | null;
-  orderType: "DELIVERY" | "DINE_IN";
-  shippingMethod: string | null;
-  paymentMethod: string;
-  currency: string;
-  currencyMinorUnits: number;
-  totalAmount: Prisma.Decimal;
-  deliveryFee: Prisma.Decimal;
-  deliveryZones: Prisma.JsonValue | null;
-  deliveryDistanceKm: number | null;
-  deliveryZoneLabel: string | null;
-  deliveryZoneFallback: boolean;
-  table: { label: string } | null;
-  deliveryTracking: { riderId: string } | null;
-  items: {
-    id: string;
-    quantity: number;
-    price: Prisma.Decimal;
-    menuItem: { title: string };
-  }[];
-}): OrderViewData {
-  const addressParts = [
-    order.address,
-    order.apartment,
-    order.city,
-    order.state,
-    order.zip,
-    order.country,
-  ].filter((part): part is string => Boolean(part && part.trim()));
-
-  return {
-    id: order.id,
-    reference: formatOrderId(order.id),
-    email: order.email,
-    phone: order.phone,
-    address: addressParts.length > 0 ? addressParts.join(", ") : null,
-    items: order.items.map((item) => ({
-      id: item.id,
-      title: item.menuItem.title,
-      quantity: item.quantity,
-      lineTotal: money(order, item.price.times(item.quantity)),
-    })),
-    channel: channelLabel(order),
-    paymentLabel: paymentLabel(order),
-    totalLabel: money(order, order.totalAmount),
-    deliveryFeeLabel: money(order, order.deliveryFee),
-    riderId: order.deliveryTracking?.riderId ?? null,
-    delivery: deliverySnapshot(order),
-  };
 }
 
 /**

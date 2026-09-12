@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { minutesAgo } from "@/lib/time";
 import { orderIdSearchToken } from "@/lib/format-order-id";
+import { ORDER_VIEW_SELECT, toOrderViewData } from "@/lib/order-view-data";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import KitchenOverviewCards from "@/components/admin/KitchenOverviewCards";
 import KitchenSortFilter from "@/components/admin/KitchenSortFilter";
@@ -88,9 +89,14 @@ export default async function KitchenDisplayPage({
           { status: "OUT_FOR_DELIVERY", updatedAt: { gte: readySince } },
         ],
       },
-      include: {
-        items: { include: { menuItem: { select: { title: true } } } },
-        table: { select: { label: true } },
+      select: {
+        // ⚠️ বোর্ডের কার্ডে যা দেখায় + modal-এর যা লাগে, একসাথে।
+        // ORDER_VIEW_SELECT-এ orderType, items আর table আগে থেকেই আছে।
+        status: true,
+        firstName: true,
+        lastName: true,
+        createdAt: true,
+        ...ORDER_VIEW_SELECT,
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -197,11 +203,33 @@ export default async function KitchenDisplayPage({
         </div>
 
         {/**
-         * ⚠️ `JSON.parse(JSON.stringify(...))` — Prisma-র Date আর
-         * Decimal সরাসরি client component-এ পাঠানো যায় না। আগের
-         * কোডেও এটাই ছিল, ইচ্ছাকৃতভাবে রাখা।
+         * ⚠️ আগে এখানে `JSON.parse(JSON.stringify(visible))` ছিল — Date
+         * আর Decimal serialize করতে। কাজ করত, কিন্তু পুরো object-টাকে
+         * `any` বানিয়ে দিত, তাই board-এর prop type-এর সাথে গরমিল হলে
+         * tsc একটা শব্দও বলত না।
+         *
+         * এখন প্রতিটা field হাতে লেখা আর টাকার অঙ্কগুলো server-এ
+         * toOrderViewData দিয়ে সাজানো — poll endpoint ঠিক একই আকৃতি
+         * ফেরায়, তাই প্রথম refresh-এ কিছু বদলায় না।
          */}
-        <KitchenBoard initialOrders={JSON.parse(JSON.stringify(visible))} sort={sort} />
+        <KitchenBoard
+          initialOrders={visible.map((order) => ({
+            id: order.id,
+            status: order.status as "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY",
+            orderType: order.orderType,
+            firstName: order.firstName,
+            lastName: order.lastName,
+            createdAt: order.createdAt.toISOString(),
+            items: order.items.map((item) => ({
+              id: item.id,
+              quantity: item.quantity,
+              menuItem: { title: item.menuItem.title },
+            })),
+            table: order.table,
+            view: toOrderViewData(order),
+          }))}
+          sort={sort}
+        />
       </div>
     </div>
   );

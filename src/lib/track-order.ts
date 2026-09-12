@@ -81,6 +81,17 @@ export const TRACK_ORDER_SELECT = {
       destLat: true,
       destLng: true,
       deliveredAt: true,
+      /**
+       * ⚠️ কেবল নাম আর ছবি — id, ফোন বা email নয়।
+       *
+       * Figma-র map-এ rider-এর নাম আর মুখ দেখানো হয় ("Adam kirton Jr. ·
+       * Your Delivery Rider"), আর সেটা যুক্তিসঙ্গত: যিনি দরজায় আসবেন
+       * তাঁকে চেনা গ্রাহকের নিরাপত্তারই অংশ। কিন্তু ফোন নম্বর দিলে
+       * প্রতিটা ডেলিভারি কর্মীর ব্যক্তিগত নম্বর গ্রাহকের হাতে চলে যেত,
+       * চিরতরে — যোগাযোগের জন্য chat আছে, যেটা ডেলিভারি শেষে বন্ধ হয়ে
+       * যায়।
+       */
+      rider: { select: { name: true, image: true } },
     },
   },
 } as const satisfies Prisma.OrderSelect;
@@ -159,6 +170,23 @@ export type TrackedOrder = {
    */
   eta: { min: number; max: number } | null;
 
+  /**
+   * রান্না শেষ হতে আর কত মিনিট — Figma-র "8 min · Left to preparing"।
+   *
+   * কেবল PLACED আর PREPARING-এ; তার পরে রান্নার কথা বলার আর মানে নেই।
+   * PLACED-এ পুরো অনুমান, PREPARING-এ যতটা পেরিয়েছে তা বাদ দিয়ে। ০-এ
+   * থামে — ঋণাত্মক সংখ্যা দেখানোর বদলে client "Almost ready" বলে।
+   */
+  prepMinutesLeft: number | null;
+
+  /**
+   * Rider-এর পরিচয় — কেবল চলমান ডেলিভারিতে, নাহলে null।
+   *
+   * ⚠️ canSeeRiderLocation-এর একই নিয়মে gate করা: ডেলিভারি শেষ হয়ে
+   * গেলে rider কে ছিলেন সেটা আর গ্রাহকের পাতার তথ্য নয়।
+   */
+  rider: { name: string; image: string | null } | null;
+
   deliveryTracking: {
     riderLat: number | null;
     riderLng: number | null;
@@ -170,6 +198,7 @@ export type TrackedOrder = {
 };
 
 const ACTIVE_STATUSES = new Set(["PLACED", "PREPARING", "OUT_FOR_DELIVERY"]);
+const IN_KITCHEN_STATUSES = new Set(["PLACED", "PREPARING"]);
 
 export function findOrderForTracking(id: string) {
   return prisma.order.findUnique({ where: { id }, select: TRACK_ORDER_SELECT });
@@ -188,6 +217,8 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
   const isActiveDelivery = order.orderType === "DELIVERY" && ACTIVE_STATUSES.has(order.status);
 
   const hasDiscount = order.discountAmount.plus(order.tierDiscountAmount).greaterThan(0);
+
+  const timings = await estimateTimings(order);
 
   const tracking = order.deliveryTracking;
   const destination: LatLng | null = !isActiveDelivery
@@ -244,8 +275,19 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
       price: money(item.price.times(item.quantity)),
     })),
 
+    rider:
+      live && tracking
+        ? {
+            // নাম না থাকলে (staff row-এ name ফাঁকা) "Your rider" — খালি
+            // জায়গা বা "null" দেখানোর চেয়ে ভালো।
+            name: tracking.rider.name?.trim() || "Your rider",
+            image: tracking.rider.image,
+          }
+        : null,
+
     destination,
-    eta: isActiveDelivery ? await estimateArrival(order) : null,
+    eta: timings.eta,
+    prepMinutesLeft: timings.prepMinutesLeft,
 
     deliveryTracking: tracking
       ? {
@@ -261,32 +303,60 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
 }
 
 /**
- * পৌঁছানোর আনুমানিক সময়, এখন থেকে মিনিটে।
+ * রান্না আর পথের সময়ের অনুমান।
  *
- *   PLACED / PREPARING → রান্নাঘরের সারি অনুযায়ী রান্না + পথের সময়
+ *   PLACED / PREPARING → রান্নাঘরের সারি অনুযায়ী রান্নার বাকি সময়,
+ *                        আর (delivery হলে) তার সাথে পথের সময়
  *   OUT_FOR_DELIVERY   → পথের সময় − বের হওয়ার পর যতটা পেরিয়েছে
  *
- * ⚠️ পথে থাকা অর্ডারে পেরোনো সময় বাদ দেওয়া হয়। নাহলে rider ২৫ মিনিট ধরে
- * রাস্তায় থাকলেও পাতাটা একই "15-30 min" দেখিয়ে যেত। শূন্যের নিচে নামে
- * না — client সেটাকে "Any minute now" হিসেবে দেখায়।
+ * ⚠️ পেরোনো সময় বাদ দেওয়া হয় দুই জায়গাতেই। নাহলে rider ২৫ মিনিট ধরে
+ * রাস্তায় থাকলেও পাতাটা একই "15-30 min" দেখিয়ে যেত, আর রান্না প্রায়
+ * শেষ হয়ে এলেও "8 min" আটকে থাকত। শূন্যের নিচে নামে না — client
+ * সেটাকে "Any minute now" / "Almost ready" হিসেবে দেখায়।
+ *
+ * ⚠️ সারির count query কেবল রান্নাঘরে থাকা অর্ডারেই চলে। পথে থাকা,
+ * পৌঁছে যাওয়া বা বাতিল অর্ডারে সারির হিসাব অর্থহীন, তাই সেখানে DB-তে
+ * যাওয়াই হয় না — প্রতি ১৫ সেকেন্ডের poll-এ এটা গুরুত্বপূর্ণ।
  */
-async function estimateArrival(order: TrackOrderRecord): Promise<{ min: number; max: number } | null> {
-  if (!order.shippingMethod) return null;
-  const transit = SHIPPING_TRANSIT_MINUTES[order.shippingMethod];
+async function estimateTimings(order: TrackOrderRecord): Promise<{
+  eta: { min: number; max: number } | null;
+  prepMinutesLeft: number | null;
+}> {
+  const isDelivery = order.orderType === "DELIVERY";
+  const transit = order.shippingMethod ? SHIPPING_TRANSIT_MINUTES[order.shippingMethod] : null;
 
   if (order.status === "OUT_FOR_DELIVERY") {
+    if (!isDelivery || !transit) return { eta: null, prepMinutesLeft: null };
     const elapsed = order.dispatchedAt
       ? Math.floor((Date.now() - order.dispatchedAt.getTime()) / 60_000)
       : 0;
     return {
-      min: Math.max(0, transit.min - elapsed),
-      max: Math.max(0, transit.max - elapsed),
+      eta: { min: Math.max(0, transit.min - elapsed), max: Math.max(0, transit.max - elapsed) },
+      prepMinutesLeft: null,
     };
+  }
+
+  if (!IN_KITCHEN_STATUSES.has(order.status)) {
+    return { eta: null, prepMinutesLeft: null };
   }
 
   const queueLength = await prisma.order.count({
     where: { status: { in: [...KITCHEN_QUEUE_STATUSES] } },
   });
   const prep = calcKitchenPrepMinutes(queueLength);
-  return { min: prep + transit.min, max: prep + transit.max };
+
+  // PLACED-এ রান্না এখনো শুরুই হয়নি, তাই পুরো অনুমানটাই বাকি।
+  const elapsed =
+    order.status === "PREPARING" && order.preparingAt
+      ? Math.floor((Date.now() - order.preparingAt.getTime()) / 60_000)
+      : 0;
+  const prepMinutesLeft = Math.max(0, prep - elapsed);
+
+  return {
+    eta:
+      isDelivery && transit
+        ? { min: prepMinutesLeft + transit.min, max: prepMinutesLeft + transit.max }
+        : null,
+    prepMinutesLeft,
+  };
 }

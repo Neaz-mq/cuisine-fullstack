@@ -127,7 +127,7 @@ export async function PATCH(
   // ফিরিয়ে আনা যেতো।
   const existingOrder = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, status: true },
+    select: { id: true, status: true, dispatchedAt: true },
   });
   if (!existingOrder) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -138,9 +138,27 @@ export async function PATCH(
     return NextResponse.json({ error: invalid }, { status: 409 });
   }
 
+  /**
+   * ⚠️ `dispatchedAt` এখানেও বসে, শুধু assign-rider route-এ নয়।
+   *
+   * আগে কেবল ওই route-টা সময়টা লিখত। কিন্তু dine-in-এর "Mark Ready",
+   * kitchen board আর admin dropdown — সবগুলোই এই সাধারণ path দিয়ে
+   * OUT_FOR_DELIVERY-তে নেয়, আর তখন কলামটা null থেকে যেত। ফল: /track
+   * পাতার timeline-এ "Out for Delivery" ধাপটা সবুজ হতো ঠিকই, কিন্তু
+   * তার নিচে সময়টা থাকত না।
+   *
+   * ⚠️ শুধু তখনই লেখা হয় যখন আগে থেকে নেই — নাহলে rider বসানোর পর কেউ
+   * status আবার সেট করলে আসল বেরোনোর সময়টা মুছে গিয়ে এখনকার সময়
+   * বসত, আর ETA-র হিসাবও (পথে কত সময় পেরিয়েছে) ভুল হয়ে যেত।
+   */
   const updated = await prisma.order.update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      ...(status === "OUT_FOR_DELIVERY" && existingOrder.dispatchedAt === null
+        ? { dispatchedAt: new Date() }
+        : {}),
+    },
   });
 
   return NextResponse.json(updated);

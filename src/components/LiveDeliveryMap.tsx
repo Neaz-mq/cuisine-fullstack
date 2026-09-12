@@ -10,6 +10,7 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+import Image from "next/image";
 import "leaflet/dist/leaflet.css";
 
 /**
@@ -110,6 +111,9 @@ export default function LiveDeliveryMap({
   riderUpdatedAt,
   caption,
   headline,
+  riderName,
+  riderImage,
+  onOpenChat,
 }: {
   origin: LatLng;
   destination: LatLng | null;
@@ -119,6 +123,16 @@ export default function LiveDeliveryMap({
   caption: string;
   /** বড় লেখা — "25-30 min"। */
   headline: string;
+  /**
+   * Figma "Frame 2147229466" — map-এর ডান-নিচের rider pill।
+   *
+   * ⚠️ নাম না থাকলে পুরো pill আর chat বোতাম দুটোই থাকে না। rider বসানোর
+   * আগেই ("Preparing" থেকে সরাসরি OUT_FOR_DELIVERY) একটা ফাঁকা মুখ আর
+   * নিষ্ক্রিয় chat বোতাম দেখানোর চেয়ে কিছু না দেখানোই সৎ।
+   */
+  riderName?: string | null;
+  riderImage?: string | null;
+  onOpenChat?: () => void;
 }) {
   const [fitKey, setFitKey] = useState(0);
   const [relativeTime, setRelativeTime] = useState("");
@@ -205,28 +219,94 @@ export default function LiveDeliveryMap({
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFitKey((key) => key + 1)}
-          aria-label="Re-center map"
-          className="pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-white transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[60px] md:w-[60px]"
-        >
-          {/* vuesax/linear/gps */}
-          <svg
-            className="h-6 w-6 md:h-[30px] md:w-[30px]"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        {/**
+          * Figma "Frame 2147236161": ডান পাশে খাড়া স্তম্ভ, gap 24 —
+          * উপরে gps বোতাম, নিচে chat বোতাম + rider pill।
+          */}
+        <div className="flex shrink-0 flex-col items-end gap-3 md:gap-6">
+          <button
+            type="button"
+            onClick={() => setFitKey((key) => key + 1)}
+            aria-label="Re-center map"
+            className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black text-white transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[60px] md:w-[60px]"
           >
-            <circle cx="12" cy="12" r="7.5" />
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v2.5M2 12h2.5M12 22v-2.5M22 12h-2.5" />
-          </svg>
-        </button>
+            {/* vuesax/linear/gps */}
+            <svg
+              className="h-6 w-6 md:h-[30px] md:w-[30px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="7.5" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v2.5M2 12h2.5M12 22v-2.5M22 12h-2.5" />
+            </svg>
+          </button>
+
+          {riderName && (
+            <div className="flex items-center gap-3 md:gap-5">
+              {onOpenChat && (
+                <button
+                  type="button"
+                  onClick={onOpenChat}
+                  aria-label={`Chat with ${riderName}`}
+                  className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E5EDFF] text-[#0090FF] transition-opacity hover:opacity-80 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[72px] md:w-[72px]"
+                >
+                  {/* vuesax/linear/message */}
+                  <svg
+                    className="h-6 w-6 md:h-9 md:w-9"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M8.5 19h-.5a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6h8a6 6 0 0 1 6 6v5a6 6 0 0 1-6 6h-.5l-3.5 2.5L8.5 19Z" />
+                    <path d="M15.5 10.5h.01M11.99 10.5H12M8.49 10.5h.01" strokeWidth="2.5" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Figma "Frame 2147229466": cream pill, radius 90, বাঁয়ে
+                  48px গোল ছবি, তারপর নাম আর ভূমিকা। */}
+              <div className="flex min-w-0 items-center gap-3 rounded-full bg-[#F9F6F3] py-[6px] pl-[6px] pr-5 md:py-3 md:pl-3 md:pr-[30px]">
+                {riderImage ? (
+                  <Image
+                    src={riderImage}
+                    alt=""
+                    width={48}
+                    height={48}
+                    aria-hidden="true"
+                    className="h-9 w-9 shrink-0 rounded-full object-cover md:h-12 md:w-12"
+                  />
+                ) : (
+                  /* ছবি না থাকলে নামের প্রথম অক্ষর — ভাঙা ছবির আইকনের
+                     চেয়ে ভালো, আর মাপটা একই থাকে বলে pill লাফায় না। */
+                  <span
+                    aria-hidden="true"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF9540] font-sora text-[14px] font-semibold text-white md:h-12 md:w-12 md:text-[16px]"
+                  >
+                    {riderName.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate font-frank-ruhl text-[14px] font-medium leading-[1.2] text-black md:text-[16px]">
+                    {riderName}
+                  </span>
+                  <span className="truncate font-sora text-[11px] leading-[1.2] text-black/70 md:text-[12px]">
+                    Your Delivery Rider
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

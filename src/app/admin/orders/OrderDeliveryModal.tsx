@@ -66,11 +66,22 @@ export default function OrderDeliveryModal({
   onClose,
   orderId,
   order,
+  onDone,
 }: {
   open: boolean;
   onClose: () => void;
   orderId: string;
   order: OrderViewData;
+  /**
+   * rider সফলভাবে বসে যাওয়ার পর ডাকা হয় — modal বন্ধ হওয়ার আগে।
+   *
+   * ⚠️ ঐচ্ছিক, আর না দিলে আচরণ আগের মতোই (`router.refresh()`)। orders
+   * টেবিলে ওটাই যথেষ্ট, কারণ সারিগুলো server component থেকে আসে।
+   * রান্নাঘরের বোর্ড কিন্তু নিজের state-এ তালিকা রাখে আর ১৫ সেকেন্ড
+   * পর পর poll করে — refresh ওই state ছোঁয় না, তাই বোতাম চাপার পরেও
+   * কার্ডটা "Preparing" কলামেই বসে থাকত, আর staff দ্বিতীয়বার চাপতেন।
+   */
+  onDone?: () => void;
 }) {
   if (!open) return null;
   return (
@@ -79,6 +90,7 @@ export default function OrderDeliveryModal({
       onClose={onClose}
       orderId={orderId}
       order={order}
+      onDone={onDone}
     />
   );
 }
@@ -88,11 +100,13 @@ function OrderDeliveryModalContent({
   onClose,
   orderId,
   order,
+  onDone,
 }: {
   open: boolean;
   onClose: () => void;
   orderId: string;
   order: OrderViewData;
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const [riders, setRiders] = useState<Rider[] | null>(null);
@@ -145,6 +159,10 @@ function OrderDeliveryModalContent({
         throw new Error(data.error ?? "Couldn't assign this rider.");
       }
 
+      // ⚠️ দুটোই চলে, একটা নয়: `onDone` caller-এর নিজের তালিকা মেলায়
+      // (রান্নাঘরের বোর্ড), আর `router.refresh()` server component-এর
+      // অংশগুলো — যেমন উপরের গণনার কার্ডগুলো — নতুন করে আনে।
+      onDone?.();
       onClose();
       router.refresh();
       toast.success("Rider assigned — order is on the way.");
