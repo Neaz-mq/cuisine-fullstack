@@ -252,20 +252,32 @@ function CelebrationArt() {
       aria-hidden="true"
     >
       <circle cx="160" cy="171" r="97" fill="#FEF0E3" />
-      <path
-        d="M160 94.5l19.6 8.1 21.2 .1 8.1 19.6 15 15-8.1 19.6-.1 21.2-19.6 8.1-15 15-19.6-8.1-21.2-.1-8.1-19.6-15-15 8.1-19.6 .1-21.2 19.6-8.1 15-15Z"
-        fill="#FFFFFF"
-        stroke="#FA7F12"
-        strokeWidth="9.42"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M137 170.5l15.5 15.5 25.5-25.5"
-        stroke="#FA7F12"
-        strokeWidth="9.42"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+
+      {/**
+        * Figma "Polygon 17" — ৯ কোণার rosette (153.87px বাক্সে
+        * border-radius 37.68)। নিজের 200×200 ছকে আঁকা, তাই নিচে
+        * translate + scale দিয়ে cream গোলটার কেন্দ্রে বসানো হয়েছে;
+        * এতে path-টা দুই ফাইলে (এখানে আর Carts-এর success modal)
+        * হুবহু এক থাকে।
+        */}
+      <g transform="translate(160 171) scale(0.77) translate(-100 -100)">
+        <path
+          d="M173.8 109.6 A38.2 38.2 0 0 1 165.9 134.5 L150.4 154.8 A38.2 38.2 0 0 1 128.3 168.8 L103.4 174.3 A38.2 38.2 0 0 1 77.5 170.9 L54.8 159.1 A38.2 38.2 0 0 1 37.2 139.8 L27.4 116.2 A38.2 38.2 0 0 1 26.3 90.1 L33.9 65.8 A38.2 38.2 0 0 1 49.8 45.0 L71.4 31.3 A38.2 38.2 0 0 1 96.9 25.7 L122.2 29.0 A38.2 38.2 0 0 1 145.4 41.1 L162.7 59.9 A38.2 38.2 0 0 1 172.7 84.0 Z"
+          fill="#FFFFFF"
+          stroke="#FA7F12"
+          strokeWidth="12.2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <path
+          d="M74 101l18 19 34-38"
+          fill="none"
+          stroke="#FA7F12"
+          strokeWidth="12.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
 
       {/* confetti — কমলা #FA7F12, গোলাপি #FF70C6 */}
       <path
