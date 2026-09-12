@@ -234,8 +234,16 @@ export default function Navbar() {
                 >
                   Log In
                 </Link>
+                {/**
+                  * ⚠️ `/register`, `/signup` নয় — পাতাটার ফোল্ডার
+                  * `app/(auth)/register/`। ঠিক নিচের cart-এর মন্তব্যটার
+                  * মতোই একই ভুল: বোতামের লেখা "Sign Up" দেখে path-টাও
+                  * `/signup` ধরে নেওয়া হয়েছিল, আর সেটা সোজা 404-এ
+                  * পাঠাত। AccountMenu আর login পাতা দুটোই আগে থেকেই
+                  * `/register`-এ যেত, তাই ভুলটা কেবল এখানেই ছিল।
+                  */}
                 <Link
-                  href="/signup"
+                  href="/register"
                   className="flex h-[46px] items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                 >
                   Sign Up
