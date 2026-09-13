@@ -1,64 +1,85 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useTransition, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Search } from "lucide-react";
+import FilterMenu from "@/components/admin/FilterMenu";
+import {
+  DEFAULT_RESERVATION_STATUS,
+  RESERVATION_STATUS_OPTIONS,
+  type ReservationStatusFilter,
+} from "@/lib/reservation-filters";
 
-const STATUSES = ["ALL", "PENDING", "CONFIRMED", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"];
-
-export default function ReservationsToolbar() {
+/**
+ * Figma-র খোঁজার ঘর + "All Statuses" pill।
+ *
+ * ⚠️ গড়নটা Orders/Payment toolbar-এর হুবহু — একই debounce, একই
+ * "ডিফল্ট মান URL-এ লেখা হয় না" নিয়ম, একই `page` মুছে ফেলা। তিনটে
+ * পাতার toolbar আলাদা আচরণ করলে staff-কে তিনটে অভ্যাস শিখতে হতো।
+ */
+export default function ReservationsToolbar({ status }: { status: ReservationStatusFilter }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
 
-  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const urlQuery = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(urlQuery);
+  const [syncedQuery, setSyncedQuery] = useState(urlQuery);
 
-  function updateParams(next: Record<string, string>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(next).forEach(([key, value]) => {
-      if (value && value !== "ALL") {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    params.delete("page");
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
-    });
+  // পেছনে/সামনে গেলে URL-ই সত্য — ঘরটা তার সাথে মিলিয়ে নেওয়া হয়।
+  if (urlQuery !== syncedQuery) {
+    setSyncedQuery(urlQuery);
+    setQuery(urlQuery);
   }
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (query !== (searchParams.get("q") ?? "")) {
-        updateParams({ q: query });
-      }
-    }, 400);
-    return () => clearTimeout(timeout);
+    if (query === urlQuery) return;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (query) params.set("q", query);
+      else params.delete("q");
+      params.delete("page");
+      router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
+    }, 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, urlQuery]);
+
+  const handleStatus = (next: ReservationStatusFilter) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === DEFAULT_RESERVATION_STATUS) params.delete("status");
+    else params.set("status", next);
+    params.delete("page");
+    router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
+  };
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-6">
-      <input
-        type="text"
-        placeholder="Search by name or phone..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#2C6252]"
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+      <div className="relative h-[50px] min-w-0 flex-1">
+        <Search
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black min-[480px]:h-5 min-[480px]:w-5"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by customer name or phone..."
+          aria-label="Search reservations by customer name or phone"
+          /* ইনপুট ১৬px — iOS Safari তার কম font-size-এর ঘরে ট্যাপ করলে
+             পুরো পাতা zoom করে দেয়। */
+          className="h-[50px] w-full text-ellipsis rounded-full bg-white pl-10 pr-4 font-sora text-[16px] font-normal leading-none text-black/70 placeholder:text-[12px] placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px] min-[480px]:pl-11 min-[480px]:placeholder:text-[14px] md:placeholder:text-[16px]"
+        />
+      </div>
+
+      <FilterMenu
+        surface="white"
+        value={status}
+        options={RESERVATION_STATUS_OPTIONS}
+        onSelect={handleStatus}
+        ariaLabel="Filter reservations by status"
       />
-      <select
-        defaultValue={searchParams.get("status") ?? "ALL"}
-        onChange={(e) => updateParams({ status: e.target.value })}
-        className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-      >
-        {STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {s === "ALL" ? "All statuses" : s.replace(/_/g, " ")}
-          </option>
-        ))}
-      </select>
-      {isPending && <span className="text-xs text-gray-400 self-center">Updating…</span>}
     </div>
   );
 }

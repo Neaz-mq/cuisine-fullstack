@@ -77,6 +77,7 @@ export default function FilterMenu<T extends string>({
   ariaLabel,
   className = "",
   surface = "cream",
+  triggerClassName,
   menuPositionClassName = "right-0",
 }: {
   value: T;
@@ -100,6 +101,18 @@ export default function FilterMenu<T extends string>({
    */
   surface?: "cream" | "white";
   /**
+   * trigger pill-টার নিজস্ব চেহারা — দিলে `surface`-এর মাপ আর রং
+   * দুটোই এটা দিয়ে বদলে যায়।
+   *
+   * ⚠️ এটা যোগ করা হয়েছে reservation-এর অবস্থার ব্যাজের জন্য: ওটার রং
+   * প্রতিটা সারিতে আলাদা (সবুজ Confirmed, লাল Cancelled), তাই দুটো
+   * স্থির surface-এ কুলোয় না। আগে ওখানে native `<select>` ছিল, আর
+   * browser তার option তালিকায় ব্যাজের সবুজ পটভূমিটাও টেনে আনত —
+   * পুরো তালিকা সবুজের উপর সবুজ লেখা হয়ে যেত। এখন popup-টা বাকি
+   * সিস্টেমের হুবহু একই সাদা তালিকা।
+   */
+  triggerClassName?: string;
+  /**
    * popup কোন কিনারা ধরে ঝুলবে — ডিফল্ট `"right-0"` (button-এর ডান
    * কিনারার সাথে মিলিয়ে বাঁ দিকে ছড়ায়)।
    *
@@ -113,6 +126,19 @@ export default function FilterMenu<T extends string>({
   menuPositionClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * তালিকাটা নিচে খুলবে না উপরে।
+   *
+   * ⚠️ পাতার শেষ দিকের সারিগুলোতে নিচে জায়গা থাকে না, আর তখন তালিকাটা
+   * কার্ডের বাইরে বেরিয়ে পুরো পাতার উচ্চতা বাড়িয়ে দিত — ফলে ডান পাশে
+   * একটা scrollbar এসে পড়ত আর তালিকার নিচের item-গুলো দেখতে scroll
+   * করতে হতো।
+   *
+   * ⚠️ সিদ্ধান্তটা নেওয়া হয় খোলার ক্লিকে (নিচের `toggle`-এ), effect-এ
+   * নয়। খোলার আগে জায়গা মাপলে প্রথম render-এই ঠিক দিকে খোলে, তাই
+   * তালিকাটা এক ঝলকের জন্য নিচে দেখিয়ে তারপর উপরে লাফায় না।
+   */
+  const [dropUp, setDropUp] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,6 +159,28 @@ export default function FilterMenu<T extends string>({
     };
   }, [open]);
 
+  /**
+   * তালিকার আনুমানিক উচ্চতা: padding 32 + প্রতিটা item 34 + ফাঁক 6।
+   *
+   * ⚠️ আসল উচ্চতা মাপা যেত না — তালিকাটা তো এখনো render-ই হয়নি।
+   * অনুমানটা একটু বেশি ধরা হয়েছে, কারণ ভুল হলে সবচেয়ে খারাপ যা হয়
+   * তা হলো জায়গা থাকা সত্ত্বেও উপরে খোলা, যেটা ক্ষতিকর নয়।
+   */
+  const estimatedMenuHeight = 32 + options.length * 40;
+
+  const toggle = () => {
+    if (!open) {
+      const rect = dropdownRef.current?.getBoundingClientRect();
+      if (rect) {
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        // নিচে না আঁটলে, আর উপরে বেশি জায়গা থাকলে — তবেই উপরে।
+        setDropUp(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
+      }
+    }
+    setOpen((prev) => !prev);
+  };
+
   // অজানা মান এলে (যেমন URL-এ হাতে লেখা ?period=xyz) প্রথমটায় পড়ে
   // থাকে, যাতে pill খালি না দেখায়।
   const selected = options.find((option) => option.value === value) ?? options[0];
@@ -149,7 +197,7 @@ export default function FilterMenu<T extends string>({
           দেখাত। */}
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel ? `${ariaLabel}: ${selected.label}` : undefined}
@@ -167,11 +215,15 @@ export default function FilterMenu<T extends string>({
          * বোতাম) ৩৬×padding 12×লেখা 12px। ৫০px রাখলে দুটো pill
          * পাশাপাশি ২৮৮px-এ আঁটত না।
          */
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full font-sora font-normal leading-none text-black transition-colors ${FILTER_FOCUS_RING} ${
-          surface === "white"
-            ? "h-9 bg-white px-3 text-[12px] hover:bg-black/[0.03] min-[480px]:h-[50px] min-[480px]:px-4 min-[480px]:text-[14px] md:text-[16px]"
-            : "h-10 bg-[#F9F6F3] px-3 text-[14px] hover:bg-black/[0.06]"
-        }`}
+        className={
+          triggerClassName
+            ? `flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-sora leading-none transition-opacity hover:opacity-80 ${FILTER_FOCUS_RING} ${triggerClassName}`
+            : `flex items-center gap-2 whitespace-nowrap rounded-full font-sora font-normal leading-none text-black transition-colors ${FILTER_FOCUS_RING} ${
+                surface === "white"
+                  ? "h-9 bg-white px-3 text-[12px] hover:bg-black/[0.03] min-[480px]:h-[50px] min-[480px]:px-4 min-[480px]:text-[14px] md:text-[16px]"
+                  : "h-10 bg-[#F9F6F3] px-3 text-[14px] hover:bg-black/[0.06]"
+              }`
+        }
       >
         {selected.triggerLabel ?? selected.label}
         {/**
@@ -184,7 +236,7 @@ export default function FilterMenu<T extends string>({
          */}
         <ChevronDown
           className={`shrink-0 transition-transform ${
-            surface === "white" ? "h-5 w-5" : "h-4 w-4"
+            surface === "white" && !triggerClassName ? "h-5 w-5" : "h-4 w-4"
           } ${open ? "rotate-180" : ""}`}
           strokeWidth={1.6}
           aria-hidden="true"
@@ -211,7 +263,9 @@ export default function FilterMenu<T extends string>({
          */
         <ul
           role="listbox"
-          className={`absolute ${menuPositionClassName} z-20 mt-2 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]`}
+          className={`absolute ${menuPositionClassName} z-20 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)] ${
+            dropUp ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
