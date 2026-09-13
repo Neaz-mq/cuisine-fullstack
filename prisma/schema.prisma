@@ -215,6 +215,17 @@ model StaffProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// এই staff শেষ কবে notification তালিকাটা "সব পড়া হয়েছে" চিহ্নিত করেছেন।
+  ///
+  /// ⚠️ প্রতিটা notification-এর জন্য আলাদা read-সারি রাখা হয়নি, একটাই
+  /// timestamp। কারণ তালিকাটা কোনো Notification টেবিল থেকে আসে না — সেটা
+  /// অর্ডার, বুকিং, রিভিউ আর কম-স্টকের সারি থেকে চলতে চলতে তৈরি হয়
+  /// (src/lib/admin-notifications.ts)। তাই "অপঠিত" মানে সহজভাবে: এই
+  /// সময়ের পরে ঘটেছে।
+  ///
+  /// null = কখনো চিহ্নিত করেননি, অর্থাৎ সবই অপঠিত।
+  notificationsReadAt DateTime?
 }
 
 model Category {
