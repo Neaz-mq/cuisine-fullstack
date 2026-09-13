@@ -11,21 +11,29 @@ import {
 /**
  * "Payment Summary" আর "Shipping Summary" কার্ডের ডান পাশের সময়-pill।
  *
- * ⚠️ দুটো কার্ডে একটাই parameter (`summary`) — আলাদা করা যেত, কিন্তু
- * Figma-তে দুটো pill সবসময় একই মান দেখায় ("Today"), আর কার্ড দুটো
- * একই প্রশ্নের দুই কাটাকাটি: "এই সময়ে কোন মাধ্যমে কত এল"। আলাদা
- * parameter হলে একটায় "আজ" আর অন্যটায় "এই মাস" রেখে দুটো সংখ্যা
- * পাশাপাশি দেখে ভুল তুলনা করার সুযোগ থাকত।
+ * ⚠️ প্রতিটা কার্ডের নিজের URL parameter (`payRange` / `shipRange`) —
+ * আগে দুটোই একটা `summary` ভাগ করত, তাই একটা pill বদলালে অন্যটাও
+ * বদলে যেত। কিন্তু প্রশ্ন দুটো আলাদা: "আজ কোন মাধ্যমে টাকা এল" আর
+ * "এই মাসে কোন কুরিয়ারে কত গেল" একসাথে দেখতে চাওয়া খুব স্বাভাবিক।
+ *
+ * ⚠️ parameter-এর নামটা prop হিসেবে আসে, component-এর ভেতরে ঠিক হয় না —
+ * তাহলে ভবিষ্যতে তৃতীয় কোনো সারাংশ যোগ করলে এই ফাইলে হাত দিতে হবে না।
  */
-export default function SummaryRangeMenu({ value }: { value: SummaryRange }) {
+export default function SummaryRangeMenu({
+  value,
+  param,
+}: {
+  value: SummaryRange;
+  param: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const handleSelect = (next: SummaryRange) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === DEFAULT_SUMMARY_RANGE) params.delete("summary");
-    else params.set("summary", next);
+    if (next === DEFAULT_SUMMARY_RANGE) params.delete(param);
+    else params.set(param, next);
     // ⚠️ `page` মোছা হয় না — সারাংশের সময়সীমা নিচের তালিকার একটা সারিও
     // বদলায় না, তাই staff-কে পৃষ্ঠা ১-এ ফেরত পাঠানো অকারণ।
     router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });

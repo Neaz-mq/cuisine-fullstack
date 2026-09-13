@@ -614,9 +614,9 @@ model Order {
   // Tracks real payment confirmation for ONLINE orders via Stripe Checkout
   // + webhook — separate from `status` (fulfillment stage) because an order
   // can be PLACED in our DB before Stripe has actually confirmed the charge.
-  // For COD orders (and DINE_IN, which is always COD) this is left at its
-  // default and isn't currently acted on anywhere (no "mark paid on
-  // delivery/at table" admin action exists yet).
+  // For COD orders (and DINE_IN, which is always COD) the cash changes
+  // hands at delivery, so markOrderDelivered() flips this to PAID in the
+  // same transaction that sets DELIVERED — see lib/mark-order-delivered.ts.
   paymentStatus PaymentStatus @default(PENDING)
 
   // ---------------------------------------------------------------------
@@ -1389,6 +1389,33 @@ enum DeliveryFeeMode {
 /// Review-তে জোর করে বসাতে গেলে অর্ডারের প্রতিটা পদের জন্য একটা করে সারি
 /// লিখতে হতো একই লেখা দিয়ে, আর গ্রাহক আগে ওই পদ রিভিউ করে থাকলে unique
 /// constraint ভাঙত।
+/// Figma-র Payment/Shipping Summary কার্ডের "Add Method" বোতাম যা তৈরি করে।
+///
+/// ⚠️ এটা `PaymentMethod` বা `ShippingMethod` enum-এর বিকল্প নয়, **তালিকার
+/// একটা বাড়তি সারি মাত্র**। enum দুটো কেবল migration দিয়ে বাড়ানো যায়, আর
+/// নতুন একটা মাধ্যম সত্যিই কাজ করতে হলে checkout, webhook আর refund —
+/// তিন জায়গাতেই কোড লাগে। তাই এখানে যোগ করা নামটা সারাংশে দেখা যায়
+/// (শূন্য লেনদেন নিয়ে), কিন্তু গ্রাহক checkout-এ সেটা বেছে নিতে পারেন না।
+/// সেই সীমাটা UI-তেও স্পষ্ট করে লেখা থাকে, যাতে কেউ ভুল না বোঝেন।
+model TransactionMethod {
+  id   String                @id @default(cuid())
+  kind TransactionMethodKind
+  name String
+
+  createdAt DateTime @default(now())
+
+  /// একই ধরনে একই নাম দুবার নয় — "Banking" দুবার যোগ করলে সারাংশে দুটো
+  /// একই সারি দেখা যেত। তুলনাটা case-sensitive, তাই API-তে নামটা আগে
+  /// ছাঁটাই করা হয়।
+  @@unique([kind, name])
+  @@index([kind, createdAt])
+}
+
+enum TransactionMethodKind {
+  PAYMENT
+  SHIPPING
+}
+
 model OrderReview {
   id      String @id @default(cuid())
   /// এক অর্ডারে একটাই রিভিউ — দুবার submit করলে দ্বিতীয়টা আগেরটাকেই

@@ -36,7 +36,7 @@ type DeliverResult =
 export async function markOrderDelivered(orderId: string): Promise<DeliverResult> {
   const existingOrder = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { status: true },
+    select: { status: true, paymentMethod: true, paymentStatus: true },
   });
 
   if (!existingOrder) return { ok: false, error: "Order not found" };
@@ -55,6 +55,32 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
     };
   }
 
+  /**
+   * ── নগদ টাকা হাতে আসার মুহূর্ত ──────────────────────────────────────
+   *
+   * COD অর্ডারে টাকাটা ঠিক এখানেই হাতবদল হয়: rider দরজায় টাকা নেন, বা
+   * dine-in-এ গ্রাহক টেবিলে দিয়ে যান। তাই DELIVERED হওয়ার সাথে সাথেই
+   * `paymentStatus` PAID, একই transaction-এ।
+   *
+   * ⚠️ আগে এটা কোথাও হতো না — schema-র মন্তব্যেই স্বীকার করা ছিল "no
+   * mark paid on delivery/at table admin action exists yet"। ফলে নগদে
+   * নেওয়া প্রতিটা টাকা চিরকাল PENDING থেকে যেত, আর /admin/payment-এর
+   * "Total Revenue" কেবল কার্ডের অর্ডার গুনত। অর্ধেক ব্যবসা হিসাবের
+   * বাইরে থাকা মানে সংখ্যাটা ভুল, আর সেই সংখ্যা দেখেই সিদ্ধান্ত হয়।
+   *
+   * ⚠️ শর্ত দুটো, আর দুটোই দরকার:
+   *
+   *   `paymentMethod === "COD"` — ONLINE অর্ডারের টাকা Stripe webhook
+   *   বসায়। ডেলিভারির সময় সেটাকে PAID বলা মানে টাকা আসার প্রমাণ ছাড়াই
+   *   দাবি করা; কার্ড আটকে গেলেও অর্ডারটা "পরিশোধিত" হয়ে যেত।
+   *
+   *   `paymentStatus === "PENDING"` — নাহলে ফেরত দেওয়া অর্ডার (REFUNDED
+   *   বা PARTIALLY_REFUNDED) কোনোভাবে আবার DELIVERED চিহ্নিত হলে
+   *   ফেরতের হিসাবটাই মুছে গিয়ে PAID বসত।
+   */
+  const settlesCash =
+    existingOrder.paymentMethod === "COD" && existingOrder.paymentStatus === "PENDING";
+
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.update({
       where: { id: orderId },
@@ -64,7 +90,11 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
        * আর dine-in বা Uber Eats অর্ডারে কিছুই থাকে না। timeline-টা
        * প্রতিটা অর্ডারে দেখাতে হয়, তাই Order-এর নিজের কলাম।
        */
-      data: { status: "DELIVERED", deliveredAt: new Date() },
+      data: {
+        status: "DELIVERED",
+        deliveredAt: new Date(),
+        ...(settlesCash ? { paymentStatus: "PAID" as const } : {}),
+      },
       select: { id: true, status: true },
     });
 

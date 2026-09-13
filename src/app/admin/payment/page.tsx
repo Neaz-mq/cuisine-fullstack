@@ -19,6 +19,7 @@ import ExportReportButton from "@/components/admin/dashboard/ExportReportButton"
 import Pagination from "@/app/admin/orders/Pagination";
 import PaymentsToolbar from "./PaymentsToolbar";
 import SummaryRangeMenu from "./SummaryRangeMenu";
+import AddMethodModal from "./AddMethodModal";
 
 export const metadata = { title: "Payment" };
 
@@ -54,7 +55,13 @@ const PAGE_SIZE = 5;
 export default async function AdminPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; page?: string; summary?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    page?: string;
+    payRange?: string;
+    shipRange?: string;
+  }>;
 }) {
   // layout.tsx-ও `requireStaff("refunds")` ডাকে; এখানে আবার ডাকা হয়
   // session-টার জন্য (নাম দেখাতে), আর সেটাই একমাত্র কারণ।
@@ -65,8 +72,17 @@ export default async function AdminPaymentPage({
   const status: PaymentStatusFilter = isPaymentStatus(params.status)
     ? params.status
     : DEFAULT_PAYMENT_STATUS;
-  const summary: SummaryRange = isSummaryRange(params.summary)
-    ? params.summary
+  /**
+   * ⚠️ দুটো সারাংশের দুটো আলাদা ছাঁকনি।
+   *
+   * আগে দুটোই একটা `summary` parameter ভাগ করত, তাই একটা pill বদলালে
+   * অন্যটাও বদলে যেত — যেটা staff-এর কাছে একটা bug-এর মতোই লাগে।
+   */
+  const payRange: SummaryRange = isSummaryRange(params.payRange)
+    ? params.payRange
+    : DEFAULT_SUMMARY_RANGE;
+  const shipRange: SummaryRange = isSummaryRange(params.shipRange)
+    ? params.shipRange
     : DEFAULT_SUMMARY_RANGE;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const now = new Date();
@@ -92,11 +108,13 @@ export default async function AdminPaymentPage({
   const prevWeekStart = new Date(now);
   prevWeekStart.setDate(prevWeekStart.getDate() - 14);
 
-  const summaryStart = summaryRangeStart(summary);
-  const summaryWhere: Prisma.OrderWhereInput = {
-    ...SETTLED,
-    ...(summaryStart ? { createdAt: { gte: summaryStart } } : {}),
+  const settledSince = (range: SummaryRange): Prisma.OrderWhereInput => {
+    const start = summaryRangeStart(range);
+    return { ...SETTLED, ...(start ? { createdAt: { gte: start } } : {}) };
   };
+
+  const payWhere = settledSince(payRange);
+  const shipWhere = settledSince(shipRange);
 
   const [
     settledTotals,
@@ -108,6 +126,7 @@ export default async function AdminPaymentPage({
     byPaymentMethod,
     byShippingMethod,
     dineInSummary,
+    customMethods,
     transactions,
     totalCount,
     latestOrder,
@@ -128,22 +147,28 @@ export default async function AdminPaymentPage({
     }),
     prisma.order.groupBy({
       by: ["paymentMethod"],
-      where: summaryWhere,
+      where: payWhere,
       _count: { _all: true },
       _sum: { grandTotal: true, refundedAmount: true },
     }),
     prisma.order.groupBy({
       by: ["shippingMethod"],
-      where: { ...summaryWhere, orderType: "DELIVERY" },
+      where: { ...shipWhere, orderType: "DELIVERY" },
       _count: { _all: true },
       _sum: { grandTotal: true, refundedAmount: true },
     }),
     // ⚠️ dine-in আলাদা করে গোনা হয়, কারণ ওগুলোর `shippingMethod` null —
     // উপরের groupBy-তে রাখলে তালিকায় একটা "—" নামের সারি দেখা যেত।
     prisma.order.aggregate({
-      where: { ...summaryWhere, orderType: "DINE_IN" },
+      where: { ...shipWhere, orderType: "DINE_IN" },
       _count: { _all: true },
       _sum: { grandTotal: true, refundedAmount: true },
+    }),
+    // "Add Method" দিয়ে হাতে যোগ করা মাধ্যমগুলো (TransactionMethod
+    // দ্রষ্টব্য) — কোনো অর্ডারে এখনো ব্যবহার হয়নি, তাই groupBy-তে আসে না।
+    prisma.transactionMethod.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, kind: true, name: true },
     }),
     prisma.order.findMany({
       where,
@@ -199,6 +224,42 @@ export default async function AdminPaymentPage({
       revenue: net(row._sum),
     }))
     .sort((a, b) => b.revenue.comparedTo(a.revenue));
+
+  /**
+   * "Add Method" দিয়ে যোগ করা নামগুলো তালিকার শেষে।
+   *
+   * ⚠️ এগুলোর লেনদেন সবসময় ০, আর সেটা লুকানো হয় না — `custom: true`
+   * দিয়ে সারিতে একটা ছোট টীকা বসে। কারণ এই নামগুলো checkout-এ যায় না
+   * (PaymentMethod/ShippingMethod enum দুটো কেবল migration-এ বাড়ে), তাই
+   * "০ লেনদেন" দেখে staff যেন ভাবেন না যে কেউ ব্যবহার করছে না — বরং
+   * জানেন যে এখনো ব্যবহারই করা যায় না।
+   */
+  const zero = new Prisma.Decimal(0);
+
+  /**
+   * ⚠️ আসল সারির সাথে নাম মিলে গেলে custom সারিটা দেখানো হয় না।
+   *
+   * নতুন নামগুলো API-তেই আটকানো হয় (BUILT_IN তালিকা), কিন্তু সেই
+   * পাহারা বসার আগে যোগ করা সারি database-এ থেকে যেতে পারে — আর তখন
+   * "COD" দুবার দেখা যেত: একটায় আসল সংখ্যা, আরেকটায় শূন্য। পুরনো
+   * সারিটা মুছতে বলার বদলে চুপচাপ লুকিয়ে দেওয়াই ভালো।
+   */
+  const customRows = (
+    kind: "PAYMENT" | "SHIPPING",
+    existing: { label: string }[]
+  ) => {
+    const taken = new Set(existing.map((row) => row.label.trim().toLowerCase()));
+    return customMethods
+      .filter((method) => method.kind === kind)
+      .filter((method) => !taken.has(method.name.trim().toLowerCase()))
+      .map((method) => ({
+        key: method.id,
+        label: method.name,
+        transactions: 0,
+        revenue: zero,
+        custom: true,
+      }));
+  };
 
   const shippingRows = [
     ...byShippingMethod.map((row) => ({
@@ -284,10 +345,26 @@ export default async function AdminPaymentPage({
       </section>
 
       {/* --- Payment Summary --- */}
-      <SummarySection title="Payment Summary" range={summary} rows={paymentRows} money={money} />
+      <SummarySection
+        title="Payment Summary"
+        rowLabel="Payment Method"
+        range={payRange}
+        rangeParam="payRange"
+        kind="PAYMENT"
+        rows={[...paymentRows, ...customRows("PAYMENT", paymentRows)]}
+        money={money}
+      />
 
       {/* --- Shipping Summary --- */}
-      <SummarySection title="Shipping Summary" range={summary} rows={shippingRows} money={money} />
+      <SummarySection
+        title="Shipping Summary"
+        rowLabel="Shipping Method"
+        range={shipRange}
+        rangeParam="shipRange"
+        kind="SHIPPING"
+        rows={[...shippingRows, ...customRows("SHIPPING", shippingRows)]}
+        money={money}
+      />
 
       {/* --- Recent Transactions --- */}
       <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
@@ -473,13 +550,26 @@ function StatCard({
 /** "Payment Summary" আর "Shipping Summary" — একই গড়ন, আলাদা সারি। */
 function SummarySection({
   title,
+  rowLabel,
   range,
+  rangeParam,
+  kind,
   rows,
   money,
 }: {
   title: string;
+  /** প্রতিটা সারির প্রথম ঘরের লেবেল — "Payment Method" / "Shipping Method"। */
+  rowLabel: string;
   range: SummaryRange;
-  rows: { key: string; label: string; transactions: number; revenue: Prisma.Decimal }[];
+  rangeParam: string;
+  kind: "PAYMENT" | "SHIPPING";
+  rows: {
+    key: string;
+    label: string;
+    transactions: number;
+    revenue: Prisma.Decimal;
+    custom?: boolean;
+  }[];
   money: (value: Prisma.Decimal) => string;
 }) {
   return (
@@ -488,7 +578,11 @@ function SummarySection({
         <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
           {title}
         </h2>
-        <SummaryRangeMenu value={range} />
+        {/* Figma: gradient "Add Method" pill, তারপর সময়ের pill। */}
+        <div className="flex flex-wrap items-center gap-2 min-[480px]:gap-3">
+          <AddMethodModal kind={kind} label={kind === "PAYMENT" ? "Payment" : "Shipping"} />
+          <SummaryRangeMenu value={range} param={rangeParam} />
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -502,7 +596,7 @@ function SummarySection({
               key={row.key}
               className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[16px] bg-[#F9F6F3] p-4 md:grid-cols-3"
             >
-              <Field label={title === "Payment Summary" ? "Payment Method" : "Shipping Method"}>
+              <Field label={rowLabel}>
                 <span className="truncate font-sora text-[13px] font-medium leading-none text-black">
                   {row.label}
                 </span>
@@ -510,6 +604,9 @@ function SummarySection({
               <Field label="Transactions">
                 <span className="truncate font-sora text-[13px] leading-none text-black/70">
                   {row.transactions}
+                  {row.custom && (
+                    <span className="text-black/40"> · not at checkout yet</span>
+                  )}
                 </span>
               </Field>
               <Field label="Revenue">
