@@ -78,9 +78,27 @@ export async function getTransactionMethods(): Promise<{
   payment: TransactionMethod[];
   shipping: TransactionMethod[];
 }> {
-  const overrides = await prisma.transactionMethod.findMany({
-    select: { kind: true, code: true, label: true, enabled: true },
-  });
+  /**
+   * ⚠️ database-এ পৌঁছনো না গেলে পাতা ভাঙে না, ডিফল্টেই চলে।
+   *
+   * এই তালিকাটা checkout-এর একটা সহায়ক সেটিং, মূল তথ্য নয় — অর্ডারের
+   * দাম বা পদ নয়। DB এক মুহূর্তের জন্য নাগালের বাইরে গেলে গ্রাহককে
+   * একটা error পাতা দেখানোর চেয়ে কোডের ডিফল্ট নাম আর "সব চালু" ধরে
+   * নেওয়াই ভালো — তাতে অন্তত অর্ডারটা দেওয়া যায়।
+   *
+   * ⚠️ তবে server-এর পাহারা (isPaymentMethodEnabled) এতে শিথিল হয় না:
+   * ওটাও একই ডিফল্টে ফিরবে, অর্থাৎ বন্ধ করা মাধ্যম আবার চালু দেখাবে।
+   * সেটা মেনে নেওয়া হয়েছে ইচ্ছাকৃতভাবে — DB ছাড়া অর্ডার তৈরিই হয় না,
+   * তাই এই অবস্থায় ভুল মাধ্যমে অর্ডার ঢোকার সুযোগও নেই।
+   */
+  let overrides: { kind: string; code: string; label: string; enabled: boolean }[] = [];
+  try {
+    overrides = await prisma.transactionMethod.findMany({
+      select: { kind: true, code: true, label: true, enabled: true },
+    });
+  } catch (error) {
+    console.error("Failed to load transaction method settings; using defaults", error);
+  }
 
   const find = (kind: "PAYMENT" | "SHIPPING", code: string) =>
     overrides.find((row) => row.kind === kind && row.code === code);
