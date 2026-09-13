@@ -1389,26 +1389,39 @@ enum DeliveryFeeMode {
 /// Review-তে জোর করে বসাতে গেলে অর্ডারের প্রতিটা পদের জন্য একটা করে সারি
 /// লিখতে হতো একই লেখা দিয়ে, আর গ্রাহক আগে ওই পদ রিভিউ করে থাকলে unique
 /// constraint ভাঙত।
-/// Figma-র Payment/Shipping Summary কার্ডের "Add Method" বোতাম যা তৈরি করে।
+/// Checkout-এ কোন মাধ্যমগুলো দেখা যাবে আর কী নামে — তার একমাত্র জায়গা।
 ///
-/// ⚠️ এটা `PaymentMethod` বা `ShippingMethod` enum-এর বিকল্প নয়, **তালিকার
-/// একটা বাড়তি সারি মাত্র**। enum দুটো কেবল migration দিয়ে বাড়ানো যায়, আর
-/// নতুন একটা মাধ্যম সত্যিই কাজ করতে হলে checkout, webhook আর refund —
-/// তিন জায়গাতেই কোড লাগে। তাই এখানে যোগ করা নামটা সারাংশে দেখা যায়
-/// (শূন্য লেনদেন নিয়ে), কিন্তু গ্রাহক checkout-এ সেটা বেছে নিতে পারেন না।
-/// সেই সীমাটা UI-তেও স্পষ্ট করে লেখা থাকে, যাতে কেউ ভুল না বোঝেন।
+/// ⚠️ এই টেবিল নতুন মাধ্যম **তৈরি** করে না, বরং কোডে আগে থেকেই থাকা
+/// মাধ্যমগুলোর উপর admin-এর সিদ্ধান্ত জমা রাখে। কারণ একটা payment method
+/// মানে চারটে জিনিস একসাথে: checkout-এ একটা অপশন, টাকা নেওয়ার
+/// integration, টাকা এসেছে জানার পথ (webhook বা ডেলিভারি), আর ফেরতের পথ।
+/// database-এ একটা নাম লিখলে এর একটাও তৈরি হয় না — তাই Shopify বা
+/// WooCommerce-ও "নাম লিখে নতুন gateway" দেয় না, দেয় তালিকা + toggle।
+///
+/// কোন `code`-গুলো থাকতে পারে তা লেখা আছে src/lib/transaction-methods.ts-এ;
+/// এখানে সারি না থাকলে সেখানকার ডিফল্টই চলে।
 model TransactionMethod {
   id   String                @id @default(cuid())
   kind TransactionMethodKind
-  name String
 
-  createdAt DateTime @default(now())
+  /// কোডে থাকা মাধ্যমের পরিচয় — "ONLINE", "COD", "UBER_EATS" ইত্যাদি।
+  /// ⚠️ enum নয়, String: PaymentMethod/ShippingMethod enum দুটো database-এর
+  /// **অর্ডারে কী বসেছিল** তা বলে, আর এটা বলে **কী দেখানো হবে**। দুটো এক
+  /// করলে পুরনো অর্ডারের ইতিহাস আর আজকের সেটিং একসাথে জড়িয়ে যেত।
+  code String
 
-  /// একই ধরনে একই নাম দুবার নয় — "Banking" দুবার যোগ করলে সারাংশে দুটো
-  /// একই সারি দেখা যেত। তুলনাটা case-sensitive, তাই API-তে নামটা আগে
-  /// ছাঁটাই করা হয়।
-  @@unique([kind, name])
-  @@index([kind, createdAt])
+  /// Checkout আর রিপোর্টে যে নামটা দেখা যায়। admin বদলাতে পারেন
+  /// ("Cash on Delivery" → "ক্যাশ অন ডেলিভারি")।
+  label String
+
+  /// ⚠️ কেবল PAYMENT-এ কার্যকর। বন্ধ করলে অপশনটা checkout থেকে উধাও হয়,
+  /// আর server-ও সেই মাধ্যমে অর্ডার নেয় না — শুধু UI লুকানো নয়।
+  /// SHIPPING-এ এখনো কেবল নাম বদলানো যায়, তাই ওখানে মানটা সবসময় true।
+  enabled Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, code])
 }
 
 enum TransactionMethodKind {

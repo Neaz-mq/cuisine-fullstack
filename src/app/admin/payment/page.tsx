@@ -7,8 +7,10 @@ import { formatOrderId } from "@/lib/format-order-id";
 import { formatAmount } from "@/lib/currency-format";
 import { orderSearchFilter } from "@/lib/order-search";
 import {
+  DEFAULT_OVERVIEW_RANGE,
   DEFAULT_PAYMENT_STATUS,
   DEFAULT_SUMMARY_RANGE,
+  overviewWindows,
   isPaymentStatus,
   isSummaryRange,
   summaryRangeStart,
@@ -19,7 +21,13 @@ import ExportReportButton from "@/components/admin/dashboard/ExportReportButton"
 import Pagination from "@/app/admin/orders/Pagination";
 import PaymentsToolbar from "./PaymentsToolbar";
 import SummaryRangeMenu from "./SummaryRangeMenu";
-import AddMethodModal from "./AddMethodModal";
+import OverviewRangeMenu from "./OverviewRangeMenu";
+import MethodManagerModal from "./MethodManagerModal";
+import OrderItemsModal from "./OrderItemsModal";
+import {
+  getTransactionMethods,
+  type TransactionMethod as TransactionMethodConfig,
+} from "@/lib/transaction-methods";
 
 export const metadata = { title: "Payment" };
 
@@ -59,6 +67,7 @@ export default async function AdminPaymentPage({
     q?: string;
     status?: string;
     page?: string;
+    overview?: string;
     payRange?: string;
     shipRange?: string;
   }>;
@@ -78,6 +87,9 @@ export default async function AdminPaymentPage({
    * আগে দুটোই একটা `summary` parameter ভাগ করত, তাই একটা pill বদলালে
    * অন্যটাও বদলে যেত — যেটা staff-এর কাছে একটা bug-এর মতোই লাগে।
    */
+  const overviewRange: SummaryRange = isSummaryRange(params.overview)
+    ? params.overview
+    : DEFAULT_OVERVIEW_RANGE;
   const payRange: SummaryRange = isSummaryRange(params.payRange)
     ? params.payRange
     : DEFAULT_SUMMARY_RANGE;
@@ -102,11 +114,21 @@ export default async function AdminPaymentPage({
     paymentStatus: { in: ["PAID", "PARTIALLY_REFUNDED"] },
   };
 
-  // Overview-র তুলনার জন্য দুটো সাত দিনের জানালা: এই সপ্তাহ, তার আগেরটা।
-  const weekStart = new Date(now);
-  weekStart.setDate(weekStart.getDate() - 7);
-  const prevWeekStart = new Date(now);
-  prevWeekStart.setDate(prevWeekStart.getDate() - 14);
+  const windows = overviewWindows(overviewRange);
+
+  const overviewWhere: Prisma.OrderWhereInput = {
+    ...SETTLED,
+    ...(windows.totalStart ? { createdAt: { gte: windows.totalStart } } : {}),
+  };
+  // growth ব্যাজের দুটো জানালা — বিস্তারিত lib/payment-filters.ts-এ।
+  const trendWhere: Prisma.OrderWhereInput = {
+    ...SETTLED,
+    createdAt: { gte: windows.trendStart },
+  };
+  const previousWhere: Prisma.OrderWhereInput = {
+    ...SETTLED,
+    createdAt: { gte: windows.trendPrevious, lt: windows.trendStart },
+  };
 
   const settledSince = (range: SummaryRange): Prisma.OrderWhereInput => {
     const start = summaryRangeStart(range);
@@ -119,32 +141,33 @@ export default async function AdminPaymentPage({
   const [
     settledTotals,
     settledCount,
-    thisWeek,
-    prevWeek,
-    thisWeekCount,
-    prevWeekCount,
+    trendTotals,
+    previousTotals,
+    trendCount,
+    previousCount,
     byPaymentMethod,
     byShippingMethod,
     dineInSummary,
-    customMethods,
+    methodSettings,
     transactions,
     totalCount,
     latestOrder,
   ] = await Promise.all([
-    prisma.order.aggregate({ where: SETTLED, _sum: { grandTotal: true, refundedAmount: true } }),
-    prisma.order.count({ where: SETTLED }),
     prisma.order.aggregate({
-      where: { ...SETTLED, createdAt: { gte: weekStart } },
+      where: overviewWhere,
+      _sum: { grandTotal: true, refundedAmount: true },
+    }),
+    prisma.order.count({ where: overviewWhere }),
+    prisma.order.aggregate({
+      where: trendWhere,
       _sum: { grandTotal: true, refundedAmount: true },
     }),
     prisma.order.aggregate({
-      where: { ...SETTLED, createdAt: { gte: prevWeekStart, lt: weekStart } },
+      where: previousWhere,
       _sum: { grandTotal: true, refundedAmount: true },
     }),
-    prisma.order.count({ where: { ...SETTLED, createdAt: { gte: weekStart } } }),
-    prisma.order.count({
-      where: { ...SETTLED, createdAt: { gte: prevWeekStart, lt: weekStart } },
-    }),
+    prisma.order.count({ where: trendWhere }),
+    prisma.order.count({ where: previousWhere }),
     prisma.order.groupBy({
       by: ["paymentMethod"],
       where: payWhere,
@@ -164,12 +187,9 @@ export default async function AdminPaymentPage({
       _count: { _all: true },
       _sum: { grandTotal: true, refundedAmount: true },
     }),
-    // "Add Method" দিয়ে হাতে যোগ করা মাধ্যমগুলো (TransactionMethod
-    // দ্রষ্টব্য) — কোনো অর্ডারে এখনো ব্যবহার হয়নি, তাই groupBy-তে আসে না।
-    prisma.transactionMethod.findMany({
-      orderBy: { createdAt: "asc" },
-      select: { id: true, kind: true, name: true },
-    }),
+    // admin-এর দেওয়া নাম আর চালু/বন্ধ (lib/transaction-methods.ts) —
+    // সারাংশের লেবেলগুলো এখান থেকেই আসে, হাতে লেখা string থেকে নয়।
+    getTransactionMethods(),
     prisma.order.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -190,6 +210,17 @@ export default async function AdminPaymentPage({
         currencyMinorUnits: true,
         user: { select: { name: true } },
         table: { select: { label: true } },
+        // "View" modal-এর জন্য — Figma-র "Order Items"। তালিকার প্রতিটা
+        // সারির সাথেই আসে, কারণ modal খোলার পর আলাদা request পাঠালে
+        // staff-কে প্রতিবার এক মুহূর্ত অপেক্ষা করতে হতো।
+        items: {
+          select: {
+            id: true,
+            quantity: true,
+            price: true,
+            menuItem: { select: { title: true } },
+          },
+        },
       },
     }),
     prisma.order.count({ where }),
@@ -210,16 +241,24 @@ export default async function AdminPaymentPage({
   const money = (value: Prisma.Decimal) => formatAmount(value.toFixed(minorUnits), currency);
 
   const totalRevenue = net(settledTotals._sum);
-  const revenueTrend = percentChange(net(thisWeek._sum), net(prevWeek._sum));
+  const revenueTrend = percentChange(net(trendTotals._sum), net(previousTotals._sum));
   const paymentsTrend = percentChange(
-    new Prisma.Decimal(thisWeekCount),
-    new Prisma.Decimal(prevWeekCount)
+    new Prisma.Decimal(trendCount),
+    new Prisma.Decimal(previousCount)
   );
+
+  /**
+   * ⚠️ লেবেলগুলো admin-এর সেটিং থেকে, হাতে লেখা নয়। কেউ "Cash on
+   * Delivery"-র নাম বদলে "ক্যাশ অন ডেলিভারি" করলে checkout, রিপোর্ট আর
+   * এই সারাংশ — তিন জায়গাতেই একই নাম দেখা উচিত।
+   */
+  const labelFor = (kind: "payment" | "shipping", code: string) =>
+    methodSettings[kind].find((method) => method.code === code)?.label;
 
   const paymentRows = byPaymentMethod
     .map((row) => ({
       key: row.paymentMethod,
-      label: row.paymentMethod === "COD" ? "Cash on Delivery" : "Online",
+      label: labelFor("payment", row.paymentMethod) ?? row.paymentMethod,
       transactions: row._count._all,
       revenue: net(row._sum),
     }))
@@ -234,37 +273,12 @@ export default async function AdminPaymentPage({
    * "০ লেনদেন" দেখে staff যেন ভাবেন না যে কেউ ব্যবহার করছে না — বরং
    * জানেন যে এখনো ব্যবহারই করা যায় না।
    */
-  const zero = new Prisma.Decimal(0);
-
-  /**
-   * ⚠️ আসল সারির সাথে নাম মিলে গেলে custom সারিটা দেখানো হয় না।
-   *
-   * নতুন নামগুলো API-তেই আটকানো হয় (BUILT_IN তালিকা), কিন্তু সেই
-   * পাহারা বসার আগে যোগ করা সারি database-এ থেকে যেতে পারে — আর তখন
-   * "COD" দুবার দেখা যেত: একটায় আসল সংখ্যা, আরেকটায় শূন্য। পুরনো
-   * সারিটা মুছতে বলার বদলে চুপচাপ লুকিয়ে দেওয়াই ভালো।
-   */
-  const customRows = (
-    kind: "PAYMENT" | "SHIPPING",
-    existing: { label: string }[]
-  ) => {
-    const taken = new Set(existing.map((row) => row.label.trim().toLowerCase()));
-    return customMethods
-      .filter((method) => method.kind === kind)
-      .filter((method) => !taken.has(method.name.trim().toLowerCase()))
-      .map((method) => ({
-        key: method.id,
-        label: method.name,
-        transactions: 0,
-        revenue: zero,
-        custom: true,
-      }));
-  };
-
   const shippingRows = [
     ...byShippingMethod.map((row) => ({
       key: row.shippingMethod ?? "UNKNOWN",
-      label: shippingLabel(row.shippingMethod),
+      label:
+        (row.shippingMethod ? labelFor("shipping", row.shippingMethod) : null) ??
+        shippingLabel(row.shippingMethod),
       transactions: row._count._all,
       revenue: net(row._sum),
     })),
@@ -319,16 +333,22 @@ export default async function AdminPaymentPage({
       <PaymentsToolbar status={status} />
 
       {/* --- Overview --- */}
-      <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
-        <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-          Overview
-        </h2>
+      <section className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
+        {/* Figma "Frame 2147236238": শিরোনাম বাঁয়ে, সময়ের pill ডানে —
+            বাকি দুটো সারাংশ কার্ডের মতোই। */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
+            Overview
+          </h2>
+          <OverviewRangeMenu value={overviewRange} />
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <StatCard
             label="Total Revenue"
             value={money(totalRevenue)}
-            hint="Revenue from settled payments"
+            hint={windows.totalStart ? "Revenue in this period" : "Revenue from settled payments"}
+            trendHint={windows.hint}
             trend={revenueTrend}
             icon={<Coins className="h-[18px] w-[18px]" strokeWidth={1.5} aria-hidden="true" />}
           />
@@ -336,6 +356,7 @@ export default async function AdminPaymentPage({
             label="Successful Payments"
             value={String(settledCount)}
             hint="Completed transactions"
+            trendHint={windows.hint}
             trend={paymentsTrend}
             icon={
               <CircleCheck className="h-[18px] w-[18px]" strokeWidth={1.5} aria-hidden="true" />
@@ -351,7 +372,8 @@ export default async function AdminPaymentPage({
         range={payRange}
         rangeParam="payRange"
         kind="PAYMENT"
-        rows={[...paymentRows, ...customRows("PAYMENT", paymentRows)]}
+        methods={methodSettings.payment}
+        rows={paymentRows}
         money={money}
       />
 
@@ -362,7 +384,8 @@ export default async function AdminPaymentPage({
         range={shipRange}
         rangeParam="shipRange"
         kind="SHIPPING"
-        rows={[...shippingRows, ...customRows("SHIPPING", shippingRows)]}
+        methods={methodSettings.shipping}
+        rows={shippingRows}
         money={money}
       />
 
@@ -386,37 +409,48 @@ export default async function AdminPaymentPage({
             {transactions.map((order) => (
               <div
                 key={order.id}
-                className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-6"
+                /**
+                 * ⚠️ সব ঘর — Status আর View সহ — একটাই grid-এ।
+                 *
+                 * আগে ছয়টা ঘর একটা grid-এ ছিল আর Status/View আলাদা flex
+                 * ব্লকে। ওই ব্লকটার চওড়াই তার ভেতরের ব্যাজের উপর নির্ভর
+                 * করত ("Pending" লেখাটা "Paid"-এর চেয়ে চওড়া), তাই প্রতি
+                 * সারিতে grid-এর ভাগে পড়া জায়গা একটু করে বদলাত — ফলে
+                 * কলামগুলো সারি ধরে সামান্য এদিক-ওদিক সরে যেত, আর
+                 * "Our Own Delivery" কোথাও কেটে "Our Own Deliv…" হতো।
+                 *
+                 * শেষ দুটো কলাম স্থির px-এ, তাই ব্যাজ যত চওড়াই হোক
+                 * বাকি ছয়টা কলামের মাপ প্রতিটা সারিতে হুবহু এক।
+                 */
+                className="rounded-[16px] bg-[#F9F6F3] p-4 xl:min-h-[94px]"
               >
-                <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 min-[640px]:grid-cols-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)] xl:items-center xl:gap-x-6">
-                  <Field label="Customer">
-                    <span className="truncate font-sora text-[13px] leading-none text-black">
+                <div className="grid grid-cols-2 items-center gap-x-4 gap-y-3 min-[640px]:grid-cols-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_112px_84px] xl:gap-x-6">
+                  <Field label="Customer" size="sm">
+                    <span className={VALUE_SM}>
                       {order.user?.name ?? `${order.firstName} ${order.lastName}`.trim()}
                     </span>
                   </Field>
-                  <Field label="Order ID">
-                    <span className="truncate font-sora text-[13px] font-medium leading-none text-black">
-                      {formatOrderId(order.id)}
-                    </span>
+                  <Field label="Order ID" size="sm">
+                    <span className={VALUE_SM}>{formatOrderId(order.id)}</span>
                   </Field>
-                  <Field label="Delivery">
-                    <span className="truncate font-sora text-[13px] leading-none text-black/70">
+                  <Field label="Delivery" size="sm">
+                    <span className={VALUE_SM}>
                       {order.orderType === "DINE_IN"
                         ? `Table - ${order.table?.label ?? "—"}`
-                        : shippingLabel(order.shippingMethod)}
+                        : ((order.shippingMethod
+                            ? labelFor("shipping", order.shippingMethod)
+                            : null) ?? shippingLabel(order.shippingMethod))}
                     </span>
                   </Field>
-                  <Field label="Payment Method">
-                    <span className="truncate font-sora text-[13px] leading-none text-black/70">
-                      {order.paymentMethod === "COD"
-                        ? order.orderType === "DINE_IN"
-                          ? "Pay at Table"
-                          : "Cash on Delivery"
-                        : "Online"}
+                  <Field label="Payment Method" size="sm">
+                    {/* ⚠️ নামটা admin-এর সেটিং থেকে — "Manage Methods"-এ
+                        বদলালে এখানেও সেই নামই দেখা উচিত। */}
+                    <span className={VALUE_SM}>
+                      {labelFor("payment", order.paymentMethod) ?? order.paymentMethod}
                     </span>
                   </Field>
-                  <Field label="Order Placed">
-                    <span className="truncate font-sora text-[13px] leading-none text-black/70">
+                  <Field label="Order Placed" size="sm">
+                    <span className={VALUE_SM}>
                       {order.createdAt.toLocaleDateString("en-US", {
                         day: "numeric",
                         month: "short",
@@ -428,8 +462,8 @@ export default async function AdminPaymentPage({
                       })}
                     </span>
                   </Field>
-                  <Field label="Amount">
-                    <span className="truncate font-frank-ruhl text-[15px] font-semibold leading-none text-black">
+                  <Field label="Amount" size="sm">
+                    <span className={VALUE_SM}>
                       {formatAmount(
                         order.grandTotal
                           .minus(order.refundedAmount)
@@ -438,12 +472,58 @@ export default async function AdminPaymentPage({
                       )}
                     </span>
                   </Field>
-                </div>
 
-                <div className="shrink-0 xl:w-[150px]">
-                  <Field label="Status">
+                  {/**
+                    * ⚠️ ছোট পর্দায় ঘরটা দুই কলাম জুড়ে, আর ব্যাজটা পুরো
+                    * চওড়া — ঠিক নিচের "View" বোতামের মতো। ৩২০px-এ অর্ধেক
+                    * কলামে একটা ছোট ব্যাজ আর তার নিচে পুরো চওড়া একটা
+                    * বোতাম দেখতে অগোছালো লাগত।
+                    *
+                    * ⚠️ `self-end` — বড় পর্দায় Status ঘরটা সবচেয়ে উঁচু
+                    * (লেবেল + ৩৪px ব্যাজ), তাই পাশের বোতামটাও একই নিচের
+                    * রেখায় বসে। grid-এর `items-center` থাকলে বোতামটা
+                    * মাঝখানে ঝুলে থাকত।
+                    */}
+                  <Field label="Status" size="sm" className="col-span-2 min-[640px]:col-span-1">
                     <PaymentBadge status={order.paymentStatus} />
                   </Field>
+
+                  {/* ⚠️ বোতামটা লেবেলহীন একটা ঘর — উপরে ফাঁকা জায়গাটা
+                      পাশের "Status" লেবেলের সমান, তাই বোতামটা অন্য
+                      সারির মানগুলোর সাথে এক রেখায় বসে। */}
+                  <div className="col-span-2 flex self-end min-[640px]:col-span-1">
+                  <OrderItemsModal
+                    reference={formatOrderId(order.id)}
+                    items={order.items.map((item) => ({
+                      id: item.id,
+                      title: item.menuItem.title,
+                      quantity: item.quantity,
+                      // ⚠️ লাইন-মোট (একক × পরিমাণ), একক দাম নয় — Figma-তে
+                      // "Chocolate Fudge Cake × 1 … $95.00" মানে ওই লাইনের
+                      // মোট। গুণটা server-এ, Decimal-এ, তাই ভগ্নাংশে
+                      // গোলমাল হয় না।
+                      lineTotal: formatAmount(
+                        item.price.times(item.quantity).toFixed(order.currencyMinorUnits),
+                        order.currency
+                      ),
+                    }))}
+                    channelLabel={
+                      order.orderType === "DINE_IN"
+                        ? `Table - ${order.table?.label ?? "—"}`
+                        : (labelFor("shipping", order.shippingMethod ?? "") ??
+                          shippingLabel(order.shippingMethod))
+                    }
+                    paymentLabel={
+                      labelFor("payment", order.paymentMethod) ?? order.paymentMethod
+                    }
+                    totalLabel={formatAmount(
+                      order.grandTotal
+                        .minus(order.refundedAmount)
+                        .toFixed(order.currencyMinorUnits),
+                      order.currency
+                    )}
+                  />
+                  </div>
                 </div>
               </div>
             ))}
@@ -489,23 +569,33 @@ function shippingLabel(method: string | null) {
 }
 
 /** Figma "Card": cream, radius 16, padding 16, gap 20। */
+/**
+ * Figma "Card" (Frame 2147232365 + 2147232366):
+ *
+ *   cream, radius 16, padding 16, gap 20, উচ্চতা 142
+ *   উপরে: শিরোনাম 20px Frank Ruhl medium | 40px সাদা গোলে আইকন
+ *   নিচে: মান 24px semibold + সবুজ pill ("+4% week"), তারপর 12px টীকা
+ */
 function StatCard({
   label,
   value,
   hint,
   trend,
+  trendHint,
   icon,
 }: {
   label: string;
   value: string;
   hint: string;
   trend: number | null;
+  /** "vs last week" / "vs yesterday" — কোন সময়ের সাথে তুলনা। */
+  trendHint?: string;
   icon: ReactNode;
 }) {
   const up = trend !== null && trend >= 0;
 
   return (
-    <div className="flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4">
+    <div className="flex min-h-[142px] flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4">
       <div className="flex items-center justify-between gap-4">
         <span className="min-w-0 truncate font-frank-ruhl text-[18px] font-medium leading-none text-black xl:text-[20px]">
           {label}
@@ -515,12 +605,15 @@ function StatCard({
         </span>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-5">
           <span className="font-frank-ruhl text-[22px] font-semibold leading-none text-black xl:text-[24px]">
             {value}
           </span>
 
+          {/* ⚠️ আগের সময়সীমায় কিছু না থাকলে ব্যাজটাই থাকে না — শূন্য
+              থেকে বাড়াকে শতাংশে প্রকাশ করা যায় না (percentChange
+              দ্রষ্টব্য)। */}
           {trend !== null && (
             <span
               className={`flex h-[26px] items-center gap-1 rounded-full px-[6px] font-sora text-[13px] leading-none xl:text-[14px] ${
@@ -533,14 +626,13 @@ function StatCard({
                 <TrendingDown className="h-[13px] w-[13px]" strokeWidth={2} aria-hidden="true" />
               )}
               {up ? "+" : ""}
-              {trend}% week
+              {trend}%
             </span>
           )}
         </div>
 
         <span className="font-sora text-[12px] leading-none text-black/70">
-          {hint}
-          {trend !== null && " · vs last week"}
+          {trend !== null && trendHint ? trendHint : hint}
         </span>
       </div>
     </div>
@@ -554,6 +646,7 @@ function SummarySection({
   range,
   rangeParam,
   kind,
+  methods,
   rows,
   money,
 }: {
@@ -563,12 +656,12 @@ function SummarySection({
   range: SummaryRange;
   rangeParam: string;
   kind: "PAYMENT" | "SHIPPING";
+  methods: TransactionMethodConfig[];
   rows: {
     key: string;
     label: string;
     transactions: number;
     revenue: Prisma.Decimal;
-    custom?: boolean;
   }[];
   money: (value: Prisma.Decimal) => string;
 }) {
@@ -580,7 +673,11 @@ function SummarySection({
         </h2>
         {/* Figma: gradient "Add Method" pill, তারপর সময়ের pill। */}
         <div className="flex flex-wrap items-center gap-2 min-[480px]:gap-3">
-          <AddMethodModal kind={kind} label={kind === "PAYMENT" ? "Payment" : "Shipping"} />
+          <MethodManagerModal
+            kind={kind}
+            label={kind === "PAYMENT" ? "Payment" : "Shipping"}
+            methods={methods}
+          />
           <SummaryRangeMenu value={range} param={rangeParam} />
         </div>
       </div>
@@ -592,28 +689,31 @@ function SummarySection({
       ) : (
         <div className="flex flex-col gap-4">
           {rows.map((row) => (
+            /**
+             * ⚠️ Revenue-টা `ml-auto` দিয়ে ডান কিনারায় ঠেলে দেওয়া হয়,
+             * তিন-কলামের grid নয়।
+             *
+             * grid-এ তৃতীয় কলামটা সারির এক-তৃতীয়াংশ জায়গায় বসত, তাই
+             * চওড়া পর্দায় অঙ্কটা মাঝামাঝি ঝুলে থাকত — Figma-তে ওটা
+             * কার্ডের একদম ডান কিনারায়। প্রথম দুটো ঘর বাঁয়ে জোড়া
+             * থাকে, আর বাকি সব ফাঁকা জায়গা তাদের মাঝখানে পড়ে।
+             */
             <div
               key={row.key}
-              className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[16px] bg-[#F9F6F3] p-4 md:grid-cols-3"
+              className="flex min-h-[80px] flex-wrap items-center gap-x-6 gap-y-3 rounded-[16px] bg-[#F9F6F3] p-4"
             >
               <Field label={rowLabel}>
-                <span className="truncate font-sora text-[13px] font-medium leading-none text-black">
-                  {row.label}
-                </span>
+                <span className={VALUE}>{row.label}</span>
               </Field>
               <Field label="Transactions">
-                <span className="truncate font-sora text-[13px] leading-none text-black/70">
-                  {row.transactions}
-                  {row.custom && (
-                    <span className="text-black/40"> · not at checkout yet</span>
-                  )}
-                </span>
+                <span className={VALUE}>{row.transactions}</span>
               </Field>
-              <Field label="Revenue">
-                <span className="truncate font-frank-ruhl text-[15px] font-semibold leading-none text-black">
-                  {money(row.revenue)}
+              <div className="ml-auto flex min-w-0 flex-col items-end gap-3 text-right">
+                <span className="truncate font-sora text-[14px] leading-none text-black/70 md:text-[16px]">
+                  Revenue
                 </span>
-              </Field>
+                <span className={VALUE}>{money(row.revenue)}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -642,19 +742,63 @@ function PaymentBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`inline-flex h-[30px] items-center justify-center rounded-full px-4 font-sora text-[12px] font-semibold leading-none ${style.className}`}
+      /* ⚠️ `min-[640px]:self-start` ছাড়া ব্যাজটা কলামের পুরো চওড়া
+         নিত: flex-col ঘরের ডিফল্ট `items-stretch` inline-flex-কেও
+         টেনে বড় করে, আর `w-auto` তখন কিছুই করে না। */
+      className={`inline-flex h-[44px] w-full items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-none min-[640px]:h-[34px] min-[640px]:w-auto min-[640px]:self-start ${style.className}`}
     >
       {style.label}
     </span>
   );
 }
 
-/** লেবেল + মান — Orders পাতার `Field`-এর হুবহু একই গড়ন। */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * লেবেল + মান।
+ *
+ * Figma "Frame 2147236266": লেবেল 16px Sora black/70, মান 20px Frank
+ * Ruhl medium কালো, মাঝে 12px ফাঁক।
+ *
+ * ⚠️ ছোট পর্দায় মাপ কমে (14/16px), কারণ Figma-র সারিটা 999px চওড়া আর
+ * তাতে ছ-টা ঘর পাশাপাশি ধরে। ফোনে ওই মাপ চাপালে প্রতিটা মান কেটে
+ * "..." হয়ে যেত — সংখ্যাটা পড়তে না পারার চেয়ে একটু ছোট হরফ ভালো।
+ */
+function Field({
+  label,
+  size = "lg",
+  className = "",
+  children,
+}: {
+  label: string;
+  /**
+   * ⚠️ দুটো টেবিলে দুটো মাপ, আর সেটা Figma-রই।
+   *
+   *   "lg" — সারাংশের সারি (Frame 2147236324): লেবেল 16px, মান 20px।
+   *          সারিতে মাত্র তিনটে ঘর, তাই জায়গা আছে।
+   *   "sm" — Recent Transactions (Frame 2147236325): লেবেল 14px, মান
+   *          16px। ওখানে আটটা ঘর পাশাপাশি, তাই হরফ ছোট না হলে
+   *          কলামগুলো একে অন্যের ঘাড়ে উঠত।
+   */
+  size?: "lg" | "sm";
+  /** grid-এ ঘরটার নিজস্ব আচরণ (কলাম জোড়া লাগানো, নিচে বসানো)। */
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <span className="truncate font-sora text-[12px] leading-none text-black/70">{label}</span>
+    <div className={`flex min-w-0 flex-col gap-3 ${className}`}>
+      <span
+        className={`truncate font-sora leading-none text-black/70 ${
+          size === "lg" ? "text-[14px] md:text-[16px]" : "text-[13px] md:text-[14px]"
+        }`}
+      >
+        {label}
+      </span>
       {children}
     </div>
   );
 }
+
+/** সারাংশের মান — Frank Ruhl medium, 20px পর্যন্ত। */
+const VALUE = "truncate font-frank-ruhl font-medium leading-none text-black text-[16px] md:text-[18px] xl:text-[20px]";
+
+/** Recent Transactions-এর মান — Frank Ruhl medium, 16px। */
+const VALUE_SM = "truncate font-frank-ruhl font-medium leading-none text-black text-[15px] md:text-[16px]";

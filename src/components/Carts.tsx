@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
 import { Trash2, Truck } from "lucide-react";
+import type { TransactionMethod } from "@/lib/transaction-methods";
 import CountryCodeSelect, {
   DEFAULT_COUNTRY,
   type Country,
@@ -152,7 +153,19 @@ const FIELD_INPUT =
   "h-[46px] w-full rounded-[12px] bg-white px-3.5 font-sora text-[13px] leading-none text-black placeholder:text-black/35 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
 
-const Carts = () => {
+const Carts = ({
+  /**
+   * চালু থাকা payment মাধ্যমগুলো — server component (carts/page.tsx)
+   * থেকে আসে।
+   *
+   * ⚠️ prop হিসেবে, ভেতরে fetch করে নয়: এটা পাতার মূল সিদ্ধান্ত, তাই
+   * প্রথম render-এই ঠিক থাকা দরকার। client-এ আনলে এক মুহূর্তের জন্য
+   * ভুল অপশন দেখা যেত।
+   */
+  paymentMethods,
+}: {
+  paymentMethods: TransactionMethod[];
+}) => {
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -275,7 +288,16 @@ const Carts = () => {
     toast.success(`${suggestion.title} added to cart`);
   };
 
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
+  /**
+   * ⚠️ শুরুর মানটা চালু থাকা মাধ্যমগুলোর প্রথমটা, স্থির "cod" নয়।
+   *
+   * admin COD বন্ধ করে দিলে আগের কোডে ফর্মটা তবুও "cod" নিয়ে বসে
+   * থাকত, আর গ্রাহক কিছু না বদলে "Confirm your order" চাপলে server
+   * সেটা ফিরিয়ে দিত — একটা error যার কারণ পর্দায় কোথাও লেখা নেই।
+   */
+  const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">(
+    paymentMethods[0]?.code === "ONLINE" ? "online" : "cod"
+  );
   /**
    * ⚠️ পুরোনো `selectedCountry` (react-select) বাদ। দেশটা এখন ফোনের
    * পতাকা থেকেই আসে — register পাতা আর Staff modal-এর মতো।
@@ -1286,51 +1308,35 @@ const Carts = () => {
           </div>
         ) : (
           <div className="space-y-3 bg-gray-50 p-4 rounded-md">
-            {/* Online Payment */}
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="radio"
-                name={`payment-${idSuffix}`}
-                value="online"
-                checked={paymentMethod === "online"}
-                onChange={() => setPaymentMethod("online")}
-                className="hidden"
-              />
-              <span
-                className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
-                  paymentMethod === "online" ? "bg-[#2C6252]" : "bg-white"
-                }`}
-              ></span>
-              <div>
-                <p className="font-semibold text-gray-800">Online Payment</p>
-                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
-                  Pay securely using a card or mobile wallet.
-                </p>
-              </div>
-            </label>
-
-            {/* Cash on Delivery */}
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="radio"
-                name={`payment-${idSuffix}`}
-                value="cod"
-                checked={paymentMethod === "cod"}
-                onChange={() => setPaymentMethod("cod")}
-                className="hidden"
-              />
-              <span
-                className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
-                  paymentMethod === "cod" ? "bg-[#2C6252]" : "bg-white"
-                }`}
-              ></span>
-              <div>
-                <p className="font-semibold text-gray-800">Cash on Delivery</p>
-                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
-                  Pay with cash upon delivery.
-                </p>
-              </div>
-            </label>
+            {/* ⚠️ অপশনগুলো server থেকে আসা তালিকা থেকে — hardcode নয়।
+                admin কোনো মাধ্যম বন্ধ করলে সেটা এখানে আর থাকে না, আর
+                নাম বদলালে সেই নামই দেখা যায়। */}
+            {paymentMethods.map((method) => {
+              const value = method.code === "ONLINE" ? "online" : "cod";
+              return (
+                <label key={method.code} className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name={`payment-${idSuffix}`}
+                    value={value}
+                    checked={paymentMethod === value}
+                    onChange={() => setPaymentMethod(value)}
+                    className="hidden"
+                  />
+                  <span
+                    className={`w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 ${
+                      paymentMethod === value ? "bg-[#2C6252]" : "bg-white"
+                    }`}
+                  ></span>
+                  <div>
+                    <p className="font-semibold text-gray-800">{method.label}</p>
+                    <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                      {method.description}
+                    </p>
+                  </div>
+                </label>
+              );
+            })}
           </div>
         )}
       </div>

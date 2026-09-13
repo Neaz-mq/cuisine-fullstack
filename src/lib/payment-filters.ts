@@ -89,3 +89,70 @@ export function summaryRangeStart(range: SummaryRange): Date | null {
   start.setDate(1);
   return start;
 }
+
+/**
+ * Overview কার্ডের ছাঁকনি — Figma-র "All Over" pill।
+ *
+ * ⚠️ সারাংশের ছাঁকনির থেকে আলাদা তালিকা, কারণ এখানে ডিফল্ট "All Over"
+ * (সব সময়ের মোট)। Overview-র প্রশ্নটাই অন্য: "ব্যবসা সব মিলিয়ে কোথায়
+ * দাঁড়িয়ে", "আজ কত এল" নয়।
+ */
+export const OVERVIEW_RANGE_OPTIONS: FilterMenuOption<SummaryRange>[] = [
+  { value: "all", label: "All Over" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+];
+
+export const DEFAULT_OVERVIEW_RANGE: SummaryRange = "all";
+
+/**
+ * Overview কার্ডের জন্য: মোটের সময়সীমা, আর growth ব্যাজের দুটো জানালা।
+ *
+ *   `totalStart`    — উপরের বড় সংখ্যাটা কোন সময় থেকে গোনা হবে।
+ *                     "All Over"-এ null, অর্থাৎ সব সময়ের মোট।
+ *   `trendStart`    — ব্যাজের "এখন" জানালা শুরু।
+ *   `trendPrevious` — তার ঠিক আগের সমান দৈর্ঘ্যের জানালা শুরু।
+ *
+ * ⚠️ তুলনা সবসময় **সমান দৈর্ঘ্যের** দুটো জানালার মধ্যে — "আজ" বনাম
+ * "গতকাল", "এই সপ্তাহ" বনাম "গত সপ্তাহ"। Figma-তে স্থিরভাবে "VS last
+ * Week" লেখা, কিন্তু সেটা হুবহু বসালে "আজ" বাছার পর একদিনের আয়কে সাত
+ * দিনের আয়ের সাথে তুলনা করা হতো, আর ব্যাজ সবসময় বিশাল ঋণাত্মক দেখাত।
+ *
+ * ⚠️ "All Over"-এ মোটটা সব সময়ের, কিন্তু ব্যাজটা **শেষ সাত দিন বনাম
+ * তার আগের সাত দিন** — কারণ "সব সময়ের আগের সময়" বলে কিছু নেই, অথচ
+ * "ব্যবসা এখন বাড়ছে না কমছে" প্রশ্নটার উত্তর তখনো দরকার। Figma-ও এটাই
+ * করে: কার্ডে "Revenue This Month", ব্যাজে "+4% week" — সংখ্যাটা এক
+ * সময়ের, গতিটা আরেক সময়ের। টীকায় কোন সময়ের তুলনা তা লেখা থাকে, তাই
+ * ভুল বোঝার সুযোগ নেই।
+ */
+export function overviewWindows(range: SummaryRange): {
+  totalStart: Date | null;
+  trendStart: Date;
+  trendPrevious: Date;
+  hint: string;
+} {
+  const totalStart = summaryRangeStart(range);
+
+  const trendStart =
+    totalStart ??
+    (() => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return weekAgo;
+    })();
+
+  const span = Date.now() - trendStart.getTime();
+
+  return {
+    totalStart,
+    trendStart,
+    trendPrevious: new Date(trendStart.getTime() - span),
+    hint:
+      range === "today"
+        ? "vs yesterday"
+        : range === "month"
+          ? "vs last month"
+          : "vs last week",
+  };
+}

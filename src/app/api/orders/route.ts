@@ -31,6 +31,7 @@ import { ZERO, type Money } from "@/lib/money";
 import { parseBody } from "@/lib/validations/parse";
 import { createOrderSchema } from "@/lib/validations/checkout";
 import { paginationSchema } from "@/lib/validations/common";
+import { isPaymentMethodEnabled } from "@/lib/transaction-methods";
 
 /**
  * src/app/api/orders/route.ts
@@ -158,6 +159,25 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, createOrderSchema);
     if (parsed instanceof NextResponse) return parsed;
+
+    /**
+     * ⚠️ admin নগদ মাধ্যমটা বন্ধ করে রাখলে অর্ডার নেওয়া হয় না।
+     *
+     * checkout-এ অপশনটা লুকানোই যথেষ্ট নয় — এই endpoint-এ যে কেউ সরাসরি
+     * request পাঠাতে পারেন, আর পুরনো ট্যাব খোলা থাকলে গ্রাহক নিজেও
+     * অজান্তে পাঠাতে পারেন। "COD বন্ধ" একটা ব্যবসায়িক সিদ্ধান্ত, তাই
+     * সেটা server-এই প্রয়োগ হওয়া দরকার।
+     *
+     * dine-in-ও এই পথে আসে ("Pay at Table" ভেতরে COD), তাই COD বন্ধ
+     * করলে টেবিলের অর্ডারও বন্ধ হয় — সেটাই প্রত্যাশিত, কারণ টেবিলে
+     * নগদ ছাড়া অন্য কোনো ব্যবস্থা এখনো নেই।
+     */
+    if (!(await isPaymentMethodEnabled("COD"))) {
+      return NextResponse.json(
+        { error: "That payment method isn't available right now." },
+        { status: 409 }
+      );
+    }
     const {
       items,
       billing,

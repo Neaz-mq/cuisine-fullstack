@@ -2,41 +2,50 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
-import { transactionMethodSchema } from "@/lib/validations/transaction-method";
+import { transactionMethodsSchema } from "@/lib/validations/transaction-method";
 
 /**
- * POST /api/admin/transaction-methods
+ * PATCH /api/admin/transaction-methods
  *
- * Payment/Shipping Summary কার্ডের "Add Method" modal যেখানে পাঠায়।
+ * Payment/Shipping Summary কার্ডের "Manage Methods" modal যেখানে পাঠায়।
+ *
+ * ⚠️ POST নয়, PATCH — কিছু তৈরি হচ্ছে না, আগে থেকেই থাকা মাধ্যমগুলোর
+ * সেটিং বদলাচ্ছে। কেন নতুন মাধ্যম তৈরি করা যায় না, তার কারণ
+ * src/lib/transaction-methods.ts-এর মাথায় লেখা আছে।
  *
  * ⚠️ scope "refunds" — /admin/payment পাতার layout যা চায়, ঠিক সেটাই।
- * টাকার পাতার কোনো কিছু বদলানোর অধিকার আর অর্ডার এগিয়ে নেওয়ার অধিকার
- * এই অ্যাপে আলাদা।
- *
- * ⚠️ নামটা আগে থেকেই থাকলে 409, আর সেটা চুপচাপ সফল বলে দেখানো হয় না।
- * "Banking" দুবার যোগ করে দুটো একই সারি দেখার চেয়ে "এটা আগে থেকেই আছে"
- * পড়া ভালো।
  */
-export async function POST(req: NextRequest) {
+export async function PATCH(req: NextRequest) {
   const authResult = await requireApiScope("refunds");
   if (authResult instanceof NextResponse) return authResult;
 
-  const parsed = await parseBody(req, transactionMethodSchema);
+  const parsed = await parseBody(req, transactionMethodsSchema);
   if (parsed instanceof NextResponse) return parsed;
 
-  const existing = await prisma.transactionMethod.findUnique({
-    where: { kind_name: { kind: parsed.kind, name: parsed.name } },
-    select: { id: true },
-  });
+  /**
+   * ⚠️ পুরো তালিকাটা একটা transaction-এ — অর্ধেক বদল সংরক্ষিত হওয়ার
+   * সুযোগ নেই। "COD বন্ধ করে Online চালু" দুটো আলাদা লেখা হলে মাঝখানে
+   * ব্যর্থ হলে দুটোই বন্ধ অবস্থায় থেকে যেত, অর্থাৎ checkout-এ কোনো
+   * অপশনই না — ঠিক যেটা schema-র refine আটকাতে চায়।
+   */
+  await prisma.$transaction(
+    parsed.methods.map((method) =>
+      prisma.transactionMethod.upsert({
+        where: { kind_code: { kind: parsed.kind, code: method.code } },
+        create: {
+          kind: parsed.kind,
+          code: method.code,
+          label: method.label,
+          // shipping-এ toggle নেই, তাই সেখানে সবসময় চালু।
+          enabled: parsed.kind === "PAYMENT" ? method.enabled : true,
+        },
+        update: {
+          label: method.label,
+          enabled: parsed.kind === "PAYMENT" ? method.enabled : true,
+        },
+      })
+    )
+  );
 
-  if (existing) {
-    return NextResponse.json({ error: "That method already exists." }, { status: 409 });
-  }
-
-  const created = await prisma.transactionMethod.create({
-    data: { kind: parsed.kind, name: parsed.name },
-    select: { id: true, name: true },
-  });
-
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json({ ok: true });
 }

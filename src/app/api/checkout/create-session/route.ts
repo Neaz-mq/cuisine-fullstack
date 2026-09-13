@@ -28,6 +28,7 @@ import { createCheckoutSessionSchema } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { cancelOrder } from "@/lib/cancel-order";
+import { isPaymentMethodEnabled } from "@/lib/transaction-methods";
 
 /**
  * src/app/api/checkout/create-session/route.ts
@@ -92,6 +93,19 @@ export async function POST(request: Request) {
 
     const parsed = await parseBody(request, createCheckoutSessionSchema);
     if (parsed instanceof NextResponse) return parsed;
+  /**
+   * ⚠️ admin অনলাইন মাধ্যমটা বন্ধ করে রাখলে Stripe session তৈরি হয় না।
+   *
+   * UI থেকে অপশন লুকানো যথেষ্ট নয় — পুরনো ট্যাব বা সরাসরি request এই
+   * endpoint-এ পৌঁছতে পারে, আর তখন গ্রাহক এমন একটা মাধ্যমে টাকা দিয়ে
+   * ফেলতেন যেটা রেস্তোরাঁ আর নিচ্ছে না।
+   */
+  if (!(await isPaymentMethodEnabled("ONLINE"))) {
+    return NextResponse.json(
+      { error: "That payment method isn't available right now." },
+      { status: 409 }
+    );
+  }
     const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent } =
       parsed;
 

@@ -41,7 +41,9 @@ export default function SummaryRangeMenu({
 
   return (
     <FilterMenu
-      surface="white"
+      /* ⚠️ cream pill (#F9F6F3), সাদা নয় — Figma-র "Frame 2147236234"।
+         কার্ডটা নিজেই সাদা, তাই সাদা pill-এর কোনো কিনারাই দেখা যেত না। */
+      surface="cream"
       value={value}
       options={SUMMARY_RANGE_OPTIONS}
       onSelect={handleSelect}
