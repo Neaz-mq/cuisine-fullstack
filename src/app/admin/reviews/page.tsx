@@ -4,6 +4,8 @@ import Image from "next/image";
 import ReviewActions from "./ReviewActions";
 import Pagination from "../orders/Pagination"; // ⚠️ adjust this path if your Pagination component lives elsewhere
 
+
+export const metadata = { title: "Reviews" };
 const STATUS_TABS = [
   { label: "All", value: undefined },
   { label: "Pending", value: "PENDING" },

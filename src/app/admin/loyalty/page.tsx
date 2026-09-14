@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import LoyaltyAdjustRow from "./LoyaltyAdjustRow";
 
+
+export const metadata = { title: "Loyalty" };
 export default async function AdminLoyaltyPage({
   searchParams,
 }: {

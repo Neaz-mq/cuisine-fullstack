@@ -4,6 +4,8 @@ import GiftCardActions from "./GiftCardActions";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
 
+
+export const metadata = { title: "Gift Cards" };
 export default async function AdminGiftCardsPage({
   searchParams,
 }: {

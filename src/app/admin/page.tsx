@@ -40,6 +40,8 @@ import {
   type RevenueRange,
 } from "@/lib/revenue-range";
 
+export const metadata = { title: "Dashboard" };
+
 const ORDERS_PER_PAGE = 10;
 
 /** "12 Jul, 02:00 am" — Figma-র Date & Time কলামের গড়ন। */

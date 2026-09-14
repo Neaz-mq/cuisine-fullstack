@@ -13,6 +13,8 @@ import TablesBoard, { type TableRow } from "./TablesBoard";
 import TablesToolbar from "./TablesToolbar";
 import TablePeriodFilter from "./TablePeriodFilter";
 
+
+export const metadata = { title: "Tables" };
 /**
  * src/app/admin/tables/page.tsx
  *

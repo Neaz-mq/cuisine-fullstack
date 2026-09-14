@@ -3,6 +3,8 @@ import { getRestaurantSettings } from "@/lib/get-settings";
 import SettingsForm from "./SettingsForm";
 import { normalizeDeliveryZones } from "@/lib/delivery-zones";
 
+
+export const metadata = { title: "Settings" };
 /**
  * ভগ্নাংশ (DB) -> শতাংশ (form)।
  *

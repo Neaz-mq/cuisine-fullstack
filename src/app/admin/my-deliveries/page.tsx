@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import RiderDashboard, { type Delivery } from "./RiderDashboard";
 import { formatAmount } from "@/lib/currency-format";
 
+
+export const metadata = { title: "My Deliveries" };
 export default async function MyDeliveriesPage() {
   const session = await auth();
   const riderId = session!.user.id;

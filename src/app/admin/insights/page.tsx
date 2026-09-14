@@ -3,6 +3,8 @@ import { calculateFoodCost, getFoodCostHealth, type FoodCostHealth } from "@/lib
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
 
+
+export const metadata = { title: "Insights" };
 // Minimum approved reviews before we trust a menu item's average rating
 // enough to base an insight on it — a single 5-star review shouldn't label
 // something a "Hidden Gem".

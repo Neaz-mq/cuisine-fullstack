@@ -5,6 +5,8 @@ import DeleteCouponButton from "./DeleteCouponButton";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
 
+
+export const metadata = { title: "Coupons" };
 // Prisma-র Decimal-এ toFixed আছে, তাই ধরনটা কেবল চওড়া করা হলো —
 // রূপান্তরের দরকার নেই।
 type DecimalLike = { toFixed(dp: number): string };
