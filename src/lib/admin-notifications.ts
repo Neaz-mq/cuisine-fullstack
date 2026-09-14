@@ -1,5 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
+import type { AdminNotification } from "@/lib/notification-filters";
+
+// ⚠️ type আর ছাঁকার নিয়মগুলো notification-filters.ts-এ, কারণ সেগুলো
+// client component-ও ব্যবহার করে (ওখানকার মন্তব্য দ্রষ্টব্য)। এখান
+// থেকে re-export করা হয় যাতে server-side caller-দের import বদলাতে
+// না হয় — তবে client component-কে সরাসরি notification-filters থেকেই
+// আনতে হবে, নাহলে আবার একই bundle সমস্যা ফিরে আসবে।
+export * from "@/lib/notification-filters";
 
 /**
  * src/lib/admin-notifications.ts
@@ -27,20 +35,6 @@ import { formatOrderId } from "@/lib/format-order-id";
  * Orders বা Reservations পাতা আছে, যেখানে ছাঁকনি আর খোঁজা দুটোই আছে।
  */
 
-export type NotificationKind = "ORDER" | "RESERVATION" | "REVIEW" | "STOCK" | "DELIVERY";
-
-export type AdminNotification = {
-  id: string;
-  kind: NotificationKind;
-  title: string;
-  description: string;
-  /** ISO — client-এ "2 min ago" হিসেবে দেখানো হয়। */
-  createdAt: string;
-  read: boolean;
-  /** ক্লিক করলে কোথায় যাবে। */
-  href: string;
-};
-
 /**
  * প্রতিটা উৎস থেকে কতগুলো সাম্প্রতিক সারি আনা হবে।
  *
@@ -50,7 +44,6 @@ export type AdminNotification = {
  */
 const SOURCE_LIMIT = 40;
 
-export type NotificationFilter = "ALL" | "UNREAD" | "READ" | "ALERTS";
 
 export async function getAdminNotifications(readAt: Date | null): Promise<AdminNotification[]> {
   const [orders, deliveries, reservations, reviews, lowStock] = await Promise.all([
@@ -197,24 +190,4 @@ export async function getAdminNotifications(readAt: Date | null): Promise<AdminN
 
   // নতুনগুলো আগে।
   return feed.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-/**
- * তারিখ ধরে ভাগ — Figma-র "Today" / "Yesterday" শিরোনাম।
- *
- * ⚠️ ভাগটা server-এ নয়, client-এ করা হয় (NotificationFeed.tsx), কারণ
- * "আজ" মানে দর্শকের ঘড়ির আজ। server Vercel-এ UTC-তে চলে, তাই
- * বাংলাদেশে সন্ধ্যার পরের সব কিছু "কাল" দেখাত।
- */
-export function notificationCounts(feed: AdminNotification[]) {
-  const unread = feed.filter((item) => !item.read).length;
-
-  return {
-    total: feed.length,
-    read: feed.length - unread,
-    unread,
-    // "System Alerts" — কম-স্টকের মতো যেগুলো কোনো গ্রাহকের কাজ নয়,
-    // সিস্টেম নিজে থেকে তুলেছে।
-    alerts: feed.filter((item) => item.kind === "STOCK").length,
-  };
 }

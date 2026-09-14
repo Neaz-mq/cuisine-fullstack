@@ -1,18 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import { toast } from "react-toastify";
 import {
-  Bell,
   CalendarCheck,
   PackageMinus,
   ShoppingBag,
   Star,
   Truck,
 } from "lucide-react";
-import type { AdminNotification } from "@/lib/admin-notifications";
+import type { AdminNotification } from "@/lib/notification-filters";
 
 const ICONS = {
   ORDER: ShoppingBag,
@@ -63,31 +60,17 @@ function dayLabel(iso: string) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/**
+ * ⚠️ "Mark All as Read" বোতামটা এখানে নেই — সেটা toolbar-এ, খোঁজার ঘর
+ * আর status ছাঁকনির পাশে (Figma যেমন দেখায়)। তিনটেই পুরো তালিকার উপর
+ * কাজ করে, তাই একসাথে থাকাই যুক্তিসঙ্গত।
+ */
 export default function NotificationFeed({
   notifications,
-  hasUnread,
 }: {
   notifications: AdminNotification[];
-  hasUnread: boolean;
 }) {
-  const router = useRouter();
   const isClient = useIsClient();
-  const [marking, setMarking] = useState(false);
-
-  async function markAllRead() {
-    if (marking) return;
-    setMarking(true);
-    try {
-      const res = await fetch("/api/admin/notifications/read", { method: "POST" });
-      if (!res.ok) throw new Error("Couldn't mark these as read.");
-      toast.success("All notifications marked as read.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't mark these as read.");
-    } finally {
-      setMarking(false);
-    }
-  }
 
   /**
    * দিন ধরে ভাগ — Figma-র "Today" / "Yesterday" শিরোনাম।
@@ -108,24 +91,6 @@ export default function NotificationFeed({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="min-w-0 font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
-          Notification
-        </h2>
-
-        {/* ⚠️ সব পড়া হয়ে গেলে বোতামটা নিষ্ক্রিয়, লুকানো নয় — হঠাৎ উধাও
-            হয়ে যাওয়া বোতাম খুঁজতে গিয়ে staff ভাবতেন কিছু ভেঙেছে। */}
-        <button
-          type="button"
-          onClick={markAllRead}
-          disabled={marking || !hasUnread}
-          className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#F9F6F3] px-4 font-sora text-[13px] leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] disabled:cursor-not-allowed disabled:opacity-50 min-[480px]:h-11 min-[480px]:text-[14px]"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-          {marking ? "Marking…" : "Mark all as Read"}
-        </button>
-      </div>
-
       {notifications.length === 0 ? (
         <p className="rounded-[16px] bg-[#F9F6F3] p-4 font-sora text-[14px] leading-[1.7] text-black/70">
           Nothing to catch up on right now.
