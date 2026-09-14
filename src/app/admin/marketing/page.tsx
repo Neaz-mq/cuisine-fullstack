@@ -3,6 +3,8 @@
 
 import { useState } from "react";
 
+
+export const metadata = { title: "Marketing" };
 export default function MarketingPage() {
   const [subject, setSubject] = useState("");
   const [headline, setHeadline] = useState("");
