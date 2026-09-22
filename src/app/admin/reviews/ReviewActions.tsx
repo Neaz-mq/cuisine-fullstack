@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Loader2 } from "lucide-react";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
+import {
+  LABEL,
+  ModalError,
+  ModalShell,
+  OUTLINE_BUTTON,
+  PRIMARY_BUTTON,
+  TEXTAREA,
+} from "@/components/admin/modal-ui";
 
 type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -16,10 +24,11 @@ type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
  *   APPROVED → Reply  · Delete
  *   REJECTED → Accept · Delete
  *
- * "Reply" opens the staff member's own email app with the customer's
- * address and a subject line filled in — reviews have no reply field in
- * the database, and an email is how the customer actually gets an answer.
- * It is only shown when the customer has an email address.
+ * "Reply" opens a small form right here; the app emails the answer to the
+ * customer from Cuisine's own address (POST /api/admin/reviews/[id]/reply,
+ * through Resend). It used to be a `mailto:` link, which on most staff PCs
+ * opened an Outlook that was never set up. Only shown when the customer
+ * has an email address.
  */
 const OUTLINE =
   "flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-black px-4 font-sora text-[14px] font-normal leading-none text-black transition-colors hover:bg-black/[0.04] disabled:opacity-50 md:flex-none xl:h-[50px] xl:text-[16px] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -32,18 +41,51 @@ export default function ReviewActions({
   customerName,
   customerEmail,
   itemTitle,
+  rating,
+  comment,
 }: {
   reviewId: string;
   status: ReviewStatus;
   customerName: string;
   customerEmail: string | null;
   itemTitle: string;
+  /** Shown in the Reply form so staff can see what they're answering. */
+  rating: number;
+  comment: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // Which button is busy, so only that one shows the spinner.
   const [busy, setBusy] = useState<"accept" | "reject" | "delete" | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  async function sendReply() {
+    const message = replyText.trim();
+    if (!message || replySending) return;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      const res = await fetch(`/api/admin/reviews/${reviewId}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Couldn't send the reply (error ${res.status}).`);
+
+      toast.success(`Reply sent to ${data.sentTo ?? customerName}`);
+      setReplyOpen(false);
+      setReplyText("");
+    } catch (error) {
+      setReplyError(error instanceof Error ? error.message : "Couldn't send the reply.");
+    } finally {
+      setReplySending(false);
+    }
+  }
 
   function updateStatus(next: "APPROVED" | "REJECTED") {
     setBusy(next === "APPROVED" ? "accept" : "reject");
@@ -87,19 +129,21 @@ export default function ReviewActions({
 
   const spinner = <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />;
 
-  const replyHref = customerEmail
-    ? `mailto:${customerEmail}?subject=${encodeURIComponent(
-        `About your review of ${itemTitle}`
-      )}&body=${encodeURIComponent(`Hi ${customerName},\n\nThank you for your review of ${itemTitle}.\n\n`)}`
-    : null;
 
   return (
     <div className="flex w-full items-center gap-3 md:w-auto md:justify-end">
       {status === "APPROVED" ? (
-        replyHref && (
-          <a href={replyHref} className={OUTLINE}>
+        customerEmail && (
+          <button
+            type="button"
+            onClick={() => {
+              setReplyError(null);
+              setReplyOpen(true);
+            }}
+            className={OUTLINE}
+          >
             Reply
-          </a>
+          </button>
         )
       ) : (
         <button
@@ -133,6 +177,75 @@ export default function ReviewActions({
           Delete
         </button>
       )}
+
+      <ModalShell
+        open={replyOpen}
+        onClose={() => {
+          if (!replySending) setReplyOpen(false);
+        }}
+        title="Reply to Review"
+        titleId={`reply-title-${reviewId}`}
+        footer={
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setReplyOpen(false)}
+              disabled={replySending}
+              className={`${OUTLINE_BUTTON} flex-1`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={sendReply}
+              disabled={replySending || replyText.trim().length === 0}
+              className={`${PRIMARY_BUTTON} flex-1`}
+            >
+              {replySending && spinner}
+              {replySending ? "Sending…" : "Send Reply"}
+            </button>
+          </div>
+        }
+      >
+        {/* What they wrote, so staff answer the right thing. */}
+        <div className="flex flex-col gap-2 rounded-[12px] bg-[#F9F6F3] p-4">
+          <p className="font-sora text-[12px] leading-[1.4] text-black/70">
+            {customerName} · {itemTitle}
+          </p>
+          <p
+            className="font-sora text-[16px] leading-none tracking-[2px] text-[#FF9540]"
+            aria-label={`${rating} out of 5 stars`}
+          >
+            {"★".repeat(rating)}
+            <span className="text-[#FF9540]/30">{"★".repeat(5 - rating)}</span>
+          </p>
+          {comment && (
+            <p className="break-words font-sora text-[13px] italic leading-[1.5] text-black">
+              “{comment}”
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor={`reply-text-${reviewId}`} className={LABEL}>
+            Your reply
+          </label>
+          <textarea
+            id={`reply-text-${reviewId}`}
+            value={replyText}
+            onChange={(event) => setReplyText(event.target.value)}
+            maxLength={2000}
+            rows={5}
+            placeholder={`Hi ${customerName.split(" ")[0]}, thank you for your review…`}
+            className={TEXTAREA}
+          />
+          <p className="mt-1.5 font-sora text-[12px] leading-[1.4] text-black/70">
+            Sent by email to <span className="text-black">{customerEmail}</span> from Cuisine.
+          </p>
+        </div>
+
+        {replyError && <ModalError message={replyError} />}
+      </ModalShell>
 
       <ConfirmDialog
         open={confirmingDelete}

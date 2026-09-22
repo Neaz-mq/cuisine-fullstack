@@ -343,6 +343,8 @@ export default async function AdminReviewsPage({
                       customerName={name}
                       customerEmail={review.user.email}
                       itemTitle={review.menuItem.title}
+                      rating={review.rating}
+                      comment={review.comment}
                     />
                   </div>
                 </li>
