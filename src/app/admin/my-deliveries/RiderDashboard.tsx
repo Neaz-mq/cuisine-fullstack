@@ -30,9 +30,11 @@ export type Delivery = {
 // expectation of always-on tracking.
 export default function RiderDashboard({ initialDeliveries }: { initialDeliveries: Delivery[] }) {
   const [deliveries, setDeliveries] = useState<Delivery[]>(initialDeliveries);
-  const [geoStatus, setGeoStatus] = useState<"idle" | "active" | "denied" | "unsupported">(
-    "idle"
-  );
+  const [geoStatus, setGeoStatus] = useState<
+    "idle" | "active" | "denied" | "unsupported" | "far"
+  >("idle");
+  // How far away the device claimed to be, when the server refused it.
+  const [farKm, setFarKm] = useState<number | null>(null);
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
   // Which delivery card's chat panel is expanded — collapsed by default so
   // a rider with multiple assigned orders isn't shown several open chat
@@ -73,16 +75,30 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
     }
     navigator.geolocation.watchPosition(
       (pos) => {
-        setGeoStatus("active");
         const { latitude, longitude } = pos.coords;
+        if (activeOrderIdsRef.current.length === 0) setGeoStatus("active");
         activeOrderIdsRef.current.forEach((orderId) => {
           fetch(`/api/rider/deliveries/${orderId}/location`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ lat: latitude, lng: longitude }),
-          }).catch(() => {
-            // best-effort — next position update will retry
-          });
+          })
+            .then(async (res) => {
+              // The server refuses positions that are impossibly far from
+              // the restaurant (a PC behind a VPN, see the location route).
+              if (res.status === 422) {
+                const data = await res.json().catch(() => ({}));
+                if (data.reason === "too_far") {
+                  setFarKm(typeof data.distanceKm === "number" ? data.distanceKm : null);
+                  setGeoStatus("far");
+                  return;
+                }
+              }
+              if (res.ok) setGeoStatus("active");
+            })
+            .catch(() => {
+              // best-effort — next position update will retry
+            });
         });
       },
       () => setGeoStatus("denied"),
@@ -124,6 +140,15 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
               <p className="text-sm text-orange-700">
                 Your browser doesn&apos;t support location sharing. Use a phone browser to share your
                 live position with customers.
+              </p>
+            ) : geoStatus === "far" ? (
+              <p className="text-sm text-orange-700">
+                Your device says you are{" "}
+                {farKm !== null ? `about ${farKm.toLocaleString("en-US")} km` : "very far"} from the
+                restaurant, so your position is <strong>not</strong> being shown to the customer.
+                This usually means a VPN is on, or you&apos;re on a computer without GPS. Turn the
+                VPN off, or open this page on your phone with location (GPS) on — it fixes itself
+                on the next update.
               </p>
             ) : geoStatus === "denied" ? (
               <p className="text-sm text-orange-700">

@@ -1,6 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { canSeeRiderLocation } from "@/lib/order-access";
+import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
+import { haversineKm } from "@/lib/delivery-zones";
+
+/**
+ * Same limit as the rider location route. A saved rider position further
+ * than this from the restaurant is a bad reading (a laptop behind a VPN
+ * reporting another country) — the customer map treats it as "no position
+ * yet" instead of drawing the rider on another continent.
+ */
+const MAX_RIDER_DISTANCE_KM = 50;
 import {
   KITCHEN_QUEUE_STATUSES,
   SHIPPING_TRANSIT_MINUTES,
@@ -231,6 +241,10 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
   const timings = await estimateTimings(order);
 
   const tracking = order.deliveryTracking;
+  const riderPositionOk =
+    !!tracking &&
+    haversineKm(RESTAURANT_LOCATION, { lat: tracking.riderLat, lng: tracking.riderLng }) <=
+      MAX_RIDER_DISTANCE_KM;
   const destination: LatLng | null = !isActiveDelivery
     ? null
     : live && tracking && tracking.destLat !== null && tracking.destLng !== null
@@ -303,9 +317,9 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
 
     deliveryTracking: tracking
       ? {
-          riderLat: live ? tracking.riderLat : null,
-          riderLng: live ? tracking.riderLng : null,
-          riderLocationUpdatedAt: live ? tracking.riderLocationUpdatedAt.toISOString() : null,
+          riderLat: live && riderPositionOk ? tracking.riderLat : null,
+          riderLng: live && riderPositionOk ? tracking.riderLng : null,
+          riderLocationUpdatedAt: live && riderPositionOk ? tracking.riderLocationUpdatedAt.toISOString() : null,
           destLat: live ? tracking.destLat : null,
           destLng: live ? tracking.destLng : null,
           deliveredAt: tracking.deliveredAt?.toISOString() ?? null,

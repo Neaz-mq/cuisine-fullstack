@@ -3,6 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
 import { riderLocationUpdateSchema } from "@/lib/validations/delivery";
+import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
+import { haversineKm } from "@/lib/delivery-zones";
+
+/**
+ * How far from the restaurant a rider can believably be. Deliveries here
+ * are a few km; 50 km leaves plenty of room for a long trip.
+ *
+ * ⚠️ Why this check exists: the position comes from the rider's browser.
+ * A phone uses GPS, but a laptop or PC has no GPS and guesses from its
+ * internet address — and behind a VPN (Cloudflare WARP etc.) that address
+ * can be in another country. The customer's live map then showed the
+ * rider in the USA. A position that far away is never real, so it isn't
+ * saved; the rider's screen explains what to fix instead.
+ */
+const MAX_RIDER_DISTANCE_KM = 50;
 
 /**
  * POST /api/rider/deliveries/[orderId]/location
@@ -39,6 +54,19 @@ export async function POST(
     return NextResponse.json(
       { error: "This delivery is already complete" },
       { status: 400 }
+    );
+  }
+
+  const distanceKm = haversineKm(RESTAURANT_LOCATION, { lat, lng });
+  if (distanceKm > MAX_RIDER_DISTANCE_KM) {
+    return NextResponse.json(
+      {
+        error:
+          "Your device reports a location far from the restaurant, so it wasn't shared with the customer.",
+        reason: "too_far",
+        distanceKm: Math.round(distanceKm),
+      },
+      { status: 422 }
     );
   }
 
