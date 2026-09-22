@@ -20,6 +20,7 @@ import { orderSearchFilter } from "@/lib/order-search";
 import { Prisma } from "@/generated/prisma/client";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
+import { netRevenueOf } from "@/lib/net-revenue";
 import {
   isDashboardPeriod,
   periodStart,
@@ -302,28 +303,9 @@ export default async function AdminDashboardPage({
    * ধরা হয়ে গেছে। তাই ওগুলো grandTotal-এর বাইরে (totalAmount-এ), আর
    * এই হিসাবেও ছোঁয়া হয় না।
    */
-  const ZERO = new Prisma.Decimal(0);
-
-  const netRevenueOf = (agg: {
-    _sum: {
-      grandTotal: Prisma.Decimal | null;
-      taxAmount: Prisma.Decimal | null;
-      refundedAmount: Prisma.Decimal | null;
-    };
-  }) => {
-    const gross = agg._sum.grandTotal ?? ZERO;
-    const tax = agg._sum.taxAmount ?? ZERO;
-    const refunded = agg._sum.refundedAmount ?? ZERO;
-
-    const net = gross.minus(tax);
-    if (gross.lte(0) || refunded.lte(0)) return net;
-
-    // ফেরতের যে অংশটা আয় ছিল। clamp করা, কারণ refundedAmount হিসাব হয়
-    // totalAmount-এর বিপরীতে — যাতে বকশিশও থাকে — তাই বড় বকশিশের একটা
-    // পূর্ণ ফেরত তাত্ত্বিকভাবে net-কে ছাড়িয়ে যেতে পারত।
-    const revenueRefunded = Prisma.Decimal.min(refunded.times(net).dividedBy(gross), net);
-    return net.minus(revenueRefunded);
-  };
+  // সূত্রটা এখন lib/net-revenue.ts-এ — Insights পাতাও একই হিসাব দেখায়,
+  // তাই দুই জায়গায় আলাদা কপি রাখলে একদিন দুটো পাতা একই সময়কালের
+  // জন্য দুটো ভিন্ন আয় দেখাত।
 
   const totalRevenue = netRevenueOf(revenueResult);
 

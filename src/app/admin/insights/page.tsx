@@ -1,374 +1,393 @@
+import { Calendar, ChartNoAxesCombined, CircleCheck, CircleDollarSign } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { calculateFoodCost, getFoodCostHealth, type FoodCostHealth } from "@/lib/menu-profitability";
+import { requireStaff } from "@/lib/require-admin";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
-
+import { netRevenueOf } from "@/lib/net-revenue";
+import { type FoodCostHealth } from "@/lib/menu-profitability";
+import {
+  isDashboardPeriod,
+  periodStart,
+  type DashboardPeriod,
+} from "@/lib/dashboard-period";
+import {
+  DEFAULT_MENU_STATUS,
+  isMenuStatus,
+  type MenuStatusFilter,
+} from "@/lib/menu-status-filter";
+import {
+  filterMenuItems,
+  growthWindows,
+  loadMenuInsightSource,
+  neverSelling,
+  profitability,
+  revenueByCategory,
+  slowestSelling,
+  topSelling,
+  withSales,
+} from "@/lib/menu-insights";
+import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
+import InsightsToolbar from "./InsightsToolbar";
+import InsightsPeriodFilter from "./InsightsPeriodFilter";
+import InsightsList, { type InsightRow } from "./InsightsList";
 
 export const metadata = { title: "Insights" };
-// Minimum approved reviews before we trust a menu item's average rating
-// enough to base an insight on it — a single 5-star review shouldn't label
-// something a "Hidden Gem".
-const MIN_REVIEWS_FOR_RATING_INSIGHT = 2;
-const HIDDEN_GEM_MIN_RATING = 4.0;
-const QUALITY_RISK_MAX_RATING = 3.0;
 
-type ItemStat = {
-  id: string;
-  title: string;
-  categoryName: string;
-  isAvailable: boolean;
-  quantity: number;
-  revenue: number;
-  avgRating: number | null;
-  reviewCount: number;
-  // Profitability fields — derived from the item's recipe (see
-  // menu-profitability.ts). Independent of sales data above, so these
-  // stay populated even for items that have never sold.
-  price: number;
-  foodCost: number;
-  foodCostPercent: number | null;
-  grossMargin: number;
-  hasRecipe: boolean;
-  foodCostHealth: FoodCostHealth;
-  // Profit actually banked so far = grossMargin x units sold. Distinct
-  // from `revenue` above (revenue is gross sales dollars, this is what's
-  // left after ingredient cost) — the number an owner actually cares
-  // about when deciding what to push or pull from the menu.
-  totalProfitContribution: number;
+/**
+ * /admin/insights — built to the Figma "Insights" frame (1059px wide,
+ * column, gap 24):
+ *
+ *   Welcome header · date pill · Export Report
+ *   Search by Food Name + All Statuses
+ *   Overview (3 tiles)
+ *   Top Selling Items (bars, 8 per page)
+ *   Slowest Selling Items | Never Selling Items
+ *   Revenue by Category (bars, 5 per page)
+ *
+ * Below the Figma frame, in the same card style, Menu Profitability (food
+ * cost and margin per item) from the old page.
+ *
+ * Every card has its own period in the URL (?overview= ?top= ?slow=
+ * ?never= ?cat=, default Today), and ?q= / ?status= apply to all the
+ * item cards.
+ */
+
+// ⚠️ min-w-0: Slowest / Never Selling sit in a CSS grid, and a grid item
+// never shrinks below its content by default — at 320px the page-number
+// row made both cards wider than the screen and cut them off on the right.
+const CARD =
+  "flex min-w-0 flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]";
+const CARD_TITLE =
+  "min-w-0 font-frank-ruhl text-[22px] font-semibold leading-tight text-black min-[480px]:text-[24px] min-[480px]:leading-none xl:text-[30px]";
+const CARD_HINT = "font-sora text-[12px] leading-[1.4] text-black/70";
+
+const TOP_PAGE_SIZE = 8;
+const SMALL_LIST_PAGE_SIZE = 5;
+const CATEGORY_PAGE_SIZE = 5;
+const NEVER_SELLING_EMPTY: Record<DashboardPeriod, string> = {
+  today: "Every item has sold at least once today.",
+  week: "Every item has sold at least once this week.",
+  month: "Every item has sold at least once this month.",
+  all: "Every menu item has sold at least once. 🎉",
 };
 
-export default async function AdminInsightsPage() {
-  // Every figure on this page is money, and the food-cost percentages that
-  // drive the whole margin analysis come from InventoryItem.costPerUnit —
-  // so a hardcoded "$" here was mislabelling the very numbers an owner uses
-  // to decide what stays on the menu.
+const FOOD_COST_STYLES: Record<FoodCostHealth, string> = {
+  critical: "bg-[#FFE9EC] text-[#FF3F5C]",
+  watch: "bg-[#FFF2DA] text-[#FF9E00]",
+  healthy: "bg-[#E8FFEC] text-[#0ECF00]",
+  unknown: "bg-[#F9F6F3] text-black/70",
+};
+
+function readPeriod(value: string | undefined): DashboardPeriod {
+  return isDashboardPeriod(value) ? value : "today";
+}
+
+export default async function AdminInsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    overview?: string;
+    top?: string;
+    slow?: string;
+    never?: string;
+    cat?: string;
+  }>;
+}) {
+  // The layout already checks the "insights" scope; this call also gives
+  // us the session for the welcome name.
+  const session = await requireStaff("insights");
+
+  const params = await searchParams;
+  const q = params.q?.trim() || undefined;
+  const status: MenuStatusFilter = isMenuStatus(params.status) ? params.status : DEFAULT_MENU_STATUS;
+  const periods = {
+    overview: readPeriod(params.overview),
+    top: readPeriod(params.top),
+    slow: readPeriod(params.slow),
+    never: readPeriod(params.never),
+    cat: readPeriod(params.cat),
+  };
+
+  const now = new Date();
   const settings = await getRestaurantSettings();
   const units = settings.currencyMinorUnits;
   const money = (value: number) => formatAmount(value.toFixed(units), settings.currency);
-  const [menuItems, orderItemAgg, reviewAgg] = await Promise.all([
-    prisma.menuItem.findMany({
-      select: {
-        id: true,
-        title: true,
-        price: true,
-        isAvailable: true,
-        category: { select: { name: true } },
-        // Recipe / Bill-of-Materials — empty array means no recipe has
-        // been configured yet, handled as hasRecipe=false below rather
-        // than a misleading $0 food cost.
-        ingredients: {
-          select: {
-            quantityRequired: true,
-            inventoryItem: { select: { costPerUnit: true } },
-          },
-        },
-      },
-    }),
-    // OrderItem.price is a UNIT price, not a line total (confirmed by every
-    // other place in the app that renders `item.price * item.quantity`).
-    // Prisma's groupBy _sum can only sum a raw column, so it can't multiply
-    // price by quantity per row — we fetch the raw lines and aggregate
-    // revenue in JS instead.
-    prisma.orderItem.findMany({
-      where: { order: { status: { not: "CANCELLED" } } },
-      select: { menuItemId: true, quantity: true, price: true },
-    }),
-    prisma.review.groupBy({
-      by: ["menuItemId"],
-      _avg: { rating: true },
-      _count: { rating: true },
-      where: { status: "APPROVED" },
-    }),
-  ]);
 
-  const salesMap = new Map<string, { quantity: number; revenue: number }>();
-  orderItemAgg.forEach((line) => {
-    const existing = salesMap.get(line.menuItemId) ?? { quantity: 0, revenue: 0 };
-    existing.quantity += line.quantity;
-    // Decimal -> number, display/ranking-এর জন্য। এই সংখ্যা কেবল
-    // "কোন পদ কত আয় করল" সাজাতে ব্যবহার হয়, কোনো চালানে যায় না।
-    existing.revenue += line.price.toNumber() * line.quantity;
-    salesMap.set(line.menuItemId, existing);
-  });
-  const reviewMap = new Map(reviewAgg.map((r) => [r.menuItemId, r]));
+  // ── Overview ────────────────────────────────────────────────────────────
+  const overviewSince = periodStart(periods.overview, now);
+  const createdInOverview = overviewSince ? { createdAt: { gte: overviewSince } } : {};
+  const growth = growthWindows(periods.overview, now);
 
-  const stats: ItemStat[] = menuItems.map((item) => {
-    const sales = salesMap.get(item.id);
-    const reviews = reviewMap.get(item.id);
+  const [revenueAgg, completedOrders, newCustomers, previousCustomers, source] =
+    await Promise.all([
+      prisma.order.aggregate({
+        _sum: { grandTotal: true, taxAmount: true, refundedAmount: true },
+        where: { status: { not: "CANCELLED" }, ...createdInOverview },
+      }),
+      prisma.order.count({ where: { status: "DELIVERED", ...createdInOverview } }),
+      prisma.user.count({ where: { role: "CUSTOMER", createdAt: growth.current } }),
+      prisma.user.count({ where: { role: "CUSTOMER", createdAt: growth.previous } }),
+      loadMenuInsightSource(),
+    ]);
 
-    // Decimal -> number boundary. menu-profitability.ts ইচ্ছাকৃতভাবে
-    // Prisma-মুক্ত (তার header-এর নোট দ্রষ্টব্য), আর এই সংখ্যাগুলো
-    // ব্যবস্থাপনার রিপোর্ট — গ্রাহকের চালান নয়, তাই float নিরাপদ।
-    const recipe = item.ingredients.map((line) => ({
-      quantityRequired: line.quantityRequired,
-      costPerUnit: line.inventoryItem.costPerUnit.toNumber(),
-    }));
-    const { foodCost, foodCostPercent, grossMargin, hasRecipe } = calculateFoodCost(
-      recipe,
-      item.price.toNumber()
-    );
+  // New customer sign-ups, this window vs the one before it.
+  let growthValue: string;
+  if (previousCustomers > 0) {
+    const change = ((newCustomers - previousCustomers) / previousCustomers) * 100;
+    growthValue = `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
+  } else {
+    // Nothing to compare against — a percentage would be infinite.
+    growthValue = newCustomers > 0 ? `+${newCustomers} new` : "0%";
+  }
 
-    return {
-      id: item.id,
-      title: item.title,
-      categoryName: item.category?.name ?? "Uncategorized",
-      isAvailable: item.isAvailable,
-      quantity: sales?.quantity ?? 0,
-      revenue: sales?.revenue ?? 0,
-      avgRating: reviews?._avg.rating ?? null,
-      reviewCount: reviews?._count.rating ?? 0,
-      price: item.price.toNumber(),
-      foodCost,
-      foodCostPercent,
-      grossMargin,
-      hasRecipe,
-      foodCostHealth: getFoodCostHealth(foodCostPercent),
-      totalProfitContribution: grossMargin * (sales?.quantity ?? 0),
-    };
-  });
+  const overviewTiles = [
+    {
+      label: "Total Revenue",
+      value: money(netRevenueOf(revenueAgg).toNumber()),
+      hint: periods.overview === "all" ? "All Over" : "Net sales, after tax & refunds",
+      icon: CircleDollarSign,
+    },
+    {
+      label: "Total Orders",
+      value: completedOrders.toLocaleString("en-US"),
+      hint: "Orders Completed",
+      icon: CircleCheck,
+    },
+    {
+      label: "Customer Growth",
+      value: growthValue,
+      hint: growth.label,
+      icon: ChartNoAxesCombined,
+    },
+  ];
 
-  const soldItems = stats.filter((s) => s.quantity > 0);
-  const avgQuantityAcrossSoldItems =
-    soldItems.length > 0
-      ? soldItems.reduce((sum, s) => sum + s.quantity, 0) / soldItems.length
-      : 0;
+  // ── Item cards ──────────────────────────────────────────────────────────
+  const items = filterMenuItems(source.items, q, status);
 
-  const topSellers = [...soldItems].sort((a, b) => b.quantity - a.quantity).slice(0, 8);
+  const top = topSelling(withSales(source, items, periods.top, now));
+  const maxTopQuantity = top[0]?.quantity ?? 1;
+  const topRows: InsightRow[] = top.map((item) => ({
+    key: item.id,
+    label: item.title,
+    amount: money(item.revenue),
+    fraction: item.quantity / maxTopQuantity,
+    sold: item.quantity,
+  }));
 
-  const bottomSellers = [...soldItems].sort((a, b) => a.quantity - b.quantity).slice(0, 5);
+  const slowRows: InsightRow[] = slowestSelling(withSales(source, items, periods.slow, now)).map(
+    (item) => ({ key: item.id, label: item.title, sold: item.quantity })
+  );
 
-  const neverOrdered = stats.filter((s) => s.quantity === 0);
+  const neverRows: InsightRow[] = neverSelling(withSales(source, items, periods.never, now)).map(
+    (item) => ({
+      key: item.id,
+      label: item.isAvailable ? item.title : `${item.title} (unavailable)`,
+      sold: 0,
+    })
+  );
 
-  const hiddenGems = stats
-    .filter(
-      (s) =>
-        s.reviewCount >= MIN_REVIEWS_FOR_RATING_INSIGHT &&
-        (s.avgRating ?? 0) >= HIDDEN_GEM_MIN_RATING &&
-        s.quantity < avgQuantityAcrossSoldItems
-    )
-    .sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0))
-    .slice(0, 5);
+  const categories = revenueByCategory(withSales(source, items, periods.cat, now));
+  const maxCategoryRevenue = Math.max(...categories.map((c) => c.revenue), 0) || 1;
+  const categoryRows: InsightRow[] = categories.map((category) => ({
+    key: category.name,
+    label: category.name,
+    amount: money(category.revenue),
+    fraction: category.revenue / maxCategoryRevenue,
+  }));
 
-  const qualityRisks = stats
-    .filter(
-      (s) =>
-        s.reviewCount >= MIN_REVIEWS_FOR_RATING_INSIGHT &&
-        (s.avgRating ?? 5) <= QUALITY_RISK_MAX_RATING
-    )
-    .sort((a, b) => (a.avgRating ?? 0) - (b.avgRating ?? 0))
-    .slice(0, 5);
+  // Food cost is about the dish, not a period, so this uses all-time sales.
+  const { withRecipe, withoutRecipe } = profitability(withSales(source, items, "all", now));
 
-  // Worst food-cost-% first, so the items bleeding the most margin are
-  // the first thing the owner sees — matches the "Slowest Movers" /
-  // "Quality Risk" pattern above of surfacing what needs attention, not
-  // what's already fine. Items without a computable percent (no recipe
-  // configured) are kept separate rather than sorted arbitrarily among
-  // items that DO have a real number.
-  const itemsWithRecipe = stats
-    .filter((s) => s.hasRecipe && s.foodCostPercent !== null)
-    .sort((a, b) => (b.foodCostPercent ?? 0) - (a.foodCostPercent ?? 0));
-  const itemsWithoutRecipe = stats.filter((s) => !s.hasRecipe);
-
-  const foodCostHealthStyles: Record<FoodCostHealth, string> = {
-    critical: "bg-red-50 text-red-600",
-    watch: "bg-amber-50 text-amber-600",
-    healthy: "bg-emerald-50 text-emerald-600",
-    unknown: "bg-gray-100 text-gray-500",
-  };
-
-  const categoryRevenueMap = new Map<string, number>();
-  stats.forEach((s) => {
-    categoryRevenueMap.set(s.categoryName, (categoryRevenueMap.get(s.categoryName) ?? 0) + s.revenue);
-  });
-  const categoryRevenue = [...categoryRevenueMap.entries()]
-    .map(([name, revenue]) => ({ name, revenue }))
-    .sort((a, b) => b.revenue - a.revenue);
-  const maxCategoryRevenue = Math.max(...categoryRevenue.map((c) => c.revenue), 1);
+  // Remount each list when its filters change, so it goes back to page 1.
+  const filterKey = `${q ?? ""}|${status}`;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-1">Menu Insights</h1>
-      <p className="text-sm text-gray-400 mb-6">
-        Data-driven analysis of sales and ratings across your menu.
-      </p>
+    <div className="flex flex-col gap-6">
+      {/* ── Welcome header — same markup as the dashboard ── */}
+      <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
+        <h1 className="min-w-0 font-sora text-[22px] font-semibold leading-tight tracking-normal text-black/70 md:leading-none lg:text-[26px] xl:text-[30px]">
+          Welcome Back,{" "}
+          <span className="bg-gradient-to-r from-[#FF7100] to-[#FF1CA4] bg-clip-text text-transparent">
+            {session.user.name ?? "there"}!
+          </span>
+        </h1>
 
-      {/* Top sellers */}
-      <div className="border border-gray-200 rounded-md p-5 bg-white mb-6">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          Top-Selling Items
-        </h3>
-        {topSellers.length === 0 ? (
-          <p className="text-sm text-gray-400">No order data yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {topSellers.map((item) => (
-              <div key={item.id} className="flex items-center gap-3">
-                <span className="text-sm text-gray-700 w-44 truncate">{item.title}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2">
-                  <div
-                    className="bg-[#FF4C15] h-2 rounded-full"
-                    style={{ width: `${(item.quantity / topSellers[0].quantity) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500 w-16 text-right">{item.quantity} sold</span>
-                <span className="text-xs font-semibold text-[#2C6252] w-20 text-right">
-                  {money(item.revenue)}
+        <div className="flex w-full shrink-0 flex-nowrap items-center gap-2.5 md:w-auto md:justify-start">
+          <span className="flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-3 font-sora text-[12px] leading-none text-black md:h-11 md:flex-none md:justify-start md:px-4 md:text-[14px]">
+            <Calendar className="h-4 w-4 shrink-0 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+            <span>
+              {now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          </span>
+          <ExportReportButton
+            endpoint="/api/admin/insights/menu-export"
+            forwardParams={["q", "status", "top"]}
+            fallbackFilename="cuisine-menu-insights.csv"
+          />
+        </div>
+      </div>
+
+      <InsightsToolbar status={status} />
+
+      {/* ── Overview ── */}
+      <section className={`${CARD} gap-6`}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className={CARD_TITLE}>Overview</h2>
+          <InsightsPeriodFilter param="overview" value={periods.overview} />
+        </div>
+
+        <div className="grid gap-4 min-[640px]:grid-cols-3 md:gap-5">
+          {overviewTiles.map((tile) => (
+            <div key={tile.label} className="flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="min-w-0 font-frank-ruhl text-[18px] font-medium leading-tight text-black lg:text-[20px] lg:leading-none">
+                  {tile.label}
+                </h3>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white">
+                  <tile.icon className="h-[18px] w-[18px] text-black" strokeWidth={1.2} aria-hidden="true" />
                 </span>
               </div>
-            ))}
+              <div className="flex flex-col gap-3">
+                <p className="break-words font-frank-ruhl text-[24px] font-semibold leading-none text-black">
+                  {tile.value}
+                </p>
+                <p className="font-sora text-[12px] font-normal leading-none text-black/70">{tile.hint}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Top Selling Items ── */}
+      <section className={CARD}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className={CARD_TITLE}>Top Selling Items</h2>
+          <InsightsPeriodFilter param="top" value={periods.top} />
+        </div>
+        <InsightsList
+          key={`top|${filterKey}|${periods.top}`}
+          rows={topRows}
+          variant="bar"
+          pageSize={TOP_PAGE_SIZE}
+          noun="Items"
+          emptyText={q ? "No matching item sold in this period." : "No sales in this period yet."}
+          alwaysShowFooter
+        />
+      </section>
+
+      {/* ── Slowest | Never ── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className={CARD}>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className={CARD_TITLE}>Slowest Selling Items</h2>
+            <InsightsPeriodFilter param="slow" value={periods.slow} />
           </div>
-        )}
+          <InsightsList
+            key={`slow|${filterKey}|${periods.slow}`}
+            rows={slowRows}
+            variant="rank"
+            pageSize={SMALL_LIST_PAGE_SIZE}
+            noun="Items"
+            emptyText="Not enough sales in this period yet."
+          />
+        </section>
+
+        <section className={CARD}>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className={CARD_TITLE}>Never Selling Items</h2>
+            <InsightsPeriodFilter param="never" value={periods.never} />
+          </div>
+          <InsightsList
+            key={`never|${filterKey}|${periods.never}`}
+            rows={neverRows}
+            variant="rank"
+            pageSize={SMALL_LIST_PAGE_SIZE}
+            noun="Items"
+            emptyText={q ? "No matching item here." : NEVER_SELLING_EMPTY[periods.never]}
+          />
+        </section>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Hidden gems */}
-        <div className="border border-gray-200 rounded-md p-5 bg-white">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
-            Hidden Gems
-          </h3>
-          <p className="text-xs text-gray-400 mb-4">Highly rated, but underselling — worth promoting.</p>
-          {hiddenGems.length === 0 ? (
-            <p className="text-sm text-gray-400">None right now.</p>
-          ) : (
-            <div className="space-y-3">
-              {hiddenGems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{item.title}</p>
-                    <p className="text-xs text-gray-400">
-                      {item.quantity} sold &middot; {item.reviewCount} reviews
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full shrink-0">
-                    ★ {item.avgRating?.toFixed(1)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* ── Revenue by Category ── */}
+      <section className={CARD}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className={CARD_TITLE}>Revenue by Category</h2>
+          <InsightsPeriodFilter param="cat" value={periods.cat} />
         </div>
+        <InsightsList
+          key={`cat|${filterKey}|${periods.cat}`}
+          rows={categoryRows}
+          variant="bar"
+          pageSize={CATEGORY_PAGE_SIZE}
+          noun="Categories"
+          emptyText="No categories to show."
+          alwaysShowFooter
+        />
+      </section>
 
-        {/* Quality risk */}
-        <div className="border border-gray-200 rounded-md p-5 bg-white">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
-            Quality Risk
-          </h3>
-          <p className="text-xs text-gray-400 mb-4">Low rated items — review the recipe or listing.</p>
-          {qualityRisks.length === 0 ? (
-            <p className="text-sm text-gray-400">None right now.</p>
-          ) : (
-            <div className="space-y-3">
-              {qualityRisks.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{item.title}</p>
-                    <p className="text-xs text-gray-400">
-                      {item.quantity} sold &middot; {item.reviewCount} reviews
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold bg-red-50 text-red-500 px-2 py-0.5 rounded-full shrink-0">
-                    ★ {item.avgRating?.toFixed(1)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Bottom sellers */}
-        <div className="border border-gray-200 rounded-md p-5 bg-white">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-            Slowest Movers
-          </h3>
-          {bottomSellers.length === 0 ? (
-            <p className="text-sm text-gray-400">Not enough order data yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {bottomSellers.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700 truncate">{item.title}</span>
-                  <span className="text-gray-400 text-xs shrink-0 ml-2">{item.quantity} sold</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Never ordered */}
-        <div className="border border-gray-200 rounded-md p-5 bg-white">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
-            Never Ordered
-          </h3>
-          <p className="text-xs text-gray-400 mb-4">
-            On the menu, zero orders so far — consider removing or featuring these.
+      {/* ── Below the Figma frame: food-cost analysis ── */}
+      <section className={CARD}>
+        <div className="flex flex-col gap-2">
+          <h2 className={CARD_TITLE}>Menu Profitability</h2>
+          <p className={CARD_HINT}>
+            Food cost as a % of price, per item — worst first. Rule of thumb: aim for 28–35%; above
+            45% usually means the item loses you money the more it sells.
           </p>
-          {neverOrdered.length === 0 ? (
-            <p className="text-sm text-gray-400">Every menu item has sold at least once. 🎉</p>
-          ) : (
-            <div className="space-y-2">
-              {neverOrdered.slice(0, 10).map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700 truncate">{item.title}</span>
-                  {!item.isAvailable && (
-                    <span className="text-[11px] text-gray-400 shrink-0 ml-2">unavailable</span>
-                  )}
-                </div>
-              ))}
-              {neverOrdered.length > 10 && (
-                <p className="text-xs text-gray-400 pt-1">+{neverOrdered.length - 10} more</p>
-              )}
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Menu profitability */}
-      <div className="border border-gray-200 rounded-md p-5 bg-white mb-6">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
-          Menu Profitability
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Food cost as a % of price, per item — sorted worst first. Industry rule of thumb: aim for
-          28-35%; above 45% usually means the item is losing you money the more it sells.
-        </p>
-        {itemsWithRecipe.length === 0 ? (
-          <p className="text-sm text-gray-400">
-            No menu item has a recipe configured yet — add ingredients under Inventory to see food
-            cost and margin here.
+        {withRecipe.length === 0 ? (
+          <p className="font-sora text-[14px] leading-[1.3] text-black/70">
+            No menu item has a recipe yet — add ingredients to an item to see its food cost and
+            margin here.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="-mx-4 overflow-x-auto px-4 min-[480px]:mx-0 min-[480px]:px-0">
+            <table className="w-full min-w-[720px] border-separate border-spacing-0 font-sora text-[14px]">
               <thead>
-                <tr className="text-left text-[11px] text-gray-400 uppercase tracking-wide border-b border-gray-100">
-                  <th className="py-2 pr-3 font-medium">Item</th>
-                  <th className="py-2 px-3 font-medium text-right">Price</th>
-                  <th className="py-2 px-3 font-medium text-right">Food Cost</th>
-                  <th className="py-2 px-3 font-medium text-right">Food Cost %</th>
-                  <th className="py-2 px-3 font-medium text-right">Margin/Unit</th>
-                  <th className="py-2 px-3 font-medium text-right">Units Sold</th>
-                  <th className="py-2 pl-3 font-medium text-right">Profit Contribution</th>
+                <tr className="text-left text-[12px] font-normal text-black/70">
+                  {[
+                    ["Item", "text-left"],
+                    ["Price", "text-right"],
+                    ["Food Cost", "text-right"],
+                    ["Food Cost %", "text-center"],
+                    ["Margin / Unit", "text-right"],
+                    ["Units Sold", "text-right"],
+                    ["Profit", "text-right"],
+                  ].map(([label, align], i, all) => (
+                    <th
+                      key={label}
+                      className={`bg-[#F9F6F3] px-3 py-3 font-normal ${align} ${
+                        i === 0 ? "rounded-l-full pl-4" : ""
+                      } ${i === all.length - 1 ? "rounded-r-full pr-4" : ""}`}
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {itemsWithRecipe.map((item) => (
-                  <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2 pr-3 text-gray-700 truncate max-w-[160px]">{item.title}</td>
-                    <td className="py-2 px-3 text-right text-gray-600">{money(item.price)}</td>
-                    <td className="py-2 px-3 text-right text-gray-600">{money(item.foodCost)}</td>
-                    <td className="py-2 px-3 text-right">
+                {withRecipe.map((item) => (
+                  <tr key={item.id} className="text-black">
+                    <td className="max-w-[220px] truncate border-b border-[#F9F6F3] py-3 pl-4 pr-3">
+                      {item.title}
+                    </td>
+                    <td className="border-b border-[#F9F6F3] px-3 py-3 text-right">{money(item.price)}</td>
+                    <td className="border-b border-[#F9F6F3] px-3 py-3 text-right">{money(item.foodCost)}</td>
+                    <td className="border-b border-[#F9F6F3] px-3 py-3 text-center">
                       <span
-                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${foodCostHealthStyles[item.foodCostHealth]}`}
+                        className={`inline-flex rounded-full px-2.5 py-1.5 text-[12px] font-semibold leading-none ${
+                          FOOD_COST_STYLES[item.foodCostHealth]
+                        }`}
                       >
                         {item.foodCostPercent?.toFixed(0)}%
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right text-gray-600">{money(item.grossMargin)}</td>
-                    <td className="py-2 px-3 text-right text-gray-500">{item.quantity}</td>
-                    <td className="py-2 pl-3 text-right font-semibold text-[#2C6252]">
-                      {money(item.totalProfitContribution)}
+                    <td className="border-b border-[#F9F6F3] px-3 py-3 text-right">{money(item.grossMargin)}</td>
+                    <td className="border-b border-[#F9F6F3] px-3 py-3 text-right">{item.quantity}</td>
+                    <td className="border-b border-[#F9F6F3] py-3 pl-3 pr-4 text-right font-frank-ruhl text-[16px] font-semibold">
+                      {money(item.profitContribution)}
                     </td>
                   </tr>
                 ))}
@@ -376,45 +395,19 @@ export default async function AdminInsightsPage() {
             </table>
           </div>
         )}
-        {itemsWithoutRecipe.length > 0 && (
-          <p className="text-xs text-gray-400 mt-4">
-            {itemsWithoutRecipe.length} item{itemsWithoutRecipe.length === 1 ? "" : "s"} without a
-            recipe configured, so no food cost can be shown:{" "}
-            {itemsWithoutRecipe
+
+        {withoutRecipe.length > 0 && (
+          <p className={CARD_HINT}>
+            {withoutRecipe.length} item{withoutRecipe.length === 1 ? "" : "s"} without a recipe, so
+            no food cost can be shown:{" "}
+            {withoutRecipe
               .slice(0, 6)
-              .map((i) => i.title)
+              .map((item) => item.title)
               .join(", ")}
-            {itemsWithoutRecipe.length > 6 ? `, +${itemsWithoutRecipe.length - 6} more` : ""}.
+            {withoutRecipe.length > 6 ? `, +${withoutRecipe.length - 6} more` : ""}.
           </p>
         )}
-      </div>
-
-      {/* Category revenue */}
-      <div className="border border-gray-200 rounded-md p-5 bg-white">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-          Revenue by Category
-        </h3>
-        {categoryRevenue.every((c) => c.revenue === 0) ? (
-          <p className="text-sm text-gray-400">No order data yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {categoryRevenue.map((cat) => (
-              <div key={cat.name} className="flex items-center gap-3">
-                <span className="text-sm text-gray-700 w-32 truncate">{cat.name}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2">
-                  <div
-                    className="bg-[#2C6252] h-2 rounded-full"
-                    style={{ width: `${(cat.revenue / maxCategoryRevenue) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-[#2C6252] w-20 text-right">
-                  {money(cat.revenue)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      </section>
     </div>
   );
 }
