@@ -809,8 +809,13 @@ model DeliveryTracking {
   // rather than a native background-GPS app).
   riderLocationUpdatedAt DateTime @default(now())
 
-  destLat Float
-  destLng Float
+  // Customer's location on the map. Nullable on purpose: when the address
+  // can't be placed on the map (map service down, rate-limited, or a
+  // village the map doesn't know), the rider is still assigned — they
+  // navigate by the written address instead. Before this, a map outage
+  // blocked every dispatch with "Could not locate this address".
+  destLat Float?
+  destLng Float?
 
   assignedAt  DateTime  @default(now())
   deliveredAt DateTime?

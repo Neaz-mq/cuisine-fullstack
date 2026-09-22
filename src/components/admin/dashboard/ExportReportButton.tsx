@@ -56,7 +56,9 @@ export default function ExportReportButton({
       if (!res.ok) {
         // Error গুলো JSON, সফল উত্তরটা CSV — তাই এখানেই আলাদা করে পড়া।
         const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? "Export failed. Please try again.");
+        // The HTTP code in the fallback message makes a missing route (404/405)
+        // or a server crash (500) obvious instead of a vague "failed".
+        throw new Error(body?.error ?? `Export failed (error ${res.status}). Please try again.`);
       }
 
       const blob = await res.blob();

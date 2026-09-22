@@ -49,21 +49,51 @@ function rememberCelebration(orderId: string) {
   }
 }
 
-type Step = "congrats" | "review";
+export type CelebrationStep = "congrats" | "review";
+type Step = CelebrationStep;
+
+/** One dish in the order, for the "rate your dishes" list. */
+export type ReviewDish = { menuItemId: string; title: string; imageUrl: string | null };
 
 export default function OrderCelebration({
   open,
   orderId,
   onClose,
+  dishes = [],
+  canRate = false,
+  startAt = "congrats",
 }: {
   open: boolean;
   orderId: string;
   onClose: () => void;
+  /** The dishes in this order (one entry per dish). */
+  dishes?: ReviewDish[];
+  /**
+   * Star ratings need a logged-in customer who owns the order (see
+   * /api/orders/[id]/review). Guests only get the comment box.
+   */
+  canRate?: boolean;
+  /** "review" when opened from the "Write a Review" button — skips the
+   *  congratulations screen the customer has already seen. */
+  startAt?: Step;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [step, setStep] = useState<Step>("congrats");
+  const [step, setStep] = useState<Step>(startAt);
   const [comment, setComment] = useState("");
+  // menuItemId → 1..5. A dish with no entry simply isn't rated.
+  const [ratings, setRatings] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Each time the dialog opens, start on the requested screen. (Adjusting
+  // state during render, like MenuToolbar does, instead of in an effect.)
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setStep(startAt);
+  }
+
+  const ratedCount = Object.keys(ratings).length;
+  const canSubmit = comment.trim().length > 0 || ratedCount > 0;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -95,14 +125,17 @@ export default function OrderCelebration({
 
   async function submitReview() {
     const text = comment.trim();
-    if (!text || submitting) return;
+    if (!canSubmit || submitting) return;
 
     setSubmitting(true);
     try {
       const res = await fetch(`/api/orders/${orderId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: text }),
+        body: JSON.stringify({
+          comment: text,
+          ratings: Object.entries(ratings).map(([menuItemId, rating]) => ({ menuItemId, rating })),
+        }),
       });
 
       if (!res.ok) {
@@ -129,7 +162,7 @@ export default function OrderCelebration({
       onClick={(event) => {
         if (event.target === dialogRef.current) dismiss();
       }}
-      className={`m-auto w-[calc(100vw-32px)] bg-white p-0 backdrop:bg-black/50 ${
+      className={`m-auto max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] overflow-y-auto bg-white p-0 backdrop:bg-black/50 ${
         step === "congrats" ? "max-w-[555px] rounded-[30px]" : "max-w-[815px] rounded-[20px]"
       }`}
     >
@@ -198,6 +231,16 @@ export default function OrderCelebration({
               </div>
             </div>
 
+            {canRate && dishes.length > 0 && (
+              <DishRatings
+                dishes={dishes}
+                ratings={ratings}
+                onRate={(menuItemId, rating) =>
+                  setRatings((prev) => ({ ...prev, [menuItemId]: rating }))
+                }
+              />
+            )}
+
             {/* Figma "Fill": cream, radius 12, padding 12, উচ্চতা 121। */}
             <textarea
               value={comment}
@@ -223,7 +266,7 @@ export default function OrderCelebration({
                 /* ⚠️ ফাঁকা লেখায় নিষ্ক্রিয় — server-ও সেটা নেবে না
                    (orderReviewSchema), তাই এখানে আটকানো মানে একটা অকারণ
                    round trip আর একটা error toast কম। */
-                disabled={submitting || comment.trim().length === 0}
+                disabled={submitting || !canSubmit}
                 className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] disabled:opacity-50 md:text-[16px]"
               >
                 {submitting ? "Sending…" : "Submit"}
@@ -243,6 +286,90 @@ export default function OrderCelebration({
  * তাতে কোনো নেটওয়ার্ক request লাগে না — modal-টা ঠিক যে মুহূর্তে
  * খোলে সেই মুহূর্তেই পুরোটা দেখা যায়, অর্ধেক আঁকা অবস্থায় নয়।
  */
+/**
+ * "Rate your dishes" — one row per dish: photo, name, five stars.
+ *
+ * Each row is a radio group, so screen readers announce "3 of 5" and the
+ * arrow keys work. Tapping the star that is already chosen keeps it (there
+ * is no un-rate — just don't touch a dish you don't want to rate).
+ */
+function DishRatings({
+  dishes,
+  ratings,
+  onRate,
+}: {
+  dishes: ReviewDish[];
+  ratings: Record<string, number>;
+  onRate: (menuItemId: string, rating: number) => void;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <p className="font-sora text-[13px] font-semibold leading-none text-black md:text-[14px]">
+        Rate your dishes
+      </p>
+      <ul className="flex w-full flex-col gap-2">
+        {dishes.map((dish) => {
+          const current = ratings[dish.menuItemId] ?? 0;
+          return (
+            <li
+              key={dish.menuItemId}
+              className="flex flex-col gap-2 rounded-[12px] bg-[#F9F6F3] p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                {dish.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- small thumbnail from any allowed host
+                  <img
+                    src={dish.imageUrl}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 shrink-0 rounded-[8px] object-cover"
+                  />
+                ) : (
+                  <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-[8px] bg-white" />
+                )}
+                <span className="min-w-0 break-words font-sora text-[13px] font-medium leading-[1.3] text-black md:text-[14px]">
+                  {dish.title}
+                </span>
+              </span>
+
+              <div
+                role="radiogroup"
+                aria-label={`Rate ${dish.title}`}
+                className="flex shrink-0 items-center gap-0.5"
+              >
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={current === value}
+                    aria-label={`${value} star${value === 1 ? "" : "s"}`}
+                    onClick={() => onRate(dish.menuItemId, value)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:[outline:2px_solid_#FF9540]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-6 w-6"
+                      fill={value <= current ? "#FF9540" : "none"}
+                      stroke="#FF9540"
+                      strokeWidth={1.5}
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.33l-5.8 3.05 1.1-6.46-4.69-4.58 6.49-.95L12 2.5Z" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function CelebrationArt() {
   return (
     <svg

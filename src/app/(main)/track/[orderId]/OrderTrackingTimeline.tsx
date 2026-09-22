@@ -5,7 +5,11 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { formatOrderId } from "@/lib/format-order-id";
 import ChatModal from "@/components/ChatModal";
-import OrderCelebration, { hasSeenCelebration } from "./OrderCelebration";
+import OrderCelebration, {
+  hasSeenCelebration,
+  type CelebrationStep,
+  type ReviewDish,
+} from "./OrderCelebration";
 import KitchenStatusCard from "./KitchenStatusCard";
 import { formatAmount, isPositiveAmount } from "@/lib/currency-format";
 import type { TrackedOrder } from "@/lib/track-order";
@@ -189,6 +193,20 @@ export default function OrderTrackingTimeline({
       !hasSeenCelebration(initialOrder.id)
   );
 
+  // Which screen the pop-up opens on: the automatic one after delivery
+  // starts with "Congratulations!", the "Write a Review" button goes
+  // straight to the review form.
+  const [celebrationStart, setCelebrationStart] = useState<CelebrationStep>("congrats");
+
+  // One entry per dish — the same dish can sit on two order lines.
+  const reviewDishes: ReviewDish[] = [];
+  const seenDishes = new Set<string>();
+  for (const item of order.items) {
+    if (seenDishes.has(item.menuItemId)) continue;
+    seenDishes.add(item.menuItemId);
+    reviewDishes.push({ menuItemId: item.menuItemId, title: item.title, imageUrl: item.imageUrl });
+  }
+
   const isClient = useIsClient();
 
   useEffect(() => {
@@ -289,6 +307,21 @@ export default function OrderTrackingTimeline({
           >
             {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
           </span>
+
+          {/* The pop-up after delivery only shows once per order, so this
+              is how a customer reviews later (or changes their review). */}
+          {order.status === "DELIVERED" && (
+            <button
+              type="button"
+              onClick={() => {
+                setCelebrationStart("review");
+                setCelebrating(true);
+              }}
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[46px] md:px-5 md:text-[16px]"
+            >
+              Write a Review
+            </button>
+          )}
         </div>
 
         {isCancelled ? (
@@ -579,7 +612,13 @@ export default function OrderTrackingTimeline({
       <OrderCelebration
         open={celebrating}
         orderId={order.id}
-        onClose={() => setCelebrating(false)}
+        onClose={() => {
+          setCelebrating(false);
+          setCelebrationStart("congrats");
+        }}
+        dishes={reviewDishes}
+        canRate={order.isMemberOrder}
+        startAt={celebrationStart}
       />
     </div>
   );

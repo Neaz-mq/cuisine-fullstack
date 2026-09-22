@@ -70,6 +70,8 @@ export const TRACK_ORDER_SELECT = {
       id: true,
       quantity: true,
       price: true,
+      // For the "rate each dish" step of the review pop-up.
+      menuItemId: true,
       menuItem: { select: { title: true, description: true, imageUrl: true } },
     },
   },
@@ -102,6 +104,8 @@ type LatLng = { lat: number; lng: number };
 
 export type TrackedOrderItem = {
   id: string;
+  /** The dish itself — what a star rating is attached to. */
+  menuItemId: string;
   quantity: number;
   title: string;
   description: string | null;
@@ -157,6 +161,12 @@ export type TrackedOrder = {
   shippingMethod: TrackOrderRecord["shippingMethod"];
   table: { label: string } | null;
   items: TrackedOrderItem[];
+  /**
+   * True when a logged-in customer placed this order. Only they can give
+   * dishes star ratings (a `Review` row needs a user); guest orders can
+   * still leave the written comment. The user id itself is never sent.
+   */
+  isMemberOrder: boolean;
 
   /** Map-এর গন্তব্য পিন — কেবল চলমান delivery অর্ডারে, নাহলে null। */
   destination: LatLng | null;
@@ -223,7 +233,7 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
   const tracking = order.deliveryTracking;
   const destination: LatLng | null = !isActiveDelivery
     ? null
-    : live && tracking
+    : live && tracking && tracking.destLat !== null && tracking.destLng !== null
       ? { lat: tracking.destLat, lng: tracking.destLng }
       : order.deliveryLat !== null && order.deliveryLng !== null
         ? { lat: order.deliveryLat, lng: order.deliveryLng }
@@ -258,6 +268,7 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
       ? money(order.totalAmount.plus(order.discountAmount).plus(order.tierDiscountAmount))
       : null,
     itemCount: order.items.reduce((total, item) => total + item.quantity, 0),
+    isMemberOrder: order.userId !== null,
 
     firstName: order.firstName,
     city: order.city,
@@ -267,6 +278,7 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
     table: order.table,
     items: order.items.map((item) => ({
       id: item.id,
+      menuItemId: item.menuItemId,
       quantity: item.quantity,
       title: item.menuItem.title,
       description: item.menuItem.description || null,

@@ -8,34 +8,30 @@ import { checkRateLimit } from "@/lib/rate-limit";
 /**
  * POST /api/orders/[id]/review
  *
- * Figma-র delivered-অবস্থার "How Was Your Food Experience?" modal।
+ * The "How Was Your Food Experience?" pop-up on /track/[orderId], sent
+ * once the order is delivered. It carries up to two things:
  *
- * ── কে লিখতে পারেন ──────────────────────────────────────────────────
+ *   comment → one OrderReview for the whole order (as before).
  *
- * ⚠️ অনুমতির নিয়ম হুবহু /track পাতার — `resolveOrderAccess`। অর্থাৎ
- * অতিথি অর্ডারে লিঙ্কটাই টিকিট, আর মালিকানাধীন অর্ডারে log in করতে হবে।
- * আলাদা নিয়ম লিখলে এমন হতো যে গ্রাহক নিজের অর্ডারটা দেখতে পাচ্ছেন
- * অথচ রিভিউ দিতে পারছেন না (বা উল্টোটা, যা আরও খারাপ)।
+ *   ratings → one `Review` per rated dish, status PENDING. These are what
+ *             /admin/reviews lists for Accept / Reject, and what the dish's
+ *             menu page shows once approved. Before this, nothing in the
+ *             app ever created a `Review`, so the admin page stayed empty
+ *             no matter how many customers reviewed their food.
  *
- * ⚠️ কেবল DELIVERED অর্ডারে। "খাবার কেমন লাগল" প্রশ্নটার কোনো উত্তর
- * নেই যতক্ষণ খাবারটা পৌঁছয়নি, আর বাতিল অর্ডারে তো নয়ই।
+ * ⚠️ Star ratings need a logged-in customer who OWNS the order:
+ *   - a `Review` row must belong to a user (userId is required), so guest
+ *     orders can only leave the written comment;
+ *   - staff can open any order's tracking page, and must not be able to
+ *     post ratings in a customer's name.
  *
- * ── কেন upsert ──────────────────────────────────────────────────────
- *
- * OrderReview-তে orderId unique। গ্রাহক modal-টা দুবার খুলে দুবার
- * submit করলে (বা network ধীর হওয়ায় দুবার চাপলে) create দিয়ে P2002
- * আসত আর তিনি একটা অকারণ error দেখতেন। upsert-এ দ্বিতীয় লেখাটা
- * আগেরটাকেই বদলে দেয় — যা তিনি চাইছিলেনও।
- *
- * ⚠️ upsert-এ `status` ইচ্ছাকৃতভাবে আবার PENDING-এ ফেরত যায়: লেখা
- * বদলালে সেটা নতুন করে অনুমোদন পাওয়ার কথা, নাহলে কেউ একটা নিরীহ রিভিউ
- * অনুমোদন করিয়ে নিয়ে পরে লেখাটা বদলে দিতে পারতেন।
+ * Sending again updates the same rows (one review per customer per dish —
+ * the @@unique in the schema) and puts them back to PENDING, so an edited
+ * review is checked again before it goes public.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // ⚠️ rate limit access check-এর আগেই — নাহলে অস্তিত্বহীন id-তে বারবার
-  // request পাঠিয়ে বিনা খরচে DB-তে lookup করানো যেত।
   const rate = checkRateLimit(req, "order-review", { limit: 10, windowMs: 60 * 1000 });
   if (!rate.allowed) {
     return NextResponse.json(
@@ -49,7 +45,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, status: true, userId: true, firstName: true },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+      firstName: true,
+      items: { select: { menuItemId: true } },
+    },
   });
 
   if (!order) {
@@ -58,8 +60,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const access = await resolveOrderAccess(order);
   if (!access) {
-    // GET-এর মতোই 404, 403 নয় — 403 নিশ্চিত করে দিত যে এই id-তে একটা
-    // order আছে, আর সেটাই enumeration oracle।
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
@@ -70,24 +70,56 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  await prisma.orderReview.upsert({
-    where: { orderId: order.id },
-    create: {
-      orderId: order.id,
-      // ⚠️ userId বসে কেবল তখনই যখন অর্ডারটার একজন মালিক আছে। অতিথি
-      // অর্ডারে null — সেখানে কোনো অ্যাকাউন্টই নেই, আর session-এর
-      // user-কে জুড়ে দেওয়া ভুল হতো (staff অন্যের অর্ডার দেখতে পারেন)।
-      userId: order.userId,
-      authorName: order.firstName,
-      comment: parsed.comment,
-    },
-    update: {
-      comment: parsed.comment,
-      status: "PENDING",
-    },
-  });
+  // Only dishes that were actually in this order, one rating per dish (if
+  // the same dish is sent twice, the last one wins).
+  const orderedDishes = new Set(order.items.map((item) => item.menuItemId));
+  const ratings = new Map<string, number>();
+  for (const { menuItemId, rating } of parsed.ratings) {
+    if (orderedDishes.has(menuItemId)) ratings.set(menuItemId, rating);
+  }
 
-  // ⚠️ রিভিউটা ফেরত পাঠানো হয় না — client-এর কেবল "সফল" জানলেই চলে,
-  // আর কম পাঠানো মানে কম ফাঁস হওয়ার সুযোগ।
-  return NextResponse.json({ ok: true }, { status: 201 });
+  if (ratings.size > 0 && (access !== "owner" || !order.userId)) {
+    return NextResponse.json(
+      { error: "Please log in with the account that placed this order to rate dishes." },
+      { status: 403 }
+    );
+  }
+
+  if (parsed.comment.length === 0 && ratings.size === 0) {
+    return NextResponse.json(
+      { error: "Please rate a dish or write a few words about your experience" },
+      { status: 400 }
+    );
+  }
+
+  const userId = order.userId;
+  const comment = parsed.comment || null;
+
+  await prisma.$transaction([
+    ...(comment
+      ? [
+          prisma.orderReview.upsert({
+            where: { orderId: order.id },
+            create: {
+              orderId: order.id,
+              userId: order.userId,
+              authorName: order.firstName,
+              comment,
+            },
+            update: { comment, status: "PENDING" },
+          }),
+        ]
+      : []),
+    ...(userId
+      ? [...ratings].map(([menuItemId, rating]) =>
+          prisma.review.upsert({
+            where: { userId_menuItemId: { userId, menuItemId } },
+            create: { userId, menuItemId, rating, comment, status: "PENDING" },
+            update: { rating, comment, status: "PENDING" },
+          })
+        )
+      : []),
+  ]);
+
+  return NextResponse.json({ ok: true, rated: ratings.size }, { status: 201 });
 }

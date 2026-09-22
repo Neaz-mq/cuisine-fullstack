@@ -162,10 +162,18 @@ function OrderDeliveryModalContent({
       // ⚠️ দুটোই চলে, একটা নয়: `onDone` caller-এর নিজের তালিকা মেলায়
       // (রান্নাঘরের বোর্ড), আর `router.refresh()` server component-এর
       // অংশগুলো — যেমন উপরের গণনার কার্ডগুলো — নতুন করে আনে।
+      // The rider is assigned even when the address couldn't be put on the
+      // map — the route then says so in `mapWarning`, shown as a warning.
+      const data = await res.json().catch(() => ({}));
+
       onDone?.();
       onClose();
       router.refresh();
-      toast.success("Rider assigned — order is on the way.");
+      if (data.mapWarning) {
+        toast.warning(data.mapWarning, { autoClose: 8000 });
+      } else {
+        toast.success("Rider assigned — order is on the way.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't assign this rider.");
     } finally {

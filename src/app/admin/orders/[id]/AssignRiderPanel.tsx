@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -42,6 +43,9 @@ export default function AssignRiderPanel({
         setError(data.error ?? "Could not assign rider");
         return;
       }
+      // Assigned — but maybe without a map pin (see the assign-rider route).
+      const data = await res.json().catch(() => ({}));
+      if (data.mapWarning) toast.warning(data.mapWarning, { autoClose: 8000 });
       router.refresh();
     } finally {
       setIsSubmitting(false);

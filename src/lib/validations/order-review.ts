@@ -1,20 +1,41 @@
 import { z } from "zod";
 
 /**
- * POST /api/orders/[id]/review-এর body।
+ * Body of POST /api/orders/[id]/review — the "How Was Your Food
+ * Experience?" pop-up on the tracking page.
  *
- * ⚠️ কেবল `comment` — rating নেই, আর সেটা ইচ্ছাকৃত। Figma-র modal-এ
- * শুধু একটা textarea; উপরের তারাটা সাজসজ্জা, কোনো input নয়। না থাকা
- * একটা field-এর জন্য schema রাখলে পরে কেউ ধরে নিত সেটা সংরক্ষিত হচ্ছে।
+ * Two parts, and the customer may send either or both:
  *
- * ⚠️ `.trim()` min-এর **আগে**, তাই শুধু space দিয়ে ফাঁকা রিভিউ পাঠানো
- * যায় না। 2000 অক্ষর একটা খাবারের অভিজ্ঞতার জন্য যথেষ্ট উদার, আর
- * সীমা ছাড়া রাখলে একটা request-এই মেগাবাইট ঢোকানো যেত।
+ *   comment — the written review of the whole order (OrderReview).
+ *   ratings — 1–5 stars per dish in the order. Each one becomes a `Review`
+ *             row (PENDING), which is what /admin/reviews moderates and,
+ *             once approved, what the dish's menu page shows.
+ *
+ * ⚠️ `.trim()` runs before the length check, so a comment of only spaces
+ * counts as empty. 2000 characters is generous for a meal review and stops
+ * someone pushing megabytes in one request.
  */
-export const orderReviewSchema = z.object({
-  comment: z
-    .string()
-    .trim()
-    .min(1, "Please write a few words about your experience")
-    .max(2000, "That's a bit too long — please keep it under 2000 characters"),
-});
+export const orderReviewSchema = z
+  .object({
+    comment: z
+      .string()
+      .trim()
+      .max(2000, "That's a bit too long — please keep it under 2000 characters")
+      .optional()
+      .default(""),
+    ratings: z
+      .array(
+        z.object({
+          menuItemId: z.string().min(1).max(64),
+          rating: z.number().int().min(1).max(5),
+        })
+      )
+      // An order never has anywhere near this many different dishes; the
+      // cap just stops an oversized request.
+      .max(50)
+      .optional()
+      .default([]),
+  })
+  .refine((body) => body.comment.length > 0 || body.ratings.length > 0, {
+    message: "Please rate a dish or write a few words about your experience",
+  });

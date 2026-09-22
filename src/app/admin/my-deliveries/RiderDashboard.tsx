@@ -16,8 +16,9 @@ export type Delivery = {
   /** Already formatted to the order's own currency, e.g. "BDT 107.41". */
   totalAmount: string;
   paymentMethod: "COD" | "ONLINE";
-  destLat: number;
-  destLng: number;
+  /** null when the address couldn't be placed on the map at dispatch. */
+  destLat: number | null;
+  destLng: number | null;
   assignedAt: string;
 };
 
@@ -103,7 +104,14 @@ export default function RiderDashboard({ initialDeliveries }: { initialDeliverie
   }
 
   function navigateUrl(d: Delivery) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${d.destLat},${d.destLng}&travelmode=driving`;
+    // No map point (the address couldn't be located at dispatch) → hand
+    // Google Maps the written address instead; it finds most places our
+    // free map service doesn't.
+    const destination =
+      d.destLat !== null && d.destLng !== null
+        ? `${d.destLat},${d.destLng}`
+        : encodeURIComponent(d.address);
+    return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
   }
 
   return (

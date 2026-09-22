@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
 import { assignRiderSchema } from "@/lib/validations/delivery";
-import { geocodeAddress } from "@/lib/geocode";
+import { geocodeAddressDetailed, type GeocodeFailure } from "@/lib/geocode";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { canTransition, needsPreparingFirst } from "@/lib/order-state-machine";
@@ -136,16 +136,23 @@ export async function POST(
    * feature-এর আগের অর্ডারগুলোতে ওই column খালি, তাই fallback-টা
    * থাকতেই হবে।
    */
-  const geocoded =
-    order.deliveryLat !== null && order.deliveryLng !== null
-      ? { lat: order.deliveryLat, lng: order.deliveryLng }
-      : await geocodeAddress(order);
-
-  if (!geocoded) {
-    return NextResponse.json(
-      { error: "Could not locate this address on the map — check it and try again" },
-      { status: 422 }
-    );
+  // ⚠️ The map point is a nice-to-have, not a requirement. A rider can
+  // always deliver to the written address (and their Navigate button falls
+  // back to it). Before, any map-service hiccup — rate limit, outage, a
+  // village the map doesn't know — blocked dispatch entirely, and the food
+  // sat waiting. Now the rider is assigned either way; staff just see a
+  // note that the live map won't show the customer's pin.
+  let geocoded: { lat: number; lng: number } | null = null;
+  let mapWarning: string | null = null;
+  if (order.deliveryLat !== null && order.deliveryLng !== null) {
+    geocoded = { lat: order.deliveryLat, lng: order.deliveryLng };
+  } else {
+    const outcome = await geocodeAddressDetailed(order);
+    if (outcome.ok) {
+      geocoded = outcome.result;
+    } else {
+      mapWarning = geocodeErrorMessage(outcome.failure);
+    }
   }
 
   // PLACED হলে আগে PREPARING-এ নিয়ে যাওয়া, যাতে inventory deduct হয়।
@@ -171,8 +178,8 @@ export async function POST(
         riderId,
         riderLat: RESTAURANT_LOCATION.lat,
         riderLng: RESTAURANT_LOCATION.lng,
-        destLat: geocoded.lat,
-        destLng: geocoded.lng,
+        destLat: geocoded?.lat ?? null,
+        destLng: geocoded?.lng ?? null,
       },
       update: {
         riderId,
@@ -184,8 +191,8 @@ export async function POST(
         riderLat: RESTAURANT_LOCATION.lat,
         riderLng: RESTAURANT_LOCATION.lng,
         riderLocationUpdatedAt: new Date(),
-        destLat: geocoded.lat,
-        destLng: geocoded.lng,
+        destLat: geocoded?.lat ?? null,
+        destLng: geocoded?.lng ?? null,
         deliveredAt: null,
       },
     }),
@@ -200,5 +207,23 @@ export async function POST(
     }),
   ]);
 
-  return NextResponse.json(updatedOrder);
+  return NextResponse.json({ ...updatedOrder, mapWarning });
+}
+
+/**
+ * Tells staff WHICH problem it is. Before, all three read "Could not
+ * locate this address", so a throttled map service looked like a typo in
+ * the customer's address and staff went looking for a mistake that
+ * wasn't there.
+ */
+function geocodeErrorMessage(failure: GeocodeFailure): string {
+  const tail =
+    " The rider was assigned anyway and can navigate by the written address.";
+  if (failure.reason === "not_found") {
+    return "This address couldn't be found on the map." + tail;
+  }
+  if (failure.reason === "refused") {
+    return `The map service was busy (error ${failure.status}), so the customer's pin isn't on the live map.` + tail;
+  }
+  return "The map service couldn't be reached, so the customer's pin isn't on the live map." + tail;
 }

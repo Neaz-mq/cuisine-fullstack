@@ -5,7 +5,8 @@
  * live delivery map (LiveDeliveryMap.tsx) has a destination pin to show
  * next to the rider's position.
  *
- * Uses OpenStreetMap's Nominatim — free, no API key, no billing account
+ * Uses LocationIQ when LOCATIONIQ_API_KEY is set, with OpenStreetMap's
+ * public Nominatim as the backup (see PROVIDERS below). Nominatim is free, no API key, no billing account
  * needed (unlike the Google Geocoding API), which matters for a feature
  * that's otherwise entirely free to run (Leaflet + OSM tiles for the map
  * itself, see LiveDeliveryMap.tsx). Trade-off: Nominatim's public
@@ -76,60 +77,200 @@ function buildQueryCandidates(parts: AddressParts): string[] {
   return [...new Set(candidates)].filter((q) => q.length > 0);
 }
 
-async function geocodeQuery(query: string): Promise<GeocodeResult | null> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "1");
+/**
+ * Why a lookup failed — shown to staff instead of a vague "not found".
+ *
+ *   not_found — the service answered, and nothing matched any version of
+ *               the address.
+ *   refused   — the service said no (429 = too many requests, 403 =
+ *               blocked). Common on a dev machine after many test orders,
+ *               or behind a VPN such as Cloudflare WARP.
+ *   network   — no answer at all (offline, DNS, timeout).
+ */
+export type GeocodeFailure =
+  | { reason: "not_found" }
+  | { reason: "refused"; status: number }
+  | { reason: "network"; detail: string };
 
+type QueryOutcome =
+  | { ok: true; result: GeocodeResult }
+  | { ok: false; failure: GeocodeFailure };
+
+/**
+ * Two providers, tried in order. Both use OpenStreetMap data, so they find
+ * the same places — the difference is reliability:
+ *
+ *   LocationIQ  — needs a free API key (LOCATIONIQ_API_KEY). 5,000 lookups
+ *                 a day, 2 per second, a service meant for apps. Used first
+ *                 when the key is set. Free-plan terms ask for a visible
+ *                 "Search by LocationIQ" link somewhere in the app.
+ *   Nominatim   — OpenStreetMap's own public server. No key, but ~1 per
+ *                 second, and it throttles or blocks busy or anonymous
+ *                 callers. Used as the backup (or alone, with no key).
+ *
+ * A provider that refuses or can't be reached hands over to the next one;
+ * "not found" does not, because both search the same map data.
+ */
+type Provider = {
+  name: string;
+  /** Minimum gap between two real requests, per the provider's limits. */
+  gapMs: number;
+  buildUrl: (query: string) => string;
+  headers: Record<string, string>;
+  /** LocationIQ answers "nothing matched" with HTTP 404 instead of []. */
+  notFoundStatus?: number;
+};
+
+/**
+ * Nominatim's usage policy asks every app to identify itself with a
+ * User-Agent AND a way to contact the owner. Anonymous-looking traffic is
+ * the first to be throttled or blocked. Set NOMINATIM_EMAIL in .env to
+ * your real email; it goes in the User-Agent and in the `email` parameter
+ * Nominatim documents for exactly this purpose.
+ */
+const CONTACT_EMAIL = process.env.NOMINATIM_EMAIL?.trim() || "";
+const USER_AGENT = CONTACT_EMAIL
+  ? `cuisine-fullstack-delivery-tracking/1.0 (${CONTACT_EMAIL})`
+  : "cuisine-fullstack-delivery-tracking/1.0";
+
+const LOCATIONIQ_KEY = process.env.LOCATIONIQ_API_KEY?.trim() || "";
+
+const PROVIDERS: Provider[] = [
+  ...(LOCATIONIQ_KEY
+    ? [
+        {
+          name: "LocationIQ",
+          gapMs: 600,
+          buildUrl: (query: string) => {
+            const url = new URL("https://us1.locationiq.com/v1/search");
+            url.searchParams.set("key", LOCATIONIQ_KEY);
+            url.searchParams.set("q", query);
+            url.searchParams.set("format", "json");
+            url.searchParams.set("limit", "1");
+            return url.toString();
+          },
+          headers: { "Accept-Language": "en" },
+          notFoundStatus: 404,
+        },
+      ]
+    : []),
+  {
+    name: "Nominatim",
+    gapMs: 1100,
+    buildUrl: (query: string) => {
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "json");
+      url.searchParams.set("limit", "1");
+      if (CONTACT_EMAIL) url.searchParams.set("email", CONTACT_EMAIL);
+      return url.toString();
+    },
+    headers: { "User-Agent": USER_AGENT, "Accept-Language": "en" },
+  },
+];
+
+/**
+ * Same address typed again (the checkout quote, then checkout, then the
+ * rider assignment) doesn't hit a service again. Per server instance,
+ * cleared on restart; addresses don't move, so there's nothing to expire.
+ * Only real answers are cached — a refusal is retried next time.
+ */
+const cache = new Map<string, GeocodeResult | "none">();
+
+async function geocodeQuery(provider: Provider, query: string): Promise<QueryOutcome> {
   try {
-    const res = await fetch(url.toString(), {
-      headers: {
-        // Nominatim's usage policy requires a real identifying
-        // User-Agent — requests without one get silently dropped.
-        "User-Agent": "cuisine-fullstack-delivery-tracking/1.0",
-      },
-      // Assignment is an admin-initiated action, not a hot path — no
-      // need to cache, and caching a wrong/stale geocode would be worse
-      // than re-fetching.
+    const res = await fetch(provider.buildUrl(query), {
+      headers: provider.headers,
       cache: "no-store",
+      // A hung request used to stall checkout / rider assignment with no
+      // end. 8 seconds, then give up.
+      signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+
+    if (provider.notFoundStatus && res.status === provider.notFoundStatus) {
+      return { ok: false, failure: { reason: "not_found" } };
+    }
+    if (!res.ok) {
+      console.warn(
+        `[geocode] ${provider.name} answered HTTP ${res.status} for "${query}".` +
+          (res.status === 429 || res.status === 403
+            ? " It is refusing requests from this server (too many, or blocked)."
+            : "") +
+          (provider.name === "Nominatim" && !LOCATIONIQ_KEY
+            ? " Set LOCATIONIQ_API_KEY in .env for a reliable provider."
+            : "")
+      );
+      return { ok: false, failure: { reason: "refused", status: res.status } };
+    }
 
     const results = (await res.json()) as Array<{ lat: string; lon: string }>;
-    const first = results[0];
-    if (!first) return null;
-
-    const lat = parseFloat(first.lat);
-    const lng = parseFloat(first.lon);
-    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-
-    return { lat, lng };
-  } catch {
-    // Network error / Nominatim down for this attempt — let the caller's
-    // fallback chain keep trying simpler queries.
-    return null;
+    const first = Array.isArray(results) ? results[0] : undefined;
+    const lat = first ? parseFloat(first.lat) : NaN;
+    const lng = first ? parseFloat(first.lon) : NaN;
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return { ok: false, failure: { reason: "not_found" } };
+    }
+    return { ok: true, result: { lat, lng } };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(`[geocode] Could not reach ${provider.name} for "${query}": ${detail}`);
+    return { ok: false, failure: { reason: "network", detail } };
   }
 }
 
-/** Server-only — never call this from a client component. */
-export async function geocodeAddress(parts: AddressParts): Promise<GeocodeResult | null> {
-  const candidates = buildQueryCandidates(parts);
-  if (candidates.length === 0) return null;
+/** One provider, every version of the address, most specific first. */
+async function geocodeWith(
+  provider: Provider,
+  candidates: string[]
+): Promise<QueryOutcome> {
+  let calledBefore = false;
+  for (const query of candidates) {
+    const cached = cache.get(query);
+    if (cached === "none") continue;
+    if (cached) return { ok: true, result: cached };
 
-  for (let i = 0; i < candidates.length; i++) {
-    if (i > 0) {
-      // Nominatim's public instance is rate-limited to ~1 request/second;
-      // only the (rare) fallback attempts pay this cost, not the common
-      // case where the first, most specific query succeeds.
-      await sleep(1100);
+    if (calledBefore) await sleep(provider.gapMs);
+    calledBefore = true;
+
+    const outcome = await geocodeQuery(provider, query);
+    if (outcome.ok) {
+      cache.set(query, outcome.result);
+      return outcome;
     }
-    const result = await geocodeQuery(candidates[i]);
-    if (result) return result;
+    // ⚠️ A refusal or network error is about the connection, not the
+    // address — the other versions would fail the same way, and hammering
+    // a service that is already throttling only extends the block.
+    if (outcome.failure.reason !== "not_found") return outcome;
   }
+  return { ok: false, failure: { reason: "not_found" } };
+}
 
-  // Every fallback down to city-level failed — caller decides how to
-  // handle a null result (currently: reject the assign-rider request with
-  // a clear error rather than silently pinning the map at 0,0).
-  return null;
+/**
+ * Tries each provider in turn and says why it failed if none worked.
+ * Only a real "not found" from a provider that answered is remembered, so
+ * the next attempt skips versions that are known not to exist.
+ */
+export async function geocodeAddressDetailed(
+  parts: AddressParts
+): Promise<{ ok: true; result: GeocodeResult } | { ok: false; failure: GeocodeFailure }> {
+  const candidates = buildQueryCandidates(parts);
+  if (candidates.length === 0) return { ok: false, failure: { reason: "not_found" } };
+
+  let lastFailure: GeocodeFailure = { reason: "not_found" };
+  for (const provider of PROVIDERS) {
+    const outcome = await geocodeWith(provider, candidates);
+    if (outcome.ok) return outcome;
+    lastFailure = outcome.failure;
+    if (outcome.failure.reason === "not_found") {
+      candidates.forEach((query) => cache.set(query, "none"));
+      break;
+    }
+  }
+  return { ok: false, failure: lastFailure };
+}
+
+/** Same as geocodeAddressDetailed, for callers that only need yes / no. */
+export async function geocodeAddress(parts: AddressParts): Promise<GeocodeResult | null> {
+  const outcome = await geocodeAddressDetailed(parts);
+  return outcome.ok ? outcome.result : null;
 }
