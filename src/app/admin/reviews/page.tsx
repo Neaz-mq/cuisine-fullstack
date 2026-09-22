@@ -267,9 +267,13 @@ export default async function AdminReviewsPage({
                     // like the Figma.
                     "[grid-template-areas:'who'_'what'_'meta'_'actions']",
                     "md:grid-cols-[minmax(0,1fr)_auto] md:[grid-template-areas:'who_actions'_'what_meta']",
-                    // Fixed widths for the last two columns so Time & Date, Status
-                    // and the buttons line up from row to row.
-                    "xl:grid-cols-[minmax(0,210px)_minmax(0,1fr)_252px_200px] xl:gap-6 xl:[grid-template-areas:'who_what_meta_actions']",
+                    // Desktop, like the Figma row (justify-between, the middle
+                    // group centred): customer on the left, buttons on the
+                    // right, and dish + Time & Date + Status kept together in
+                    // the middle. The customer and button columns share the
+                    // spare room equally, so the middle block sits in the
+                    // centre and lines up from row to row.
+                    "xl:grid-cols-[minmax(170px,1fr)_minmax(0,240px)_auto_minmax(176px,1fr)] xl:gap-5 min-[1536px]:gap-[30px] xl:[grid-template-areas:'who_what_meta_actions']",
                   ].join(" ")}
                 >
                   {/* Customer — Figma: 60×60 photo, name Frank Ruhl 20,
@@ -323,7 +327,7 @@ export default async function AdminReviewsPage({
 
                   {/* Time & Date | Status — Figma: label Sora 14 Black/70,
                       value Frank Ruhl 16, gap 12. */}
-                  <div className="grid grid-cols-2 gap-4 [grid-area:meta] md:justify-self-end xl:grid-cols-[136px_100px] xl:justify-self-stretch">
+                  <div className="grid grid-cols-2 gap-4 [grid-area:meta] md:justify-self-end xl:grid-cols-[136px_100px] xl:justify-self-stretch min-[1536px]:gap-[30px]">
                     <div className="flex min-w-0 flex-col gap-3">
                       <span className={FIELD_LABEL}>Time &amp; Date</span>
                       <span className="whitespace-nowrap font-frank-ruhl text-[15px] font-medium leading-none text-black min-[480px]:text-[16px]">
@@ -336,7 +340,7 @@ export default async function AdminReviewsPage({
                     </div>
                   </div>
 
-                  <div className="min-w-0 [grid-area:actions]">
+                  <div className="min-w-0 [grid-area:actions] xl:justify-self-end">
                     <ReviewActions
                       reviewId={review.id}
                       status={review.status}
