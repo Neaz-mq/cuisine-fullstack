@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { PricingSettings, TaxModeForPricing } from "@/lib/pricing";
 import type { DeliveryFeeSettings } from "@/lib/delivery-fee";
+import { applyServerTimezone } from "@/lib/server-timezone";
 
 /**
  * সবসময় একটাই settings row থাকে (id: "singleton")। যদি এখনো তৈরি না হয়ে
@@ -12,6 +13,9 @@ export async function getRestaurantSettings() {
     update: {},
     create: { id: "singleton" },
   });
+  // Keep the server clock on the restaurant's time zone — so a change in
+  // Settings applies straight away (see lib/server-timezone.ts).
+  applyServerTimezone(settings.timezone);
   return settings;
 }
 
