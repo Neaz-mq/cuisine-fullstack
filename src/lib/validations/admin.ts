@@ -231,10 +231,16 @@ export const updateSettingsSchema = z
 // Marketing broadcast email
 // ---------------------------------------------------------------------------
 export const broadcastSchema = z.object({
-  subject: nonEmptyString("Subject"),
-  headline: z.string().trim().optional().or(z.literal("")),
-  message: nonEmptyString("Message"),
-  ctaText: z.string().trim().optional().or(z.literal("")),
+  subject: nonEmptyString("Subject").max(150, "Keep the subject under 150 characters"),
+  headline: z.string().trim().max(120, "Keep the headline under 120 characters").optional().or(z.literal("")),
+  message: nonEmptyString("Message").max(5000, "Keep the message under 5,000 characters"),
+  ctaText: z.string().trim().max(40, "Keep the button text under 40 characters").optional().or(z.literal("")),
+  // A running product offer (/admin/offers) to show as a card in the email.
+  // Only the id comes from the browser — the dish, photo and prices are
+  // read on the server.
+  offerId: z.string().trim().optional().or(z.literal("")),
+  // true = "Send Test to Me": only the signed-in staff member gets it.
+  test: z.boolean().optional(),
   // Empty string is allowed through (route falls back to NEXT_PUBLIC_APP_URL)
   // but if the admin *did* type something, it must be a real URL — the old
   // code sent whatever was typed straight into the email template unchecked.

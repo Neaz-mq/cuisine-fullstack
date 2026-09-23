@@ -299,6 +299,9 @@ model MenuItem {
   // Coupon below.
   restrictedByCoupons Coupon[] @relation("CouponItems")
 
+  // Product offers ("20% off Chic Burger until Aug 6") — see ProductOffer.
+  offers ProductOffer[]
+
   // The recipe / Bill-of-Materials for this item — see MenuItemIngredient
   // below. Empty (the default) means no inventory deduction happens when
   // this item is ordered, which keeps every existing menu item working
@@ -901,6 +904,16 @@ model OrderItem {
   // display. Adding a `titleSnapshot` column here would close that gap.
   price Decimal @db.Decimal(12, 3)
 
+  // When a product offer lowered this line's price: the menu price before
+  // the offer, and which offer it was. `price` above is always what the
+  // customer actually paid per unit. Both stay null for full-price lines
+  // (and for every order placed before offers existed). SetNull, so
+  // deleting an old offer never touches order history — the price and
+  // originalPrice written here are enough to read the receipt later.
+  originalPrice Decimal?      @db.Decimal(12, 3)
+  offer         ProductOffer? @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  offerId       String?
+
   order      Order    @relation(fields: [orderId], references: [id])
   orderId    String
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
@@ -916,6 +929,7 @@ model OrderItem {
   // ordered" (insights) and for the recommendations query.
   @@index([orderId])
   @@index([menuItemId])
+  @@index([offerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1015,6 +1029,64 @@ model Coupon {
 enum CouponDiscountType {
   PERCENT
   FIXED
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Product offers — /admin/offers
+// ─────────────────────────────────────────────────────────────────────────
+//
+// A price cut on ONE dish for a time window: "20% off Chic Burger, Aug 1 →
+// Aug 6". Different from a Coupon, which the customer has to type in at
+// checkout and which works on the whole cart: an offer needs no code — the
+// menu simply shows the lower price, and checkout charges it.
+//
+// The lower price is applied on the server, in resolveOrderItems()
+// (src/lib/order-checkout-shared.ts), the one place every checkout path
+// reads menu prices from. Nothing the browser sends can change it.
+//
+// Rules (checked by the admin API, see src/lib/product-offers.ts):
+//   • at most one current (running or scheduled) offer per dish, so the
+//     price a customer sees is never a guess between two offers;
+//   • the new price must stay above zero.
+//
+// Status is never stored — it follows from the dates:
+//   startsAt in the future         → Scheduled
+//   startsAt ≤ now < endsAt (or no end) → Active
+//   endsAt ≤ now                   → Ended
+// "Remove" on a running offer sets endsAt = now, so it ends at once but its
+// order history (OrderItem.offerId) stays countable.
+model ProductOffer {
+  id String @id @default(cuid())
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItemId String
+
+  type       CouponDiscountType @default(PERCENT)
+  percentOff Int? // 1-99, when type = PERCENT
+  fixedOff   Decimal? @db.Decimal(12, 3) // amount off, when type = FIXED
+
+  audience OfferAudience @default(ALL)
+
+  startsAt DateTime
+  // Exclusive: the offer stops at this instant. The admin form's "Expiry
+  // Date" is the last day the offer runs, so this is set to the start of
+  // the next day in the restaurant's time zone. Null = no end date.
+  endsAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([menuItemId])
+  @@index([startsAt, endsAt])
+}
+
+// Figma "Applies To". MEMBERS = customers signed in to an account — the
+// same people who earn loyalty points. Guests pay the normal price.
+enum OfferAudience {
+  ALL
+  MEMBERS
 }
 
 // One row per successful redemption — the audit trail a hard single-use

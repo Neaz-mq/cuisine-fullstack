@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { type Money, toMoney, ZERO, sum, minMoney, applyRate } from "@/lib/money";
+import { effectivePrice, findLiveOffers } from "@/lib/product-offers";
 
 export const SHIPPING_METHODS = ["UBER_EATS", "FOOD_PANDA", "OWN_DELIVERY"] as const;
 export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
@@ -89,8 +90,16 @@ export interface IncomingItem {
 export interface ResolvedItem {
   menuItemId: string;
   categoryId: string;
-  /** MenuItem.price থেকে সরাসরি — Decimal, তাই কোনো float রূপান্তর নেই। */
+  /**
+   * What the customer pays per unit — MenuItem.price, or the product-offer
+   * price when an offer is running for this dish (and applies to this
+   * customer). Decimal, so no float conversion anywhere.
+   */
   price: Money;
+  /** The menu price before the offer, when an offer lowered `price`. */
+  originalPrice: Money | null;
+  /** The ProductOffer that set `price`, if any. */
+  offerId: string | null;
   quantity: number;
   title: string;
 }
@@ -160,6 +169,8 @@ export async function resolveOrderItems(
       menuItemId: menuItem.id,
       categoryId: menuItem.categoryId,
       price: menuItem.price,
+      originalPrice: null,
+      offerId: null,
       quantity: item.quantity,
       title: menuItem.title,
     });
@@ -172,7 +183,53 @@ export async function resolveOrderItems(
     };
   }
 
+  await applyProductOffers(resolved);
+
   return { ok: true, items: resolved };
+}
+
+/**
+ * Product offers (/admin/offers) — swap in the offer price for every dish
+ * that has one running right now.
+ *
+ * This is the only place checkout reads menu prices, so the quote, the
+ * cash/QR order and the Stripe session all charge the same offer price,
+ * and nothing the browser sends can change it. The price the cart showed
+ * is never trusted.
+ *
+ * Members-only offers need to know who is ordering; the session is only
+ * read when such an offer is actually in the cart. Settings (for rounding
+ * to the currency's minor units) likewise only when an offer applies.
+ * Both are imported lazily so the unit tests for this file don't pull in
+ * next-auth.
+ */
+async function applyProductOffers(items: ResolvedItem[]): Promise<void> {
+  const offers = await findLiveOffers([...new Set(items.map((item) => item.menuItemId))]);
+  if (offers.size === 0) return;
+
+  const { getRestaurantSettings } = await import("@/lib/get-settings");
+  const settings = await getRestaurantSettings();
+
+  let isMember = false;
+  if ([...offers.values()].some((offer) => offer.audience === "MEMBERS")) {
+    const { auth } = await import("@/auth");
+    const session = await auth();
+    isMember = Boolean(session?.user?.id);
+  }
+
+  for (const item of items) {
+    const result = effectivePrice(
+      item.price,
+      offers.get(item.menuItemId),
+      isMember,
+      settings.currencyMinorUnits
+    );
+    if (result.offer) {
+      item.originalPrice = result.originalPrice;
+      item.offerId = result.offer.id;
+      item.price = result.price;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -136,7 +136,9 @@ const SCOPE_PATH: Record<Scope, string> = {
   settings: "/admin/settings",
   insights: "/admin/insights",
   staff: "/admin/staff",
-  marketing: "/admin/marketing",
+  // The Offers page. The email broadcast (/admin/marketing) sits under the
+  // same scope and is reached from there.
+  marketing: "/admin/offers",
   myDeliveries: "/admin/my-deliveries",
 };
 

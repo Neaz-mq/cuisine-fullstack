@@ -285,6 +285,27 @@ export async function POST(req: NextRequest) {
      */
     deliveryFeeMode: deliverySettings.deliveryFeeMode,
 
+    /**
+     * Product offers (/admin/offers): the unit price the server will
+     * actually charge for each dish, and the menu price when an offer
+     * lowered it. The cart shows the price it had when the dish was added;
+     * if an offer started or ended since, this is the up-to-date one.
+     */
+    items: resolvedItems.map((item) => ({
+      menuItemId: item.menuItemId,
+      price: m(item.price),
+      originalPrice: item.originalPrice ? m(item.originalPrice) : null,
+    })),
+    offerSavings: m(
+      resolvedItems.reduce(
+        (total, item) =>
+          item.originalPrice
+            ? total.plus(item.originalPrice.minus(item.price).times(item.quantity))
+            : total,
+        ZERO
+      )
+    ),
+
     // client যা চেয়েছিল তার সাথে server কী মেনে নিল, তা মেলানোর জন্য।
     appliedCouponCode: couponInfo?.code ?? null,
     appliedGiftCardCode: giftCardInfo?.code ?? null,

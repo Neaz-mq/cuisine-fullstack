@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
+import { auth } from "@/auth";
+import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 import MenuHero from "@/components/menu/MenuHero";
 import TodaysOffers, { type MenuOffer } from "@/components/menu/TodaysOffers";
 import MenuBrowser, { type MenuBrowserCategory } from "@/components/menu/MenuBrowser";
@@ -151,6 +153,14 @@ export default async function MenuPage() {
     ratingRows.map((row) => [row.menuItemId, row._avg.rating])
   );
 
+  // Product offers (/admin/offers): the price shown here is the price
+  // checkout charges. Members-only offers need to know who is looking.
+  const [liveOffers, session] = await Promise.all([
+    findLiveOffers(categoryRows.flatMap((row) => row.menuItems.map((item) => item.id)), now),
+    auth(),
+  ]);
+  const isMember = Boolean(session?.user?.id);
+
   // ব্যবহারের সীমা পেরোনো কুপন কোথাও দেখানো হয় না — কার্ডেও না,
   // ব্যাজেও না। এটা JS-এ, কারণ Prisma-য় এক কলামের সাথে আরেক কলামের
   // তুলনা (`usageCount < usageLimit`) raw SQL ছাড়া লেখা যায় না, আর
@@ -222,7 +232,14 @@ export default async function MenuPage() {
       id: row.id,
       name: row.name,
       items: row.menuItems.map((item) => {
-        const price = Number(item.price);
+        const shown = displayPrice(
+          item.price,
+          liveOffers.get(item.id),
+          isMember,
+          settings.currency,
+          units
+        );
+        const price = shown.price;
         const average = ratingByItem.get(item.id);
 
         return {
@@ -230,7 +247,8 @@ export default async function MenuPage() {
           title: item.title,
           description: item.description,
           price,
-          priceLabel: formatAmount(price.toFixed(units), settings.currency),
+          priceLabel: shown.priceLabel,
+          oldPriceLabel: shown.oldPriceLabel,
           imageUrl: item.imageUrl,
           isAvailable: item.isAvailable,
           calories: item.calories,
@@ -240,7 +258,9 @@ export default async function MenuPage() {
           // `_avg` কোনো review না থাকলে `null` দেয় — সেটাই এখানে
           // "রেটিং দেখানো হবে না"-র সংকেত।
           rating: average ?? null,
-          discountLabel: discountFor(item.id, row.id, price),
+          // A product offer's own badge first; otherwise a coupon aimed at
+          // this dish or its category.
+          discountLabel: shown.badge ?? discountFor(item.id, row.id, price),
         };
       }),
     }));

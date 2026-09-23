@@ -19,6 +19,14 @@ export type ProductDetailItem = {
   /** এক ইউনিটের দাম, মুদ্রা সহ — server-এ `formatAmount` দিয়ে তৈরি। */
   priceLabel: string;
   /**
+   * Product offer (/admin/offers): the normal one-unit price, struck
+   * through, and the offer pill ("20%"). Both null without an offer.
+   */
+  oldPriceLabel?: string | null;
+  offerBadge?: string | null;
+  /** The normal one-unit price as a number, for the struck-through total. */
+  oldPrice?: number | null;
+  /**
    * মুদ্রার ISO কোড ("USD")। সংখ্যা বদলালে মোট দামটা এখানেই হিসাব
    * করতে হয়, তাই কোডটাও লাগে।
    *
@@ -102,6 +110,13 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
           item.currency
         )
       : item.priceLabel;
+
+  const oldTotalLabel =
+    item.oldPrice != null
+      ? quantity > 1
+        ? formatAmount((item.oldPrice * quantity).toFixed(item.currencyMinorUnits), item.currency)
+        : (item.oldPriceLabel ?? null)
+      : null;
 
   const hasImages = item.images.length > 0;
   const hasGallery = item.images.length > 1;
@@ -253,13 +268,28 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
             {/* Frame 2147236130 — দাম আর সংখ্যা বাছাই। */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-1">
-                <span
-                  /* ⚠️ `aria-live` — সংখ্যা বদলালে screen reader নতুন
-                     দামটা পড়ে শোনায়, নাহলে বদলটা কেবল চোখেই ধরা পড়ত। */
-                  aria-live="polite"
-                  className="font-frank-ruhl text-[28px] font-semibold leading-[1.3] text-black xl:text-[36px]"
-                >
-                  {totalLabel}
+                <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span
+                    /* ⚠️ `aria-live` — সংখ্যা বদলালে screen reader নতুন
+                       দামটা পড়ে শোনায়, নাহলে বদলটা কেবল চোখেই ধরা পড়ত। */
+                    aria-live="polite"
+                    className="font-frank-ruhl text-[28px] font-semibold leading-[1.3] text-black xl:text-[36px]"
+                  >
+                    {totalLabel}
+                  </span>
+                  {/* Product offer: the normal price, struck through, and
+                      the discount pill. */}
+                  {oldTotalLabel && (
+                    <s className="font-frank-ruhl text-[18px] font-normal leading-none text-black/50 xl:text-[22px]">
+                      <span className="sr-only">Normal price </span>
+                      {oldTotalLabel}
+                    </s>
+                  )}
+                  {item.offerBadge && (
+                    <span className="self-center rounded-full bg-[#FFF2E6] px-3 py-1.5 font-sora text-[12px] font-semibold leading-none text-[#FF7100]">
+                      {item.offerBadge}
+                    </span>
+                  )}
                 </span>
                 {/**
                  * ⚠️ লাইনটা সবসময় থাকে, কেবল দেখা যায় না — `invisible`,

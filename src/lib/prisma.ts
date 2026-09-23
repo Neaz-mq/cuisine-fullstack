@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /**
  * src/lib/prisma.ts
@@ -53,7 +53,33 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+/**
+ * ⚠️ dev-এ cache করা client পুরনো হয়ে যেতে পারে।
+ *
+ * schema-য় নতুন model যোগ করে `prisma generate` চালালে generated কোড
+ * বদলায়, কিন্তু globalThis-এ রাখা **পুরনো instance**-টা dev server
+ * চলা পর্যন্ত থেকেই যায় — তাতে নতুন model-এর delegate নেই। ফলাফল:
+ * `prisma.productOffer` undefined, আর "Cannot read properties of
+ * undefined (reading 'findMany')" (ProductOffer যোগ করার পর ঠিক এটাই
+ * হয়েছিল)।
+ *
+ * তাই cache-টা তখনই ব্যবহার হয় যখন তাতে এখনকার generated client-এর
+ * প্রতিটা model আছে; নাহলে পুরনোটা বন্ধ করে নতুন বানানো হয়। production-এ
+ * cache নেই, তাই এটা কেবল dev-এর জন্য।
+ */
+function isCurrent(client: PrismaClient): boolean {
+  return Object.values(Prisma.ModelName).every((name) => {
+    const delegate = name.charAt(0).toLowerCase() + name.slice(1);
+    return delegate in client;
+  });
+}
+
+const cached = globalForPrisma.prisma;
+if (cached && !isCurrent(cached)) {
+  void cached.$disconnect().catch(() => {});
+}
+
+export const prisma = cached && isCurrent(cached) ? cached : createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

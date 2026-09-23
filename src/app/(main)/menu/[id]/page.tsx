@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
-import { formatAmount } from "@/lib/currency-format";
+import { auth } from "@/auth";
+import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 import ProductDetail, { type ProductDetailItem } from "@/components/menu/ProductDetail";
 import CustomerFeedback, { type FeedbackCard } from "@/components/menu/CustomerFeedback";
 import { MoreOptions, FullMenuCta } from "@/components/menu/MoreOptions";
@@ -186,7 +187,15 @@ export default async function MenuItemPage({
     siblingRatings.map((row) => [row.menuItemId, row._avg.rating])
   );
 
-  const price = Number(item.price);
+  // Product offers — this dish and the three "More Options" cards show the
+  // price checkout will charge.
+  const [liveOffers, session] = await Promise.all([
+    findLiveOffers([item.id, ...siblings.map((sibling) => sibling.id)]),
+    auth(),
+  ]);
+  const isMember = Boolean(session?.user?.id);
+  const shown = displayPrice(item.price, liveOffers.get(item.id), isMember, settings.currency, units);
+  const price = shown.price;
 
   /**
    * Benefits ঘরের চারটে ঘর।
@@ -214,7 +223,10 @@ export default async function MenuItemPage({
     title: item.title,
     description: item.description,
     price,
-    priceLabel: formatAmount(price.toFixed(units), settings.currency),
+    priceLabel: shown.priceLabel,
+    oldPriceLabel: shown.oldPriceLabel,
+    oldPrice: shown.oldPriceLabel ? Number(item.price) : null,
+    offerBadge: shown.badge,
     // সংখ্যা বদলালে মোট দামটা client-এ হিসাব হয়, তাই মুদ্রার কোড আর
     // দশমিক সংখ্যা দুটোই পাঠাতে হয় — ProductDetail-এ বিস্তারিত।
     currency: settings.currency,
@@ -235,13 +247,21 @@ export default async function MenuItemPage({
   };
 
   const related: MenuCardItem[] = siblings.map((sibling) => {
-    const siblingPrice = Number(sibling.price);
+    const siblingShown = displayPrice(
+      sibling.price,
+      liveOffers.get(sibling.id),
+      isMember,
+      settings.currency,
+      units
+    );
+    const siblingPrice = siblingShown.price;
     return {
       id: sibling.id,
       title: sibling.title,
       description: sibling.description,
       price: siblingPrice,
-      priceLabel: formatAmount(siblingPrice.toFixed(units), settings.currency),
+      priceLabel: siblingShown.priceLabel,
+      oldPriceLabel: siblingShown.oldPriceLabel,
       imageUrl: sibling.imageUrl,
       isAvailable: sibling.isAvailable,
       calories: sibling.calories,
@@ -250,12 +270,11 @@ export default async function MenuItemPage({
       prepTimeMinutes: sibling.prepTimeMinutes,
       rating: ratingByItem.get(sibling.id) ?? null,
       /**
-       * ⚠️ এই পাতায় ছাড়ের ব্যাজ দেখানো হয় না। মেনু পাতায় ওটা চালু
-       * কুপন থেকে হিসাব হয় (`discountFor`), আর সেই হিসাবটা এখানে
-       * আবার করতে গেলে আরেকটা coupon query লাগত — তিনটে কার্ডের
-       * জন্য যেটা বাড়াবাড়ি।
+       * Only a product offer's badge here. The menu page also shows
+       * coupon badges (`discountFor`), but working that out again would
+       * need another coupon query just for three cards.
        */
-      discountLabel: null,
+      discountLabel: siblingShown.badge,
     };
   });
 

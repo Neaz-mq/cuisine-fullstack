@@ -21,8 +21,10 @@ type NavDef = {
  * Figma sidebar-এর গোষ্ঠীবিন্যাস। কয়েকটা জায়গায় Figma-র নাম আর এই
  * app-এর বাস্তবতা মেলাতে হয়েছে:
  *
- *  • "Offers" → /admin/marketing। ওই page-টার কাজই offer broadcast
- *    পাঠানো, তাই নতুন page না বানিয়ে Figma-র নামটাই ব্যবহার করা হলো।
+ *  • "Offers" → /admin/offers — product offers (a price cut on one dish
+ *    for a time window). The email broadcast that used to sit here
+ *    (/admin/marketing) is now reached from the "Email Subscribers"
+ *    button on that page; same "marketing" scope.
  *  • Users / Suppliers / Payment / Notification — Figma-তে আছে, app-এ
  *    page ছিল না। প্রতিটার জন্য "Coming soon" placeholder বসানো হয়েছে,
  *    যাতে design-টা পুরো থাকে অথচ click করলে 404 না আসে।
@@ -86,7 +88,7 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
     items: [
       { label: "Insights", href: "/admin/insights", scope: "insights", icon: "insights" },
       { label: "Reviews", href: "/admin/reviews", scope: "reviews", icon: "reviews" },
-      { label: "Offers", href: "/admin/marketing", scope: "marketing", icon: "offers" },
+      { label: "Offers", href: "/admin/offers", scope: "marketing", icon: "offers" },
       { label: "Coupons", href: "/admin/coupons", scope: "coupons", icon: "coupons" },
       { label: "Gift Cards", href: "/admin/gift-cards", scope: "giftCards", icon: "giftCards" },
       { label: "Loyalty", href: "/admin/loyalty", scope: "loyalty", icon: "loyalty" },

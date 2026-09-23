@@ -37,6 +37,11 @@ export type MenuCardItem = {
   description: string;
   price: number;
   priceLabel: string;
+  /**
+   * The menu price, struck through, when a product offer (/admin/offers)
+   * lowers `price`. Null when the dish sells at its normal price.
+   */
+  oldPriceLabel?: string | null;
   imageUrl: string | null;
   isAvailable: boolean;
   calories: number | null;
@@ -180,8 +185,17 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
 
         {/* Frame 2147236028: row, space-between — দাম আর বোতাম। */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
-            {item.priceLabel}
+          <span className="flex items-baseline gap-2">
+            {item.oldPriceLabel && (
+              <s className="font-frank-ruhl text-[14px] font-normal leading-none text-black/50 xl:text-[16px]">
+                <span className="sr-only">Was </span>
+                {item.oldPriceLabel}
+              </s>
+            )}
+            <span className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
+              {item.oldPriceLabel && <span className="sr-only">Now </span>}
+              {item.priceLabel}
+            </span>
           </span>
 
           {/**

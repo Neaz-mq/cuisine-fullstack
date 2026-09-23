@@ -5,27 +5,64 @@ import {
   Heading,
   Hr,
   Html,
+  Img,
   Link,
   Preview,
   Section,
   Text,
 } from "@react-email/components";
-import EmailLogo from "@/emails/EmailLogo";
+
+/**
+ * The offer email sent to marketing subscribers from /admin/marketing
+ * ("Email Subscribers" on the Offers page).
+ *
+ * Same colours as the admin and the site: the orange → pink gradient
+ * (#FF9540 → #FF70C6), cream cards (#F9F6F3), black text, serif headings.
+ * Email clients don't load web fonts reliably, so headings fall back to
+ * Georgia — the nearest safe serif to Frank Ruhl Libre.
+ *
+ * ⚠️ Gradients: Outlook ignores `background-image`, so every gradient
+ * sits on a solid orange `backgroundColor` — it just shows flat orange
+ * there instead of a white box.
+ *
+ * `featured` is optional: when staff pick one of the running product
+ * offers, its dish is shown as a card (photo, old and new price). The
+ * prices come from the server (see the broadcast route), never from the
+ * browser.
+ */
+export type FeaturedOfferEmail = {
+  title: string;
+  imageUrl: string | null;
+  badge: string;
+  oldPrice: string;
+  newPrice: string;
+  /** "Ends Aug 6, 2026" / "No end date" — plus "· Members only" if so. */
+  note: string;
+};
 
 interface OfferBroadcastEmailProps {
   headline: string;
-  // Raw HTML written by the admin in the broadcast composer (e.g.
-  // "<p>...</p>"). Rendered as-is inside the branded frame below, the same
-  // way the old plain-HTML broadcast did — admins keep full control over
-  // the copy without needing a rich text editor.
+  /** Safe HTML made from the admin's plain text (plainTextToHtml). */
   bodyHtml: string;
   ctaText: string;
   ctaUrl: string;
   previewText: string;
+  featured?: FeaturedOfferEmail | null;
+  /**
+   * Where "Unsubscribe" points. For a broadcast this is Resend's
+   * placeholder "{{{RESEND_UNSUBSCRIBE_URL}}}", which Resend swaps for each
+   * contact's own link when it sends — without it the email has no visible
+   * unsubscribe link at all (Resend does not add one by itself). A test
+   * email has no contact, so it passes null and shows a note instead.
+   */
+  unsubscribeUrl?: string | null;
 }
 
-const GREEN = "#2C6252";
-const ORANGE = "#FF4C15";
+const ORANGE = "#FF9540";
+const GRADIENT = "linear-gradient(93.36deg, #FF9540 0%, #FF70C6 145.78%)";
+const CREAM = "#F9F6F3";
+const SERIF = "Georgia, 'Times New Roman', serif";
+const SANS = "Arial, Helvetica, sans-serif";
 
 export default function OfferBroadcastEmail({
   headline,
@@ -33,93 +70,182 @@ export default function OfferBroadcastEmail({
   ctaText,
   ctaUrl,
   previewText,
+  featured = null,
+  unsubscribeUrl = null,
 }: OfferBroadcastEmailProps) {
   return (
     <Html>
       <Head />
       <Preview>{previewText}</Preview>
-      <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
+      <Body style={{ backgroundColor: CREAM, fontFamily: SANS, margin: 0, padding: "24px 12px" }}>
         <Container
           style={{
             backgroundColor: "#ffffff",
             margin: "0 auto",
-            padding: "0 0 32px 0",
             maxWidth: "560px",
-            borderRadius: "8px",
+            borderRadius: "20px",
             overflow: "hidden",
           }}
         >
-          {/* Hero band — sets this apart from transactional emails at a glance */}
-          <Section style={{ backgroundColor: GREEN, padding: "28px 24px", textAlign: "center" }}>
-            {/* onDark: এই band সবুজ, তাই wordmark সাদা — ডিফল্ট গাঢ় রঙে
-                লেখাটা প্রায় পড়াই যেত না। */}
-            <EmailLogo onDark align="center" />
+          {/* Hero band — the brand gradient */}
+          <Section
+            style={{
+              backgroundColor: ORANGE,
+              backgroundImage: GRADIENT,
+              padding: "32px 28px",
+              textAlign: "center",
+            }}
+          >
+            {/* Wordmark only, centred. The logo mark is orange, so on
+                this orange gradient it disappeared. */}
+            <Text
+              style={{
+                fontFamily: SERIF,
+                fontSize: "26px",
+                fontWeight: "bold",
+                color: "#ffffff",
+                textAlign: "center",
+                margin: "0 0 16px 0",
+              }}
+            >
+              Cuisine
+            </Text>
             <Text
               style={{
                 display: "inline-block",
-                backgroundColor: ORANGE,
-                color: "#ffffff",
-                fontSize: "11px",
+                backgroundColor: "#ffffff",
+                color: "#000000",
+                fontSize: "12px",
                 fontWeight: "bold",
-                letterSpacing: "0.08em",
+                letterSpacing: "0.06em",
                 textTransform: "uppercase",
-                padding: "6px 14px",
+                padding: "8px 14px",
                 borderRadius: "999px",
-                margin: "0 0 12px 0",
+                margin: "0 0 14px 0",
               }}
             >
-              Special Offer
+              {featured ? `${featured.badge} · Special Offer` : "Special Offer"}
             </Text>
             <Heading
               style={{
                 color: "#ffffff",
-                fontSize: "24px",
-                lineHeight: "1.3",
-                margin: "0",
+                fontFamily: SERIF,
+                fontSize: "28px",
+                fontWeight: 600,
+                lineHeight: "1.2",
+                margin: 0,
               }}
             >
               {headline}
             </Heading>
           </Section>
 
-          {/* Body — admin-authored HTML rendered inside consistent typography */}
-          <Section style={{ padding: "28px 24px 8px 24px" }}>
+          {/* Message */}
+          <Section style={{ padding: "28px 28px 4px 28px" }}>
             <div
-              style={{ color: "#374151", fontSize: "15px", lineHeight: "1.6" }}
+              style={{ color: "rgba(0,0,0,0.7)", fontSize: "15px", lineHeight: "1.7" }}
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
           </Section>
 
-          {/* CTA button */}
-          <Section style={{ textAlign: "center", margin: "16px 0 8px 0" }}>
+          {/* The dish on offer, when one was picked */}
+          {featured && (
+            <Section style={{ padding: "12px 28px 0 28px" }}>
+              <Section
+                style={{ backgroundColor: CREAM, borderRadius: "16px", padding: "12px" }}
+              >
+                {featured.imageUrl && (
+                  <Img
+                    src={featured.imageUrl}
+                    alt={featured.title}
+                    width="100%"
+                    style={{
+                      width: "100%",
+                      maxWidth: "480px",
+                      height: "auto",
+                      borderRadius: "12px",
+                      display: "block",
+                    }}
+                  />
+                )}
+                <Text
+                  style={{
+                    fontFamily: SERIF,
+                    fontSize: "20px",
+                    fontWeight: 600,
+                    color: "#000000",
+                    margin: "14px 4px 6px 4px",
+                  }}
+                >
+                  {featured.title}
+                </Text>
+                <Text style={{ margin: "0 4px 6px 4px", fontSize: "14px" }}>
+                  <span style={{ color: "rgba(0,0,0,0.45)", textDecoration: "line-through" }}>
+                    {featured.oldPrice}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: SERIF,
+                      fontSize: "22px",
+                      fontWeight: 700,
+                      color: "#000000",
+                      marginLeft: "10px",
+                    }}
+                  >
+                    {featured.newPrice}
+                  </span>
+                </Text>
+                <Text style={{ margin: "0 4px 4px 4px", fontSize: "12px", color: "rgba(0,0,0,0.7)" }}>
+                  {featured.note}
+                </Text>
+              </Section>
+            </Section>
+          )}
+
+          {/* Call to action — gradient pill, like the site's buttons */}
+          <Section style={{ textAlign: "center", padding: "28px 28px 8px 28px" }}>
             <Link
               href={ctaUrl}
               style={{
                 backgroundColor: ORANGE,
+                backgroundImage: GRADIENT,
                 color: "#ffffff",
-                padding: "14px 32px",
-                borderRadius: "6px",
-                fontSize: "15px",
+                padding: "15px 36px",
+                borderRadius: "999px",
+                fontSize: "16px",
                 fontWeight: "bold",
                 textDecoration: "none",
                 display: "inline-block",
               }}
             >
-              {ctaText} →
+              {ctaText}
             </Link>
           </Section>
 
-          <Hr style={{ borderColor: "#e5e7eb", margin: "28px 24px 16px 24px" }} />
+          {/* Padding on a wrapper, not margin on the Hr — Hr is 100% wide,
+              so side margins pushed it past the card's right edge. */}
+          <Section style={{ padding: "28px 28px 0 28px" }}>
+            <Hr style={{ borderColor: "#EFE9E3", margin: "0 0 16px 0" }} />
+          </Section>
 
-          {/* Footer — brand sign-off. Resend injects the required unsubscribe
-              link/header automatically for broadcast sends (RFC 8058), so no
-              manual unsubscribe link is added here. */}
-          <Section style={{ padding: "0 24px" }}>
-            <Text style={{ fontSize: "12px", color: "#9ca3af", margin: "0 0 4px 0" }}>
-              You&apos;re receiving this email because you opted in to offers and
-              updates from Cuisine.
+          {/* Footer — with the unsubscribe link every marketing email must
+              carry (see `unsubscribeUrl` above). */}
+          <Section style={{ padding: "0 28px 28px 28px" }}>
+            <Text style={{ fontSize: "12px", color: "rgba(0,0,0,0.5)", margin: "0 0 4px 0" }}>
+              You&apos;re receiving this email because you opted in to offers and updates from
+              Cuisine.{" "}
+              {unsubscribeUrl ? (
+                <Link
+                  href={unsubscribeUrl}
+                  style={{ color: "rgba(0,0,0,0.7)", textDecoration: "underline" }}
+                >
+                  Unsubscribe
+                </Link>
+              ) : (
+                <span>(Test email — the real one has an Unsubscribe link here.)</span>
+              )}
             </Text>
-            <Text style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+            <Text style={{ fontSize: "12px", color: "rgba(0,0,0,0.5)", margin: 0 }}>
               &copy; {new Date().getFullYear()} Cuisine. All rights reserved.
             </Text>
           </Section>

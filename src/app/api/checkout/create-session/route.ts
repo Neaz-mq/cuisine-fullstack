@@ -313,6 +313,9 @@ export async function POST(request: Request) {
               menuItemId: i.menuItemId,
               quantity: i.quantity,
               price: i.price,
+              // Set only when a product offer lowered the price.
+              originalPrice: i.originalPrice,
+              offerId: i.offerId,
             })),
           },
         },
@@ -513,6 +516,11 @@ export async function POST(request: Request) {
       const checkoutSession = await stripe.checkout.sessions.create(
         {
           mode: "payment",
+          // ⚠️ Stripe's default is 24 hours. Until the session expires (and
+          // the "expired" webhook runs cancelOrder), the coupon use, gift
+          // card balance and loyalty points on this order stay locked. 30
+          // minutes is the shortest Stripe allows.
+          expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
           payment_method_types: ["card"],
           customer_email: billing.email,
           line_items: lineItems,

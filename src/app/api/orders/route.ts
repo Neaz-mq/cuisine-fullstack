@@ -429,6 +429,9 @@ export async function POST(request: Request) {
               menuItemId: i.menuItemId,
               quantity: i.quantity,
               price: i.price,
+              // Set only when a product offer lowered the price.
+              originalPrice: i.originalPrice,
+              offerId: i.offerId,
             })),
           },
         },

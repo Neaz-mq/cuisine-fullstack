@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { render } from "@react-email/render";
-import OfferBroadcastEmail from "@/emails/OfferBroadcastEmail";
+import OfferBroadcastEmail, { type FeaturedOfferEmail } from "@/emails/OfferBroadcastEmail";
 
 // Lazily instantiated so that importing this module never throws even if
 // RESEND_API_KEY isn't set yet (e.g. local dev before the .env is filled
@@ -74,13 +74,19 @@ export async function syncCustomerToAudience(params: {
 }): Promise<void> {
   try {
     const resend = getResendClient();
+    const audienceId = getAudienceId();
     await resend.contacts.create({
-      audienceId: getAudienceId(),
+      audienceId,
       email: params.email,
       firstName: params.firstName,
       lastName: params.lastName,
       unsubscribed: false,
     });
+    // ⚠️ If this email is already in the Audience — e.g. they unsubscribed
+    // earlier — `create` doesn't change them, so they'd stay unsubscribed
+    // even though they just ticked "Email me about offers" again. Setting
+    // it explicitly respects that new, deliberate opt-in.
+    await resend.contacts.update({ audienceId, email: params.email, unsubscribed: false });
   } catch (error) {
     console.error("[resend] Failed to sync contact to audience:", error);
     // Intentionally swallowed — see doc comment above.
@@ -113,27 +119,66 @@ export async function removeCustomerFromAudience(email: string): Promise<void> {
  * the admin UI needs to know if the send failed so it can show an error
  * instead of a false "sent!" confirmation.
  */
-export async function sendOfferBroadcast(params: {
+export type OfferEmailParams = {
   subject: string;
   headline: string;
   bodyHtml: string;
   ctaText: string;
   ctaUrl: string;
-}): Promise<{ broadcastId: string }> {
-  const resend = getResendClient();
+  /** A running product offer to show as a card — see OfferBroadcastEmail. */
+  featured?: FeaturedOfferEmail | null;
+};
 
-  // Render the branded template to HTML ourselves (rather than relying on
-  // whatever "react" support broadcasts.create may or may not have) so this
-  // works reliably regardless of Resend SDK version.
-  const html = await render(
+// Render the branded template to HTML ourselves (rather than relying on
+// whatever "react" support broadcasts.create may or may not have) so this
+// works reliably regardless of Resend SDK version.
+function renderOfferEmail(
+  params: OfferEmailParams,
+  unsubscribeUrl: string | null
+): Promise<string> {
+  return render(
     OfferBroadcastEmail({
+      unsubscribeUrl,
       headline: params.headline,
       bodyHtml: params.bodyHtml,
       ctaText: params.ctaText,
       ctaUrl: params.ctaUrl,
       previewText: params.subject,
+      featured: params.featured ?? null,
     })
   );
+}
+
+/**
+ * "Send Test to Me" on /admin/marketing — the exact same email, sent only
+ * to the staff member's own inbox, so they can check it before it goes to
+ * every subscriber. Subject starts with "[Test]" so it's never mistaken
+ * for the real send.
+ */
+export async function sendOfferTestEmail(
+  to: string,
+  params: OfferEmailParams
+): Promise<{ id: string }> {
+  const resend = getResendClient();
+  const html = await renderOfferEmail(params, null);
+  const sent = await resend.emails.send({
+    from: MARKETING_EMAIL_FROM,
+    to,
+    subject: `[Test] ${params.subject}`,
+    html,
+  });
+  if (sent.error) {
+    throw new Error(`Failed to send test email: ${sent.error.message}`);
+  }
+  return { id: sent.data!.id };
+}
+
+export async function sendOfferBroadcast(
+  params: OfferEmailParams
+): Promise<{ broadcastId: string }> {
+  const resend = getResendClient();
+  // Resend replaces this with each contact's own unsubscribe link.
+  const html = await renderOfferEmail(params, "{{{RESEND_UNSUBSCRIBE_URL}}}");
 
   const created = await resend.broadcasts.create({
     audienceId: getAudienceId(),
@@ -160,4 +205,69 @@ export async function sendOfferBroadcast(params: {
   }
 
   return { broadcastId };
+}
+
+export type AudienceStats = {
+  /** Contacts who will get the next broadcast. */
+  subscribed: number;
+  /** Contacts who clicked "Unsubscribe" (Resend skips them). */
+  unsubscribed: number;
+  /** True if the list was too long to count fully — shown as "5,000+". */
+  capped: boolean;
+};
+
+const AUDIENCE_PAGE_SIZE = 100;
+const AUDIENCE_MAX_PAGES = 50; // 5,000 contacts
+
+/**
+ * How many people a broadcast will actually reach — counted in the Resend
+ * Audience itself, the list broadcasts are sent to.
+ *
+ * This is the industry-standard source of truth: the email provider owns
+ * the subscription state. Unsubscribes happen on Resend's own page (and
+ * through the one-click unsubscribe in Gmail/Apple Mail), so our database
+ * never hears about them — counting `User.marketingConsent` would keep
+ * showing people who already left, and would miss guests who opted in at
+ * checkout.
+ *
+ * Returns null if Resend can't be reached; the page then falls back to the
+ * database count and says so.
+ */
+export async function getAudienceStats(): Promise<AudienceStats | null> {
+  try {
+    const resend = getResendClient();
+    const audienceId = getAudienceId();
+
+    let subscribed = 0;
+    let unsubscribed = 0;
+    let after: string | undefined;
+
+    for (let page = 0; page < AUDIENCE_MAX_PAGES; page++) {
+      const result = await resend.contacts.list({
+        audienceId,
+        limit: AUDIENCE_PAGE_SIZE,
+        ...(after ? { after } : {}),
+      });
+      if (result.error || !result.data) {
+        console.error("[resend] Failed to list audience contacts:", result.error);
+        return null;
+      }
+
+      for (const contact of result.data.data) {
+        if (contact.unsubscribed) unsubscribed++;
+        else subscribed++;
+      }
+
+      const last = result.data.data.at(-1);
+      if (!result.data.has_more || !last) {
+        return { subscribed, unsubscribed, capped: false };
+      }
+      after = last.id;
+    }
+
+    return { subscribed, unsubscribed, capped: true };
+  } catch (error) {
+    console.error("[resend] Failed to count audience contacts:", error);
+    return null;
+  }
 }

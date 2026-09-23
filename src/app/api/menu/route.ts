@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 
 /**
  * src/app/api/menu/route.ts
@@ -54,14 +57,35 @@ export async function GET() {
     // এখানে float হওয়া নিরাপদ: এই দাম কেবল দেখানোর জন্য। গ্রাহক অর্ডার
     // করলে server নিজেই MenuItem.price আবার পড়ে (resolveOrderItems),
     // client-এর পাঠানো কোনো দাম কখনো বিশ্বাস করা হয় না।
+    //
+    // Product offers (/admin/offers): `price` is what checkout will charge;
+    // `originalPrice` is the normal price when an offer lowered it.
+    const [settings, liveOffers, session] = await Promise.all([
+      getRestaurantSettings(),
+      findLiveOffers(nonEmptyCategories.flatMap((c) => c.menuItems.map((item) => item.id))),
+      auth(),
+    ]);
+    const isMember = Boolean(session?.user?.id);
+
     return NextResponse.json(
       nonEmptyCategories.map((c) => ({
         id: c.id,
         label: c.name,
-        items: c.menuItems.map((item) => ({
-          ...item,
-          price: item.price.toNumber(),
-        })),
+        items: c.menuItems.map((item) => {
+          const shown = displayPrice(
+            item.price,
+            liveOffers.get(item.id),
+            isMember,
+            settings.currency,
+            settings.currencyMinorUnits
+          );
+          return {
+            ...item,
+            price: shown.price,
+            originalPrice: shown.oldPriceLabel ? item.price.toNumber() : null,
+            offerBadge: shown.badge,
+          };
+        }),
       }))
     );
   } catch (error) {
