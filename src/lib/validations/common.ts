@@ -55,7 +55,14 @@ export const quantitySchema = z
   .positive("Quantity must be at least 1")
   .max(99, "Maximum 99 of a single item per order");
 
-export const emailSchema = z.email("Enter a valid email address").trim().toLowerCase();
+// ⚠️ trim/lowercase first, THEN validate. In zod 4 `z.email().trim()` runs
+// the email check on the raw string, so "  me@x.com" failed validation and
+// the .trim() never got a chance to help.
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email("Enter a valid email address"));
 
 /** Deliberately permissive — this app serves customers who type numbers
  * in varied local formats (spaces, dashes, +880 prefix). Strip to digits

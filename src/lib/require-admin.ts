@@ -63,6 +63,21 @@ export async function loadActiveRole(userId: string): Promise<string | null> {
 
 /** Page-level guard: any staff role may pass. Section-level layout.tsx
  * files handle the finer-grained scope check for their own subtree. */
+/**
+ * Puts the role we just read from the DB onto the session before handing it
+ * back.
+ *
+ * The role inside the JWT is frozen at login and lives for up to 8 hours.
+ * Several callers (the staff routes, the staff pages) read
+ * `session.user.role` to decide owner-only things — creating owners, seeing
+ * salaries. Without this, an owner who was demoted to manager kept owner
+ * powers until their token expired.
+ */
+function withDbRole<T extends { user?: unknown }>(session: T, role: string): T {
+  if (session.user) (session.user as { role?: string }).role = role;
+  return session;
+}
+
 export async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -74,7 +89,7 @@ export async function requireAdmin() {
   if (!role) redirect("/login");
   if (!isStaffRole(role)) redirect("/");
 
-  return session;
+  return withDbRole(session, role);
 }
 
 /** Page-level guard for a specific scope, e.g. requireStaff("settings").
@@ -94,7 +109,7 @@ export async function requireStaff(scope: Scope) {
   if (!isStaffRole(role)) redirect("/");
   if (!hasPermission(role, scope)) redirect("/admin");
 
-  return session;
+  return withDbRole(session, role);
 }
 
 /** Same as requireStaff, but passes if the role has ANY of the given
@@ -109,7 +124,7 @@ export async function requireStaffAny(scopes: Scope[]) {
   if (!isStaffRole(role)) redirect("/");
   if (!hasAnyPermission(role, scopes)) redirect("/admin");
 
-  return session;
+  return withDbRole(session, role);
 }
 
 /**
@@ -138,7 +153,7 @@ export async function requireApiScope(scope: Scope) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return session;
+  return withDbRole(session, role);
 }
 
 /** Same idea as requireApiScope, but passes for ANY of the given scopes. */
@@ -156,7 +171,7 @@ export async function requireApiScopeAny(scopes: Scope[]) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return session;
+  return withDbRole(session, role);
 }
 
 /** API-route guard: any staff role passes (no specific scope required) —
@@ -176,5 +191,5 @@ export async function requireApiStaff() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return session;
+  return withDbRole(session, role);
 }

@@ -23,6 +23,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { canTransition } from "@/lib/order-state-machine";
+import { isRecordNotFound } from "@/lib/prisma-errors";
 
 type AdvanceResult =
   | { ok: true; order: { id: string; status: string }; deducted: boolean }
@@ -31,7 +32,8 @@ type AdvanceResult =
       error:
         | "Order not found"
         | "Cannot prepare a cancelled order"
-        | "This order cannot be moved to preparing from its current status";
+        | "This order cannot be moved to preparing from its current status"
+        | "This order hasn't been paid yet";
     };
 
 export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceResult> {
@@ -39,6 +41,8 @@ export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceR
     where: { id: orderId },
     select: {
       status: true,
+      paymentMethod: true,
+      paymentStatus: true,
       items: {
         select: {
           quantity: true,
@@ -68,6 +72,17 @@ export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceR
     };
   }
 
+  // ⚠️ An ONLINE order is created BEFORE the customer pays — it sits as
+  // PLACED + PENDING while they are on Stripe's page (up to the session's
+  // expiry), and may never be paid at all. Cooking it, and deducting stock
+  // for it, before the webhook marks it PAID means cooking unpaid food.
+  if (
+    existingOrder.paymentMethod === "ONLINE" &&
+    (existingOrder.paymentStatus === "PENDING" || existingOrder.paymentStatus === "FAILED")
+  ) {
+    return { ok: false, error: "This order hasn't been paid yet" };
+  }
+
   // এক order-এর দুটো ভিন্ন menu item একই ingredient ব্যবহার করতে পারে
   // (যেমন দুটো পদেই চাল) — তাই আগে ingredient ধরে যোগ করে নেওয়া, যাতে
   // ledger-এ প্রতি ingredient-এ একটাই row যায়, প্রতি menu item-এ নয়।
@@ -91,8 +106,9 @@ export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceR
 
   const result = await prisma.$transaction(
     async (tx) => {
+      // status in WHERE = atomic claim (see cancelOrder in cancel-order.ts).
       const order = await tx.order.update({
-        where: { id: orderId },
+        where: { id: orderId, status: existingOrder.status },
         /**
          * ⚠️ `preparingAt` এখানেই বসে, `updatedAt`-এর উপর ভরসা করে নয়।
          *
@@ -149,7 +165,18 @@ export async function advanceOrderToPreparing(orderId: string): Promise<AdvanceR
     // change-ও rollback হয়ে যেতো, অর্থাৎ kitchen board-এ order আটকে
     // থাকতো কোনো ব্যাখ্যা ছাড়াই।
     { timeout: 15000 }
-  );
+  ).catch((error: unknown) => {
+    if (isRecordNotFound(error)) return null;
+    throw error;
+  });
+
+  if (!result) {
+    // Another request moved or cancelled the order between our read and write.
+    return {
+      ok: false,
+      error: "This order cannot be moved to preparing from its current status",
+    };
+  }
 
   return { ok: true, order: result.order, deducted: result.deducted };
 }
