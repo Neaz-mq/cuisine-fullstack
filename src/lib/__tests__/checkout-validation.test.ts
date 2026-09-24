@@ -82,7 +82,7 @@ describe("validateBilling — DINE_IN orders (QR table ordering)", () => {
       lastName: "Ahmed",
       phone: "01812345678",
     };
-    // No email, address, city, state, zip at all — must still pass.
+    // No email, address, city, state, zip at all — must still pass..
     expect(validateBilling(dineInBilling, "DINE_IN")).toBeNull();
   });
 });
