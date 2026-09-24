@@ -143,6 +143,10 @@ export default async function MenuPage() {
         expiresAt: true,
         usageLimit: true,
         usageCount: true,
+        // The card text staff write in /admin/coupons (optional).
+        label: true,
+        headline: true,
+        description: true,
         restrictedCategories: { select: { id: true, name: true } },
         restrictedItems: { select: { id: true } },
       },
@@ -277,11 +281,13 @@ export default async function MenuPage() {
     .slice(0, 3)
     .map((coupon) => {
       const discount =
-        coupon.type === "PERCENT" && coupon.percentOff !== null
-          ? `${coupon.percentOff}% Off`
-          : coupon.fixedOff !== null
-            ? `${formatAmount(Number(coupon.fixedOff).toFixed(units), settings.currency)} Off`
-            : "A Discount";
+        coupon.type === "FREE_DELIVERY"
+          ? "Free Delivery On"
+          : coupon.type === "PERCENT" && coupon.percentOff !== null
+            ? `${coupon.percentOff}% Off`
+            : coupon.fixedOff !== null
+              ? `${formatAmount(Number(coupon.fixedOff).toFixed(units), settings.currency)} Off`
+              : "A Discount";
 
       const scope =
         coupon.restrictedCategories.length > 0
@@ -308,12 +314,14 @@ export default async function MenuPage() {
         })}.`;
       }
 
+      // Staff-written text (/admin/coupons) wins; the built sentences are
+      // the fallback for coupons that don't have any.
       return {
         id: coupon.id,
         code: coupon.code,
-        eyebrow: scope,
-        headline: `${discount} Your Order`,
-        detail,
+        eyebrow: coupon.label?.trim() || scope,
+        headline: coupon.headline?.trim() || `${discount} Your Order`,
+        detail: coupon.description?.trim() || detail,
       };
     });
 

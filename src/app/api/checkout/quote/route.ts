@@ -8,7 +8,6 @@ import {
   getCustomerKey,
   type CouponInfo,
 } from "@/lib/order-checkout-shared";
-import { findValidGiftCard, calcGiftCardAmountToApply, type GiftCardInfo } from "@/lib/gift-cards";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption } from "@/lib/loyalty-redemption";
 import { getCheckoutSettings } from "@/lib/get-settings";
@@ -88,7 +87,6 @@ export async function POST(req: NextRequest) {
     items,
     orderType,
     couponCode,
-    giftCardCode,
     redeemPoints,
     tipAmount,
     tipPercent,
@@ -99,7 +97,7 @@ export async function POST(req: NextRequest) {
   // কোড সঙ্গে থাকলে এটা কার্যত একটা validate call, তাই সেই endpoint-
   // গুলোর সমান বাজেট — আলাদা scope, যাতে উপরের উদার bucket-টা এই
   // কড়া হিসাবের সাথে মিশে না যায়।
-  if (couponCode || giftCardCode) {
+  if (couponCode) {
     const codeLimit = checkRateLimit(req, "checkout-quote-code", {
       limit: 20,
       windowMs: 60_000,
@@ -163,7 +161,7 @@ export async function POST(req: NextRequest) {
   let couponInfo: CouponInfo | null = null;
   let discountAmount: Money = ZERO;
   if (couponCode?.trim()) {
-    const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
+    const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey, { orderType: orderType });
     if (couponResult.ok) {
       couponInfo = couponResult.coupon;
       discountAmount = calcDiscountAmount(couponResult.eligibleSubtotal, couponInfo);
@@ -181,24 +179,12 @@ export async function POST(req: NextRequest) {
       orderType,
       items: resolvedItems,
       couponDiscount: discountAmount,
+      freeDelivery: couponInfo?.type === "FREE_DELIVERY",
       tierDiscountPercent,
       deliveryFeeOverride,
     },
     pricingSettings
   );
-
-  let giftCardInfo: GiftCardInfo | null = null;
-  let giftCardRequested: Money = ZERO;
-  if (giftCardCode?.trim()) {
-    const giftCardResult = await findValidGiftCard(giftCardCode);
-    if (giftCardResult.ok) {
-      giftCardInfo = giftCardResult.giftCard;
-      giftCardRequested = calcGiftCardAmountToApply(
-        beforePrepaid.grandTotal,
-        giftCardInfo.balance
-      );
-    }
-  }
 
   let pointsToRedeem = 0;
   let pointsRedeemedRequested: Money = ZERO;
@@ -206,7 +192,7 @@ export async function POST(req: NextRequest) {
     const clamped = clampPointsRedemption(
       redeemPoints,
       currentUser.loyaltyPoints,
-      beforePrepaid.grandTotal.minus(giftCardRequested)
+      beforePrepaid.grandTotal
     );
     pointsToRedeem = clamped.points;
     pointsRedeemedRequested = clamped.amount;
@@ -217,13 +203,13 @@ export async function POST(req: NextRequest) {
       orderType,
       items: resolvedItems,
       couponDiscount: discountAmount,
+      freeDelivery: couponInfo?.type === "FREE_DELIVERY",
       tierDiscountPercent,
-      giftCardRequested,
       pointsRedeemedRequested,
       tipAmount,
       tipPercent,
       // ⚠️ দুটো হিসাবেই একই override — একটাতে দিয়ে অন্যটায় ভুলে গেলে
-      // gift card/point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
+      // point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
       deliveryFeeOverride,
     },
     pricingSettings
@@ -248,12 +234,11 @@ export async function POST(req: NextRequest) {
     tierDiscountAmount: m(priced.tierDiscountAmount),
     serviceCharge: m(priced.serviceCharge),
     deliveryFee: m(priced.deliveryFee),
+    // What a free-delivery coupon took off the delivery fee (else "0.00").
+    deliveryFeeWaived: m(priced.deliveryFeeWaived),
     taxAmount: m(priced.taxAmount),
     grandTotal: m(priced.grandTotal),
 
-    // প্রকৃতপক্ষে যতটা প্রয়োগ হয়েছে, চাওয়া পরিমাণ নয় — বিলের চেয়ে বড়
-    // gift card বিল পর্যন্তই কাটে।
-    giftCardAmount: m(priced.giftCardAmount),
     pointsRedeemedAmount: m(priced.pointsRedeemedAmount),
     pointsRedeemed: pointsToRedeem,
 
@@ -308,14 +293,5 @@ export async function POST(req: NextRequest) {
 
     // client যা চেয়েছিল তার সাথে server কী মেনে নিল, তা মেলানোর জন্য।
     appliedCouponCode: couponInfo?.code ?? null,
-    appliedGiftCardCode: giftCardInfo?.code ?? null,
-    // ⚠️ giftCardBalance এখান থেকে সরানো হয়েছে।
-    //
-    // কার্ডের অবশিষ্ট balance ফেরত যেতো, অথচ Carts.tsx সেটা কখনো
-    // দেখাতো না — type-এ ঘোষিত ছিল, ব্যবহার হতো না। এই বিলে কতটা
-    // কাটছে সেটা giftCardAmount-ই বলে, আর সেটাই গ্রাহকের দরকার।
-    //
-    // পার্থক্যটা হলো একটা কোড অনুমান করে ফেললে কতটা জানা যায়: শুধু
-    // "কোডটা খাটে" নাকি "কোডটা খাটে এবং এতে ৳৫০০০ পড়ে আছে"।
   });
 }

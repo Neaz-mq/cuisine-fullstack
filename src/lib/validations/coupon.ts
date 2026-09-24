@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emailSchema, nonEmptyString } from "@/lib/validations/common";
+import { nonEmptyString } from "@/lib/validations/common";
 import { incomingItemSchema } from "@/lib/validations/checkout";
 
 /**
@@ -16,63 +16,9 @@ export const validateCouponSchema = z.object({
   code: nonEmptyString("Coupon code"),
   items: z.array(incomingItemSchema).min(1, "Cart is empty"),
   phone: z.string().trim().optional(),
+  // So a free-delivery coupon can be refused on a dine-in order.
+  orderType: z.enum(["DELIVERY", "DINE_IN"]).optional(),
 });
-
-export const validateGiftCardSchema = z.object({
-  code: nonEmptyString("Gift card code"),
-  orderTotal: z.number().finite().nonnegative("Invalid order total"),
-});
-
-/** MIN/MAX kept in sync with the route's own constants — duplicated here
- * rather than imported since gift-cards/purchase/route.ts defines them
- * inline as local consts, not exported. */
-export const purchaseGiftCardSchema = z.object({
-  amount: z
-    .number()
-    .finite()
-    .min(5, "Gift card amount must be between $5 and $500")
-    .max(500, "Gift card amount must be between $5 and $500"),
-  purchaserEmail: emailSchema,
-  purchaserName: z.string().trim().optional(),
-  recipientEmail: z.string().trim().email("Enter a valid recipient email").optional().or(z.literal("")),
-  recipientName: z.string().trim().optional(),
-  message: z.string().trim().max(500).optional(),
-});
-
-/**
- * POST /api/admin/gift-cards — a staff-issued card (comp/refund/goodwill),
- * no Stripe payment involved. Unlike the customer purchase flow above, no
- * $5-$500 ceiling: an admin refund/comp legitimately might need to exceed
- * that, so only "positive number" is enforced here.
- */
-export const issueGiftCardSchema = z.object({
-  amount: z.number().finite().positive("Amount must be a positive number"),
-  recipientEmail: emailSchema,
-  recipientName: z.string().trim().optional(),
-  purchaserName: z.string().trim().optional(),
-  message: z.string().trim().max(500).optional(),
-  note: z.string().trim().max(500).optional(),
-});
-
-/**
- * PATCH /api/admin/gift-cards/[id] — two independent optional operations
- * in one request (see the route's own doc comment): flip `isActive`,
- * and/or apply a signed balance `adjustment`. At least one of the three
- * keys must be present or the route has nothing to do.
- */
-export const adjustGiftCardSchema = z
-  .object({
-    isActive: z.boolean().optional(),
-    adjustment: z
-      .number()
-      .finite()
-      .refine((n) => n !== 0, "Adjustment must be a non-zero number")
-      .optional(),
-    note: z.string().trim().max(500).optional(),
-  })
-  .refine((data) => data.isActive !== undefined || data.adjustment !== undefined, {
-    message: "No editable fields provided",
-  });
 
 /**
  * PATCH /api/admin/coupons/[id] — only the "business terms" fields stay
@@ -111,3 +57,70 @@ export const updateCouponSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: "No editable fields provided",
   });
+/**
+ * The "Create New Coupon" / "Edit Coupon" modal on /admin/coupons — the
+ * whole coupon in one body (POST /api/admin/coupons and PATCH
+ * /api/admin/coupons/[id]).
+ *
+ * Dates are calendar days ("2026-08-01") in the restaurant's time zone;
+ * the expiry date is the LAST day the code works. The route turns them into
+ * instants (see src/lib/coupon-admin.ts).
+ */
+const couponDay = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date");
+
+const optionalText = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${label} can be at most ${max} characters`)
+    .optional()
+    .nullable()
+    .transform((value) => (value ? value : null));
+
+export const couponFormSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .min(3, "Coupon code needs at least 3 characters")
+      .max(30, "Coupon code can be at most 30 characters")
+      .regex(/^[A-Z0-9_-]+$/, "Use only letters, numbers, - and _ in the code (no spaces)"),
+    label: optionalText(40, "Tag / Label"),
+    headline: optionalText(80, "Headline"),
+    description: optionalText(300, "Description"),
+    isActive: z.boolean(),
+    type: z.enum(["PERCENT", "FIXED", "FREE_DELIVERY"]),
+    // Percent (1-100) or amount; ignored for FREE_DELIVERY.
+    value: z.number().finite().nullable().optional(),
+    maxDiscountAmount: z.number().finite().positive("Max discount must be more than 0").nullable().optional(),
+    minOrderValue: z.number().finite().nonnegative("Minimum order can't be negative").nullable().optional(),
+    usageLimit: z.number().int("Usage limit must be a whole number").positive("Usage limit must be at least 1").nullable().optional(),
+    perCustomerLimit: z.number().int("Uses per customer must be a whole number").positive("Uses per customer must be at least 1").nullable().optional(),
+    startDate: couponDay.nullable().optional(),
+    endDate: couponDay.nullable().optional(),
+    audience: z.enum(["ALL", "NEW_CUSTOMERS", "MEMBERS"]),
+    restrictedCategoryIds: z.array(z.string().trim().min(1)).max(50).default([]),
+    // Left out = keep whatever item restriction the coupon already has
+    // (the modal doesn't edit single items). [] clears it.
+    restrictedItemIds: z.array(z.string().trim().min(1)).max(200).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PERCENT") {
+      if (data.value == null || !Number.isInteger(data.value) || data.value < 1 || data.value > 100) {
+        ctx.addIssue({ code: "custom", path: ["value"], message: "Percentage must be a whole number from 1 to 100" });
+      }
+    } else if (data.type === "FIXED") {
+      if (data.value == null || data.value <= 0) {
+        ctx.addIssue({ code: "custom", path: ["value"], message: "Discount amount must be more than 0" });
+      }
+    }
+    if (data.startDate && data.endDate && data.endDate < data.startDate) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "Expiry date can't be before the start date" });
+    }
+  });
+
+export type CouponFormInput = z.infer<typeof couponFormSchema>;

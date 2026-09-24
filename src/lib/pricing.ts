@@ -130,6 +130,13 @@ export interface PricingInput {
    * ভুল করে dine-in অর্ডারে পাঠালেও ফি বসবে না।
    */
   deliveryFeeOverride?: Money | number | string;
+
+  /**
+   * A FREE_DELIVERY coupon is applied: the delivery fee becomes zero.
+   * What it would have been is returned as `deliveryFeeWaived`, so the
+   * coupon's redemption can record how much it saved.
+   */
+  freeDelivery?: boolean;
 }
 
 export interface PricedOrder {
@@ -138,6 +145,8 @@ export interface PricedOrder {
   tierDiscountAmount: Money;
   serviceCharge: Money;
   deliveryFee: Money;
+  /** The delivery fee a free-delivery coupon waived (else zero). */
+  deliveryFeeWaived: Money;
   taxAmount: Money;
   grandTotal: Money;
 
@@ -219,10 +228,12 @@ export function calculateOrderPricing(
   // ⚠️ override এলে সেটাই, নইলে settings-এর flat ফি। রাউন্ডিং, কর আর
   // grandTotal — নিচের সবকিছু আগের মতোই চলে, কারণ ফি-টা যেখান থেকেই
   // আসুক পরের ধাপগুলোর কাছে সেটা একই একটা Money।
-  const deliveryFee =
+  const fullDeliveryFee =
     input.orderType === "DELIVERY"
       ? round(toMoney(input.deliveryFeeOverride ?? settings.deliveryFeeFlat))
       : ZERO;
+  const deliveryFee = input.freeDelivery ? ZERO : fullDeliveryFee;
+  const deliveryFeeWaived = input.freeDelivery ? fullDeliveryFee : ZERO;
 
   // ── কর ────────────────────────────────────────────────────────────────
   // করযোগ্য ভিত্তি: খাবার সবসময়, বাকি দুটো settings অনুযায়ী। VAT
@@ -289,6 +300,7 @@ export function calculateOrderPricing(
     tierDiscountAmount: tierDiscount,
     serviceCharge,
     deliveryFee,
+    deliveryFeeWaived,
     taxAmount,
     grandTotal,
     giftCardAmount,

@@ -87,7 +87,9 @@ export default async function OfferPage({
   if (!coupon || !isLive) notFound();
 
   const discount =
-    coupon.type === "PERCENT" && coupon.percentOff !== null
+    coupon.type === "FREE_DELIVERY"
+      ? "FREE DELIVERY"
+      : coupon.type === "PERCENT" && coupon.percentOff !== null
       ? `${coupon.percentOff}% OFF`
       : coupon.fixedOff !== null
         ? `${formatAmount(Number(coupon.fixedOff).toFixed(units), settings.currency)} OFF`
@@ -151,7 +153,9 @@ export default async function OfferPage({
    * বসে গোলমাল করত।
    */
   const badge =
-    coupon.type === "PERCENT" && coupon.percentOff !== null
+    coupon.type === "FREE_DELIVERY"
+      ? "Free Delivery"
+      : coupon.type === "PERCENT" && coupon.percentOff !== null
       ? `${coupon.percentOff}%`
       : coupon.fixedOff !== null
         ? `${formatAmount(Number(coupon.fixedOff).toFixed(units), settings.currency)} Off`

@@ -11,12 +11,6 @@ import {
   getCustomerKey,
   CouponInfo,
 } from "@/lib/order-checkout-shared";
-import {
-  findValidGiftCard,
-  calcGiftCardAmountToApply,
-  redeemGiftCard,
-  GiftCardInfo,
-} from "@/lib/gift-cards";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { getCheckoutSettings } from "@/lib/get-settings";
@@ -106,7 +100,7 @@ export async function POST(request: Request) {
       { status: 409 }
     );
   }
-    const { items, billing, shippingMethod, couponCode, giftCardCode, redeemPoints, tipAmount, tipPercent } =
+    const { items, billing, shippingMethod, couponCode, redeemPoints, tipAmount, tipPercent } =
       parsed;
 
     const billingError = validateBilling(billing);
@@ -168,7 +162,7 @@ export async function POST(request: Request) {
     let couponInfo: CouponInfo | null = null;
     let discountAmount: Money = ZERO;
     if (couponCode?.trim()) {
-      const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
+      const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey, { orderType: "DELIVERY" });
       if (!couponResult.ok) {
         return NextResponse.json({ error: couponResult.error }, { status: 409 });
       }
@@ -191,22 +185,12 @@ export async function POST(request: Request) {
         orderType: "DELIVERY",
         items: resolvedItems,
         couponDiscount: discountAmount,
+        freeDelivery: couponInfo?.type === "FREE_DELIVERY",
         tierDiscountPercent,
         deliveryFeeOverride,
       },
       pricingSettings
     );
-
-    let giftCardInfo: GiftCardInfo | null = null;
-    let giftCardAmount: Money = ZERO;
-    if (giftCardCode?.trim()) {
-      const giftCardResult = await findValidGiftCard(giftCardCode);
-      if (!giftCardResult.ok) {
-        return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
-      }
-      giftCardInfo = giftCardResult.giftCard;
-      giftCardAmount = calcGiftCardAmountToApply(beforePrepaid.grandTotal, giftCardInfo.balance);
-    }
 
     // Loyalty points redemption — see /api/orders/route.ts for the full
     // rationale. Same silent-clamp behaviour: an invalid/stale request
@@ -217,7 +201,7 @@ export async function POST(request: Request) {
       const clamped = clampPointsRedemption(
         redeemPoints,
         currentUser.loyaltyPoints,
-        beforePrepaid.grandTotal.minus(giftCardAmount)
+        beforePrepaid.grandTotal
       );
       pointsToRedeem = clamped.points;
       pointsRedeemedAmount = clamped.amount;
@@ -228,22 +212,21 @@ export async function POST(request: Request) {
         orderType: "DELIVERY",
         items: resolvedItems,
         couponDiscount: discountAmount,
+        freeDelivery: couponInfo?.type === "FREE_DELIVERY",
         tierDiscountPercent,
-        giftCardRequested: giftCardAmount,
         pointsRedeemedRequested: pointsRedeemedAmount,
         tipAmount,
         tipPercent,
         // ⚠️ দুটো হিসাবেই একই override — একটাতে দিয়ে অন্যটায় ভুলে গেলে
-        // gift card/point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
+        // point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
         deliveryFeeOverride,
       },
       pricingSettings
     );
 
-    giftCardAmount = priced.giftCardAmount;
     pointsRedeemedAmount = priced.pointsRedeemedAmount;
 
-    // coupon + tier discount + gift card + points মিলিয়ে পুরো bill ঢেকে
+    // coupon + tier discount + points মিলিয়ে পুরো bill ঢেকে
     // ফেললে চার্জ করার মতো কিছুই থাকে না — Stripe-কে ডাকাই অর্থহীন।
     //
     // ⚠️ এখানে আগে `chargeableMinorUnits < 50` ছিল, আর সেটা দুটো
@@ -303,7 +286,6 @@ export async function POST(request: Request) {
           paymentStatus: hasNothingToCharge ? "PAID" : "PENDING",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
-          giftCardCode: giftCardInfo?.code ?? null,
           pointsRedeemed: pointsToRedeem,
           // এখনই সংরক্ষণ করা হচ্ছে যাতে webhook যখন payment নিশ্চিত করে
           // পড়ে তখন row-তে আগে থেকেই থাকে — উপরের doc comment দ্রষ্টব্য।
@@ -328,14 +310,10 @@ export async function POST(request: Request) {
           couponInfo.id,
           created.id,
           customerKey,
-          priced.discountAmount
+          // Free delivery records the waived fee as what the coupon saved.
+          priced.discountAmount.plus(priced.deliveryFeeWaived)
         );
         if (!claimed) throw new Error("COUPON_ALREADY_USED");
-      }
-
-      if (giftCardInfo && giftCardAmount.greaterThan(0)) {
-        const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
-        if (!redeemed) throw new Error("GIFT_CARD_RACE");
       }
 
       if (pointsToRedeem > 0 && session?.user?.id) {
@@ -364,7 +342,7 @@ export async function POST(request: Request) {
         // "checkout failed" দেখানোর কারণ নয়, কারণ retry করলে সে আরেকটা
         // order বানাবে আর gift card দ্বিতীয়বার debit হবে। webhook-এর
         // handleOrderPaid-এ ঠিক একই যুক্তি।
-        console.error("Confirmation email failed for gift-card-paid order", order.id, error);
+        console.error("Confirmation email failed for fully-discounted order", order.id, error);
       }
 
       return NextResponse.json(
@@ -471,9 +449,9 @@ export async function POST(request: Request) {
       // rounding logic লাগতো শুধু উপরে হিসাব করা মোট অঙ্কে পৌঁছাতে।
       //
       // Stripe Checkout Session (payment mode) একটাই `discounts` entry নেয়,
-      // তাই coupon, tier discount, gift card আর point — চারটেই মিলিয়ে
-      // একটাই Stripe coupon বানানো হয়। আমাদের নিজের totalAmount-ও ঠিক এই
-      // চারটে বাদ দিয়েই হিসাব করা, তাই দুই দিক মিলে থাকে।
+      // তাই coupon, tier discount আর point — তিনটেই মিলিয়ে একটাই Stripe
+      // coupon বানানো হয়। আমাদের নিজের totalAmount-ও ঠিক এই তিনটে বাদ
+      // দিয়েই হিসাব করা, তাই দুই দিক মিলে থাকে।
       //
       // সবসময় amount_off দিয়ে বানানো হয়, percent_off দিয়ে নয় — এতেই
       // maxDiscountAmount cap আর FIXED-type coupon Stripe-এর hosted পেজেও
@@ -482,7 +460,6 @@ export async function POST(request: Request) {
         sum(
           priced.discountAmount,
           priced.tierDiscountAmount,
-          priced.giftCardAmount,
           priced.pointsRedeemedAmount
         )
       );
@@ -548,12 +525,6 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
       return NextResponse.json(
         { error: "This coupon was just used by someone else. Please remove it and try again." },
-        { status: 409 }
-      );
-    }
-    if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
-      return NextResponse.json(
-        { error: "This gift card's balance just changed. Please remove it and try again." },
         { status: 409 }
       );
     }

@@ -5,8 +5,7 @@ import type { MetadataRoute } from "next";
  *
  * Next's file-convention route — generates /sitemap.xml automatically.
  * Deliberately only lists public, non-personalized, non-authenticated
- * pages: the marketing homepage, the menu, the chefs page, and gift
- * cards. Login/register, account/order pages, the QR table-ordering
+ * pages: the marketing homepage, the menu and the chefs page. Login/register, account/order pages, the QR table-ordering
  * flow, and everything under /admin are excluded on purpose — see the
  * matching disallow list in robots.ts for why.
  *
@@ -36,12 +35,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/gift-cards`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
     },
   ];
 }

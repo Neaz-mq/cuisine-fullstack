@@ -1,9 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
 /**
- * validateBilling and calcGiftCardAmountToApply are both pure functions,
- * but the modules that export them (order-checkout-shared.ts, gift-cards.ts)
- * unconditionally import "@/lib/prisma" at the top for their OTHER
+ * validateBilling is a pure function, but order-checkout-shared.ts
+ * unconditionally imports "@/lib/prisma" at the top for its OTHER
  * exports. Mocking it here — same as order-checkout-shared.test.ts — means
  * this suite never needs a generated Prisma client or a live DATABASE_URL,
  * even though neither function under test touches the database at all.
@@ -17,7 +16,6 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { validateBilling, type Billing } from "@/lib/order-checkout-shared";
-import { calcGiftCardAmountToApply } from "@/lib/gift-cards";
 
 function billing(overrides: Partial<Billing> = {}): Billing {
   return {
@@ -103,47 +101,5 @@ describe("validateBilling — phone format", () => {
   it("rejects a phone number that's too short or too long", () => {
     expect(validateBilling(billing({ phone: "12345" }))).toMatch(/digits/i);
     expect(validateBilling(billing({ phone: "1".repeat(20) }))).toMatch(/digits/i);
-  });
-});
-
-/**
- * calcGiftCardAmountToApply এখন Prisma Decimal ফেরত দেয়, number নয় —
- * money model migration-এর অংশ। তাই প্রতিটা assertion amount() দিয়ে
- * মোড়ানো।
- *
- * expect(decimal).toBe(300) কখনো পাশ করবে না: toBe reference সমতা দেখে,
- * আর Decimal একটা object। মান ঠিকই ৩০০, কিন্তু সেটা একই object নয়।
- */
-const amount = (d: { toNumber(): number }) => d.toNumber();
-
-describe("calcGiftCardAmountToApply", () => {
-  it("applies the full order total when the gift card balance covers it", () => {
-    expect(amount(calcGiftCardAmountToApply(300, 500))).toBe(300);
-  });
-
-  it("caps the applied amount at the remaining gift card balance", () => {
-    expect(amount(calcGiftCardAmountToApply(500, 300))).toBe(300);
-  });
-
-  it("never returns a negative amount for an already-zeroed-out total", () => {
-    expect(amount(calcGiftCardAmountToApply(-50, 300))).toBe(0);
-  });
-
-  it("returns 0 when the order total is already fully covered elsewhere", () => {
-    expect(amount(calcGiftCardAmountToApply(0, 300))).toBe(0);
-  });
-
-  /**
-   * ⚠️ আচরণ বদলেছে — নাম বদলে দেওয়া হলো।
-   *
-   * আগে function-টা নিজেই ২ দশমিকে round করত। এখন করে না, ইচ্ছাকৃতভাবে:
-   * কোন currency-তে কয় দশমিক সেটা এই function জানে না (ইয়েনে ০,
-   * কুয়েতি দিনারে ৩)। round হয় ঠিক এক জায়গায় — lib/pricing.ts,
-   * যেখানে RestaurantSettings থেকে currency জানা যায়।
-   *
-   * তাই এখানে ১০.০০৫ অবিকৃতই ফেরত আসে, আর সেটাই সঠিক।
-   */
-  it("passes the amount through unrounded — rounding belongs to pricing.ts", () => {
-    expect(amount(calcGiftCardAmountToApply(10.005, 100))).toBe(10.005);
   });
 });

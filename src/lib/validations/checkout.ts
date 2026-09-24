@@ -70,7 +70,6 @@ const baseOrderFields = {
   items: z.array(incomingItemSchema).min(1, "Cart is empty"),
   billing: billingSchema,
   couponCode: z.string().trim().optional(),
-  giftCardCode: z.string().trim().optional(),
   // Loyalty points the customer wants to redeem for a discount — only
   // meaningful for a logged-in user (see lib/loyalty-redemption.ts); the
   // route silently ignores this for guest checkout. Server-clamped to
@@ -119,7 +118,6 @@ export const quoteSchema = z.object({
    */
   deliveryAddress: billingSchema.partial().optional(),
   couponCode: z.string().trim().optional(),
-  giftCardCode: z.string().trim().optional(),
   redeemPoints: z.number().int().nonnegative().optional(),
   tipAmount: z.number().nonnegative().optional(),
   tipPercent: z.number().min(0).max(100).optional(),

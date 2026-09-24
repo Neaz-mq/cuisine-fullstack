@@ -13,7 +13,6 @@ import {
   ChefHat,
   ClipboardList,
   CreditCard,
-  Gift,
   LayoutDashboard,
   LayoutGrid,
   Lightbulb,
@@ -71,7 +70,6 @@ export type NavIcon =
   | "reviews"
   | "offers"
   | "coupons"
-  | "giftCards"
   | "loyalty"
   | "settings";
 
@@ -97,7 +95,6 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
   reviews: Star,
   offers: Ticket,
   coupons: BadgePercent,
-  giftCards: Gift,
   loyalty: Award,
   settings: Settings,
 };

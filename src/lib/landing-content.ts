@@ -154,17 +154,14 @@ export type NavItem = { name: string; path: string };
 /**
  * Figma-র navbar: Home · Menu · Our Chefs · Reservation।
  *
- * ⚠️ পুরনো খাড়া rail-এ ছিল Home · Menu · Our Chefs · **Gift Cards**।
- * Figma-তে "Gift Cards"-এর বদলে "Reservation" — কিন্তু `/gift-cards`
- * পাতাটা সত্যিই আছে, তাই লিঙ্কটা হারিয়ে ফেলা ঠিক হতো না। দুটোই
- * রাখা হলো, আর Figma-র ক্রমটাই মানা হলো।
+ * Gift card ফিচার সরিয়ে দেওয়া হয়েছে (offer আর coupon-ই যথেষ্ট), তাই
+ * পুরনো "Gift Cards" লিঙ্কটাও নেই।
  */
 export const NAV_ITEMS: NavItem[] = [
   { name: "Home", path: "/" },
   { name: "Menu", path: "/menu" },
   { name: "Our Chefs", path: "/chefs" },
   { name: "Reservation", path: "/dine-in" },
-  { name: "Gift Cards", path: "/gift-cards" },
 ];
 
 /* ── "Our Services" section ───────────────────────────────────────── */

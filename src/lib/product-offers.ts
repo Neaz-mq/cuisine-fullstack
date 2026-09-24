@@ -22,7 +22,9 @@ export type OfferStatus = "active" | "scheduled" | "ended";
 export type OfferAudienceValue = "ALL" | "MEMBERS";
 
 export type OfferPricing = {
-  type: "PERCENT" | "FIXED";
+  // FREE_DELIVERY exists only because offers share the coupons' enum; an
+  // offer never has it (the offers API rejects it) and it prices nothing.
+  type: "PERCENT" | "FIXED" | "FREE_DELIVERY";
   percentOff: number | null;
   fixedOff: MoneyInput | null;
 };
@@ -68,6 +70,7 @@ export function applyOffer(
   const base = toMoney(price);
   let next: Money;
 
+  if (offer.type === "FREE_DELIVERY") return null;
   if (offer.type === "PERCENT") {
     if (offer.percentOff === null || offer.percentOff <= 0) return null;
     next = base.times(100 - offer.percentOff).dividedBy(100);

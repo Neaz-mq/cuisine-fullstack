@@ -960,8 +960,22 @@ model OrderItem {
 // ---------------------------------------------------------------------------
 model Coupon {
   id   String             @id @default(cuid())
-  code String             @unique
+  code String     @unique
+  // PERCENT / FIXED take money off the food; FREE_DELIVERY waives the
+  // delivery fee instead (delivery orders only). Product offers share this
+  // enum but only ever use PERCENT / FIXED (checked by the offers API).
   type CouponDiscountType @default(PERCENT)
+
+  // What customers see on the coupon card (/menu "Today's Offers") and on
+  // /admin/coupons — the Figma "Create New Coupon" form's Tag / Label,
+  // Headline and Description. All optional: coupons made before these
+  // existed have none, and the card then builds its text from the rules.
+  label       String? // "New Here", "Free Delivery", "Combo Saver"…
+  headline    String? // "20% Off Your First Order"
+  description String? // "Use the code below at checkout on any order over $15."
+
+  // Figma "Applies To". Checked at checkout in findValidCoupon().
+  audience CouponAudience @default(ALL)
 
   // Exactly one of these is meaningful, matching `type` — enforced at the
   // application layer (see validateCouponInput in order-checkout-shared.ts),
@@ -1029,6 +1043,19 @@ model Coupon {
 enum CouponDiscountType {
   PERCENT
   FIXED
+  // Coupons only: waives the delivery fee. See Coupon.type.
+  FREE_DELIVERY
+}
+
+// Coupon.audience — who may use the code.
+//   ALL            anyone
+//   NEW_CUSTOMERS  only someone with no earlier (non-cancelled) order,
+//                  matched by account or by phone number for guests
+//   MEMBERS        only customers signed in to an account
+enum CouponAudience {
+  ALL
+  NEW_CUSTOMERS
+  MEMBERS
 }
 
 // ─────────────────────────────────────────────────────────────────────────

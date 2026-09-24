@@ -16,12 +16,6 @@ import {
   getCustomerKey,
   CouponInfo,
 } from "@/lib/order-checkout-shared";
-import {
-  findValidGiftCard,
-  calcGiftCardAmountToApply,
-  redeemGiftCard,
-  GiftCardInfo,
-} from "@/lib/gift-cards";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { getCheckoutSettings } from "@/lib/get-settings";
@@ -185,7 +179,6 @@ export async function POST(request: Request) {
       orderType,
       tableId,
       couponCode,
-      giftCardCode,
       redeemPoints,
       tipAmount,
       tipPercent,
@@ -284,7 +277,7 @@ export async function POST(request: Request) {
     let couponInfo: CouponInfo | null = null;
     let discountAmount: Money = ZERO;
     if (couponCode?.trim()) {
-      const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey);
+      const couponResult = await findValidCoupon(couponCode, resolvedItems, customerKey, { orderType: orderType });
       if (!couponResult.ok) {
         return NextResponse.json({ error: couponResult.error }, { status: 409 });
       }
@@ -308,12 +301,11 @@ export async function POST(request: Request) {
 
     // ── দুই ধাপে দাম হিসাব ───────────────────────────────────────────────
     //
-    // Gift card আর point বিলের বিপরীতে খরচ হয়, অথচ বিলটা নিজেই কর আর
-    // service charge যোগ হওয়ার পরে চূড়ান্ত হয় — তাই একবারে হিসাব করা
-    // যায় না।
+    // Point বিলের বিপরীতে খরচ হয়, অথচ বিলটা নিজেই কর আর service charge
+    // যোগ হওয়ার পরে চূড়ান্ত হয় — তাই একবারে হিসাব করা যায় না।
     //
     //   ধাপ ১: prepaid কিছু ছাড়াই দাম কষে grandTotal বের করা
-    //   ধাপ ২: সেই grandTotal-এর বিপরীতে gift card ও point কতটা খাটবে
+    //   ধাপ ২: সেই grandTotal-এর বিপরীতে point কতটা খাটবে
     //          ঠিক করে আবার পুরো হিসাব চালানো
     //
     // ধাপ ১ কেবল হিসাব, কোনো DB call নেই — তাই দুবার চালানো সস্তা।
@@ -322,27 +314,12 @@ export async function POST(request: Request) {
         orderType,
         items: resolvedItems,
         couponDiscount: discountAmount,
+        freeDelivery: couponInfo?.type === "FREE_DELIVERY",
         tierDiscountPercent,
         deliveryFeeOverride,
       },
       pricingSettings
     );
-
-    // Pre-check outside the transaction purely for a fast, friendly error
-    // message — the actual claim (and the only real concurrency guard)
-    // happens inside the transaction via redeemGiftCard below.
-    let giftCardInfo: GiftCardInfo | null = null;
-    let giftCardAmount: Money = ZERO;
-    if (giftCardCode?.trim()) {
-      const giftCardResult = await findValidGiftCard(giftCardCode);
-      if (!giftCardResult.ok) {
-        return NextResponse.json({ error: giftCardResult.error }, { status: 409 });
-      }
-      giftCardInfo = giftCardResult.giftCard;
-      // grandTotal-এর বিপরীতে, subtotal-এর নয় — কর আর service charge-ও
-      // gift card দিয়ে দেওয়া যায়, ওগুলোও বিলেরই অংশ।
-      giftCardAmount = calcGiftCardAmountToApply(beforePrepaid.grandTotal, giftCardInfo.balance);
-    }
 
     // Loyalty points redemption — spends down what's left after every
     // other discount, same "last in line" position as a store-credit
@@ -357,7 +334,7 @@ export async function POST(request: Request) {
       const clamped = clampPointsRedemption(
         redeemPoints,
         currentUser.loyaltyPoints,
-        beforePrepaid.grandTotal.minus(giftCardAmount)
+        beforePrepaid.grandTotal
       );
       pointsToRedeem = clamped.points;
       pointsRedeemedAmount = clamped.amount;
@@ -370,23 +347,21 @@ export async function POST(request: Request) {
         orderType,
         items: resolvedItems,
         couponDiscount: discountAmount,
+        freeDelivery: couponInfo?.type === "FREE_DELIVERY",
         tierDiscountPercent,
-        giftCardRequested: giftCardAmount,
         pointsRedeemedRequested: pointsRedeemedAmount,
         tipAmount: tipAmount,
         tipPercent: tipPercent,
         // ⚠️ দুটো হিসাবেই একই override — একটাতে দিয়ে অন্যটায় ভুলে গেলে
-        // gift card/point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
+        // point কতটা লাগবে সেটা ভুল ভিত্তির উপর ঠিক হতো।
         deliveryFeeOverride,
       },
       pricingSettings
     );
 
     // pricing নিজেই বিলের চেয়ে বেশি হলে কেটে ছোট করে, আর সেই কাটা
-    // পরিমাণটাই ledger-এ লেখা হতে হবে — নইলে কার্ড থেকে বেশি কেটে নেওয়া
-    // হতো। তাই নিচের সব জায়গায় priced.* ব্যবহার হচ্ছে, উপরের চাওয়া
-    // পরিমাণ নয়।
-    giftCardAmount = priced.giftCardAmount;
+    // পরিমাণটাই ledger-এ লেখা হতে হবে। তাই নিচে priced.* ব্যবহার হচ্ছে,
+    // উপরের চাওয়া পরিমাণ নয়।
     pointsRedeemedAmount = priced.pointsRedeemedAmount;
 
     const order = await prisma.$transaction(async (tx) => {
@@ -405,7 +380,6 @@ export async function POST(request: Request) {
           paymentMethod: "COD",
           userId: session?.user?.id ?? null,
           couponCode: couponInfo?.code ?? null,
-          giftCardCode: giftCardInfo?.code ?? null,
           pointsRedeemed: pointsToRedeem,
           // Defaults to false (opt-in, never opt-out by default) if the
           // client omits it entirely.
@@ -444,7 +418,8 @@ export async function POST(request: Request) {
           couponInfo.id,
           created.id,
           customerKey,
-          priced.discountAmount
+          // Free delivery records the waived fee as what the coupon saved.
+          priced.discountAmount.plus(priced.deliveryFeeWaived)
         );
         if (!claimed) {
           // Someone else claimed this exact code in the moment between our
@@ -452,15 +427,6 @@ export async function POST(request: Request) {
           // discount, so the customer isn't silently charged full price
           // for what they believed was a discounted order.
           throw new Error("COUPON_ALREADY_USED");
-        }
-      }
-
-      if (giftCardInfo && giftCardAmount.greaterThan(0)) {
-        const redeemed = await redeemGiftCard(tx, giftCardInfo.id, created.id, giftCardAmount);
-        if (!redeemed) {
-          // Same race as the coupon check above — someone else spent the
-          // balance we were counting on between the pre-check and now.
-          throw new Error("GIFT_CARD_RACE");
         }
       }
 
@@ -571,12 +537,6 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "COUPON_ALREADY_USED") {
       return NextResponse.json(
         { error: "This coupon was just used by someone else. Please remove it and try again." },
-        { status: 409 }
-      );
-    }
-    if (error instanceof Error && error.message === "GIFT_CARD_RACE") {
-      return NextResponse.json(
-        { error: "This gift card's balance just changed. Please remove it and try again." },
         { status: 409 }
       );
     }

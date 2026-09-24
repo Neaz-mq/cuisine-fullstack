@@ -58,11 +58,11 @@ export const metadata: Metadata = {
     template: "%s | Cuisine",
   },
   description:
-    "Order online for delivery or dine-in, browse our menu, book a table, and send a gift card — all from Cuisine.",
+    "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
   openGraph: {
     title: "Cuisine — Online Restaurant Ordering",
     description:
-      "Order online for delivery or dine-in, browse our menu, book a table, and send a gift card — all from Cuisine.",
+      "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
     siteName: "Cuisine",
     type: "website",
     images: [
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Cuisine — Online Restaurant Ordering",
     description:
-      "Order online for delivery or dine-in, browse our menu, book a table, and send a gift card — all from Cuisine.",
+      "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
   },
 };
 

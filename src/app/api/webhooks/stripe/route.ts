@@ -4,10 +4,8 @@ import { getStripeClient } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { sendOrderConfirmationEmail } from "@/lib/send-order-confirmation-email";
 import { syncCustomerToAudience } from "@/lib/resend";
-import { createGiftCard } from "@/lib/gift-cards";
-import { sendGiftCardEmail } from "@/lib/send-gift-card-email";
 import { cancelOrder } from "@/lib/cancel-order";
-import { recordExternalRefunds } from "@/lib/refund-order";
+import { recordExternalRefunds, refundOrder } from "@/lib/refund-order";
 
 /**
  * src/app/api/webhooks/stripe/route.ts
@@ -75,18 +73,16 @@ export async function POST(request: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        // Gift-card কেনাকাটায় কখনো orderId থাকে না — সেগুলো
-        // metadata.purpose দিয়ে আলাদা করা হয়, যা শুধু
-        // /api/gift-cards/purchase সেট করে। এখানে কোনো Order row-ই
-        // জড়িত নয়, তাই নিচের order-payment path থেকে সম্পূর্ণ আলাদা।
+        // Gift card বিক্রি বন্ধ — নতুন কোনো gift_card session আর তৈরি
+        // হয় না। পুরোনো কোনো session দেরিতে এলে সেটা order নয়, তাই
+        // order path-এ না পাঠিয়ে লগ করে ছেড়ে দেওয়া হয় (Stripe-কে 200)।
         if (session.metadata?.purpose === "gift_card") {
-          await handleGiftCardPurchase(session);
+          console.warn("Stripe webhook: ignoring gift_card session — gift cards are disabled", session.id);
           break;
         }
 
         /**
-         * Reservation-এর অগ্রিম। gift card-এর মতোই কোনো Order জড়িত
-         * নয়, তাই আলাদা path।
+         * Reservation-এর অগ্রিম। কোনো Order জড়িত নয়, তাই আলাদা path।
          *
          * ⚠️ দাবিটা updateMany দিয়ে, `status: "PENDING"` শর্ত সহ —
          * Stripe একই event একাধিকবার পাঠাতে পারে (at-least-once), আর
@@ -247,6 +243,22 @@ async function handleOrderPaid(orderId: string, session: Stripe.Checkout.Session
     return;
   }
 
+  // ⚠️ The customer paid for an order that was already CANCELLED — staff
+  // cancelled it while they were still on Stripe's page. cancelOrder()
+  // already gave back the coupon, gift card and points, but the card money
+  // just arrived and nobody will cook this order. Send it straight back
+  // rather than silently keeping it.
+  if (order.status === "CANCELLED") {
+    const refund = await refundOrder({
+      orderId,
+      reason: "Paid after the order was cancelled",
+    });
+    if (!refund.ok) {
+      console.error("⚠️ Could not refund payment for a cancelled order", orderId, refund.error);
+    }
+    return;
+  }
+
   // ⚠️ এখান থেকে নিচের কিছুই throw করে webhook fail করাতে পারবে না।
   // টাকা নেওয়া হয়ে গেছে এবং DB-তে record হয়ে গেছে — Resend সাময়িকভাবে
   // বন্ধ থাকলে সেটা Stripe-কে 500 দেখানোর কারণ নয়, কারণ retry-তে উপরের
@@ -281,73 +293,4 @@ async function handleOrderPaid(orderId: string, session: Stripe.Checkout.Session
       console.error("Marketing audience sync failed for order", orderId, error);
     }
   }
-}
-
-/**
- * Gift card কেনা সম্পন্ন — card তৈরি করে recipient-কে email পাঠায়।
- *
- * Idempotency-র আসল guard হলো GiftCard.stripeSessionId-এর @unique
- * constraint। আগে findUnique দিয়ে আগে থেকে দেখা হতো, কিন্তু সেটা
- * check-then-act — দুটো delivery একসাথে এলে দুটোই "নেই" দেখতো। এখন
- * সরাসরি তৈরি করার চেষ্টা করা হয় আর P2002 ধরা হয়।
- */
-async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
-  const amount = Number(session.metadata?.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    console.error(
-      "Stripe webhook: gift_card session completed with invalid amount metadata",
-      session.id
-    );
-    return;
-  }
-
-  let giftCard;
-  try {
-    giftCard = await createGiftCard({
-      amount,
-      type: "PURCHASE",
-      stripeSessionId: session.id,
-      purchaserEmail: session.metadata?.purchaserEmail || null,
-      purchaserName: session.metadata?.purchaserName || null,
-      recipientEmail: session.metadata?.recipientEmail || null,
-      recipientName: session.metadata?.recipientName || null,
-      message: session.metadata?.message || null,
-    });
-  } catch (error) {
-    // stripeSessionId-এ P2002 মানে এই session আগেই সামলানো হয়েছে —
-    // duplicate delivery, ত্রুটি নয়। চুপচাপ ফিরে যাওয়াই সঠিক, নাহলে
-    // Stripe 500 দেখে চিরকাল retry করতে থাকবে।
-    if (isSessionAlreadyProcessed(error)) return;
-    throw error;
-  }
-
-  if (giftCard.recipientEmail) {
-    try {
-      await sendGiftCardEmail({
-        code: giftCard.code,
-        amount: giftCard.initialAmount,
-        recipientEmail: giftCard.recipientEmail,
-        recipientName: giftCard.recipientName || "there",
-        purchaserName: giftCard.purchaserName,
-        message: giftCard.message,
-      });
-    } catch (error) {
-      // Card তৈরি হয়ে গেছে — email পাঠানো যায়নি বলে webhook fail
-      // করানো যাবে না, কারণ retry-তে P2002 হয়ে চুপচাপ ফিরে যাবে আর
-      // email কোনোদিনই যাবে না। Admin panel থেকে code দেখে হাতে
-      // পাঠানো যাবে।
-      console.error("Gift card delivery email failed for card", giftCard.id, error);
-    }
-  }
-}
-
-/** P2002 হয়েছে কিনা এবং সেটা stripeSessionId-এর কারণে কিনা। code-এর
- * collision (createGiftCard নিজেই retry করে) থেকে আলাদা করা জরুরি। */
-function isSessionAlreadyProcessed(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const e = error as { code?: string; meta?: { target?: string[] | string } };
-  if (e.code !== "P2002") return false;
-  const target = e.meta?.target;
-  const fields = Array.isArray(target) ? target : target ? [target] : [];
-  return fields.some((f) => f.includes("stripeSessionId"));
 }

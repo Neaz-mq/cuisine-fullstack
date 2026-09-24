@@ -387,7 +387,7 @@ export default async function AdminOffersPage({
               const editable: EditableOffer = {
                 id: offer.id,
                 product: toProduct(offer.menuItem),
-                type: offer.type,
+                type: offer.type === "FIXED" ? "FIXED" : "PERCENT",
                 value: offer.type === "PERCENT" ? (offer.percentOff ?? 0) : Number(offer.fixedOff ?? 0),
                 audience: offer.audience,
                 startDate: zonedISODate(offer.startsAt, tz),

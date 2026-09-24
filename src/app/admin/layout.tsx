@@ -90,7 +90,6 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
       { label: "Reviews", href: "/admin/reviews", scope: "reviews", icon: "reviews" },
       { label: "Offers", href: "/admin/offers", scope: "marketing", icon: "offers" },
       { label: "Coupons", href: "/admin/coupons", scope: "coupons", icon: "coupons" },
-      { label: "Gift Cards", href: "/admin/gift-cards", scope: "giftCards", icon: "giftCards" },
       { label: "Loyalty", href: "/admin/loyalty", scope: "loyalty", icon: "loyalty" },
     ],
   },

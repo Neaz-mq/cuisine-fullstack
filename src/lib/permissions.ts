@@ -35,7 +35,6 @@ export type Scope =
   | "tables"
   | "reservations"
   | "coupons"
-  | "giftCards"
   | "reviews"
   | "loyalty"
   | "settings"
@@ -54,7 +53,6 @@ const ALL_SCOPES: Scope[] = [
   "tables",
   "reservations",
   "coupons",
-  "giftCards",
   "reviews",
   "loyalty",
   "settings",
@@ -130,7 +128,6 @@ const SCOPE_PATH: Record<Scope, string> = {
   tables: "/admin/tables",
   reservations: "/admin/reservations",
   coupons: "/admin/coupons",
-  giftCards: "/admin/gift-cards",
   reviews: "/admin/reviews",
   loyalty: "/admin/loyalty",
   settings: "/admin/settings",
@@ -154,7 +151,6 @@ const SCOPE_PRIORITY: Scope[] = [
   "categories",
   "inventory",
   "coupons",
-  "giftCards",
   "reviews",
   "loyalty",
   "staff",

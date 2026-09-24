@@ -241,7 +241,8 @@ async function applyProductOffers(items: ResolvedItem[]): Promise<void> {
 export interface CouponInfo {
   id: string;
   code: string;
-  type: "PERCENT" | "FIXED";
+  /** FREE_DELIVERY waives the delivery fee instead of taking money off the food. */
+  type: "PERCENT" | "FIXED" | "FREE_DELIVERY";
   percentOff: number | null;
   fixedOff: Money | null;
   maxDiscountAmount: Money | null;
@@ -319,12 +320,46 @@ export function computeEligibleSubtotal(
  * client-supplied subtotal — both the minOrderValue check and the
  * eligible-subtotal computation below depend on real prices/categoryIds.
  */
+/**
+ * True if this customer has placed an order before (cancelled ones don't
+ * count) — for "First-Time Customers Only" coupons.
+ *
+ * Signed-in customers are matched by account. Guests by phone number,
+ * compared digits-only so "+880 1711-000000" and "8801711000000" are the
+ * same person: the database narrows by the last 8 digits, then the full
+ * number is compared here.
+ */
+async function hasOrderedBefore(customerKey: string): Promise<boolean> {
+  if (customerKey.startsWith("user:")) {
+    const count = await prisma.order.count({
+      where: { userId: customerKey.slice("user:".length), status: { not: "CANCELLED" } },
+    });
+    return count > 0;
+  }
+
+  const digits = customerKey.slice("phone:".length).replace(/\D/g, "");
+  if (digits.length < 6) return false;
+  const rows = await prisma.order.findMany({
+    where: { phone: { contains: digits.slice(-8) }, status: { not: "CANCELLED" } },
+    select: { phone: true },
+    take: 50,
+  });
+  return rows.some((row) => row.phone.replace(/\D/g, "") === digits);
+}
+
 export async function findValidCoupon(
   code: string,
   items: Pick<ResolvedItem, "menuItemId" | "categoryId" | "price" | "quantity">[],
-  customerKey: string | null
+  customerKey: string | null,
+  // Optional so older callers keep working; when known, a free-delivery
+  // coupon is refused on dine-in orders (there's no delivery to waive).
+  options: { orderType?: OrderTypeValue } = {}
 ): Promise<
-  { ok: true; coupon: CouponInfo; subtotal: Money; eligibleSubtotal: Money } | { ok: false; error: string }
+  | { ok: true; coupon: CouponInfo; subtotal: Money; eligibleSubtotal: Money }
+  // `notFound` = no coupon has this code at all. The cart's shared code box
+  // then tries it as a gift card; any other failure is the coupon's real
+  // reason and must be shown as-is.
+  | { ok: false; error: string; notFound?: true }
 > {
   const trimmed = code?.trim().toUpperCase();
   if (!trimmed) return { ok: false, error: "Enter a coupon code" };
@@ -336,7 +371,7 @@ export async function findValidCoupon(
       restrictedItems: { select: { id: true } },
     },
   });
-  if (!coupon) return { ok: false, error: "Invalid coupon code" };
+  if (!coupon) return { ok: false, error: "Invalid coupon code", notFound: true };
   if (!coupon.isActive) return { ok: false, error: "This coupon is no longer active" };
 
   const now = new Date();
@@ -345,6 +380,23 @@ export async function findValidCoupon(
   }
   if (coupon.expiresAt && now > coupon.expiresAt) {
     return { ok: false, error: "This coupon has expired" };
+  }
+
+  if (coupon.type === "FREE_DELIVERY" && options.orderType === "DINE_IN") {
+    return { ok: false, error: "This coupon is for delivery orders only" };
+  }
+
+  // "Applies To" (Coupon.audience)
+  if (coupon.audience === "MEMBERS" && !customerKey?.startsWith("user:")) {
+    return { ok: false, error: "Sign in to your account to use this coupon" };
+  }
+  if (coupon.audience === "NEW_CUSTOMERS") {
+    if (!customerKey) {
+      return { ok: false, error: "Enter your phone number first — this coupon is for first-time customers" };
+    }
+    if (await hasOrderedBefore(customerKey)) {
+      return { ok: false, error: "This coupon is for first-time customers only" };
+    }
   }
 
   const subtotal = sum(...items.map((i) => toMoney(i.price).times(i.quantity)));
@@ -415,6 +467,10 @@ export function calcDiscountAmount(
   coupon: CouponInfo
 ): Money {
   const base = toMoney(eligibleSubtotal);
+
+  // Free delivery takes nothing off the food — the fee itself is waived in
+  // calculateOrderPricing (freeDelivery).
+  if (coupon.type === "FREE_DELIVERY") return ZERO;
 
   let raw: Money;
   if (coupon.type === "FIXED") {

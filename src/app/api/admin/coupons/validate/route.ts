@@ -67,10 +67,7 @@ export async function POST(request: Request) {
 
     const result = await findValidCoupon(code, resolvedItems, customerKey, { orderType });
     if (!result.ok) {
-      // 404 only when the code doesn't exist — the cart then tries it as a
-      // gift card. A real coupon that fails a rule stays 400 so its reason
-      // ("Minimum order…", "first-time customers only"…) reaches the customer.
-      return NextResponse.json({ error: result.error }, { status: result.notFound ? 404 : 400 });
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
     const discountAmount = calcDiscountAmount(result.eligibleSubtotal, result.coupon);

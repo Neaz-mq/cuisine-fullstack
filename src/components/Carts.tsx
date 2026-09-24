@@ -57,13 +57,11 @@ type Quote = {
   deliveryFee: string;
   taxAmount: string;
   grandTotal: string;
-  giftCardAmount: string;
   pointsRedeemedAmount: string;
   pointsRedeemed: number;
   tipAmount: string;
   totalAmount: string;
   appliedCouponCode: string | null;
-  appliedGiftCardCode: string | null;
 
   /**
    * Delivery charge কীভাবে ঠিক হয়েছে।
@@ -79,10 +77,6 @@ type Quote = {
   deliveryFeeMode: "FLAT" | "DISTANCE";
   deliveryDistanceKm: number | null;
   deliveryZoneLabel: string | null;
-  // giftCardBalance ইচ্ছাকৃতভাবে নেই — server আর পাঠায় না। কার্ডে কত
-  // পড়ে আছে সেটা এই পাতার দরকার হয় না (giftCardAmount বলে দেয় এই
-  // বিলে কতটা কাটছে), আর কেউ কোড অনুমান করে ফেললে তাকে বাড়তি কিছু
-  // জানানোর কারণ নেই।
 };
 
 type PublicSettings = {
@@ -330,7 +324,7 @@ const Carts = ({
   const [discountCode, setDiscountCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
-    type: "PERCENT" | "FIXED";
+    type: "PERCENT" | "FIXED" | "FREE_DELIVERY";
     percentOff: number | null;
     fixedOff: number | null;
     // ⚠️ No eligibleSubtotal snapshot any more. What a coupon is worth
@@ -340,13 +334,6 @@ const Carts = ({
   } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
-
-  // Gift card — separate from the coupon above (both can be applied to
-  // the same order). Only the CODE lives here; how much of it comes off
-  // this bill is decided server-side and arrives in the quote, because it
-  // depends on a grand total this component no longer computes.
-  const [appliedGiftCard, setAppliedGiftCard] = useState<{ code: string } | null>(null);
-  const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
 
   // Loyalty points redemption — fetched from the customer's OWN account
   // (never trusted from anywhere client-writable), see
@@ -451,9 +438,8 @@ const Carts = ({
    */
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
-  // Only used before the first quote lands, and to give
-  // /api/gift-cards/validate a rough figure for its toast. No money
-  // decision is ever made from it.
+  // Only used before the first quote lands. No money decision is ever
+  // made from it.
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   // An empty cart has nothing to price, so that case is DERIVED here at
@@ -578,7 +564,7 @@ const Carts = ({
    * The bill is computed by the server, not here.
    *
    * This component used to carry six "display-only mirrors" — one
-   * reimplementation each of the coupon, tier, gift-card and points rules,
+   * reimplementation each of the coupon, tier and points rules,
    * plus the running totals. That was fine for as long as both sides
    * applied the same rules.
    *
@@ -622,7 +608,6 @@ const Carts = ({
             // it the quote could promise a discount the order then refuses.
             phone: formData.phoneNumber || undefined,
             couponCode: appliedCoupon?.code,
-            giftCardCode: appliedGiftCard?.code,
             redeemPoints: redeemedPoints > 0 ? redeemedPoints : undefined,
             tipPercent: tipPercent ?? undefined,
             tipAmount:
@@ -658,7 +643,6 @@ const Carts = ({
     debouncedAddress,
     formData.phoneNumber,
     appliedCoupon?.code,
-    appliedGiftCard?.code,
     redeemedPoints,
     tipPercent,
     customTip,
@@ -775,7 +759,6 @@ const Carts = ({
             orderType: "DINE_IN",
             tableId,
             couponCode: appliedCoupon?.code,
-            giftCardCode: appliedGiftCard?.code,
             redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
             ...tipPayload,
           }),
@@ -818,7 +801,6 @@ const Carts = ({
         setErrors({});
         setAppliedCoupon(null);
         setDiscountCode("");
-        setAppliedGiftCard(null);
         setRedeemedPoints(0);
         setTipPercent(null);
         setCustomTip("");
@@ -867,7 +849,6 @@ const Carts = ({
             billing,
             shippingMethod,
             couponCode: appliedCoupon?.code,
-            giftCardCode: appliedGiftCard?.code,
             redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
             ...tipPayload,
           }),
@@ -902,7 +883,6 @@ const Carts = ({
           billing,
           shippingMethod,
           couponCode: appliedCoupon?.code,
-          giftCardCode: appliedGiftCard?.code,
           redeemPoints: cappedRedeemedPoints > 0 ? cappedRedeemedPoints : undefined,
           ...tipPayload,
         }),
@@ -950,7 +930,6 @@ const Carts = ({
       setPaymentErrors({});
       setAppliedCoupon(null);
       setDiscountCode("");
-      setAppliedGiftCard(null);
       setRedeemedPoints(0);
       setTipPercent(null);
       setCustomTip("");
@@ -996,19 +975,11 @@ const Carts = ({
 
   const applyDiscount = async () => {
     if (!discountCode.trim()) {
-      setCouponError("Enter a coupon or gift card code");
+      setCouponError("Enter a coupon code");
       return;
     }
     if (cartItems.length === 0) {
       setCouponError("Add an item to your cart first");
-      return;
-    }
-
-    // A coupon slot is already filled — this field can now only be adding
-    // a gift card, so skip straight to that lookup instead of re-trying
-    // (and failing) the coupon endpoint first.
-    if (appliedCoupon) {
-      await applyGiftCard();
       return;
     }
 
@@ -1027,22 +998,15 @@ const Carts = ({
             quantity: item.quantity,
           })),
           phone: formData.phoneNumber || undefined,
+          orderType: isDineIn ? "DINE_IN" : "DELIVERY",
         }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        // The shared "Gift card or discount code" field could be either
-        // kind — a coupon miss isn't necessarily wrong, it just might be
-        // a gift card code instead, so fall back and try that lookup
-        // before showing an error. Only fall back if a gift card slot is
-        // still open — with one already applied, a coupon miss is just a
-        // coupon miss.
-        if (!appliedGiftCard) {
-          await applyGiftCard();
-          return;
-        }
-        setCouponError(data?.error ?? "Invalid coupon or gift card code");
+        // Server-এর আসল কারণটাই দেখানো হয় ("Invalid coupon code",
+        // "Minimum order…", "first-time customers only"…)।
+        setCouponError(data?.error ?? "Invalid coupon code");
         return;
       }
 
@@ -1061,9 +1025,11 @@ const Carts = ({
       });
       setDiscountCode("");
       const discountLabel =
-        data.type === "FIXED"
-          ? `${currency} ${Number(data.fixedOff).toFixed(2)} off`
-          : `${data.percentOff}% off`;
+        data.type === "FREE_DELIVERY"
+          ? "free delivery"
+          : data.type === "FIXED"
+            ? `${currency} ${Number(data.fixedOff).toFixed(2)} off`
+            : `${data.percentOff}% off`;
       toast.success(`"${data.code}" applied — ${discountLabel}!`, {
         position: "bottom-center",
         autoClose: 2000,
@@ -1077,50 +1043,6 @@ const Carts = ({
     } finally {
       setIsApplyingCoupon(false);
     }
-  };
-
-  const applyGiftCard = async () => {
-    setIsApplyingGiftCard(true);
-    setCouponError(null);
-
-    try {
-      const res = await fetch("/api/gift-cards/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // A rough figure, purely so the endpoint can preview a sensible
-        // "X off" in the toast below. The authoritative deduction is
-        // recomputed in the quote, and again at order creation.
-        body: JSON.stringify({ code: discountCode, orderTotal: subtotal }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setCouponError(data?.error ?? "Invalid coupon or gift card code");
-        return;
-      }
-
-      setAppliedGiftCard({ code: data.code });
-      setDiscountCode("");
-      toast.success(
-        `Gift card "${data.code}" applied — ${currency} ${Number(data.amountToApply).toFixed(2)} off!`,
-        {
-          position: "bottom-center",
-          autoClose: 2000,
-          hideProgressBar: true,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        }
-      );
-    } catch {
-      setCouponError("Something went wrong. Please try again.");
-    } finally {
-      setIsApplyingGiftCard(false);
-    }
-  };
-
-  const removeGiftCard = () => {
-    setAppliedGiftCard(null);
   };
 
   const removeCoupon = () => {
@@ -1831,7 +1753,7 @@ const Carts = ({
             *
             * ⚠️ যা **যোগ করা হয়নি**: Figma-তে দামের পাশে একটা কাটা
             * পুরোনো দাম (`$21.78 $20.10`) দেখানো আছে। আমাদের কোনো
-            * "আগের দাম" নেই — ছাড় আসে coupon/gift card/points থেকে,
+            * "আগের দাম" নেই — ছাড় আসে coupon/points থেকে,
             * আর সেগুলো নিচে নিজের নিজের সারিতে দেখানো হয়। একটা কাটা
             * সংখ্যা বানিয়ে দেখালে সেটা মিথ্যা হতো।
             */}
@@ -1967,9 +1889,11 @@ const Carts = ({
                 <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
                   <span className="text-sm text-green-800 font-medium">
                     &quot;{appliedCoupon.code}&quot; applied —{" "}
-                    {appliedCoupon.type === "FIXED"
-                      ? `${currency} ${(appliedCoupon.fixedOff ?? 0).toFixed(2)} off`
-                      : `${appliedCoupon.percentOff}% off`}
+                    {appliedCoupon.type === "FREE_DELIVERY"
+                      ? "free delivery"
+                      : appliedCoupon.type === "FIXED"
+                        ? `${currency} ${(appliedCoupon.fixedOff ?? 0).toFixed(2)} off`
+                        : `${appliedCoupon.percentOff}% off`}
                   </span>
                   <button
                     onClick={removeCoupon}
@@ -1981,22 +1905,6 @@ const Carts = ({
                 </div>
               )}
 
-              {appliedGiftCard && (
-                <div className="flex items-center justify-between mb-4 bg-green-50 border border-green-200 px-4 py-2 rounded">
-                  <span className="text-sm text-green-800 font-medium">
-                    Gift card &quot;{appliedGiftCard.code}&quot; applied
-                    {bill && isPositive(bill.giftCardAmount) &&
-                      ` — ${money(bill.giftCardAmount)} off`}
-                  </span>
-                  <button
-                    onClick={removeGiftCard}
-                    className="text-xs text-red-500 hover:text-red-700 font-medium"
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
 
               {/* Loyalty points redemption — only shown to a logged-in
                   customer with a fetched balance (see the /api/loyalty/me
@@ -2101,22 +2009,13 @@ const Carts = ({
                 </div>
               )}
 
-              {/* One code can only be applied once each — show the shared
-                  input as long as either slot (coupon or gift card) is
-                  still open, so a second code can be added after the
-                  first without needing to remove it first. */}
-              {(!appliedCoupon || !appliedGiftCard) && (
+              {/* একটা অর্ডারে একটাই coupon — বসে গেলে ঘরটা লুকিয়ে যায়,
+                  বদলাতে চাইলে উপরের "Remove"। */}
+              {!appliedCoupon && (
                 <>
                   {/**
                     * Figma-র "Enter your voucher" সারি: সাদা pill,
                     * ভেতরে ডানদিকে gradient "Apply Now" বোতাম।
-                    *
-                    * ⚠️ placeholder-টা কী কী প্রয়োগ করা যাবে তার সাথে
-                    * বদলায় ("Gift card code" / "Discount code" /
-                    * দুটোই) — Figma-তে একটাই স্থির লেখা, কিন্তু এখানে
-                    * দুটো আলাদা স্লট আছে আর দুটোই একসাথে ভরে যেতে
-                    * পারে। কোনটা এখনো খালি সেটা না বললে গ্রাহক
-                    * বারবার ভুল কোড দিতেন।
                     *
                     * ⚠️ বোতামটা ঘরের **ভেতরে** (`pr-1.5` + absolute
                     * নয়, flex)। বাইরে বসালে সরু পর্দায় ইনপুটটা
@@ -2125,23 +2024,18 @@ const Carts = ({
                   <div className="flex h-[50px] items-center rounded-full bg-white pl-4 pr-1.5 focus-within:[outline:2px_solid_#FF9540] focus-within:[outline-offset:-2px]">
                     <input
                       type="text"
-                      placeholder={
-                        appliedCoupon
-                          ? "Gift card code"
-                          : appliedGiftCard
-                            ? "Discount code"
-                            : "Enter your voucher"
-                      }
+                      placeholder="Enter your voucher"
+                      aria-label="Coupon code"
                       className="min-w-0 flex-1 bg-transparent font-sora text-[13px] leading-none text-black placeholder:text-black/40 focus:outline-none"
                       value={discountCode}
                       onChange={handleDiscountCodeChange}
                     />
                     <button
                       onClick={applyDiscount}
-                      disabled={isApplyingCoupon || isApplyingGiftCard}
+                      disabled={isApplyingCoupon}
                       className="h-[38px] shrink-0 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-none text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
-                      {isApplyingCoupon || isApplyingGiftCard ? "Checking…" : "Apply Now"}
+                      {isApplyingCoupon ? "Checking…" : "Apply Now"}
                     </button>
                   </div>
 
@@ -2162,7 +2056,10 @@ const Carts = ({
                   Japan, South Korea and China, where offering a tip reads as
                   rude rather than generous. */}
               {showTipping && (
-                <div className="mb-4 border border-gray-200 rounded px-4 py-3">
+                // mt-4 শুধু voucher ঘরটা দেখা গেলে — ঘরটার নিজের নিচে কোনো
+                // margin নেই। coupon বসে গেলে ঘরটা লুকায়, তখন উপরের
+                // block-এর mb-4-ই যথেষ্ট; দুটো মিলে ফাঁক দ্বিগুণ হতো না।
+                <div className={`mb-4 border border-gray-200 rounded px-4 py-3 ${appliedCoupon ? "" : "mt-4"}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-800">Add a tip</span>
                     {bill && isPositive(bill.tipAmount) && (
@@ -2362,13 +2259,6 @@ const Carts = ({
                       )}
                     </span>
                     <span>{money(bill.taxAmount)}</span>
-                  </div>
-                )}
-
-                {bill && isPositive(bill.giftCardAmount) && (
-                  <div className="flex justify-between">
-                    <span>Gift card</span>
-                    <span className="text-[#2C6252]">-{money(bill.giftCardAmount)}</span>
                   </div>
                 )}
 
