@@ -46,6 +46,8 @@ export async function PATCH(req: NextRequest) {
     tipEnabled,
     tipPresetPercents,
     reservationDepositAmount,
+    lowStockAlerts,
+    emergencyStockAlerts,
   } = parsed;
 
   // Owner শতাংশ টাইপ করে ("5"), DB ভগ্নাংশ রাখে (0.05). রূপান্তরটা ঠিক
@@ -86,6 +88,8 @@ export async function PATCH(req: NextRequest) {
     // এখানেও ঠিক ততটাই বিপজ্জনক (Stripe-এ পাঠানো হয় এই মান থেকেই,
     // দেখুন /api/reservations/deposit-session)।
     reservationDepositAmount: toMoney(reservationDepositAmount),
+    lowStockAlerts,
+    emergencyStockAlerts,
   };
 
   const updated = await prisma.restaurantSettings.upsert({

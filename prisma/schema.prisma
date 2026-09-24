@@ -1442,6 +1442,13 @@ model RestaurantSettings {
   // and a checkout that nags for one reads as broken rather than generous.
   tipEnabled Boolean @default(false)
 
+  // Admin → Settings → Notifications. Stock alerts in the admin
+  // notification feed (/admin/notifications): "low" = at or below an
+  // ingredient's reorderThreshold, "emergency" = at or below its
+  // emergencyThreshold. Both on by default.
+  lowStockAlerts       Boolean @default(true)
+  emergencyStockAlerts Boolean @default(true)
+
   // Percentages offered as one-tap buttons at checkout, e.g. [10, 15, 20].
   // The customer can always enter a custom amount instead, and can always
   // decline. Percentages are of the discounted subtotal, NOT of the
@@ -1642,6 +1649,48 @@ enum LoyaltyReason {
   // MANUAL_ADJUSTMENT (positive), matching how a reversed ORDER_DELIVERED
   // credit already does — see reverseLoyaltyPoints in lib/cancel-order.ts.
   POINTS_REDEEMED
+}
+
+// ---------------------------------------------------------------------------
+// Loyalty program settings (admin → Loyalty)
+//
+// "Target Point" = an earn rule: spend `spendAmount` on food, earn `points`.
+// Applied proportionally and rounded down (spend $1,000 → 10 pts means
+// 1 point per $100). Several rules can be saved but exactly one is active
+// at a time — "Apply" switches it. Points are worked out on the food
+// subtotal before discounts, tax, delivery and tip (see
+// lib/mark-order-delivered.ts).
+//
+// "Customer Ranking" = a tier. A customer's tier is the highest one whose
+// `minPoints` their balance reaches; the tier at 0 points is the base tier
+// and always exists. Perks: an automatic % off at checkout and a % bonus on
+// points earned.
+//
+// Both tables are filled with the old built-in values the first time they
+// are read (lib/loyalty-config.ts), so nothing changes until the owner
+// edits them.
+// ---------------------------------------------------------------------------
+model LoyaltyEarnRule {
+  id          String   @id @default(cuid())
+  spendAmount Decimal  @db.Decimal(12, 3)
+  points      Int
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model LoyaltyTier {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  minPoints       Int      @unique
+  // Automatic % off every order while in this tier (0 = none).
+  discountPercent Int      @default(0)
+  // Extra % on points earned while in this tier (10 = 10% more points).
+  bonusPercent    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------------------

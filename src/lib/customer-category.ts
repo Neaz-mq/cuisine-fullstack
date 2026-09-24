@@ -1,4 +1,4 @@
-import { LOYALTY_TIERS, getTierForPoints } from "./loyalty-tiers";
+import { getTierForPoints, type LoyaltyTierDef } from "./loyalty-tiers";
 
 /**
  * src/lib/customer-category.ts
@@ -24,69 +24,72 @@ import { LOYALTY_TIERS, getTierForPoints } from "./loyalty-tiers";
  * ⚠️ loyalty-tiers.ts-এর মতোই এই ফাইলেও Prisma পৌঁছয় এমন কোনো import
  * রাখা যাবে না — UsersToolbar একটা client component, আর সে এখান থেকে
  * label গুলো নেয়। কারণটা ওই ফাইলের মন্তব্যে বিস্তারিত আছে।
+ *
+ * Tier-গুলো এখন admin → Loyalty → Customer Ranking থেকে বদলানো যায়
+ * (LoyaltyTier table), তাই শ্রেণিগুলো আর স্থির তালিকা নয়: "new" অথবা
+ * একটা tier-এর id। প্রতিটা function tier-তালিকাটা parameter হিসেবে
+ * নেয় — server সেটা lib/loyalty-config.ts থেকে পড়ে, client prop-এ পায়।
  */
 
-export const CUSTOMER_CATEGORIES = [
-  "new",
-  "bronze",
-  "silver",
-  "gold",
-  "platinum",
-] as const;
+/** "new" or a LoyaltyTier id. */
+export type CustomerCategory = string;
 
-export type CustomerCategory = (typeof CUSTOMER_CATEGORIES)[number];
+export const NEW_CATEGORY = "new";
 
-/** Figma-র গড়ন: "<নাম> Customer"। */
-export const CATEGORY_LABELS: Record<CustomerCategory, string> = {
-  new: "New Customer",
-  bronze: "Bronze Customer",
-  silver: "Silver Customer",
-  gold: "Gold Customer",
-  platinum: "Platinum Customer",
-};
+export interface CategoryOption {
+  value: CustomerCategory;
+  /** In lists: "Gold Customer". */
+  label: string;
+  /** On the filter pill, where space is tight: "Gold". */
+  shortLabel: string;
+}
 
-/**
- * ছাঁকনির pill-এ যেটা দেখা যায়।
- *
- * ⚠️ Figma-র pill ঠিক ১৫৬px চওড়া, আর ভেতরের লেখার জন্য বরাদ্দ ৯৬
- * (১৫৬ − ১৬ − ১৬ padding − ৮ gap − ২০ icon)। "All Statuses" ঠিক ওই
- * ৯৬px-ই নেয় — অর্থাৎ নকশাটা মাপা হয়েছে ওই একটা লেখা ধরে।
- *
- * কিন্তু বাছাই করার পরে লেখাটা বদলায়, আর "Platinum Customer" ওখানে
- * কোনোভাবেই আঁটে না। তাই pill-এ ছোট নাম, আর তালিকার ভেতরে পুরোটা —
- * ওখানে জায়গার টান নেই, আর "Platinum Customer" পড়তে বেশি স্পষ্ট।
- * সবচেয়ে লম্বাটা "Platinum", ~৬২px, দিব্যি আঁটে।
- */
-export const CATEGORY_SHORT_LABELS: Record<CustomerCategory, string> = {
-  new: "New",
-  bronze: "Bronze",
-  silver: "Silver",
-  gold: "Gold",
-  platinum: "Platinum",
-};
+/** Every filter option, in order: New, then tiers lowest first. */
+export function categoryOptions(tiers: LoyaltyTierDef[]): CategoryOption[] {
+  return [
+    { value: NEW_CATEGORY, label: "New Customer", shortLabel: "New" },
+    ...tiers.map((tier) => ({
+      value: tier.id,
+      label: `${tier.label} Customer`,
+      shortLabel: tier.label,
+    })),
+  ];
+}
 
-export function isCustomerCategory(value: unknown): value is CustomerCategory {
-  return typeof value === "string" && CUSTOMER_CATEGORIES.includes(value as CustomerCategory);
+export function isCustomerCategory(value: unknown, tiers: LoyaltyTierDef[]): value is CustomerCategory {
+  return (
+    typeof value === "string" &&
+    (value === NEW_CATEGORY || tiers.some((tier) => tier.id === value))
+  );
 }
 
 /** একজন গ্রাহক কোন শ্রেণিতে — তালিকার প্রতিটা সারির জন্য। */
-export function categoryFor(points: number, orderCount: number): CustomerCategory {
-  if (orderCount === 0) return "new";
-  return getTierForPoints(points).id.toLowerCase() as CustomerCategory;
+export function categoryFor(
+  points: number,
+  orderCount: number,
+  tiers: LoyaltyTierDef[]
+): CustomerCategory {
+  if (orderCount === 0) return NEW_CATEGORY;
+  return getTierForPoints(points, tiers).id;
+}
+
+export function categoryLabel(category: CustomerCategory, tiers: LoyaltyTierDef[]): string {
+  return categoryOptions(tiers).find((option) => option.value === category)?.label ?? "Customer";
 }
 
 /**
  * ছাঁকনির জন্য পয়েন্টের সীমা — [সর্বনিম্ন, সর্বোচ্চ)।
  *
  * সর্বোচ্চটা পরের tier-এর সর্বনিম্ন, আর সবচেয়ে উপরেরটার কোনো ছাদ নেই
- * (null)। এটা এখানে হিসাব করা হয়, হাতে লেখা নয় — নাহলে loyalty-tiers.ts-এ
- * কেউ একটা সীমা বদলালে এই ছাঁকনিটা নীরবে ভুল লোক দেখাত।
+ * (null)। tier-তালিকা থেকেই হিসাব হয়, হাতে লেখা নয় — নাহলে কেউ একটা
+ * সীমা বদলালে এই ছাঁকনিটা নীরবে ভুল লোক দেখাত।
  */
 export function pointsRangeFor(
-  category: Exclude<CustomerCategory, "new">
+  tierId: CustomerCategory,
+  tiers: LoyaltyTierDef[]
 ): { min: number; max: number | null } {
-  const index = LOYALTY_TIERS.findIndex((tier) => tier.id.toLowerCase() === category);
-  const tier = LOYALTY_TIERS[index];
-  const next = LOYALTY_TIERS[index + 1];
-  return { min: tier.minPoints, max: next ? next.minPoints : null };
+  const index = tiers.findIndex((tier) => tier.id === tierId);
+  if (index === -1) return { min: 0, max: null };
+  const next = tiers[index + 1];
+  return { min: tiers[index].minPoints, max: next ? next.minPoints : null };
 }

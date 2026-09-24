@@ -9,6 +9,7 @@ import {
   type CouponInfo,
 } from "@/lib/order-checkout-shared";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
+import { getLoyaltyTiers } from "@/lib/loyalty-config";
 import { clampPointsRedemption } from "@/lib/loyalty-redemption";
 import { getCheckoutSettings } from "@/lib/get-settings";
 import { calculateOrderPricing } from "@/lib/pricing";
@@ -169,7 +170,7 @@ export async function POST(req: NextRequest) {
   }
 
   const tierDiscountPercent = currentUser
-    ? getTierForPoints(currentUser.loyaltyPoints).discountPercent
+    ? getTierForPoints(currentUser.loyaltyPoints, await getLoyaltyTiers()).discountPercent
     : 0;
 
   // ── দুই ধাপে দাম হিসাব ────────────────────────────────────────────────

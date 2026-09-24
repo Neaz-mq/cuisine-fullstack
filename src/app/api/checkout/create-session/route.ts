@@ -12,6 +12,7 @@ import {
   CouponInfo,
 } from "@/lib/order-checkout-shared";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
+import { getLoyaltyTiers } from "@/lib/loyalty-config";
 import { clampPointsRedemption, redeemLoyaltyPoints } from "@/lib/loyalty-redemption";
 import { getCheckoutSettings } from "@/lib/get-settings";
 import { calculateOrderPricing, pricingToOrderFields } from "@/lib/pricing";
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
     // Automatic loyalty-tier discount — see the identical logic (and its
     // full rationale) in /api/orders/route.ts.
     const tierDiscountPercent = currentUser
-      ? getTierForPoints(currentUser.loyaltyPoints).discountPercent
+      ? getTierForPoints(currentUser.loyaltyPoints, await getLoyaltyTiers()).discountPercent
       : 0;
 
     // এই route সবসময় DELIVERY — dine-in কখনো Stripe-এ যায় না (উপরের doc

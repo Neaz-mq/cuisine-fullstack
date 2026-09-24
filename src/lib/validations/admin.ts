@@ -190,6 +190,11 @@ export const updateSettingsSchema = z
     restaurantLng: z.number().min(-180).max(180).nullable(),
 
     tipEnabled: z.boolean(),
+
+    // Settings → Notifications. `.default(true)` so an older client that
+    // doesn't send them yet can't switch alerts off by accident.
+    lowStockAlerts: z.boolean().default(true),
+    emergencyStockAlerts: z.boolean().default(true),
     // সর্বোচ্চ ৪টা button — এর বেশি হলে checkout-এ বেছে নেওয়া কঠিন হয়ে
     // যায়, বিশেষত মোবাইলে। ০% preset অর্থহীন, তাই min 1.
     tipPresetPercents: z.array(z.number().int().min(1).max(100)).max(4),

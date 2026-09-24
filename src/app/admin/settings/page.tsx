@@ -121,6 +121,9 @@ export default async function AdminSettingsPage() {
           tipPresetPercents: settings.tipPresetPercents,
 
           reservationDepositAmount: settings.reservationDepositAmount.toNumber(),
+
+          lowStockAlerts: settings.lowStockAlerts,
+          emergencyStockAlerts: settings.emergencyStockAlerts,
         }}
       />
     </div>

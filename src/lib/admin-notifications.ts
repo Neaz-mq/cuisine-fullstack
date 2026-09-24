@@ -46,7 +46,12 @@ const SOURCE_LIMIT = 40;
 
 
 export async function getAdminNotifications(readAt: Date | null): Promise<AdminNotification[]> {
-  const [orders, deliveries, reservations, reviews, lowStock] = await Promise.all([
+  const [settings, orders, deliveries, reservations, reviews, lowStock] = await Promise.all([
+    // Settings → Notifications — the two stock-alert switches.
+    prisma.restaurantSettings.findUnique({
+      where: { id: "singleton" },
+      select: { lowStockAlerts: true, emergencyStockAlerts: true },
+    }),
     prisma.order.findMany({
       where: { status: "PLACED" },
       orderBy: { createdAt: "desc" },
@@ -107,6 +112,7 @@ export async function getAdminNotifications(readAt: Date | null): Promise<AdminN
         unit: true,
         currentStock: true,
         reorderThreshold: true,
+        emergencyThreshold: true,
         updatedAt: true,
       },
     }),
@@ -175,17 +181,47 @@ export async function getAdminNotifications(readAt: Date | null): Promise<AdminN
 
     // ⚠️ কেবল সেই পদগুলো যেগুলো সত্যিই threshold-এর নিচে — তালিকাটা
     // উপরে ৪০টা টানা হয়, ছাঁকা হয় এখানে।
-    ...lowStock
-      .filter((item) => item.currentStock <= item.reorderThreshold)
-      .map((item) => ({
-        id: `stock-${item.id}`,
-        kind: "STOCK" as const,
-        title: "Low stock alert",
-        description: `${item.name} is running low — ${item.currentStock} ${item.unit.toLowerCase()} left`,
-        createdAt: item.updatedAt.toISOString(),
-        read: isRead(item.updatedAt),
-        href: "/admin/inventory",
-      })),
+    //
+    // প্রতিটা পদের একটাই সতর্কতা: emergency সীমার নিচে হলে (আর সেই
+    // switch চালু থাকলে) "Emergency", নাহলে low-stock সীমার নিচে হলে
+    // "Low stock"। emergency switch বন্ধ থাকলে ওই পদটাও low-stock
+    // হিসেবেই আসে — সেটাও তো reorder সীমার নিচে। emergencyThreshold 0
+    // মানে "ঠিক করা হয়নি", তখন emergency ধরা হয় না।
+    ...lowStock.flatMap((item) => {
+      const lowOn = settings?.lowStockAlerts ?? true;
+      const emergencyOn = settings?.emergencyStockAlerts ?? true;
+      const isEmergency = item.emergencyThreshold > 0 && item.currentStock <= item.emergencyThreshold;
+      const isLow = item.currentStock <= item.reorderThreshold;
+      const left = `${item.currentStock} ${item.unit.toLowerCase()} left`;
+
+      if (isEmergency && emergencyOn) {
+        return [
+          {
+            id: `stock-${item.id}`,
+            kind: "STOCK" as const,
+            title: "Emergency stock alert",
+            description: `${item.name} is at emergency level — only ${left}`,
+            createdAt: item.updatedAt.toISOString(),
+            read: isRead(item.updatedAt),
+            href: "/admin/inventory/emergency",
+          },
+        ];
+      }
+      if (isLow && lowOn) {
+        return [
+          {
+            id: `stock-${item.id}`,
+            kind: "STOCK" as const,
+            title: "Low stock alert",
+            description: `${item.name} is running low — ${left}`,
+            createdAt: item.updatedAt.toISOString(),
+            read: isRead(item.updatedAt),
+            href: "/admin/inventory",
+          },
+        ];
+      }
+      return [];
+    }),
   ];
 
   // নতুনগুলো আগে।

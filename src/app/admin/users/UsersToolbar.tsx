@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Search } from "lucide-react";
-import {
-  CUSTOMER_CATEGORIES,
-  CATEGORY_LABELS,
-  CATEGORY_SHORT_LABELS,
-  type CustomerCategory,
-} from "@/lib/customer-category";
+import type { CategoryOption, CustomerCategory } from "@/lib/customer-category";
 
 /**
  * src/app/admin/users/UsersToolbar.tsx
@@ -82,9 +77,12 @@ const FULL_PLACEHOLDER = "Search by Customer Name, Email…";
 
 export default function UsersToolbar({
   category,
+  options,
 }: {
   /** null মানে কোনো ছাঁকনি নেই — "All Statuses"। */
   category: CustomerCategory | null;
+  /** New + প্রতিটা tier — server tier-তালিকা থেকে বানিয়ে দেয়। */
+  options: CategoryOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -285,7 +283,9 @@ export default function UsersToolbar({
               এটা নয়। বাছাই করা মান আর placeholder এক নয়, তাই পার্থক্যটা
               ইচ্ছাকৃত। */}
           <span className="truncate">
-            {category ? CATEGORY_SHORT_LABELS[category] : "All Statuses"}
+            {category
+              ? (options.find((option) => option.value === category)?.shortLabel ?? "All Statuses")
+              : "All Statuses"}
           </span>
           {/* vuesax/linear/arrow-down — 20×20, stroke 1.5, Black/70।
               ⚠️ search icon-টা Black/100, এটা Black/70। export-এ দুটো
@@ -313,7 +313,7 @@ export default function UsersToolbar({
             role="listbox"
             className="absolute right-0 z-20 mt-2 flex w-[224px] max-w-[calc(100vw-48px)] flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.06)]"
           >
-            {[ALL, ...CUSTOMER_CATEGORIES].map((option) => {
+            {[ALL, ...options.map((item) => item.value)].map((option) => {
               const selected = option === ALL ? category === null : option === category;
               return (
                 <li key={option} className="w-full">
@@ -343,7 +343,9 @@ export default function UsersToolbar({
                       selected ? "rounded-full bg-[#F9F6F3]" : "rounded-[12px] hover:bg-black/[0.04]"
                     }`}
                   >
-                    {option === ALL ? "All Statuses" : CATEGORY_LABELS[option as CustomerCategory]}
+                    {option === ALL
+                      ? "All Statuses"
+                      : options.find((item) => item.value === option)?.label}
                   </button>
                 </li>
               );

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getTierForPoints } from "@/lib/loyalty-tiers";
+import { getLoyaltyTiers } from "@/lib/loyalty-config";
 import { MIN_REDEEMABLE_POINTS, POINTS_TO_DOLLAR_RATE } from "@/lib/loyalty-redemption";
 
 /**
@@ -33,7 +34,7 @@ export async function GET() {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    const tier = getTierForPoints(user.loyaltyPoints);
+    const tier = getTierForPoints(user.loyaltyPoints, await getLoyaltyTiers());
 
     return NextResponse.json({
       points: user.loyaltyPoints,

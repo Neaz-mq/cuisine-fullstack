@@ -17,11 +17,9 @@
  */
 import { prisma } from "@/lib/prisma";
 import { canTransition } from "@/lib/order-state-machine";
+import { isRecordNotFound } from "@/lib/prisma-errors";
 import { calculatePointsEarned } from "@/lib/loyalty-tiers";
-
-// $10 খরচে ১ point, নিচের দিকে rounded। আগে PATCH /api/orders/[id]-এর
-// ভেতরে inline ছিল — সেই history-র সাথে সঙ্গতি রেখে আলাদাভাবে বদলাবেন না।
-const POINTS_PER_CURRENCY_UNIT = 10;
+import { getActiveEarnRule, getLoyaltyTiers, pointsForSpend } from "@/lib/loyalty-config";
 
 type DeliverResult =
   | { ok: true; order: { id: string; status: string }; pointsAwarded: number }
@@ -30,7 +28,8 @@ type DeliverResult =
       error:
         | "Order not found"
         | "Cannot deliver a cancelled order"
-        | "This order cannot be marked delivered from its current status";
+        | "This order cannot be marked delivered from its current status"
+        | "This order hasn't been paid yet";
     };
 
 export async function markOrderDelivered(orderId: string): Promise<DeliverResult> {
@@ -78,12 +77,30 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
    *   বা PARTIALLY_REFUNDED) কোনোভাবে আবার DELIVERED চিহ্নিত হলে
    *   ফেরতের হিসাবটাই মুছে গিয়ে PAID বসত।
    */
+  // Same rule as advanceOrderToPreparing(): an unpaid ONLINE order must not
+  // be handed over, and must not earn loyalty points.
+  if (
+    existingOrder.paymentMethod === "ONLINE" &&
+    (existingOrder.paymentStatus === "PENDING" || existingOrder.paymentStatus === "FAILED")
+  ) {
+    return { ok: false, error: "This order hasn't been paid yet" };
+  }
+
   const settlesCash =
     existingOrder.paymentMethod === "COD" && existingOrder.paymentStatus === "PENDING";
 
+  // কত খরচে কত point (admin → Loyalty → Target Point, যেটা "Applied") আর
+  // tier-এর bonus — transaction-এর বাইরে পড়া, কারণ এগুলো এই order-এর
+  // উপর নির্ভর করে না। কোনো নিয়ম active না থাকলে point দেওয়া হয় না।
+  const [earnRule, tiers] = await Promise.all([getActiveEarnRule(), getLoyaltyTiers()]);
+
   const result = await prisma.$transaction(async (tx) => {
+    // status in WHERE = atomic claim (see cancelOrder in cancel-order.ts).
+    // Without it a cancel and a "delivered" at the same moment could both
+    // succeed — the order ends up DELIVERED after its stock and gift card
+    // were already given back.
     const order = await tx.order.update({
-      where: { id: orderId },
+      where: { id: orderId, status: existingOrder.status },
       /**
        * ⚠️ `DeliveryTracking.deliveredAt`-এর নকল নয়। ওটা কেবল
        * OWN_DELIVERY অর্ডারে থাকে (rider assign হলে তবেই row তৈরি হয়),
@@ -137,13 +154,13 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
     // পুরো bill gift card-এ মিটলেও গ্রাহক এখন point পাবেন — যা আগের
     // আচরণ থেকে ইচ্ছাকৃত পরিবর্তন, এবং প্রায় সব loyalty program এভাবেই
     // কাজ করে (gift card পরিশোধের মাধ্যম, ছাড় নয়)।
-    const basePoints = claimed.subtotal.dividedBy(POINTS_PER_CURRENCY_UNIT).floor().toNumber();
+    const basePoints = pointsForSpend(claimed.subtotal, earnRule);
 
     // Loyalty tier bonus — Silver/Gold/Platinum customers earn a
     // multiplier on top of the base rate. Tier is derived from the
     // balance BEFORE this order's points land, so a big order can't
     // "bootstrap" itself into a bonus it applies to itself.
-    const pointsEarned = calculatePointsEarned(basePoints, claimed.user?.loyaltyPoints ?? 0);
+    const pointsEarned = calculatePointsEarned(basePoints, claimed.user?.loyaltyPoints ?? 0, tiers);
 
     if (pointsEarned > 0 && claimed.userId) {
       await tx.user.update({
@@ -165,7 +182,18 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
     // কেউ আবার চেষ্টা না করে।
 
     return { order, pointsAwarded: pointsEarned };
+  }).catch((error: unknown) => {
+    if (isRecordNotFound(error)) return null;
+    throw error;
   });
+
+  if (!result) {
+    // Another request moved or cancelled the order between our read and write.
+    return {
+      ok: false,
+      error: "This order cannot be marked delivered from its current status",
+    };
+  }
 
   // DeliveryTracking বন্ধ করা transaction-এর বাইরে, কারণ এটা নিছক
   // housekeeping — rider dashboard আর customer-এর live map জানবে delivery

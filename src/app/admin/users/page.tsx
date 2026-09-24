@@ -10,9 +10,11 @@ import UserAvatar from "@/components/admin/UserAvatar";
 import InfoField from "@/components/admin/InfoField";
 import { formatJoinDate } from "@/lib/format-date";
 import UsersToolbar from "./UsersToolbar";
+import { getLoyaltyTiers } from "@/lib/loyalty-config";
 import {
-  CATEGORY_LABELS,
   categoryFor,
+  categoryLabel,
+  categoryOptions,
   isCustomerCategory,
   pointsRangeFor,
   type CustomerCategory,
@@ -32,7 +34,8 @@ export default async function UsersPage({
 
   const params = await searchParams;
   const q = params.q?.trim();
-  const category: CustomerCategory | null = isCustomerCategory(params.category)
+  const tiers = await getLoyaltyTiers();
+  const category: CustomerCategory | null = isCustomerCategory(params.category, tiers)
     ? params.category
     : null;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
@@ -71,7 +74,7 @@ export default async function UsersPage({
             // "New" আর "Bronze" দুটোতেই একই লোক দেখা যেত।
             orders: { some: {} },
             loyaltyPoints: (() => {
-              const { min, max } = pointsRangeFor(category);
+              const { min, max } = pointsRangeFor(category, tiers);
               return max === null ? { gte: min } : { gte: min, lt: max };
             })(),
           }
@@ -192,7 +195,7 @@ export default async function UsersPage({
         </div>
       </div>
 
-      <UsersToolbar category={category} />
+      <UsersToolbar category={category} options={categoryOptions(tiers)} />
 
       {/* ⚠️ এটা আগে `<StaffOverviewCards />` ছিল — অর্থাৎ গ্রাহকের
           পাতার মাথায় কর্মীর হিসাব বসত। কারণটা component-টার নিজের
@@ -248,7 +251,7 @@ export default async function UsersPage({
           <div className="flex flex-col gap-4">
             {users.map((user) => {
               const orderCount = user._count.orders;
-              const userCategory = categoryFor(user.loyaltyPoints, orderCount);
+              const userCategory = categoryFor(user.loyaltyPoints, orderCount, tiers);
 
               return (
                 /**
@@ -365,7 +368,7 @@ export default async function UsersPage({
                     <InfoField
                       className="col-span-2 min-[560px]:col-span-1"
                       label="Customer Category"
-                      value={CATEGORY_LABELS[userCategory]}
+                      value={categoryLabel(userCategory, tiers)}
                     />
                   </div>
                 </div>

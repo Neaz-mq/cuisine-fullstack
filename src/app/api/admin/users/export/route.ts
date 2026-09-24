@@ -5,11 +5,12 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { toCsv } from "@/lib/csv";
 import { Prisma } from "@/generated/prisma/client";
 import {
-  CATEGORY_LABELS,
   categoryFor,
+  categoryLabel,
   isCustomerCategory,
   pointsRangeFor,
 } from "@/lib/customer-category";
+import { getLoyaltyTiers } from "@/lib/loyalty-config";
 
 /**
  * GET /api/admin/users/export?q=&category=
@@ -49,7 +50,8 @@ export async function GET(request: Request) {
   const rawCategory = searchParams.get("category");
   // অচেনা মান চুপচাপ "সব" হয়ে যায় — URL হাতে বদলে দিলে error নয়,
   // শুধু ছাঁকনিটা খুলে যায়। insights export-এও একই আচরণ।
-  const category = isCustomerCategory(rawCategory) ? rawCategory : null;
+  const tiers = await getLoyaltyTiers();
+  const category = isCustomerCategory(rawCategory, tiers) ? rawCategory : null;
 
   /**
    * ⚠️ এই শর্তটা page.tsx-এর শর্তের হুবহু প্রতিরূপ হতে হবে — নাহলে
@@ -73,7 +75,7 @@ export async function GET(request: Request) {
         ? {
             orders: { some: {} },
             loyaltyPoints: (() => {
-              const { min, max } = pointsRangeFor(category);
+              const { min, max } = pointsRangeFor(category, tiers);
               return max === null ? { gte: min } : { gte: min, lt: max };
             })(),
           }
@@ -113,13 +115,16 @@ export async function GET(request: Request) {
     // ISO তারিখ, "Jul 3, 2026" নয় — spreadsheet এটাকে তারিখ হিসেবে
     // চেনে আর সাজাতে পারে, আর locale বদলালেও অর্থ বদলায় না।
     user.createdAt.toISOString().slice(0, 10),
-    CATEGORY_LABELS[categoryFor(user.loyaltyPoints, user._count.orders)],
+    categoryLabel(categoryFor(user.loyaltyPoints, user._count.orders, tiers), tiers),
     user.loyaltyPoints,
     user._count.orders,
   ]);
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const suffix = category ?? "all";
+  // tier-এর id একটা cuid — file-এর নামে তার বদলে পড়ার মতো নাম।
+  const suffix = category
+    ? categoryLabel(category, tiers).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    : "all";
 
   return new NextResponse(toCsv(header, rows), {
     headers: {

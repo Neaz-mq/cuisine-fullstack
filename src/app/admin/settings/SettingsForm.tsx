@@ -124,6 +124,9 @@ export interface SettingsFormData {
    * /api/reservations/deposit-session।
    */
   reservationDepositAmount: number;
+  /** Settings → Notifications: stock alerts in the admin notification feed. */
+  lowStockAlerts: boolean;
+  emergencyStockAlerts: boolean;
 }
 
 /**
@@ -519,6 +522,28 @@ export default function SettingsForm({
             value={String(form.kitchenCloseHour)}
             onChange={(value) => set("kitchenCloseHour", parseInt(value, 10))}
             options={HOURS.map((h) => ({ value: String(h), label: formatHour(h) }))}
+          />
+        </div>
+      </Section>
+
+      {/* ──────────────────────── Notifications ────────────────────── */}
+
+      <Section
+        title="Notifications"
+        description="Stock alerts in the admin notification feed. Orders, reservations and reviews always show."
+      >
+        <div className="space-y-2">
+          <Toggle
+            checked={form.lowStockAlerts}
+            onChange={(v) => set("lowStockAlerts", v)}
+            label="Low Stock Alerts"
+            help="Notify when an ingredient crosses its low threshold"
+          />
+          <Toggle
+            checked={form.emergencyStockAlerts}
+            onChange={(v) => set("emergencyStockAlerts", v)}
+            label="Emergency Stock Alerts"
+            help="Notify instantly when an item hits emergency level"
           />
         </div>
       </Section>
@@ -921,7 +946,7 @@ export default function SettingsForm({
 
       <Section
         title="Tipping"
-        description="Tips are never taxed, and are added after gift cards and points — so a prepaid balance can never quietly pay someone's tip."
+        description="Tips are never taxed, and are added after loyalty points — so points can never quietly pay someone's tip."
       >
         <Toggle
           checked={form.tipEnabled}

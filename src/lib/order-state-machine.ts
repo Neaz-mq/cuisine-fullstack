@@ -40,6 +40,14 @@ function humanize(status: OrderStatus): string {
   return status.toLowerCase().replace(/_/g, " ");
 }
 
+/**
+ * এই status থেকে পরের কোন কোন status-এ যাওয়া যায় — admin dropdown শুধু
+ * এগুলোই দেখায়, যাতে অচল বিকল্প বেছে নীরবে ব্যর্থ হওয়ার সুযোগই না থাকে।
+ */
+export function nextStatuses(status: OrderStatus): readonly OrderStatus[] {
+  return ALLOWED_TRANSITIONS[status] ?? [];
+}
+
 /** যে status থেকে আর কোথাও যাওয়া যায় না। */
 export function isTerminalStatus(status: OrderStatus): boolean {
   return ALLOWED_TRANSITIONS[status].length === 0;

@@ -5,7 +5,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Container from "@/components/Container";
 import { formatOrderId } from "@/lib/format-order-id";
-import { LOYALTY_TIERS, getTierProgress } from "@/lib/loyalty-tiers";
+import { formatSpend, getTierProgress, tierPerks } from "@/lib/loyalty-tiers";
+import { earnRuleSentence, getActiveEarnRule, getLoyaltyTiers } from "@/lib/loyalty-config";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { POINTS_TO_DOLLAR_RATE, MIN_REDEEMABLE_POINTS } from "@/lib/loyalty-redemption";
 
 /**
  * src/app/(main)/account/loyalty/page.tsx
@@ -32,8 +35,17 @@ export default async function LoyaltyPage() {
 
   // User row missing (deleted account edge case) — treat as 0 rather than
   // crashing the page.
+  const [tiers, earnRule, settings] = await Promise.all([
+    getLoyaltyTiers(),
+    getActiveEarnRule(),
+    getRestaurantSettings(),
+  ]);
   const points = user?.loyaltyPoints ?? 0;
-  const progress = getTierProgress(points);
+  const progress = getTierProgress(points, tiers);
+  const earnText = earnRule ? earnRuleSentence(earnRule, settings.currency) : null;
+  const perks = tierPerks(progress.tier, earnText);
+  // "20 points = $1" — worked out from the real rate, not typed in.
+  const pointsPerUnit = Math.round(1 / POINTS_TO_DOLLAR_RATE);
 
   const transactions = await prisma.loyaltyTransaction.findMany({
     where: { userId: session.user.id },
@@ -108,7 +120,7 @@ export default async function LoyaltyPage() {
             Your {progress.tier.label} perks
           </h2>
           <ul className="grid sm:grid-cols-2 gap-2">
-            {progress.tier.perks.map((perk) => (
+            {perks.map((perk) => (
               <li
                 key={perk}
                 className="flex items-start gap-2 text-sm text-gray-700 border border-gray-100 rounded-md px-3 py-2 bg-gray-50"
@@ -124,7 +136,8 @@ export default async function LoyaltyPage() {
         <div className="mb-10 border border-gray-200 rounded-lg p-4 bg-gray-50">
           <h2 className="text-sm font-semibold text-gray-800 mb-1">Redeem points for $ off</h2>
           <p className="text-sm text-gray-600">
-            20 points = $1 off. Redeem any amount at checkout — look for the &quot;Use your
+            {pointsPerUnit} points = {formatSpend(1, settings.currency)} off (from{" "}
+            {MIN_REDEEMABLE_POINTS} points). Redeem any amount at checkout — look for the &quot;Use your
             points&quot; slider on the cart page. Automatic tier discounts (shown above) and
             points redemption can both be used on the same order.
           </p>
@@ -134,7 +147,7 @@ export default async function LoyaltyPage() {
         <div className="mb-10">
           <h2 className="text-lg font-semibold text-gray-800 mb-3">All tiers</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {LOYALTY_TIERS.map((tier) => {
+            {tiers.map((tier) => {
               const isCurrent = tier.id === progress.tier.id;
               return (
                 <div
@@ -156,6 +169,9 @@ export default async function LoyaltyPage() {
                       ? "Base earning rate"
                       : `${Math.round((tier.pointsMultiplier - 1) * 100)}% bonus points`}
                   </p>
+                  {tier.discountPercent > 0 && (
+                    <p className="text-xs text-gray-600 mt-1">{tier.discountPercent}% off every order</p>
+                  )}
                   {isCurrent && (
                     <p className="text-[11px] font-semibold text-[#FF4C15] mt-2">You are here</p>
                   )}
