@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
-import { Loader2, LocateFixed, Trash2, Truck } from "lucide-react";
+import { Trash2, Truck } from "lucide-react";
 import type { TransactionMethod } from "@/lib/transaction-methods";
 import CountryCodeSelect, {
   COUNTRIES,
@@ -14,7 +14,6 @@ import CountryCodeSelect, {
   type Country,
 } from "@/components/CountryCodeSelect";
 import type { CheckoutProfile } from "@/lib/checkout-profile";
-import { GOOD_LOCATION_ACCURACY_M, locateDevice, type LocateError } from "@/lib/locate-device";
 import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -167,39 +166,6 @@ function mergeProfile(
   return { form: next, country, changed };
 }
 
-/**
- * Phones and tablets (touch screen) — the devices that have GPS.
- *
- * ⚠️ "Use current location" is shown only here. A desktop computer has no
- * GPS: the browser guesses from the internet address, often a city or a
- * country away (with a VPN, another continent), yet still reports it as
- * "within 250 m". Showing a stranger's street as the customer's address
- * is worse than no button. On desktop the customer types the address, and
- * Chrome's own saved-address autofill (the autoComplete hints below) does
- * the rest — the usual way on food-delivery websites.
- *
- * Server snapshot is `false`, so the first render matches the HTML and
- * the button appears right after load on phones.
- */
-const COARSE_POINTER = "(pointer: coarse)";
-function subscribePointer(onChange: () => void) {
-  const query = window.matchMedia(COARSE_POINTER);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-function useHasGpsDevice(): boolean {
-  return useSyncExternalStore(
-    subscribePointer,
-    () => window.matchMedia(COARSE_POINTER).matches,
-    () => false
-  );
-}
-
-/** Beyond this the browser is guessing, not locating — don't fill anything. */
-const MAX_LOCATION_ACCURACY_M = 1000;
-
-/** info = all good · warn = found, but check/complete it · error = didn't work. */
-type LocationNote = { tone: "info" | "warn" | "error"; text: string };
 type PaymentErrors = Partial<Record<"isAgreedToTerms", string>>;
 
 const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY"> = {
@@ -472,115 +438,8 @@ const Carts = ({
     setPhoneCountry(DEFAULT_COUNTRY);
     setAutofilled(false);
     setFormOwner(null);
-    setLocationNote(null);
   };
 
-  /**
-   * ── "Use current location" ───────────────────────────────────────────
-   *
-   * Like the food-delivery apps: the browser shows its own "Allow this
-   * site to know your location?" prompt (only after the customer taps —
-   * Chrome quietly blocks prompts nobody asked for). The coordinates go
-   * to /api/geo/reverse, which returns the street, city, state and zip.
-   *
-   * ⚠️ Fields the lookup couldn't find are cleared, not left as they
-   * were: an old zip under a new street is a wrong address that looks
-   * right. The empty field then asks for it, like any required field.
-   *
-   * ⚠️ The coordinates themselves aren't sent with the order. The delivery
-   * fee is still worked out from the address in the form, so what the
-   * customer sees and edits is exactly what's charged.
-   */
-  const [locating, setLocating] = useState(false);
-  const [locationNote, setLocationNote] = useState<LocationNote | null>(null);
-  const canUseLocation = useHasGpsDevice();
-
-  const fillFromCurrentLocation = () => {
-    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      setLocationNote({ tone: "error", text: "This browser can't share your location. Please type your address." });
-      return;
-    }
-    if (!window.isSecureContext) {
-      setLocationNote({
-        tone: "error",
-        text: "Location only works on a secure (https) page. Please type your address.",
-      });
-      return;
-    }
-
-    setLocating(true);
-    setLocationNote(null);
-    locateDevice().then(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        if (accuracy > MAX_LOCATION_ACCURACY_M) {
-          setLocating(false);
-          setLocationNote({
-            tone: "error",
-            text: `Your device could only find your location roughly (about ${Math.round(
-              accuracy / 1000
-            )} km), so we didn't fill it in. Turn on GPS and try again, or type your address.`,
-          });
-          return;
-        }
-        try {
-          const res = await fetch("/api/geo/reverse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lat: latitude, lng: longitude }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            setLocationNote({ tone: "error", text: data?.error ?? "Couldn't look up your address. Please type it." });
-            return;
-          }
-
-          const found = {
-            address: String(data.address ?? ""),
-            city: String(data.city ?? ""),
-            state: String(data.state ?? ""),
-            zip: String(data.zip ?? ""),
-          };
-          setFormData((prev) => ({ ...prev, ...found }));
-          setErrors((prev) => ({ ...prev, address: undefined, city: undefined, state: undefined, zip: undefined }));
-
-          const missing = [
-            !found.address && "street address",
-            !found.city && "city",
-            !found.state && "state",
-            !found.zip && "zip",
-          ].filter(Boolean);
-          const approx = accuracy > GOOD_LOCATION_ACCURACY_M;
-          const text = [
-            approx
-              ? `We filled this in from your location, but it's only accurate to about ${Math.round(
-                  accuracy
-                )} m — please check the street and add your house / flat number.`
-              : "We filled this in from your location — please check it and add your house / flat number.",
-            missing.length ? `Please fill in: ${missing.join(", ")}.` : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          setLocationNote({ tone: approx || missing.length ? "warn" : "info", text });
-          if (!found.address) document.getElementById("checkout-address")?.focus();
-        } catch {
-          setLocationNote({ tone: "error", text: "No connection. Please check your internet or type your address." });
-        } finally {
-          setLocating(false);
-        }
-      },
-      (error: LocateError) => {
-        setLocating(false);
-        const text =
-          error.code === 1
-            ? "Location access is blocked. Tap the icon to the left of the web address, allow Location, then try again — or type your address."
-            : error.code === 3
-              ? "Finding your location took too long. Move near a window, make sure location is on, and try again — or type your address."
-              : "Your device couldn't find your location. Turn on location (GPS / Wi-Fi) or type your address.";
-        setLocationNote({ tone: "error", text });
-      }
-    );
-  };
 
   const [isAgreedToTerms, setIsAgreedToTerms] = useState(false);
   // Opt-in checkbox for marketing offer emails — only shown/used for
@@ -1060,7 +919,6 @@ const Carts = ({
         setProfileLoadedFor(null);
         setAutofilled(false);
         setFormOwner(null);
-        setLocationNote(null);
         setErrors({});
         setAppliedCoupon(null);
         setDiscountCode("");
@@ -1180,7 +1038,6 @@ const Carts = ({
       setProfileLoadedFor(null);
       setAutofilled(false);
       setFormOwner(null);
-      setLocationNote(null);
       // ⚠️ `phoneCountry` reset করা হয় না — একই গ্রাহক পরের অর্ডারেও
       // একই দেশ থেকেই দেবেন।
       setErrors({});
@@ -1897,29 +1754,9 @@ const Carts = ({
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <label
-                        htmlFor="checkout-address"
-                        className="block font-sora text-[12px] font-medium leading-none text-black"
-                      >
-                        Address <span className="text-[#D72A37]">*</span>
-                      </label>
-                      {canUseLocation && (
-                        <button
-                          type="button"
-                          onClick={fillFromCurrentLocation}
-                          disabled={locating}
-                          className="flex h-7 shrink-0 items-center gap-1 rounded-full border border-[#FF9540] px-2.5 font-sora text-[11px] font-semibold leading-none text-[#FF9540] transition-colors hover:bg-[#FF9540] hover:text-white disabled:cursor-wait disabled:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
-                        >
-                          {locating ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} aria-hidden="true" />
-                          ) : (
-                            <LocateFixed className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                          )}
-                          {locating ? "Locating…" : "Use current location"}
-                        </button>
-                      )}
-                    </div>
+                    <label htmlFor="checkout-address" className={FIELD_LABEL}>
+                      Address <span className="text-[#D72A37]">*</span>
+                    </label>
                     <input
                       id="checkout-address"
                       name="address"
@@ -1933,20 +1770,6 @@ const Carts = ({
                     {errors.address && (
                       <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
                         {errors.address}
-                      </p>
-                    )}
-                    {locationNote && (
-                      <p
-                        role={locationNote.tone === "error" ? "alert" : "status"}
-                        className={`mt-1.5 font-sora text-[11px] leading-[1.5] ${
-                          locationNote.tone === "error"
-                            ? "text-[#D72A37]"
-                            : locationNote.tone === "warn"
-                              ? "text-[#B35A00]"
-                              : "text-black/60"
-                        }`}
-                      >
-                        {locationNote.text}
                       </p>
                     )}
                   </div>

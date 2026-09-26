@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { buildCheckoutProfile, splitE164 } from "@/lib/checkout-profile";
-import { addressFromOsm } from "@/lib/geocode";
 
 const user = { name: "Shepon Sardar", email: "shepon@example.com", phone: null };
 const order = {
@@ -52,59 +51,5 @@ describe("buildCheckoutProfile", () => {
   it("an order without an address gives no address", () => {
     const profile = buildCheckoutProfile(user, { ...order, address: null, city: null });
     expect(profile.address).toBeNull();
-  });
-});
-
-describe("addressFromOsm", () => {
-  it("builds the street line from house number, road and area", () => {
-    expect(
-      addressFromOsm({
-        house_number: "12",
-        road: "Road 11",
-        suburb: "Banani",
-        city: "Dhaka",
-        state: "Dhaka Division",
-        postcode: "1213",
-        country: "Bangladesh",
-        country_code: "bd",
-      })
-    ).toEqual({
-      address: "12 Road 11, Banani",
-      city: "Dhaka",
-      state: "Dhaka Division",
-      zip: "1213",
-      country: "Bangladesh",
-      countryCode: "BD",
-    });
-  });
-
-  it("falls back to town / district and skips an area equal to the city", () => {
-    const result = addressFromOsm({ neighbourhood: "Bogura", town: "Bogura", state_district: "Rajshahi Division" });
-    expect(result.address).toBe("");
-    expect(result.city).toBe("Bogura");
-    expect(result.state).toBe("Rajshahi Division");
-    expect(result.zip).toBe("");
-  });
-});
-
-describe("currentLocationLimitKm", () => {
-  it("uses the last delivery zone's limit in distance mode", async () => {
-    const { currentLocationLimitKm, normalizeDeliveryZones } = await import("@/lib/delivery-zones");
-    const zones = normalizeDeliveryZones([
-      { upToKm: 3, fee: 2 },
-      { upToKm: 8, fee: 5 },
-    ]);
-    expect(currentLocationLimitKm("DISTANCE", zones)).toBe(8);
-  });
-
-  it("falls back to 50 km for a flat fee or an open-ended last zone", async () => {
-    const { currentLocationLimitKm, normalizeDeliveryZones, LOCATION_SANITY_KM } = await import("@/lib/delivery-zones");
-    const open = normalizeDeliveryZones([
-      { upToKm: 3, fee: 2 },
-      { upToKm: null, fee: 9 },
-    ]);
-    expect(LOCATION_SANITY_KM).toBe(50);
-    expect(currentLocationLimitKm("DISTANCE", open)).toBe(50);
-    expect(currentLocationLimitKm("FLAT", [])).toBe(50);
   });
 });

@@ -266,24 +266,3 @@ export interface OrderDeliverySnapshot {
    */
   fellBackToFlat: boolean;
 }
-
-/**
- * "Use current location" থেকে আসা জায়গা কত দূর পর্যন্ত বিশ্বাসযোগ্য।
- *
- * ⚠️ ব্রাউজারের location সবসময় সত্যি নয়। Desktop-এ GPS নেই — ব্রাউজার
- * IP দেখে আন্দাজ করে, আর VPN থাকলে সেটা অন্য দেশে গিয়ে পড়ে (বাংলাদেশে
- * বসে "Skiatook, Oklahoma")। সেই ঠিকানা ফর্মে বসালে খদ্দের বিভ্রান্ত হন।
- *
- * তাই: DISTANCE mode-এ শেষ ধাপের সীমা (এর বাইরে আমরা পৌঁছাইও না);
- * FLAT বা সীমাহীন ধাপে ৫০ কিমি — একটা রেস্তোরাঁর delivery এর চেয়ে
- * দূরে যায় না, আর ভুল IP-location সাধারণত শত শত কিমি দূরে পড়ে।
- */
-export const LOCATION_SANITY_KM = 50;
-
-export function currentLocationLimitKm(mode: string, zones: DeliveryZone[]): number {
-  if (mode === "DISTANCE") {
-    const last = zones[zones.length - 1];
-    if (last && last.upToKm !== null) return last.upToKm;
-  }
-  return LOCATION_SANITY_KM;
-}
