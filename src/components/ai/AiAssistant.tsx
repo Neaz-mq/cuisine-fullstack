@@ -206,13 +206,26 @@ export default function AiAssistant() {
     if (!Recognition) return;
     const recognition = new Recognition();
     recognition.lang = preferBangla ? "bn-BD" : "en-US";
-    recognition.interimResults = false;
+    // Live words while speaking — the customer SEES it's hearing them,
+    // instead of staring at an empty box until they stop talking.
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+    const before = input.trim();
+    let heardAnything = false;
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      if (transcript) setInput((prev) => `${prev ? `${prev} ` : ""}${transcript}`.slice(0, MAX_INPUT));
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i += 1) {
+        transcript += event.results[i]?.[0]?.transcript ?? "";
+      }
+      transcript = transcript.trim();
+      if (!transcript) return;
+      heardAnything = true;
+      setInput(`${before ? `${before} ` : ""}${transcript}`.slice(0, MAX_INPUT));
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      if (heardAnything) inputRef.current?.focus();
+    };
     // The browser says WHY it failed — tell the customer the real reason
     // instead of one generic line.
     recognition.onerror = (event) => {
@@ -255,8 +268,10 @@ export default function AiAssistant() {
   }
 
   function resetChat() {
+    recognitionRef.current?.stop();
     setMessages([]);
     setInput("");
+    setPreferBangla(false);
   }
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && !m.failed);
@@ -417,6 +432,21 @@ export default function AiAssistant() {
                   className="max-h-28 min-h-[36px] flex-1 resize-none bg-transparent py-2 font-sora text-[16px] leading-[1.4] text-black placeholder:text-[13px] placeholder:text-black/45 focus:outline-none min-[640px]:text-[13px]"
                   style={{ fieldSizing: "content" } as React.CSSProperties}
                 />
+                {speechSupported && (
+                  // Which language the mic listens for. It follows what the
+                  // customer last typed, but they can switch it here — a
+                  // Bangla listener hears English speech as nothing at all.
+                  <button
+                    type="button"
+                    onClick={() => setPreferBangla((prev) => !prev)}
+                    disabled={listening}
+                    aria-label={preferBangla ? "Voice language: Bangla. Switch to English" : "Voice language: English. Switch to Bangla"}
+                    title={preferBangla ? "Voice: বাংলা (tap for English)" : "Voice: English (tap for বাংলা)"}
+                    className="flex h-9 shrink-0 items-center justify-center rounded-full px-1.5 font-sora text-[11px] font-semibold text-black/55 transition-colors hover:bg-black/[0.06] disabled:opacity-40"
+                  >
+                    {preferBangla ? "বাং" : "EN"}
+                  </button>
+                )}
                 {speechSupported && (
                   <button
                     type="button"
