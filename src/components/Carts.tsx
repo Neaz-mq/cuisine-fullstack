@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
-import { Trash2, Truck } from "lucide-react";
+import { Loader2, LocateFixed, Trash2, Truck } from "lucide-react";
 import type { TransactionMethod } from "@/lib/transaction-methods";
 import CountryCodeSelect, {
+  COUNTRIES,
   DEFAULT_COUNTRY,
   type Country,
 } from "@/components/CountryCodeSelect";
+import type { CheckoutProfile } from "@/lib/checkout-profile";
 import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -98,6 +100,107 @@ interface BillingFormData {
 }
 
 type BillingErrors = Partial<Record<keyof BillingFormData, string>>;
+
+const EMPTY_FORM: BillingFormData = {
+  email: "",
+  firstName: "",
+  lastName: "",
+  address: "",
+  apartment: "",
+  city: "",
+  state: "",
+  zip: "",
+  phoneNumber: "",
+};
+
+/**
+ * Signed-in customer's saved details → the checkout form.
+ *
+ * ⚠️ Only EMPTY fields are filled. Whatever the customer already typed
+ * wins — the details arrive a moment after the page opens, and nobody
+ * should see their typing replaced.
+ *
+ * ⚠️ The address is one block: it's filled only if Address, City, State
+ * and Zip are all still empty. Filling just the gaps would stitch the
+ * last order's street onto a city the customer typed — a real address
+ * nobody lives at.
+ *
+ * Phone number and its country travel together for the same reason.
+ */
+function mergeProfile(
+  form: BillingFormData,
+  profile: CheckoutProfile
+): { form: BillingFormData; country: Country | null; changed: boolean } {
+  const next = { ...form };
+  let changed = false;
+  let country: Country | null = null;
+
+  if (!form.firstName.trim() && !form.lastName.trim() && profile.fullName.trim()) {
+    const name = profile.fullName.trim();
+    const cut = name.lastIndexOf(" ");
+    next.firstName = cut === -1 ? name : name.slice(0, cut);
+    next.lastName = cut === -1 ? "" : name.slice(cut + 1);
+    changed = true;
+  }
+  if (!form.email.trim() && profile.email) {
+    next.email = profile.email;
+    changed = true;
+  }
+  if (!form.phoneNumber.trim() && profile.phone?.number) {
+    next.phoneNumber = profile.phone.number.replace(/[^\d+]/g, "");
+    country =
+      COUNTRIES.find((c) => c.code === profile.phone?.countryCode) ??
+      COUNTRIES.find((c) => c.name === profile.phone?.countryName) ??
+      null;
+    changed = true;
+  }
+  const addressEmpty = !form.address.trim() && !form.city.trim() && !form.state.trim() && !form.zip.trim();
+  if (addressEmpty && profile.address) {
+    next.address = profile.address.address;
+    next.apartment = form.apartment.trim() ? form.apartment : profile.address.apartment;
+    next.city = profile.address.city;
+    next.state = profile.address.state;
+    next.zip = profile.address.zip;
+    changed = true;
+  }
+  return { form: next, country, changed };
+}
+
+/**
+ * Phones and tablets (touch screen) — the devices that have GPS.
+ *
+ * ⚠️ "Use current location" is shown only here. A desktop computer has no
+ * GPS: the browser guesses from the internet address, often a city or a
+ * country away (with a VPN, another continent), yet still reports it as
+ * "within 250 m". Showing a stranger's street as the customer's address
+ * is worse than no button. On desktop the customer types the address, and
+ * Chrome's own saved-address autofill (the autoComplete hints below) does
+ * the rest — the usual way on food-delivery websites.
+ *
+ * Server snapshot is `false`, so the first render matches the HTML and
+ * the button appears right after load on phones.
+ */
+const COARSE_POINTER = "(pointer: coarse)";
+function subscribePointer(onChange: () => void) {
+  const query = window.matchMedia(COARSE_POINTER);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function useHasGpsDevice(): boolean {
+  return useSyncExternalStore(
+    subscribePointer,
+    () => window.matchMedia(COARSE_POINTER).matches,
+    () => false
+  );
+}
+
+/** Beyond this the browser is guessing, not locating — don't fill anything. */
+const MAX_LOCATION_ACCURACY_M = 1000;
+/** Up to this it's a real GPS fix; above it, ask the customer to check the street. */
+const GOOD_LOCATION_ACCURACY_M = 150;
+
+/** info = all good · warn = found, but check/complete it · error = didn't work. */
+type LocationNote = { tone: "info" | "warn" | "error"; text: string };
 type PaymentErrors = Partial<Record<"isAgreedToTerms", string>>;
 
 const SHIPPING_METHOD_MAP: Record<string, "UBER_EATS" | "FOOD_PANDA" | "OWN_DELIVERY"> = {
@@ -161,7 +264,7 @@ const Carts = ({
   paymentMethods: TransactionMethod[];
 }) => {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -302,17 +405,184 @@ const Carts = ({
    */
   const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
 
-  const [formData, setFormData] = useState<BillingFormData>({
-    email: "",
-    firstName: "",
-    lastName: "",
-    address: "",
-    apartment: "",
-    city: "",
-    state: "",
-    zip: "",
-    phoneNumber: "",
-  });
+  const [formData, setFormData] = useState<BillingFormData>(EMPTY_FORM);
+
+  /**
+   * ── Signed-in customer: fill in what we already know ─────────────────
+   *
+   * Name + email come from the account (Google sign-in provides both);
+   * phone + address from their last delivery order — see
+   * lib/checkout-profile.ts. Fetched once the cart has something in it,
+   * and again after an order is placed (the next order may use the new
+   * address). Every field stays editable.
+   *
+   * The merge happens during render (not inside the fetch callback),
+   * because it has to compare against the form as it is *now* — the
+   * customer may have typed in the meantime. Same "adjust state while
+   * rendering" pattern the rest of this file uses.
+   */
+  const userId = session?.user?.id ?? null;
+  const [profileLoadedFor, setProfileLoadedFor] = useState<string | null>(null);
+  const [pendingProfile, setPendingProfile] = useState<CheckoutProfile | null>(null);
+  const [autofilled, setAutofilled] = useState(false);
+  /** Whose saved details are on screen — null when none are. */
+  const [formOwner, setFormOwner] = useState<string | null>(null);
+
+  if (pendingProfile) {
+    setPendingProfile(null);
+    const merged = mergeProfile(formData, pendingProfile);
+    if (merged.changed) {
+      setFormData(merged.form);
+      if (merged.country) setPhoneCountry(merged.country);
+      setAutofilled(true);
+      setFormOwner(userId);
+    }
+  }
+
+  // ⚠️ Signed out, or another account signed in on the same device: the
+  // previous person's phone and home address must not stay on screen.
+  if (sessionStatus !== "loading" && formOwner !== null && formOwner !== userId) {
+    setFormOwner(null);
+    setProfileLoadedFor(null);
+    setAutofilled(false);
+    setFormData(EMPTY_FORM);
+    setPhoneCountry(DEFAULT_COUNTRY);
+  }
+
+  const hasCartItems = cartItems.length > 0;
+  useEffect(() => {
+    if (!userId || !hasCartItems || profileLoadedFor === userId) return;
+    let cancelled = false;
+    fetch("/api/account/checkout-profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((profile: CheckoutProfile | null) => {
+        if (cancelled) return;
+        setProfileLoadedFor(userId);
+        if (profile) setPendingProfile(profile);
+      })
+      .catch(() => {
+        // Nothing lost — the customer types their details as a guest would.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, hasCartItems, profileLoadedFor]);
+
+  const clearSavedDetails = () => {
+    setFormData(EMPTY_FORM);
+    setPhoneCountry(DEFAULT_COUNTRY);
+    setAutofilled(false);
+    setFormOwner(null);
+    setLocationNote(null);
+  };
+
+  /**
+   * ── "Use current location" ───────────────────────────────────────────
+   *
+   * Like the food-delivery apps: the browser shows its own "Allow this
+   * site to know your location?" prompt (only after the customer taps —
+   * Chrome quietly blocks prompts nobody asked for). The coordinates go
+   * to /api/geo/reverse, which returns the street, city, state and zip.
+   *
+   * ⚠️ Fields the lookup couldn't find are cleared, not left as they
+   * were: an old zip under a new street is a wrong address that looks
+   * right. The empty field then asks for it, like any required field.
+   *
+   * ⚠️ The coordinates themselves aren't sent with the order. The delivery
+   * fee is still worked out from the address in the form, so what the
+   * customer sees and edits is exactly what's charged.
+   */
+  const [locating, setLocating] = useState(false);
+  const [locationNote, setLocationNote] = useState<LocationNote | null>(null);
+  const canUseLocation = useHasGpsDevice();
+
+  const fillFromCurrentLocation = () => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setLocationNote({ tone: "error", text: "This browser can't share your location. Please type your address." });
+      return;
+    }
+    if (!window.isSecureContext) {
+      setLocationNote({
+        tone: "error",
+        text: "Location only works on a secure (https) page. Please type your address.",
+      });
+      return;
+    }
+
+    setLocating(true);
+    setLocationNote(null);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        if (accuracy > MAX_LOCATION_ACCURACY_M) {
+          setLocating(false);
+          setLocationNote({
+            tone: "error",
+            text: `Your device could only find your location roughly (about ${Math.round(
+              accuracy / 1000
+            )} km), so we didn't fill it in. Turn on GPS and try again, or type your address.`,
+          });
+          return;
+        }
+        try {
+          const res = await fetch("/api/geo/reverse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: latitude, lng: longitude }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setLocationNote({ tone: "error", text: data?.error ?? "Couldn't look up your address. Please type it." });
+            return;
+          }
+
+          const found = {
+            address: String(data.address ?? ""),
+            city: String(data.city ?? ""),
+            state: String(data.state ?? ""),
+            zip: String(data.zip ?? ""),
+          };
+          setFormData((prev) => ({ ...prev, ...found }));
+          setErrors((prev) => ({ ...prev, address: undefined, city: undefined, state: undefined, zip: undefined }));
+
+          const missing = [
+            !found.address && "street address",
+            !found.city && "city",
+            !found.state && "state",
+            !found.zip && "zip",
+          ].filter(Boolean);
+          const approx = accuracy > GOOD_LOCATION_ACCURACY_M;
+          const text = [
+            approx
+              ? `We filled this in from your location, but it's only accurate to about ${Math.round(
+                  accuracy
+                )} m — please check the street and add your house / flat number.`
+              : "We filled this in from your location — please check it and add your house / flat number.",
+            missing.length ? `Please fill in: ${missing.join(", ")}.` : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          setLocationNote({ tone: approx || missing.length ? "warn" : "info", text });
+          if (!found.address) document.getElementById("checkout-address")?.focus();
+        } catch {
+          setLocationNote({ tone: "error", text: "No connection. Please check your internet or type your address." });
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        setLocating(false);
+        const text =
+          error.code === error.PERMISSION_DENIED
+            ? "Location access is blocked. Click the icon to the left of the web address, allow Location, then try again — or type your address."
+            : error.code === error.TIMEOUT
+              ? "Finding your location took too long. Try again, or type your address."
+              : "Your device couldn't find your location. Turn on location (GPS / Wi-Fi) or type your address.";
+        setLocationNote({ tone: "error", text });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  };
 
   const [isAgreedToTerms, setIsAgreedToTerms] = useState(false);
   // Opt-in checkbox for marketing offer emails — only shown/used for
@@ -787,17 +1057,12 @@ const Carts = ({
           draggable: true,
         });
 
-        setFormData({
-          email: "",
-          firstName: "",
-          lastName: "",
-          address: "",
-          apartment: "",
-          city: "",
-          state: "",
-          zip: "",
-          phoneNumber: "",
-        });
+        setFormData(EMPTY_FORM);
+        // Next order (new cart) → fetch the saved details again.
+        setProfileLoadedFor(null);
+        setAutofilled(false);
+        setFormOwner(null);
+        setLocationNote(null);
         setErrors({});
         setAppliedCoupon(null);
         setDiscountCode("");
@@ -911,17 +1176,13 @@ const Carts = ({
         draggable: true,
       });
 
-      setFormData({
-        email: "",
-        firstName: "",
-        lastName: "",
-        address: "",
-        apartment: "",
-        city: "",
-        state: "",
-        zip: "",
-        phoneNumber: "",
-      });
+      setFormData(EMPTY_FORM);
+      // Next order (new cart) → fetch the saved details again, including
+      // the address just used.
+      setProfileLoadedFor(null);
+      setAutofilled(false);
+      setFormOwner(null);
+      setLocationNote(null);
       // ⚠️ `phoneCountry` reset করা হয় না — একই গ্রাহক পরের অর্ডারেও
       // একই দেশ থেকেই দেবেন।
       setErrors({});
@@ -1494,6 +1755,21 @@ const Carts = ({
                 </p>
               </div>
 
+              {autofilled && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[12px] bg-white px-3.5 py-2.5">
+                  <p className="min-w-0 font-sora text-[12px] leading-[1.5] text-black/70">
+                    We&apos;ve filled in your saved details — check them before ordering.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearSavedDetails}
+                    className="shrink-0 font-sora text-[12px] font-semibold text-black underline-offset-2 hover:underline focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+
               {/**
                 * ── Figma-র ফর্ম ────────────────────────────────────────
                 *
@@ -1532,6 +1808,7 @@ const Carts = ({
                   <input
                     id="checkout-name"
                     type="text"
+                    autoComplete="name"
                     placeholder="Your full name"
                     className={FIELD_INPUT}
                     value={fullName}
@@ -1560,6 +1837,7 @@ const Carts = ({
                         name="phoneNumber"
                         type="tel"
                         inputMode="tel"
+                        autoComplete="tel-national"
                         placeholder={examplePhone(phoneCountry.code) || "Phone number"}
                         className="min-w-0 flex-1 rounded-r-[12px] bg-transparent px-3 font-sora text-[13px] leading-none text-black placeholder:text-black/35 focus:outline-none"
                         value={formData.phoneNumber}
@@ -1609,6 +1887,7 @@ const Carts = ({
                       id="checkout-email"
                       name="email"
                       type="email"
+                      autoComplete="email"
                       placeholder="you@example.com"
                       className={FIELD_INPUT}
                       value={formData.email}
@@ -1620,14 +1899,35 @@ const Carts = ({
                   </div>
 
                   <div>
-                    <label htmlFor="checkout-address" className={FIELD_LABEL}>
-                      Address <span className="text-[#D72A37]">*</span>
-                    </label>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <label
+                        htmlFor="checkout-address"
+                        className="block font-sora text-[12px] font-medium leading-none text-black"
+                      >
+                        Address <span className="text-[#D72A37]">*</span>
+                      </label>
+                      {canUseLocation && (
+                        <button
+                          type="button"
+                          onClick={fillFromCurrentLocation}
+                          disabled={locating}
+                          className="flex h-7 shrink-0 items-center gap-1 rounded-full border border-[#FF9540] px-2.5 font-sora text-[11px] font-semibold leading-none text-[#FF9540] transition-colors hover:bg-[#FF9540] hover:text-white disabled:cursor-wait disabled:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                        >
+                          {locating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} aria-hidden="true" />
+                          ) : (
+                            <LocateFixed className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                          )}
+                          {locating ? "Locating…" : "Use current location"}
+                        </button>
+                      )}
+                    </div>
                     <input
                       id="checkout-address"
                       name="address"
                       type="text"
-                      placeholder="1250 Market Street"
+                      autoComplete="street-address"
+                      placeholder="House, road, area"
                       className={FIELD_INPUT}
                       value={formData.address}
                       onChange={handleChange}
@@ -1635,6 +1935,20 @@ const Carts = ({
                     {errors.address && (
                       <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">
                         {errors.address}
+                      </p>
+                    )}
+                    {locationNote && (
+                      <p
+                        role={locationNote.tone === "error" ? "alert" : "status"}
+                        className={`mt-1.5 font-sora text-[11px] leading-[1.5] ${
+                          locationNote.tone === "error"
+                            ? "text-[#D72A37]"
+                            : locationNote.tone === "warn"
+                              ? "text-[#B35A00]"
+                              : "text-black/60"
+                        }`}
+                      >
+                        {locationNote.text}
                       </p>
                     )}
                   </div>
@@ -1651,6 +1965,7 @@ const Carts = ({
                       id="checkout-apartment"
                       name="apartment"
                       type="text"
+                      autoComplete="address-line2"
                       placeholder="Apt 8B"
                       className={FIELD_INPUT}
                       value={formData.apartment}
@@ -1667,6 +1982,7 @@ const Carts = ({
                         id="checkout-city"
                         name="city"
                         type="text"
+                        autoComplete="address-level2"
                         placeholder="Dhaka"
                         className={FIELD_INPUT}
                         value={formData.city}
@@ -1685,6 +2001,7 @@ const Carts = ({
                         id="checkout-state"
                         name="state"
                         type="text"
+                        autoComplete="address-level1"
                         placeholder="Dhaka Division"
                         className={FIELD_INPUT}
                         value={formData.state}
@@ -1705,6 +2022,7 @@ const Carts = ({
                         id="checkout-zip"
                         name="zip"
                         type="text"
+                        autoComplete="postal-code"
                         placeholder="1205"
                         className={FIELD_INPUT}
                         value={formData.zip}

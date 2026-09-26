@@ -274,3 +274,186 @@ export async function geocodeAddress(parts: AddressParts): Promise<GeocodeResult
   const outcome = await geocodeAddressDetailed(parts);
   return outcome.ok ? outcome.result : null;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Reverse geocoding — coordinates → address.
+ *
+ * Used by checkout's "Use my current location" button: the browser gives
+ * lat/lng (after the customer allows it), and this turns that into the
+ * same Address / City / State / Zip fields the customer would have typed.
+ *
+ * Same two providers, same order, same contact details as the forward
+ * lookup above. The coordinates themselves are never stored or trusted
+ * for money: checkout still geocodes the address that ends up in the
+ * form, so the delivery fee is decided exactly as for a typed address.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type ReverseAddress = {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  /** ISO 3166-1 alpha-2, upper case ("BD"), or "" if unknown. */
+  countryCode: string;
+};
+
+/** The `address` object both OpenStreetMap services return. */
+export type OsmAddress = Partial<
+  Record<
+    | "house_number"
+    | "house_name"
+    | "building"
+    | "road"
+    | "pedestrian"
+    | "residential"
+    | "neighbourhood"
+    | "quarter"
+    | "suburb"
+    | "hamlet"
+    | "city_district"
+    | "city"
+    | "town"
+    | "village"
+    | "municipality"
+    | "county"
+    | "state_district"
+    | "state"
+    | "region"
+    | "postcode"
+    | "country"
+    | "country_code",
+    string
+  >
+>;
+
+/**
+ * Turns an OpenStreetMap address into checkout fields.
+ *
+ * Street line = house number + road, then the local area ("House 12,
+ * Road 11, Banani") — in Bangladesh and much of South Asia the area name
+ * is what a rider actually navigates by, so it is kept even when there
+ * is a road. City falls back through town/village/district because OSM
+ * tags smaller places differently. Duplicates (area == city) are dropped.
+ */
+export function addressFromOsm(osm: OsmAddress): ReverseAddress {
+  const clean = (value?: string) => (value ?? "").trim();
+  const city =
+    clean(osm.city) ||
+    clean(osm.town) ||
+    clean(osm.village) ||
+    clean(osm.municipality) ||
+    clean(osm.city_district) ||
+    clean(osm.county);
+  const state = clean(osm.state) || clean(osm.state_district) || clean(osm.region);
+
+  const street = clean(osm.road) || clean(osm.pedestrian) || clean(osm.residential);
+  const houseNumber = clean(osm.house_number);
+  const house = clean(osm.house_name) || clean(osm.building);
+  const area = clean(osm.neighbourhood) || clean(osm.quarter) || clean(osm.suburb) || clean(osm.hamlet);
+
+  const parts: string[] = [];
+  const push = (value: string) => {
+    if (value && !parts.some((p) => p.toLowerCase() === value.toLowerCase()) && value.toLowerCase() !== city.toLowerCase()) {
+      parts.push(value);
+    }
+  };
+  push(house);
+  push(houseNumber && street ? `${houseNumber} ${street}` : houseNumber || street);
+  push(area);
+
+  return {
+    address: parts.join(", "),
+    city,
+    state,
+    zip: clean(osm.postcode),
+    country: clean(osm.country),
+    countryCode: clean(osm.country_code).toUpperCase(),
+  };
+}
+
+type ReverseProvider = {
+  name: string;
+  buildUrl: (lat: number, lng: number) => string;
+  headers: Record<string, string>;
+};
+
+const REVERSE_PROVIDERS: ReverseProvider[] = [
+  ...(LOCATIONIQ_KEY
+    ? [
+        {
+          name: "LocationIQ",
+          buildUrl: (lat: number, lng: number) => {
+            const url = new URL("https://us1.locationiq.com/v1/reverse");
+            url.searchParams.set("key", LOCATIONIQ_KEY);
+            url.searchParams.set("lat", String(lat));
+            url.searchParams.set("lon", String(lng));
+            url.searchParams.set("format", "json");
+            url.searchParams.set("addressdetails", "1");
+            url.searchParams.set("normalizeaddress", "1");
+            return url.toString();
+          },
+          headers: { "Accept-Language": "en" },
+        },
+      ]
+    : []),
+  {
+    name: "Nominatim",
+    buildUrl: (lat: number, lng: number) => {
+      const url = new URL("https://nominatim.openstreetmap.org/reverse");
+      url.searchParams.set("lat", String(lat));
+      url.searchParams.set("lon", String(lng));
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("zoom", "18");
+      if (CONTACT_EMAIL) url.searchParams.set("email", CONTACT_EMAIL);
+      return url.toString();
+    },
+    headers: { "User-Agent": USER_AGENT, "Accept-Language": "en" },
+  },
+];
+
+/**
+ * ~1 m precision is plenty for a doorstep, and rounding lets a second tap
+ * from the same spot come straight from memory.
+ */
+const reverseCache = new Map<string, ReverseAddress>();
+
+export async function reverseGeocode(
+  lat: number,
+  lng: number
+): Promise<{ ok: true; result: ReverseAddress } | { ok: false; failure: GeocodeFailure }> {
+  const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  const hit = reverseCache.get(key);
+  if (hit) return { ok: true, result: hit };
+
+  let lastFailure: GeocodeFailure = { reason: "not_found" };
+  for (const provider of REVERSE_PROVIDERS) {
+    try {
+      const res = await fetch(provider.buildUrl(lat, lng), {
+        headers: provider.headers,
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      // LocationIQ answers "nothing here" (open sea, desert) with 404.
+      if (res.status === 404) return { ok: false, failure: { reason: "not_found" } };
+      if (!res.ok) {
+        console.warn(`[geocode] ${provider.name} reverse lookup answered HTTP ${res.status}.`);
+        lastFailure = { reason: "refused", status: res.status };
+        continue;
+      }
+      const data = (await res.json()) as { address?: OsmAddress; error?: string };
+      if (!data?.address || data.error) return { ok: false, failure: { reason: "not_found" } };
+
+      const result = addressFromOsm(data.address);
+      if (!result.city && !result.address) return { ok: false, failure: { reason: "not_found" } };
+      reverseCache.set(key, result);
+      return { ok: true, result };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(`[geocode] Could not reach ${provider.name} for a reverse lookup: ${detail}`);
+      lastFailure = { reason: "network", detail };
+    }
+  }
+  return { ok: false, failure: lastFailure };
+}
