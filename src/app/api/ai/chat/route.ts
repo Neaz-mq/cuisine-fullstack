@@ -8,6 +8,7 @@ import { getAssistantContext } from "@/lib/ai-assistant/context";
 import {
   basicReply,
   buildSystemPrompt,
+  directIntent,
   dishesForPrompt,
   parseModelReply,
   type AssistantAnswer,
@@ -88,6 +89,15 @@ export async function POST(request: Request) {
   const dishById = new Map(context.dishes.map((dish) => [dish.id, dish]));
   const promptDishes = dishesForPrompt(context.dishes, question.content);
   const knownIds = new Set(promptDishes.map((dish) => dish.id));
+
+  // Orders and points: answered from the database, never guessed.
+  if (directIntent(question.content, Boolean(context.user))) {
+    return NextResponse.json({
+      ...basicReply(context, question.content),
+      kitchenOpen: context.kitchenOpen,
+      source: "direct",
+    } satisfies AssistantAnswer);
+  }
 
   const answer: AssistantAnswer | null = process.env.GROQ_API_KEY
     ? await askModel(buildSystemPrompt(context, promptDishes), history, knownIds).then((result) =>

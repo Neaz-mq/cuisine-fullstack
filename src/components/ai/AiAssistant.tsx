@@ -17,6 +17,7 @@ import {
   UtensilsCrossed,
   X,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCart } from "@/context/CartContext";
 import type { AssistantAnswer, AssistantDish, AssistantOrder } from "@/lib/ai-assistant/core";
 
@@ -45,7 +46,7 @@ type UiMessage = {
   orders?: AssistantOrder[];
   suggestions?: string[];
   kitchenOpen?: boolean;
-  source?: "ai" | "basic";
+  source?: "ai" | "basic" | "direct";
   failed?: boolean;
 };
 
@@ -64,14 +65,25 @@ const STARTERS = [
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
-function loadStored(): UiMessage[] {
-  if (typeof window === "undefined") return [];
+/**
+ * The saved chat and WHO it belongs to ("guest" or the user id). A chat
+ * can show someone's orders and points, so it must never be shown to the
+ * next person on a shared computer — see the owner check in the component.
+ */
+type Stored = { owner: string | null; messages: UiMessage[] };
+
+function loadStored(): Stored {
+  if (typeof window === "undefined") return { owner: null, messages: [] };
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as UiMessage[]) : [];
-    return Array.isArray(parsed) ? parsed.slice(-30) : [];
+    const parsed = raw ? (JSON.parse(raw) as Partial<Stored> | UiMessage[]) : null;
+    if (!parsed || Array.isArray(parsed)) return { owner: null, messages: [] };
+    return {
+      owner: typeof parsed.owner === "string" ? parsed.owner : null,
+      messages: Array.isArray(parsed.messages) ? parsed.messages.slice(-30) : [],
+    };
   } catch {
-    return [];
+    return { owner: null, messages: [] };
   }
 }
 
@@ -99,7 +111,19 @@ function getRecognition(): (new () => SpeechRecognitionLike) | null {
 export default function AiAssistant() {
   const { cartItems, addToCart } = useCart();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<UiMessage[]>(loadStored);
+  const [stored] = useState(loadStored);
+  const [messages, setMessages] = useState<UiMessage[]>(stored.messages);
+  const [owner, setOwner] = useState<string | null>(stored.owner);
+
+  // Signed in, signed out or switched account → start a fresh chat, so a
+  // previous customer's orders and points never show for the next person.
+  // (Set during render, React's pattern for "reset state when X changes".)
+  const { data: session, status } = useSession();
+  const currentOwner = status === "loading" ? null : (session?.user?.id ?? "guest");
+  if (currentOwner !== null && currentOwner !== owner) {
+    setOwner(currentOwner);
+    if (owner !== null) setMessages([]);
+  }
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [listening, setListening] = useState(false);
@@ -113,11 +137,14 @@ export default function AiAssistant() {
   // Keep the chat for this tab.
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-30)));
+      window.sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ owner, messages: messages.slice(-30) } satisfies Stored)
+      );
     } catch {
       // Private mode / storage full — the chat just won't survive a reload.
     }
-  }, [messages]);
+  }, [messages, owner]);
 
   // Newest message in view.
   useEffect(() => {
@@ -561,7 +588,17 @@ function AssistantBubble({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="font-sora text-[12px] font-semibold text-black">{order.label}</span>
-                  <span className="rounded-full bg-[#FFF1E5] px-2 py-0.5 font-sora text-[10px] font-semibold text-[#FF7100]">
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-sora text-[10px] font-semibold ${
+                      /delivered/i.test(order.status)
+                        ? "bg-[#E8FFEC] text-[#0E9F00]"
+                        : /cancel/i.test(order.status)
+                          ? "bg-[#FAE7EC] text-[#D72A37]"
+                          : /way|ready/i.test(order.status)
+                            ? "bg-[#FDE7F3] text-[#C2258A]"
+                            : "bg-[#FFF1E5] text-[#FF7100]"
+                    }`}
+                  >
                     {order.status}
                   </span>
                 </span>
@@ -570,7 +607,7 @@ function AssistantBubble({
                   {order.placedAt} · {order.total}
                 </span>
               </span>
-              <span className="shrink-0 font-sora text-[12px] font-semibold text-[#E0661B]">Track →</span>
+              <span className="shrink-0 font-sora text-[12px] font-semibold text-[#E0661B]">{/delivered|cancel/i.test(order.status) ? "View →" : "Track →"}</span>
             </Link>
           ))}
         </div>

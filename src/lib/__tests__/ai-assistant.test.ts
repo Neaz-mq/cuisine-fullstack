@@ -141,3 +141,47 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("a guest");
   });
 });
+
+import { directIntent } from "@/lib/ai-assistant/core";
+
+describe("directIntent", () => {
+  it("routes order questions to the database, for guests too", () => {
+    expect(directIntent("Where's my order?", true)).toBe("order");
+    expect(directIntent("আমার অর্ডার কোথায়?", false)).toBe("order");
+  });
+
+  it("routes a signed-in customer's own points question", () => {
+    expect(directIntent("How many points do I have?", true)).toBe("points");
+    expect(directIntent("আমার কত পয়েন্ট আছে?", true)).toBe("points");
+    expect(directIntent("How do loyalty points work?", false)).toBeNull();
+  });
+
+  it("leaves menu questions to the model", () => {
+    expect(directIntent("Something spicy under $15", true)).toBeNull();
+  });
+});
+
+describe("delivery answers", () => {
+  const withZones = context({
+    delivery: {
+      mode: "DISTANCE",
+      flatFee: "$2.00",
+      zones: [
+        { label: "0–1 km", fee: "$2.00" },
+        { label: "1–3 km", fee: "$5.00" },
+      ],
+      maxKm: 3,
+    },
+  });
+
+  it("is looked up directly and lists every zone", () => {
+    expect(directIntent("How much is delivery?", false)).toBe("delivery");
+    const reply = basicReply(withZones, "How much is delivery?").reply;
+    expect(reply).toContain("1–3 km: $5.00");
+    expect(reply).toContain("beyond 3 km");
+  });
+
+  it("answers in Bangla", () => {
+    expect(basicReply(withZones, "ডেলিভারি চার্জ কত?").reply).toContain("দূরত্ব অনুযায়ী");
+  });
+});

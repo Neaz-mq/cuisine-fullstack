@@ -172,8 +172,16 @@ async function buildShared(isMember: boolean): Promise<Shared> {
         ". Dine-in and table orders have no delivery fee."
       : `flat fee ${money(settings.deliveryFeeFlat)}. Dine-in and table orders have no delivery fee.`;
 
+  const delivery = {
+    mode: settings.deliveryFeeMode === "DISTANCE" ? ("DISTANCE" as const) : ("FLAT" as const),
+    flatFee: money(settings.deliveryFeeFlat),
+    zones: zones.map((z) => ({ label: z.label, fee: money(z.fee) })),
+    maxKm: zones.length && zones[zones.length - 1].upToKm !== null ? zones[zones.length - 1].upToKm : null,
+  };
+
   return {
     currency,
+    delivery,
     nowLabel: now.toLocaleString("en-US", {
       weekday: "long",
       hour: "numeric",
@@ -234,6 +242,7 @@ async function userContext(userId: string): Promise<AssistantContext["user"]> {
     tierPerks: tierPerks(progress.tier, null).join(", "),
     earnRule: earnText,
     redeemRule: `${pointsPerUnit} points = ${formatSpend(1, settings.currency)} off at checkout, from ${MIN_REDEEMABLE_POINTS} points`,
+    redeemRuleBn: `checkout-এ ${pointsPerUnit} পয়েন্ট = ${formatSpend(1, settings.currency)} ছাড়, কমপক্ষে ${MIN_REDEEMABLE_POINTS} পয়েন্ট থাকলে ব্যবহার করা যায়`,
     orders: orders.map((order) => ({
       label: formatOrderId(order.id),
       status: orderStatusLabel(order.status, order.orderType),
