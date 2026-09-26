@@ -1,6 +1,7 @@
 import SiteTopBar from "@/components/SiteTopBar";
 import SiteNavbar from "@/components/SiteNavbar";
 import Footer from "@/components/Footer";
+import AiAssistant from "@/components/ai/AiAssistant";
 
 /**
  * src/app/(main)/layout.tsx
@@ -35,6 +36,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           full-bleed পটভূমির জন্য আলাদা করে রাখার দরকারও নেই। */}
       <main className="flex-1">{children}</main>
       <Footer />
+      {/* "Ask Cuisine AI" — shown only when the free Groq key is set (see /api/ai/chat). */}
+      {process.env.GROQ_API_KEY ? <AiAssistant /> : null}
     </div>
   );
 }

@@ -147,9 +147,14 @@ const securityHeaders = [
   // the delivery-rider live tracking feature — /admin/my-deliveries needs
   // navigator.geolocation.watchPosition() to share a rider's position;
   // still blocked for any cross-origin/embedded context.
+  //
+  // microphone is 'self' too, for the "Ask Cuisine AI" voice button
+  // (components/ai/AiAssistant.tsx). With `microphone=()` the browser
+  // refused the mic outright — the permission popup never even appeared.
+  // Only this site's own pages can ask; embedded/third-party frames can't.
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
+    value: "camera=(), microphone=(self), geolocation=(self), interest-cohort=()",
   },
   // Force HTTPS for a year, including subdomains. Harmless locally over
   // HTTP (browsers only honor this over an HTTPS response in the first
