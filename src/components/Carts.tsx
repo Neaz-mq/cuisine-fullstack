@@ -14,6 +14,7 @@ import CountryCodeSelect, {
   type Country,
 } from "@/components/CountryCodeSelect";
 import type { CheckoutProfile } from "@/lib/checkout-profile";
+import { GOOD_LOCATION_ACCURACY_M, locateDevice, type LocateError } from "@/lib/locate-device";
 import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -196,8 +197,6 @@ function useHasGpsDevice(): boolean {
 
 /** Beyond this the browser is guessing, not locating — don't fill anything. */
 const MAX_LOCATION_ACCURACY_M = 1000;
-/** Up to this it's a real GPS fix; above it, ask the customer to check the street. */
-const GOOD_LOCATION_ACCURACY_M = 150;
 
 /** info = all good · warn = found, but check/complete it · error = didn't work. */
 type LocationNote = { tone: "info" | "warn" | "error"; text: string };
@@ -511,7 +510,7 @@ const Carts = ({
 
     setLocating(true);
     setLocationNote(null);
-    navigator.geolocation.getCurrentPosition(
+    locateDevice().then(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         if (accuracy > MAX_LOCATION_ACCURACY_M) {
@@ -570,17 +569,16 @@ const Carts = ({
           setLocating(false);
         }
       },
-      (error) => {
+      (error: LocateError) => {
         setLocating(false);
         const text =
-          error.code === error.PERMISSION_DENIED
-            ? "Location access is blocked. Click the icon to the left of the web address, allow Location, then try again — or type your address."
-            : error.code === error.TIMEOUT
-              ? "Finding your location took too long. Try again, or type your address."
+          error.code === 1
+            ? "Location access is blocked. Tap the icon to the left of the web address, allow Location, then try again — or type your address."
+            : error.code === 3
+              ? "Finding your location took too long. Move near a window, make sure location is on, and try again — or type your address."
               : "Your device couldn't find your location. Turn on location (GPS / Wi-Fi) or type your address.";
         setLocationNote({ tone: "error", text });
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+      }
     );
   };
 
