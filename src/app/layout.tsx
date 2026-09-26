@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { Poppins, Frank_Ruhl_Libre, Sora } from "next/font/google";
+import { Sora } from "next/font/google";
 import "./globals.css";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, Slide } from "react-toastify";
@@ -8,43 +7,26 @@ import AuthProvider from "@/components/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
 import { TableOrderProvider } from "@/context/TableOrderContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
-// Serif display font used for the "Cuisine" logo wordmark and other
-// serif headings (see register page) — matches the Figma spec (700
-// weight, 30px, 126% line-height, -1% letter-spacing on the logo).
-// Self-hosted via next/font like the other fonts here, rather than a
-// CSS @import, so there's no extra request to fonts.googleapis.com and
-// no layout shift while it loads.
-const frankRuhlLibre = Frank_Ruhl_Libre({
-  variable: "--font-frank-ruhl",
-  subsets: ["latin"],
-  // 600 যোগ করা হয়েছে admin sidebar-এর জন্য: Figma-তে active nav item
-  // আর user card-এর নাম দুটোই Frank Ruhl Libre SemiBold (600)। তালিকায়
-  // না থাকলে ওই weight-এর ফাইলটা download-ই হয় না, browser তখন 500 বা
-  // 700-এ ঠেলে দেয় — বা নিজে থেকে মোটা করে আঁকে (synthetic bold),
-  // যেটা serif-এ বিশ্রী দেখায়। নীরব ব্যর্থতা: কিছু ভাঙে না, শুধু
-  // ফন্টটা Figma-র সাথে মেলে না আর কারণটা ধরা যায় না।
-  weight: ["400", "500", "600", "700", "900"],
-});
-// Body/supporting-text font used for the hero subtext under the "Great
-// Food, Delivered With Care" heading (400 weight, 12px, 160%
-// line-height, per Figma). Self-hosted via next/font like the others.
+/**
+ * One font for the whole site: Sora.
+ *
+ * ⚠️ There used to be five (Poppins for body text, Frank Ruhl Libre for
+ * headings, Sora, Geist and Geist Mono). The owner asked for Sora
+ * everywhere, so it is the only font downloaded now.
+ *
+ * Sora is a variable font, so no `weight` list: one file covers every
+ * weight from 100 to 800 — `font-semibold`, `font-bold`, `font-extrabold`
+ * all come out real, never "fake bold". Self-hosted by next/font, so
+ * there is no request to fonts.googleapis.com and no layout shift.
+ *
+ * The old class names (`font-frank-ruhl`, `font-sans`, `font-mono`)
+ * still work — globals.css points them all at Sora, so 100+ components
+ * didn't need touching.
+ */
 const sora = Sora({
   variable: "--font-sora",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 // NOTE: swap NEXT_PUBLIC_APP_URL, the description, and openGraph.images
@@ -89,7 +71,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${frankRuhlLibre.variable} ${sora.variable} h-full antialiased`}
+      className={`${sora.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>

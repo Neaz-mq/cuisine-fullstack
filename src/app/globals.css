@@ -8,8 +8,12 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* One font everywhere: Sora (see layout.tsx). Tailwind's font-sans,
+     font-serif and font-mono all point at it, so no class can quietly
+     bring back a different typeface. */
+  --font-sans: var(--font-sora), sans-serif;
+  --font-serif: var(--font-sora), sans-serif;
+  --font-mono: var(--font-sora), sans-serif;
 
   /* ⚠️ আগে এখানে `--breakpoint-sm: 320px;` ছিল — এটাই ছিল ৩২০px-এ
      "Top Selling Items" কার্ড ভাঙার আসল কারণ।
@@ -48,14 +52,14 @@
   writing-mode: vertical-lr;
 }
 
-/* Frank Ruhl Libre utility — apply to the "Cuisine" logo wordmark and any
-   other serif headings that should match the Figma type spec, instead of
-   Tailwind's generic `font-serif` (which falls back to the browser's
-   default serif, not this specific typeface). Sourced from the
-   --font-frank-ruhl CSS variable set by next/font/google in layout.tsx
-   (self-hosted, no external request) — not a plain-string font-family. */
+/* Headings class — was Frank Ruhl Libre (serif). The owner asked for
+   Sora across the whole site, so this now renders Sora too.
+
+   ⚠️ The class name is kept on purpose: it's used in 100+ components
+   (logo, page titles, cards, modals). Renaming it everywhere would be a
+   huge change for no visual difference. Read it as "heading font". */
 .font-frank-ruhl {
-  font-family: var(--font-frank-ruhl), serif;
+  font-family: var(--font-sora), sans-serif;
 }
 
 /* Sora — hero subtext under the "Great Food, Delivered With Care"
@@ -68,7 +72,8 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-poppins), sans-serif;
+  /* Was Poppins — everything without its own font class now uses Sora. */
+  font-family: var(--font-sora), sans-serif;
 }
 
 /* ---------------------------------------------------------------------
@@ -91,7 +96,7 @@ body {
 }
 
 .cuisine-toast {
-  font-family: var(--font-poppins), sans-serif !important;
+  font-family: var(--font-sora), sans-serif !important;
   font-size: 0.9rem;
   align-items: center;
   backdrop-filter: blur(6px);
