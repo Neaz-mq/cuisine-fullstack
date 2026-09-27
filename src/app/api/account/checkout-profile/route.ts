@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildCheckoutProfile } from "@/lib/checkout-profile";
+import { ADDRESS_SELECT } from "@/lib/validations/account";
 
 /**
  * GET /api/account/checkout-profile
@@ -23,7 +24,7 @@ export async function GET() {
     }
     const userId = session.user.id;
 
-    const [user, lastOrder] = await Promise.all([
+    const [user, lastOrder, addresses] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { name: true, email: true, phone: true },
@@ -43,12 +44,17 @@ export async function GET() {
           zip: true,
         },
       }),
+      prisma.customerAddress.findMany({
+        where: { userId },
+        orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+        select: ADDRESS_SELECT,
+      }),
     ]);
     if (!user) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    return NextResponse.json(buildCheckoutProfile(user, lastOrder), {
+    return NextResponse.json(buildCheckoutProfile(user, lastOrder, addresses), {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

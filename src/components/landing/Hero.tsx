@@ -388,8 +388,11 @@ export default function Hero({
             variants={riseUp}
             className="mt-2 flex flex-wrap items-center justify-center gap-3"
           >
+            {/* ⚠️ /reservation, not /dine-in — /dine-in is the table QR-code
+                ordering page and only works with a scanned table code
+                (?table=…); opened directly it says "This QR code isn't valid". */}
             <Link
-              href="/dine-in"
+              href="/reservation"
               className="flex h-[50px] items-center justify-center gap-1.5 rounded-[90px] border border-black px-6 font-sora text-[14px] font-semibold leading-[1.6] text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] xl:h-14 xl:text-[16px]"
             >
               Book a Table

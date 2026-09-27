@@ -6,7 +6,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { FaShoppingCart } from "react-icons/fa";
-import { ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ClipboardList,
+  Gift,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Star,
+  UserRound,
+} from "lucide-react";
 import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
 import { useCart } from "@/context/CartContext";
 
@@ -41,9 +51,9 @@ import { useCart } from "@/context/CartContext";
  * Up pills, so the avatar+dropdown you get elsewhere (AccountMenu.tsx,
  * wired into the now-unused TopBar.tsx) never had anywhere to show up
  * here. useSession() is added below so this navbar actually reacts to
- * being logged in. The dropdown is intentionally short — just the
- * staff/admin destination and Logout — per the simplified reference
- * design, instead of AccountMenu's fuller My Orders / Loyalty list.
+ * being logged in. Customers see the customer panel pages (My Account,
+ * Orders, Rewards, Reservations, Profile) and Logout; staff see only
+ * their dashboard link and Logout.
  *
  * ⚠️ Logo: uses /logo.svg from your public folder directly instead of a
  * hand-drawn shape, since that file already contains the gradient bell
@@ -62,6 +72,19 @@ import { useCart } from "@/context/CartContext";
  * বিভ্রান্তিকর। পাতাটা বানানো না হলে বরং এই সারিটা তালিকা থেকে
  * মুছে ফেলাই ভালো।
  */
+/**
+ * The customer panel, one tap from the avatar — same list as the panel's
+ * own menu (components/account/AccountNav.tsx).
+ */
+const accountLinks = [
+  { label: "My Orders", href: "/account", icon: ClipboardList },
+  { label: "Profile Details", href: "/account/profile", icon: UserRound },
+  { label: "Loyalty", href: "/account/loyalty", icon: Gift },
+  { label: "My Reviews", href: "/account/reviews", icon: Star },
+  { label: "Reservations", href: "/my-reservations", icon: CalendarDays },
+  { label: "Saved Addresses", href: "/account/addresses", icon: MapPin },
+];
+
 const navLinks = [
   { label: "Home", href: "/" },
   { label: "Menu", href: "/menu" },
@@ -117,9 +140,12 @@ export default function Navbar() {
     <header className="w-full bg-[#F9F6F3]">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col items-start gap-[30px] px-4 pt-5 md:px-10 xl:px-0">
         {/* Row: logo + nav links + auth/cart buttons */}
-        <div className="flex w-full items-center justify-between gap-6">
+        {/* ⚠️ Smaller gaps and wordmark below 390px: when signed in, the
+            logo + avatar + cart were wider than a 320px phone and the page
+            scrolled sideways. From 390px up it's the Figma size. */}
+        <div className="flex w-full items-center justify-between gap-3 min-[390px]:gap-6">
           {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center gap-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2 min-[390px]:gap-3">
             <Image
               src="/logo.svg"
               alt="Cuisine logo"
@@ -128,7 +154,7 @@ export default function Navbar() {
               className="h-10 w-10"
               priority
             />
-            <span className="font-frank-ruhl text-[28px] font-bold leading-[1.26] tracking-[-0.01em] text-black">
+            <span className="font-frank-ruhl text-[22px] font-bold leading-[1.26] tracking-[-0.01em] text-black min-[390px]:text-[28px]">
               Cuisine
             </span>
           </Link>
@@ -180,7 +206,10 @@ export default function Navbar() {
                       {displayName.charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <span className="hidden max-w-[120px] truncate font-sora text-[15px] font-semibold text-black sm:inline">
+                  {/* ⚠️ min-[640px], not `sm:` — this project's sm is 320px, so
+                      `sm:inline` showed the name on phones and pushed the
+                      navbar wider than the screen (sideways scrolling). */}
+                  <span className="hidden max-w-[120px] truncate font-sora text-[15px] font-semibold text-black min-[640px]:inline">
                     {displayName}
                   </span>
                   <ChevronDown
@@ -193,11 +222,31 @@ export default function Navbar() {
                 {menuOpen && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-50 mt-2 w-[220px] rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+                    className="absolute right-0 top-full z-50 mt-2 w-[240px] rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
                   >
                     <div className="truncate px-3.5 pb-2 pt-1 font-sora text-[13px] text-black/50">
                       {session.user?.email}
                     </div>
+
+                    {/* ⚠️ Staff accounts are for work: only their dashboard
+                        and Logout. The customer pages (orders, rewards,
+                        addresses) are for customers — staff who want to
+                        order use a personal customer account, which keeps
+                        sales, points and the customer list clean. */}
+                    {!showAdminLink && accountLinks.map(({ label, href, icon: Icon }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        role="menuitem"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-[14px] px-3.5 py-2.5 font-sora text-[14px] text-black transition-colors hover:bg-black/[0.05]"
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {label}
+                      </Link>
+                    ))}
+
+                    {!showAdminLink && <span className="mx-3.5 my-1 block h-px bg-black/5" aria-hidden="true" />}
 
                     {showAdminLink && (
                       <Link

@@ -1,236 +1,227 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Award, Check } from "lucide-react";
+import { Award, Check, Gift, TrendingUp } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Container from "@/components/Container";
 import { formatOrderId } from "@/lib/format-order-id";
 import { formatSpend, getTierProgress, tierPerks } from "@/lib/loyalty-tiers";
 import { earnRuleSentence, getActiveEarnRule, getLoyaltyTiers } from "@/lib/loyalty-config";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { POINTS_TO_DOLLAR_RATE, MIN_REDEEMABLE_POINTS } from "@/lib/loyalty-redemption";
+import { CARD, CARD_SUBTITLE, CARD_TITLE, PRIMARY_BUTTON } from "@/components/account/ui";
+
+export const metadata: Metadata = { title: "Loyalty" };
 
 /**
- * src/app/(main)/account/loyalty/page.tsx
+ * src/app/(main)/account/loyalty/page.tsx — customer panel → Loyalty.
  *
- * Customer-facing loyalty page: current tier + progress bar toward the
- * next one, that tier's perks, a ladder of every tier for context, and
- * a recent ledger of point-earning/adjustment activity.
+ * Figma look: white cards on the cream page, cream boxes inside.
  *
- * Server Component, same pattern as account/orders/page.tsx — direct
- * Prisma reads, defensive redirect (middleware.ts already blocks
- * unauthenticated /account/* access, this just covers the edge case of
- * a token expiring mid-session).
+ * Current level and points, how far the next level is, what this level
+ * gives, how points turn into money off, every level for context, and the
+ * points history. Same rules as before — only the look moved into the
+ * customer panel.
  */
 export default async function LoyaltyPage() {
   const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  if (!session?.user?.id) redirect("/login?callbackUrl=/account/loyalty");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { loyaltyPoints: true },
-  });
-
-  // User row missing (deleted account edge case) — treat as 0 rather than
-  // crashing the page.
-  const [tiers, earnRule, settings] = await Promise.all([
+  const [user, tiers, earnRule, settings, transactions] = await Promise.all([
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { loyaltyPoints: true } }),
     getLoyaltyTiers(),
     getActiveEarnRule(),
     getRestaurantSettings(),
+    prisma.loyaltyTransaction.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, points: true, reason: true, note: true, createdAt: true, orderId: true },
+    }),
   ]);
+
   const points = user?.loyaltyPoints ?? 0;
   const progress = getTierProgress(points, tiers);
   const earnText = earnRule ? earnRuleSentence(earnRule, settings.currency) : null;
   const perks = tierPerks(progress.tier, earnText);
-  // "20 points = $1" — worked out from the real rate, not typed in.
   const pointsPerUnit = Math.round(1 / POINTS_TO_DOLLAR_RATE);
+  const worth = formatSpend(points * POINTS_TO_DOLLAR_RATE, settings.currency);
 
-  const transactions = await prisma.loyaltyTransaction.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      points: true,
-      reason: true,
-      note: true,
-      createdAt: true,
-      orderId: true,
-    },
+  const dateFmt = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: settings.timezone,
   });
 
   return (
-    <Container>
-      <div className="bg-white min-h-screen px-4 py-8 md:px-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 mb-2">Loyalty Rewards</h1>
-        <p className="text-sm text-gray-500 mb-8">
-          Earn points on every order and unlock better perks as you go.
-        </p>
-
-        {/* Current standing */}
-        <div className="border border-gray-200 rounded-lg p-6 mb-8 bg-gradient-to-br from-white to-gray-50">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#2C6252] flex items-center justify-center flex-shrink-0">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <span
-                  className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${progress.tier.badgeClassName}`}
-                >
-                  {progress.tier.label} Tier
-                </span>
-                <p className="text-xs text-gray-400 mt-1">Your current status</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-[#FF4C15]">{points}</p>
-              <p className="text-xs text-gray-400">points balance</p>
+    <>
+      {/* Standing */}
+      <section aria-labelledby="loyalty-title" className={`${CARD} flex flex-col gap-6`}>
+        <div>
+          <h2 id="loyalty-title" className={CARD_TITLE}>
+            Loyalty
+          </h2>
+          <p className={CARD_SUBTITLE}>Earn points on every order and unlock better perks as you go.</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)]">
+              <Award className="h-6 w-6 text-white" strokeWidth={1.8} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <span className={`inline-block rounded-full px-3 py-1 font-sora text-[11px] font-semibold ${progress.tier.badgeClassName}`}>
+                {progress.tier.label}
+              </span>
+              <p className="mt-1 font-sora text-[12px] text-black/55">Your current level</p>
             </div>
           </div>
-
-          {progress.nextTier ? (
-            <div>
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                <span>{progress.tier.label}</span>
-                <span>
-                  {progress.pointsToNextTier} points to {progress.nextTier.label}
-                </span>
-                <span>{progress.nextTier.label}</span>
-              </div>
-              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#FF4C15] rounded-full transition-all"
-                  style={{ width: `${progress.progressPercent}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-[#2C6252] font-medium">
-              🎉 You&apos;ve reached our highest tier — thank you for being a loyal customer!
-            </p>
-          )}
+          <div className="text-right">
+            <p className="font-frank-ruhl text-[32px] font-semibold leading-none text-black md:text-[36px]">{points.toLocaleString("en-US")}</p>
+            <p className="mt-1.5 font-sora text-[13px] text-black/70">points · worth about {worth}</p>
+          </div>
         </div>
 
-        {/* Current tier's perks */}
-        <div className="mb-10">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">
+        {progress.nextTier ? (
+          <div>
+            <div
+              className="h-[26px] w-full overflow-hidden rounded-full bg-[repeating-linear-gradient(115deg,#F9F6F3_0px,#F9F6F3_10px,#FFFFFF_10px,#FFFFFF_12px)]"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress.progressPercent)}
+              aria-label={`Progress to ${progress.nextTier.label}`}
+            >
+              <div
+                className="h-full rounded-full bg-[#FF9540]"
+                style={{ width: `${Math.max(progress.progressPercent, 4)}%` }}
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap justify-between gap-2 font-sora text-[13px] text-black/70 md:text-[14px]">
+              <span>{progress.tier.label}</span>
+              <span className="font-semibold text-black">
+                {progress.pointsToNextTier.toLocaleString("en-US")} points to {progress.nextTier.label}
+              </span>
+              <span>{progress.nextTier.label}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="font-sora text-[13px] font-semibold text-black">
+            🎉 You&apos;ve reached our highest level — thank you for being a loyal customer!
+          </p>
+        )}
+      </section>
+
+      <div className="grid gap-6 md:gap-8 2xl:grid-cols-2">
+        {/* Perks */}
+        <section aria-labelledby="perks" className={CARD}>
+          <h2 id="perks" className={CARD_TITLE}>
             Your {progress.tier.label} perks
           </h2>
-          <ul className="grid sm:grid-cols-2 gap-2">
+          <ul className="mt-4 flex flex-col gap-2">
             {perks.map((perk) => (
-              <li
-                key={perk}
-                className="flex items-start gap-2 text-sm text-gray-700 border border-gray-100 rounded-md px-3 py-2 bg-gray-50"
-              >
-                <Check className="w-4 h-4 text-[#2C6252] mt-0.5 flex-shrink-0" />
+              <li key={perk} className="flex items-start gap-2.5 rounded-[16px] bg-[#F9F6F3] px-4 py-3.5 font-sora text-[14px] text-black">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0E9F00]" aria-hidden="true" />
                 {perk}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
 
-        {/* Redeeming points for cash off */}
-        <div className="mb-10 border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <h2 className="text-sm font-semibold text-gray-800 mb-1">Redeem points for $ off</h2>
-          <p className="text-sm text-gray-600">
-            {pointsPerUnit} points = {formatSpend(1, settings.currency)} off (from{" "}
-            {MIN_REDEEMABLE_POINTS} points). Redeem any amount at checkout — look for the &quot;Use your
-            points&quot; slider on the cart page. Automatic tier discounts (shown above) and
-            points redemption can both be used on the same order.
-          </p>
-        </div>
-
-        {/* Full tier ladder */}
-        <div className="mb-10">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">All tiers</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {tiers.map((tier) => {
-              const isCurrent = tier.id === progress.tier.id;
-              return (
-                <div
-                  key={tier.id}
-                  className={`border rounded-lg p-4 ${
-                    isCurrent ? "border-[#FF4C15] ring-1 ring-[#FF4C15]/30" : "border-gray-200"
-                  }`}
-                >
-                  <span
-                    className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${tier.badgeClassName}`}
-                  >
-                    {tier.label}
-                  </span>
-                  <p className="text-xs text-gray-500 mb-2">
-                    {tier.minPoints === 0 ? "Starting tier" : `${tier.minPoints}+ points`}
-                  </p>
-                  <p className="text-xs font-medium text-gray-700">
-                    {tier.pointsMultiplier === 1
-                      ? "Base earning rate"
-                      : `${Math.round((tier.pointsMultiplier - 1) * 100)}% bonus points`}
-                  </p>
-                  {tier.discountPercent > 0 && (
-                    <p className="text-xs text-gray-600 mt-1">{tier.discountPercent}% off every order</p>
-                  )}
-                  {isCurrent && (
-                    <p className="text-[11px] font-semibold text-[#FF4C15] mt-2">You are here</p>
-                  )}
-                </div>
-              );
-            })}
+        {/* How to use points */}
+        <section aria-labelledby="redeem" className={`${CARD} flex flex-col gap-4`}>
+          <div>
+            <h2 id="redeem" className={CARD_TITLE}>
+              Use your points
+            </h2>
+            <p className={CARD_SUBTITLE}>Turn points into money off any order.</p>
           </div>
-        </div>
-
-        {/* Recent activity */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">Recent activity</h2>
-          {transactions.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-gray-300 rounded-md">
-              <p className="text-gray-500 mb-4">No points activity yet.</p>
-              <Link
-                href="/order"
-                className="inline-block bg-[#FF4C15] text-white font-semibold px-5 py-2 rounded-sm hover:bg-orange-600 transition-colors"
-              >
-                Browse the menu
-              </Link>
-            </div>
-          ) : (
-            <div className="border border-gray-200 rounded-md divide-y divide-gray-100">
-              {transactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm text-gray-800">
-                      {tx.reason === "ORDER_DELIVERED"
-                        ? "Points earned"
-                        : tx.note || "Manual adjustment"}
-                      {tx.orderId && (
-                        <span className="text-xs text-gray-400 ml-2">
-                          {formatOrderId(tx.orderId)}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {tx.createdAt.toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold ${
-                      tx.points >= 0 ? "text-[#2C6252]" : "text-red-600"
-                    }`}
-                  >
-                    {tx.points >= 0 ? "+" : ""}
-                    {tx.points} pts
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          <ul className="flex flex-col gap-2">
+            <li className="flex items-start gap-3 rounded-[16px] bg-[#F9F6F3] px-4 py-3.5">
+              <Gift className="mt-0.5 h-4 w-4 shrink-0 text-[#FF7100]" aria-hidden="true" />
+              <span className="font-sora text-[14px] text-black">
+                <strong className="font-semibold">{pointsPerUnit} points = {formatSpend(1, settings.currency)} off</strong>, from{" "}
+                {MIN_REDEEMABLE_POINTS} points. Use the points slider on the cart page.
+              </span>
+            </li>
+            {earnText && (
+              <li className="flex items-start gap-3 rounded-[16px] bg-[#F9F6F3] px-4 py-3.5">
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#FF7100]" aria-hidden="true" />
+                <span className="font-sora text-[14px] text-black">
+                  {earnText}. Points arrive when your order is delivered.
+                </span>
+              </li>
+            )}
+          </ul>
+          <Link href="/menu" className={`${PRIMARY_BUTTON} self-start`}>
+            Order &amp; earn
+          </Link>
+        </section>
       </div>
-    </Container>
+
+      {/* Levels */}
+      <section aria-labelledby="levels" className={CARD}>
+        <h2 id="levels" className={CARD_TITLE}>
+          All levels
+        </h2>
+        <ul className="mt-4 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 2xl:grid-cols-4">
+          {tiers.map((tier) => {
+            const isCurrent = tier.id === progress.tier.id;
+            return (
+              <li
+                key={tier.id}
+                className={`flex flex-col gap-2 rounded-[16px] bg-[#F9F6F3] p-4 ${isCurrent ? "ring-2 ring-[#FF9540]" : ""}`}
+              >
+                <span className={`self-start rounded-full px-2.5 py-0.5 font-sora text-[11px] font-semibold ${tier.badgeClassName}`}>
+                  {tier.label}
+                </span>
+                <p className="font-sora text-[12px] text-black/55">
+                  {tier.minPoints === 0 ? "Starting level" : `${tier.minPoints.toLocaleString("en-US")}+ points`}
+                </p>
+                <p className="font-sora text-[12px] text-black">
+                  {tier.pointsMultiplier === 1
+                    ? "Standard points"
+                    : `${Math.round((tier.pointsMultiplier - 1) * 100)}% bonus points`}
+                </p>
+                {tier.discountPercent > 0 && (
+                  <p className="font-sora text-[12px] text-black">{tier.discountPercent}% off every order</p>
+                )}
+                {isCurrent && <p className="font-sora text-[11px] font-semibold text-[#FF7100]">You are here</p>}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {/* History */}
+      <section aria-labelledby="history" className={CARD}>
+        <h2 id="history" className={CARD_TITLE}>
+          Points history
+        </h2>
+        {transactions.length === 0 ? (
+          <p className="mt-3 font-sora text-[14px] text-black/70">
+            No points yet — they&apos;ll appear here after your first delivered order.
+          </p>
+        ) : (
+          <ul className="mt-5 divide-y divide-black/5 rounded-[20px] bg-[#F9F6F3]">
+            {transactions.map((tx) => (
+              <li key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-sora text-[14px] text-black">
+                    {tx.reason === "ORDER_DELIVERED" ? "Points earned" : tx.note || "Points adjusted"}
+                    {tx.orderId && <span className="ml-2 text-[11px] text-black/45">{formatOrderId(tx.orderId)}</span>}
+                  </p>
+                  <p className="font-sora text-[11px] text-black/45">{dateFmt.format(tx.createdAt)}</p>
+                </div>
+                <span className={`shrink-0 font-sora text-[13px] font-semibold ${tx.points >= 0 ? "text-[#0E9F00]" : "text-[#D72A37]"}`}>
+                  {tx.points >= 0 ? "+" : ""}
+                  {tx.points.toLocaleString("en-US")} pts
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import { useTableOrder } from "@/context/TableOrderContext";
 import { Trash2, Truck } from "lucide-react";
@@ -14,6 +15,7 @@ import CountryCodeSelect, {
   type Country,
 } from "@/components/CountryCodeSelect";
 import type { CheckoutProfile } from "@/lib/checkout-profile";
+import type { SavedAddress } from "@/lib/validations/account";
 import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
 import { formatMinutes } from "@/lib/kitchen-eta";
@@ -393,8 +395,12 @@ const Carts = ({
   /** Whose saved details are on screen — null when none are. */
   const [formOwner, setFormOwner] = useState<string | null>(null);
 
+  /** Address book (customer panel → Profile) — shown as one-tap chips. */
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+
   if (pendingProfile) {
     setPendingProfile(null);
+    setSavedAddresses(pendingProfile.addresses ?? []);
     const merged = mergeProfile(formData, pendingProfile);
     if (merged.changed) {
       setFormData(merged.form);
@@ -412,7 +418,34 @@ const Carts = ({
     setAutofilled(false);
     setFormData(EMPTY_FORM);
     setPhoneCountry(DEFAULT_COUNTRY);
+    setSavedAddresses([]);
   }
+
+  /**
+   * Tap a saved address → it replaces the whole address block (never a
+   * mix of two addresses). The chip that matches what's in the form is
+   * shown as selected — worked out from the form, so typing changes
+   * un-select it naturally.
+   */
+  const pickSavedAddress = (saved: SavedAddress) => {
+    setFormData((prev) => ({
+      ...prev,
+      address: saved.address,
+      apartment: saved.apartment ?? "",
+      city: saved.city,
+      state: saved.state,
+      zip: saved.zip,
+    }));
+    setErrors((prev) => ({ ...prev, address: undefined, city: undefined, state: undefined, zip: undefined }));
+  };
+  const selectedAddressId =
+    savedAddresses.find(
+      (a) =>
+        a.address === formData.address &&
+        a.city === formData.city &&
+        a.state === formData.state &&
+        a.zip === formData.zip
+    )?.id ?? null;
 
   const hasCartItems = cartItems.length > 0;
   useEffect(() => {
@@ -991,7 +1024,7 @@ const Carts = ({
         }
 
         clearCart();
-        window.location.href = data.url; // full navigation — Stripe's page is a different origin
+        window.location.assign(data.url); // full navigation — Stripe's page is a different origin
         return;
       }
 
@@ -1752,6 +1785,50 @@ const Carts = ({
                       <p className="mt-1.5 font-sora text-[11px] text-[#D72A37]">{errors.email}</p>
                     )}
                   </div>
+
+                  {savedAddresses.length > 0 && (
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <span className="font-sora text-[12px] font-medium leading-none text-black">
+                          Deliver to a saved address
+                        </span>
+                        <Link
+                          href="/account/addresses"
+                          className="shrink-0 font-sora text-[11px] font-semibold text-black/60 underline-offset-2 hover:text-black hover:underline"
+                        >
+                          Manage
+                        </Link>
+                      </div>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Saved addresses">
+                        {savedAddresses.map((saved) => {
+                          const selected = saved.id === selectedAddressId;
+                          return (
+                            <button
+                              key={saved.id}
+                              type="button"
+                              onClick={() => pickSavedAddress(saved)}
+                              aria-pressed={selected}
+                              className={`flex min-w-0 max-w-full flex-col items-start rounded-[12px] border px-3 py-2 text-left transition-colors focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
+                                selected
+                                  ? "border-[#FF9540] bg-[#FFF1E5]"
+                                  : "border-transparent bg-white hover:border-black/15"
+                              }`}
+                            >
+                              <span className="font-sora text-[12px] font-semibold leading-tight text-black">
+                                {saved.label}
+                                {saved.isDefault && (
+                                  <span className="ml-1.5 font-normal text-black/45">· Default</span>
+                                )}
+                              </span>
+                              <span className="mt-0.5 max-w-[220px] truncate font-sora text-[11px] leading-tight text-black/55">
+                                {saved.address}, {saved.city}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label htmlFor="checkout-address" className={FIELD_LABEL}>

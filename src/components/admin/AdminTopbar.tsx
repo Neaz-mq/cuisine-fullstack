@@ -678,11 +678,10 @@ export default function AdminTopbar({
               </div>
 
               {/* Profile — Figma-র প্রথম item, cream pill দিয়ে হাইলাইট করা।
-                  ⚠️ href নিয়ে নিশ্চিত নই: app-এ আলাদা কোনো profile page
-                  নেই, /account/orders আর /account/loyalty আছে। আপাতত
-                  orders-এ পাঠানো হচ্ছে — আসল profile page হলে বদলে নিও। */}
+                  Staff-এর নিজের profile পাতা (/admin/profile): নাম, role,
+                  password। আগে এটা customer-দের /account/orders-এ যেত। */}
               <Link
-                href="/account/orders"
+                href="/admin/profile"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
                 className="flex items-center gap-3 px-3.5 py-3 rounded-[16px] bg-[#F9F6F3] font-sora text-[15px] text-black hover:bg-black/[0.06] transition-colors"

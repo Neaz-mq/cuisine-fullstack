@@ -161,7 +161,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: "Home", path: "/" },
   { name: "Menu", path: "/menu" },
   { name: "Our Chefs", path: "/chefs" },
-  { name: "Reservation", path: "/dine-in" },
+  // /reservation — /dine-in is QR-code table ordering, not booking.
+  { name: "Reservation", path: "/reservation" },
 ];
 
 /* ── "Our Services" section ───────────────────────────────────────── */
@@ -213,7 +214,8 @@ export const SERVICES: ServiceItem[] = [
     title: "Cozy and Inviting Atmosphere",
     description:
       "We've designed our restaurant to be comfortable, stylish, and welcoming for every guest.",
-    href: "/dine-in",
+    // "Cozy atmosphere" → book a table to enjoy it (/dine-in needs a QR code).
+    href: "/reservation",
   },
   {
     index: "05",

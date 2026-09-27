@@ -53,7 +53,22 @@ export const authConfig: NextAuthConfig = {
      * পড়ে নেয়; এখানকার role শুধু UI-র জন্য (কোন menu দেখাব) আর
      * নিচের middleware-এর মোটা দাগের filter-এর জন্য।
      */
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
+      /**
+       * The customer renamed themselves on /account/profile — the page
+       * calls `update({ name })`, and the navbar shows the new name at
+       * once instead of after the next sign-in.
+       *
+       * ⚠️ Only the display name, and only after the profile API has
+       * already saved it to the database. Nothing on the server reads the
+       * name from the token (orders, reviews, exports all read the DB),
+       * so a hand-crafted update() can't change anything that matters.
+       */
+      if (trigger === "update" && session && typeof (session as { name?: unknown }).name === "string") {
+        const name = ((session as { name: string }).name).trim().slice(0, 80);
+        if (name) token.name = name;
+      }
+
       if (user) {
         token.role = (user as { role?: string }).role;
         token.id = user.id;

@@ -118,6 +118,38 @@ model User {
 
   /// এই গ্রাহকের দেওয়া order-স্তরের রিভিউগুলো।
   orderReviews OrderReview[]
+
+  /// Customer's saved delivery addresses ("Home", "Work"…), managed from
+  /// /account/profile and offered as one-tap choices at checkout.
+  addresses CustomerAddress[]
+}
+
+/// A customer's saved delivery address — the "address book" every
+/// food-delivery app has.
+///
+/// ⚠️ Same fields as the address on Order, on purpose: picking one at
+/// checkout just copies these into the form, and the order keeps its
+/// own copy. Editing or deleting a saved address therefore never
+/// changes where a past order went.
+///
+/// At most one is `isDefault` per customer — the API keeps that true
+/// inside a transaction (lib/validations/account.ts, api/account/addresses).
+model CustomerAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "Home", "Work", "Mom's place" — shown on the checkout chips.
+  label     String
+  address   String
+  apartment String?
+  city      String
+  state     String
+  zip       String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // CUSTOMER is the only non-staff role. Every other value is a "staff role"

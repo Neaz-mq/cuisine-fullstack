@@ -43,10 +43,12 @@ import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
  */
 export default async function TrackOrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { orderId } = await params;
+  const [{ orderId }, query] = await Promise.all([params, searchParams]);
 
   const order = await findOrderForTracking(orderId);
   if (!order) {
@@ -86,6 +88,7 @@ export default async function TrackOrderPage({
           <OrderTrackingTimeline
             initialOrder={await serializeTrackedOrder(order)}
             origin={origin}
+            autoOpenReview={query.review === "1"}
           />
         </div>
       </section>

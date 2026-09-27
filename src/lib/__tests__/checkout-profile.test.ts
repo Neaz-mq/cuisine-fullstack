@@ -26,7 +26,13 @@ describe("splitE164", () => {
 describe("buildCheckoutProfile", () => {
   it("Google account, no orders yet → name + email only", () => {
     const profile = buildCheckoutProfile(user, null);
-    expect(profile).toEqual({ fullName: "Shepon Sardar", email: "shepon@example.com", phone: null, address: null });
+    expect(profile).toEqual({
+      fullName: "Shepon Sardar",
+      email: "shepon@example.com",
+      addresses: [],
+      phone: null,
+      address: null,
+    });
   });
 
   it("uses the last delivery order's phone and address", () => {

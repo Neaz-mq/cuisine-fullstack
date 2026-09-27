@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-/* Figma-তে এই বোতামের গোল ঘরে তীর, কিন্তু লেখাটা "Live Kitchen" —
-   রান্নাঘরে নিয়ে যাওয়ার ইঙ্গিত হিসেবে শেফের টুপিটাই স্পষ্ট। */
-import { ChefHat } from "lucide-react";
+/* Figma: the round white button holds an arrow (vuesax arrow-right). */
+import { ChevronRight } from "lucide-react";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -43,12 +42,21 @@ function Mark({
       {children}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute bottom-0 hidden h-[74px] w-px bg-[#FB7000] md:block ${
-          side === "start" ? "left-0" : "right-0"
+        /* 74px at Figma's 56px text = 1.32em — in `em` so the marker
+           grows and shrinks with the heading at every screen size. */
+        /* Figma: the first marker hangs down from a dot at the top (before
+           "ingredients"); the second rises to a dot at the bottom (after
+           "love"), like a text cursor at each end of the highlight. */
+        className={`pointer-events-none absolute hidden h-[1.32em] w-px bg-[#FB7000] md:block ${
+          side === "start" ? "bottom-0 left-0" : "right-0 top-0"
         }`}
       >
-        {/* Ellipse 13328: 10px গোল বিন্দু, খাড়া দাগের মাথায়। */}
-        <span className="absolute -left-[4.5px] -top-[10px] h-2.5 w-2.5 rounded-full bg-[#FB7000]" />
+        {/* Ellipse 13328: 10px round dot at the marker's outer end. */}
+        <span
+          className={`absolute -left-[4.5px] h-2.5 w-2.5 rounded-full bg-[#FB7000] ${
+            side === "start" ? "-top-[10px]" : "-bottom-[10px]"
+          }`}
+        />
       </span>
     </mark>
   );
@@ -71,7 +79,10 @@ export default function AboutUs() {
 
   return (
     <section className="bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]">
-      <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-10 xl:gap-20">
+      {/* Gaps follow Figma: badge → heading 24px; heading → buttons 36px
+          (Frame 2147236024 gap 36 = 24 + the buttons' mt-3). It used to be
+          80px everywhere, which left big empty bands. */}
+      <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-5 xl:gap-6">
         {/* Level Button: 113×38, padding 10px 16px, gap 6, radius 100,
             BG #F9F6F3, বিন্দু 8px #FF9540, লেখা Sora 400 14px। */}
         <motion.span
@@ -95,10 +106,20 @@ export default function AboutUs() {
         <motion.h2
           {...rise}
           transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
-          className="max-w-[1280px] text-center font-frank-ruhl text-[24px] font-medium leading-[1.5] tracking-[-0.01em] text-black md:text-[32px] lg:text-[44px] xl:text-[56px]"
+          /* Figma: 3 lines at 56px Frank Ruhl Libre 500, line-height 150%.
+             The breaks are FIXED like Figma (<br> from 1024px up), so screen
+             width or zoom can't re-wrap it into 2 or 4 lines. Sizes step
+             down only as far as needed for the longest line to fit:
+               2xl (1440+)  56px → 1248 of 1280 (Figma exact)
+               xl  (1280+)  48px → 1071 of 1120
+               lg  (1024+)  40px →  894 of 944
+             Phones/tablets wrap naturally; `text-balance` keeps it even. */
+          className="max-w-[1280px] text-balance text-center font-frank-ruhl text-[24px] font-medium leading-[1.5] tracking-[-0.01em] text-black md:text-[32px] lg:text-[40px] xl:text-[48px] 2xl:text-[56px]"
         >
-          Great food brings people together. Our chefs craft every dish with fresh{" "}
-          <Mark side="start">ingredients, bold flavors, and</Mark>{" "}
+          Great food brings people together. Our chefs craft
+          <br className="hidden lg:inline" /> every dish with fresh{" "}
+          <Mark side="start">ingredients, bold flavors, and</Mark>
+          <br className="hidden lg:inline" />{" "}
           <Mark side="end">passion to create meals you&apos;ll love</Mark> to share.
         </motion.h2>
 
@@ -106,7 +127,7 @@ export default function AboutUs() {
         <motion.div
           {...rise}
           transition={{ duration: 0.6, ease: EASE, delay: 0.2 }}
-          className="flex flex-wrap items-center justify-center gap-3"
+          className="mt-3 flex flex-wrap items-center justify-center gap-3"
         >
           <Link
             href="/chefs"
@@ -127,8 +148,8 @@ export default function AboutUs() {
           >
             Live Kitchen
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white xl:h-11 xl:w-11">
-              <ChefHat
-                className="h-4 w-4 text-black transition-transform group-hover:scale-110"
+              <ChevronRight
+                className="h-[18px] w-[18px] text-black transition-transform group-hover:translate-x-0.5"
                 strokeWidth={1.5}
                 aria-hidden="true"
               />

@@ -32,8 +32,10 @@ import {
  */
 
 const customerServiceLinks = [
-  { label: "My Account", href: "#" },
-  { label: "Track Your Order", href: "#" },
+  // Customer panel — a signed-out visitor is sent to log in first
+  // (middleware), then lands back here.
+  { label: "My Account", href: "/account" },
+  { label: "Track Your Order", href: "/account" },
   { label: "Return", href: "#" },
   { label: "FAQ", href: "#" },
 ];

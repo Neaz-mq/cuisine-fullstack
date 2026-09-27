@@ -123,8 +123,14 @@ function hasRiderLocation(tracking: TrackedOrder["deliveryTracking"]): LatLng | 
 export default function OrderTrackingTimeline({
   initialOrder,
   origin,
+  autoOpenReview = false,
 }: {
   initialOrder: TrackedOrder;
+  /**
+   * `/track/[id]?review=1` — the customer came from "My Reviews" →
+   * "Write a review", so a delivered order opens straight on the review form.
+   */
+  autoOpenReview?: boolean;
   /** রেস্তোরাঁর স্থানাঙ্ক — poll-এ বদলায় না, তাই আলাদা prop। */
   origin: LatLng;
 }) {
@@ -190,13 +196,15 @@ export default function OrderTrackingTimeline({
     () =>
       initialOrder.status === "DELIVERED" &&
       typeof window !== "undefined" &&
-      !hasSeenCelebration(initialOrder.id)
+      (autoOpenReview || !hasSeenCelebration(initialOrder.id))
   );
 
   // Which screen the pop-up opens on: the automatic one after delivery
   // starts with "Congratulations!", the "Write a Review" button goes
   // straight to the review form.
-  const [celebrationStart, setCelebrationStart] = useState<CelebrationStep>("congrats");
+  const [celebrationStart, setCelebrationStart] = useState<CelebrationStep>(
+    autoOpenReview && initialOrder.status === "DELIVERED" ? "review" : "congrats"
+  );
 
   // One entry per dish — the same dish can sit on two order lines.
   const reviewDishes: ReviewDish[] = [];

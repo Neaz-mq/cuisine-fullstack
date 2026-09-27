@@ -28,7 +28,19 @@ export type OrderAgainItem = {
   isAvailable: boolean;
 };
 
-export default function OrderAgainButton({ items }: { items: OrderAgainItem[] }) {
+export default function OrderAgainButton({
+  items,
+  className = "text-xs font-medium text-[#FF4C15] hover:underline disabled:opacity-50",
+  label = "Order again →",
+  ariaLabel,
+}: {
+  items: OrderAgainItem[];
+  /** The customer panel passes its own pill style; the default is the old text link. */
+  className?: string;
+  label?: React.ReactNode;
+  /** Needed when `label` is only an icon. */
+  ariaLabel?: string;
+}) {
   const router = useRouter();
   const { addToCart } = useCart();
   const [isAdding, setIsAdding] = useState(false);
@@ -72,9 +84,11 @@ export default function OrderAgainButton({ items }: { items: OrderAgainItem[] })
       type="button"
       onClick={handleOrderAgain}
       disabled={isAdding}
-      className="text-xs font-medium text-[#FF4C15] hover:underline disabled:opacity-50"
+      className={className}
+      aria-label={ariaLabel}
+      title={ariaLabel}
     >
-      Order again →
+      {label}
     </button>
   );
 }
