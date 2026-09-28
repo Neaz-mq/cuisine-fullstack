@@ -84,7 +84,7 @@ export default async function MyOrdersPage({
   const now = new Date();
 
   const [user, settings, tiers] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { loyaltyPoints: true, notifyRecommendations: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { loyaltyPoints: true } }),
     getRestaurantSettings(),
     getLoyaltyTiers(),
   ]);
@@ -148,9 +148,7 @@ export default async function MyOrdersPage({
     ]);
 
   // ── Favourites ──────────────────────────────────────────────────────
-  // Hidden when "Product Recommendations" is off (Profile Details).
-  const showFavourites = user?.notifyRecommendations ?? true;
-  const favouriteIds = !showFavourites ? [] : topDishes(
+  const favouriteIds = topDishes(
     orderedLines.map((line) => ({
       menuItemId: line.menuItemId,
       quantity: line.quantity,

@@ -103,8 +103,8 @@ model User {
   /// Emails when an order is on its way, delivered or cancelled. The
   /// order receipt is always sent — it isn't a notification.
   notifyOrderUpdates    Boolean @default(true)
-  /// "Your favourites" on My Orders and the personal picks from
-  /// /api/recommendations. Off = everyone-gets-the-same popular dishes.
+  /// Not used any more — the "Product Recommendations" switch was removed
+  /// (no feature for it to control). Kept so the column isn't dropped.
   notifyRecommendations Boolean @default(true)
 
   orders              Order[]

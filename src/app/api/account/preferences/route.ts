@@ -10,16 +10,15 @@ import { removeCustomerFromAudience, syncCustomerToAudience } from "@/lib/resend
  * PATCH /api/account/preferences — the notification switches on Profile
  * Details (Figma "Preferences"). Send only the switches that changed:
  *
- *   { orderUpdates?, marketingConsent?, recommendations? }
+ *   { orderUpdates?, marketingConsent? }
  *
  *   orderUpdates     — "Order Updates": emails when the order is on its
  *                      way, delivered or cancelled (lib/send-order-status-email.ts).
  *   marketingConsent — "Promotions & Offers": the same opt-in as the
  *                      checkout checkbox. Also added to / removed from the
  *                      Resend marketing list, like before.
- *   recommendations  — "Product Recommendations": personal dish picks.
  *
- * Returns all three, as saved.
+ * Returns both, as saved.
  */
 export async function PATCH(request: Request) {
   const session = await auth();
@@ -52,10 +51,9 @@ export async function PATCH(request: Request) {
       where: { id: session.user.id },
       data: {
         ...(typeof parsed.orderUpdates === "boolean" ? { notifyOrderUpdates: parsed.orderUpdates } : {}),
-        ...(typeof parsed.recommendations === "boolean" ? { notifyRecommendations: parsed.recommendations } : {}),
         ...(consentChanged ? { marketingConsent: parsed.marketingConsent, marketingConsentAt: new Date() } : {}),
       },
-      select: { notifyOrderUpdates: true, marketingConsent: true, notifyRecommendations: true },
+      select: { notifyOrderUpdates: true, marketingConsent: true },
     });
 
     if (consentChanged) {
@@ -74,7 +72,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({
       orderUpdates: saved.notifyOrderUpdates,
       marketingConsent: saved.marketingConsent,
-      recommendations: saved.notifyRecommendations,
     });
   } catch (error) {
     console.error("[account/preferences] update failed:", error);

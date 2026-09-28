@@ -4,14 +4,17 @@ import { useState } from "react";
 import { toast } from "react-toastify";
 
 /**
- * Profile Details → the notification switches (Figma "Preferences" card).
+ * Profile Details → the email switches (Figma "Preferences" card).
  *
- *   Preferences              — turns all three on or off at once
- *   Order Updates            — emails when the order is on its way,
- *                              delivered or cancelled
- *   Promotions & Offers      — deals and coupon emails (the same opt-in as
- *                              the checkout checkbox)
- *   Product Recommendations  — personal dish picks ("Your favourites")
+ *   Order Updates        — emails when the order is on its way, delivered
+ *                          or cancelled (lib/send-order-status-email.ts)
+ *   Promotions & Offers  — deals and coupon emails: the same opt-in as the
+ *                          checkout checkbox, synced to the Resend list that
+ *                          /admin/marketing sends to
+ *
+ * Only switches that really change something are here. Figma's "Product
+ * Recommendations" and the "turn all on/off" switch were taken out: the app
+ * has no personal-suggestion feature for them to control.
  *
  * Each switch saves straight away, like every phone settings screen — no
  * Save button. It flips at once and flips back with a message if saving
@@ -21,15 +24,13 @@ import { toast } from "react-toastify";
 export type PreferenceValues = {
   orderUpdates: boolean;
   marketingConsent: boolean;
-  recommendations: boolean;
 };
 
 type Key = keyof PreferenceValues;
 
 const ROWS: { key: Key; title: string; description: string }[] = [
   { key: "orderUpdates", title: "Order Updates", description: "Email notifications for order status" },
-  { key: "marketingConsent", title: "Promotions & Offers", description: "Weekly deals and discount codes" },
-  { key: "recommendations", title: "Product Recommendations", description: "Personalized dish suggestions" },
+  { key: "marketingConsent", title: "Promotions & Offers", description: "Deals, coupon codes and member offers by email" },
 ];
 
 /** Figma switch: 72×42 pill, 6px padding, 30px white knob. */
@@ -86,8 +87,6 @@ export default function PreferencesCard({ initial }: { initial: PreferenceValues
   const [values, setValues] = useState<PreferenceValues>(initial);
   const [saving, setSaving] = useState(false);
 
-  const allOn = values.orderUpdates && values.marketingConsent && values.recommendations;
-
   const save = async (change: Partial<PreferenceValues>) => {
     const before = values;
     setValues({ ...values, ...change });
@@ -107,7 +106,6 @@ export default function PreferencesCard({ initial }: { initial: PreferenceValues
       setValues({
         orderUpdates: Boolean(data.orderUpdates),
         marketingConsent: Boolean(data.marketingConsent),
-        recommendations: Boolean(data.recommendations),
       });
       toast.success("Preference saved");
     } catch {
@@ -124,14 +122,14 @@ export default function PreferencesCard({ initial }: { initial: PreferenceValues
       aria-label="Notification preferences"
       className="flex scroll-mt-6 flex-col gap-4 rounded-[24px] bg-white p-5 md:rounded-[30px] md:p-[30px]"
     >
-      <Row title="Preferences" description="Manage how we contact you about orders and offers.">
-        <Switch
-          checked={allOn}
-          disabled={saving}
-          label="Turn all notifications on or off"
-          onChange={(next) => save({ orderUpdates: next, marketingConsent: next, recommendations: next })}
-        />
-      </Row>
+      <div className="flex flex-col gap-2 pb-1">
+        <h2 className="font-frank-ruhl text-[22px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[28px]">
+          Preferences
+        </h2>
+        <p className="font-sora text-[13px] leading-[1.4] text-black/70 md:text-[16px]">
+          Manage how we contact you about orders and offers.
+        </p>
+      </div>
       {ROWS.map((row) => (
         <Row key={row.key} title={row.title} description={row.description}>
           <Switch

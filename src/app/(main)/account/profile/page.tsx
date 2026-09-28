@@ -17,8 +17,8 @@ export const metadata: Metadata = { title: "Profile Details" };
  * Figma: two white cards, 60px apart.
  *   1. Profile Details — photo (Change Photo), name, phone, email
  *      (read-only — it's the login), date of birth, gender.
- *   2. Preferences — Order Updates, Promotions & Offers, Product
- *      Recommendations, each saved the moment it's switched.
+ *   2. Preferences — Order Updates and Promotions & Offers, each saved
+ *      the moment it's switched.
  */
 export default async function ProfilePage() {
   const session = await auth();
@@ -38,7 +38,6 @@ export default async function ProfilePage() {
         gender: true,
         marketingConsent: true,
         notifyOrderUpdates: true,
-        notifyRecommendations: true,
       },
     }),
     getRestaurantSettings(),
@@ -79,7 +78,6 @@ export default async function ProfilePage() {
         initial={{
           orderUpdates: user.notifyOrderUpdates,
           marketingConsent: user.marketingConsent,
-          recommendations: user.notifyRecommendations,
         }}
       />
     </>

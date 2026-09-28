@@ -75,7 +75,6 @@ export const preferencesSchema = z
   .object({
     orderUpdates: z.boolean().optional(),
     marketingConsent: z.boolean().optional(),
-    recommendations: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((v) => typeof v === "boolean"), "Nothing to change");
 
