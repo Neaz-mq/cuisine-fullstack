@@ -578,6 +578,12 @@ export function DateField({
   onChange,
   required = false,
   minDate,
+  maxDate,
+  yearPicker = false,
+  showToday = true,
+  clearable = false,
+  placeholder = "MM/DD/YYYY",
+  compact = false,
 }: {
   id: string;
   label: string;
@@ -597,14 +603,40 @@ export function DateField({
    * ওই তারিখের আগের দিনগুলো ধূসর আর click-অযোগ্য হয়।
    */
   minDate?: Date;
+  /** Latest day that can be picked (Date of Birth → today). Later days are grey. */
+  maxDate?: Date;
+  /**
+   * Date of Birth: jumping 30 years back one month at a time is useless,
+   * so the "January 2018" title becomes a button → pick a year (12 at a
+   * time) → pick a month → pick the day. Off by default, so every existing
+   * date box (reservations, offers, staff) is unchanged.
+   */
+  yearPicker?: boolean;
+  /** The "Today" button at the bottom (pointless for a birthday). */
+  showToday?: boolean;
+  /** A "Clear" button, for dates that are optional. */
+  clearable?: boolean;
+  placeholder?: string;
+  /**
+   * The calendar is as wide as its box by default — right in narrow form
+   * columns. In a full-width box (Profile Details) a 750px calendar spreads
+   * the days apart, so `compact` keeps it at 320px under the box's left edge.
+   */
+  compact?: boolean;
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(CALENDAR_HEIGHT);
+  const shell = compact ? MENU_SHELL.replace("left-0 right-0", "left-0 w-[320px] max-w-full") : MENU_SHELL;
 
   const selected = parseISODate(value);
   const today = new Date();
   const minSelectable = minDate
     ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
     : null;
+  const maxSelectable = maxDate
+    ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate())
+    : null;
+  /** days → the normal calendar; years / months → the yearPicker steps. */
+  const [view, setView] = useState<"days" | "months" | "years">("days");
 
   const [viewMonth, setViewMonth] = useState(() => {
     const base = selected ?? today;
@@ -626,8 +658,10 @@ export function DateField({
    */
   const handleToggle = () => {
     if (!open) {
-      const base = parseISODate(value) ?? new Date();
+      const base = parseISODate(value) ?? maxSelectable ?? new Date();
       setViewMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+      // A birthday with nothing chosen yet starts on the years, not on this month.
+      setView(yearPicker && !parseISODate(value) ? "years" : "days");
     }
     toggle();
   };
@@ -640,6 +674,33 @@ export function DateField({
   const leadingBlanks = new Date(year, month, 1).getDay();
 
   const shiftMonth = (delta: number) => setViewMonth(new Date(year, month + delta, 1));
+  /** Years view: 12 per page, the page holding the shown year. */
+  const yearPageStart = year - (((year % 12) + 12) % 12);
+  const nextDisabled =
+    maxSelectable != null &&
+    (view === "years"
+      ? yearPageStart + 12 > maxSelectable.getFullYear()
+      : view === "months"
+        ? year >= maxSelectable.getFullYear()
+        : year === maxSelectable.getFullYear() && month === maxSelectable.getMonth());
+  const prevDisabled =
+    minSelectable != null &&
+    (view === "years"
+      ? yearPageStart <= minSelectable.getFullYear()
+      : view === "months"
+        ? year <= minSelectable.getFullYear()
+        : year === minSelectable.getFullYear() && month === minSelectable.getMonth());
+  const step = (delta: number) => {
+    if (view === "years") setViewMonth(new Date(year + delta * 12, month, 1));
+    else if (view === "months") setViewMonth(new Date(year + delta, month, 1));
+    else shiftMonth(delta);
+  };
+  const title =
+    view === "years"
+      ? `${yearPageStart} – ${yearPageStart + 11}`
+      : view === "months"
+        ? String(year)
+        : viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   return (
     <div>
@@ -659,7 +720,7 @@ export function DateField({
           className={`${FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
         >
           <span className={`min-w-0 truncate ${selected ? "" : "text-black/70"}`}>
-            {selected ? formatDisplayDate(selected) : "MM/DD/YYYY"}
+            {selected ? formatDisplayDate(selected) : placeholder}
           </span>
           <CalendarIcon
             className="h-3.5 w-3.5 shrink-0 text-black/70"
@@ -675,41 +736,112 @@ export function DateField({
           <div
             role="dialog"
             aria-label={`${label} calendar`}
-            className={`${MENU_SHELL} ${placement.up ? "bottom-full mb-2" : "top-full mt-2"}`}
+            className={`${shell} ${placement.up ? "bottom-full mb-2" : "top-full mt-2"}`}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="font-frank-ruhl text-[15px] font-medium leading-none text-black">
-                {viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-              </p>
+              {yearPicker ? (
+                /* Title as a button: days → years → months → days. */
+                <button
+                  type="button"
+                  onClick={() => setView(view === "days" ? "years" : "days")}
+                  aria-label={view === "days" ? "Choose a year" : "Back to days"}
+                  className="-ml-2 flex items-center gap-1 rounded-full px-2 py-1 font-frank-ruhl text-[15px] font-medium leading-none text-black transition-colors hover:bg-black/[0.04]"
+                >
+                  {title}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-black/70 transition-transform ${view === "days" ? "" : "rotate-180"}`}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+              ) : (
+                <p className="font-frank-ruhl text-[15px] font-medium leading-none text-black">{title}</p>
+              )}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => shiftMonth(-1)}
+                  onClick={() => step(-1)}
                   disabled={
                     /* ⚠️ minSelectable-এর মাসেই আটকে থাকলে "আগের মাসে"
                        যাওয়ার কোনো মানে নেই — সেখানে একটাও ক্লিক-করার
                        মতো দিন থাকবে না। শুধু এই একটা মাস আটকানো, পুরো
                        বোতামটা চিরকাল বন্ধ করে দেওয়া নয়। */
-                    minSelectable != null &&
-                    year === minSelectable.getFullYear() &&
-                    month === minSelectable.getMonth()
+                    prevDisabled
                   }
-                  aria-label="Previous month"
+                  aria-label={view === "years" ? "Earlier years" : view === "months" ? "Previous year" : "Previous month"}
                   className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F9F6F3] text-black transition-colors hover:bg-black/[0.08] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#F9F6F3]"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => shiftMonth(1)}
-                  aria-label="Next month"
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F9F6F3] text-black transition-colors hover:bg-black/[0.08]"
+                  onClick={() => step(1)}
+                  disabled={nextDisabled}
+                  aria-label={view === "years" ? "Later years" : view === "months" ? "Next year" : "Next month"}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F9F6F3] text-black transition-colors hover:bg-black/[0.08] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#F9F6F3]"
                 >
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </div>
             </div>
 
+            {view === "years" && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {Array.from({ length: 12 }, (_, index) => {
+                  const y = yearPageStart + index;
+                  const off =
+                    (maxSelectable != null && y > maxSelectable.getFullYear()) ||
+                    (minSelectable != null && y < minSelectable.getFullYear());
+                  const isSelectedYear = selected?.getFullYear() === y;
+                  return (
+                    <button
+                      key={y}
+                      type="button"
+                      disabled={off}
+                      onClick={() => {
+                        setViewMonth(new Date(y, month, 1));
+                        setView("months");
+                      }}
+                      className={`h-10 rounded-full font-sora text-[13px] leading-none transition-colors disabled:cursor-not-allowed disabled:text-black/25 ${
+                        isSelectedYear ? "bg-black text-white" : "text-[#121212] hover:bg-black/[0.04]"
+                      }`}
+                    >
+                      {y}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {view === "months" && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {Array.from({ length: 12 }, (_, m) => {
+                  const off =
+                    (maxSelectable != null && new Date(year, m, 1) > maxSelectable) ||
+                    (minSelectable != null && new Date(year, m + 1, 0) < minSelectable);
+                  const isSelectedMonth = selected?.getFullYear() === year && selected.getMonth() === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={off}
+                      onClick={() => {
+                        setViewMonth(new Date(year, m, 1));
+                        setView("days");
+                      }}
+                      className={`h-10 rounded-full font-sora text-[13px] leading-none transition-colors disabled:cursor-not-allowed disabled:text-black/25 ${
+                        isSelectedMonth ? "bg-black text-white" : "text-[#121212] hover:bg-black/[0.04]"
+                      }`}
+                    >
+                      {new Date(2000, m, 1).toLocaleDateString("en-US", { month: "short" })}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {view === "days" && (
+            <>
             <div className="mb-1 grid grid-cols-7">
               {WEEKDAY_LABELS.map((weekday) => (
                 <span
@@ -733,7 +865,9 @@ export function DateField({
                 const date = new Date(year, month, day);
                 const isSelected = selected ? isSameDay(date, selected) : false;
                 const isToday = isSameDay(date, today);
-                const isDisabled = minSelectable != null && date < minSelectable;
+                const isDisabled =
+                  (minSelectable != null && date < minSelectable) ||
+                  (maxSelectable != null && date > maxSelectable);
 
                 return (
                   <button
@@ -772,17 +906,38 @@ export function DateField({
               })}
             </div>
 
-            <button
-              type="button"
-              disabled={minSelectable != null && today < minSelectable}
-              onClick={() => {
-                onChange(toISODate(new Date()));
-                setOpen(false);
-              }}
-              className="mt-3 w-full rounded-[12px] py-2 text-center font-sora text-[13px] font-normal leading-none text-black/70 transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-            >
-              Today
-            </button>
+            </>
+            )}
+
+            {(showToday || (clearable && selected)) && (
+              <div className="mt-3 flex gap-1">
+                {clearable && selected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("");
+                      setOpen(false);
+                    }}
+                    className="w-full rounded-[12px] py-2 text-center font-sora text-[13px] font-normal leading-none text-[#D72A37] transition-colors hover:bg-[#FAE7EC]"
+                  >
+                    Clear
+                  </button>
+                )}
+                {showToday && (
+                  <button
+                    type="button"
+                    disabled={(minSelectable != null && today < minSelectable) || (maxSelectable != null && today > maxSelectable)}
+                    onClick={() => {
+                      onChange(toISODate(new Date()));
+                      setOpen(false);
+                    }}
+                    className="w-full rounded-[12px] py-2 text-center font-sora text-[13px] font-normal leading-none text-black/70 transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    Today
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

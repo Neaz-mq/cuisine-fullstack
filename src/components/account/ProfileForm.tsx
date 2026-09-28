@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { CalendarDays, Loader2, Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { toast } from "react-toastify";
 import CountryCodeSelect, { COUNTRIES, DEFAULT_COUNTRY, type Country } from "@/components/CountryCodeSelect";
-import { SelectField } from "@/components/admin/modal-ui";
+import { DateField, SelectField } from "@/components/admin/modal-ui";
 import { examplePhone, isValidPhone, toE164 } from "@/lib/phone";
 import { GENDER_OPTIONS } from "@/lib/validations/account";
 import AvatarUploadDialog from "./AvatarUploadDialog";
@@ -55,6 +55,9 @@ type Initial = {
 };
 
 export default function ProfileForm({ initial, today }: { initial: Initial; today: string }) {
+  // "YYYY-MM-DD" (restaurant's today) → a local Date for the calendar's last day.
+  const [ty, tm, td] = today.split("-").map(Number);
+  const todayDate = new Date(ty, tm - 1, td);
   const router = useRouter();
   const { update } = useSession();
 
@@ -245,33 +248,26 @@ export default function ProfileForm({ initial, today }: { initial: Initial; toda
                 </p>
               </div>
 
-              {/* Date of Birth */}
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <label htmlFor="profile-dob" className={LABEL}>
-                  Date of Birth
-                </label>
-                <div className="relative">
-                  <input
-                    id="profile-dob"
-                    type="date"
-                    min="1900-01-01"
-                    max={today}
-                    value={dateOfBirth}
-                    onChange={(e) => {
-                      setDateOfBirth(e.target.value);
-                      setErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
-                    }}
-                    className={`${INPUT} pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-2 [&::-webkit-calendar-picker-indicator]:h-6 [&::-webkit-calendar-picker-indicator]:w-6 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 ${
-                      dateOfBirth ? "" : "text-black/70"
-                    }`}
-                    aria-invalid={Boolean(errors.dateOfBirth)}
-                  />
-                  <CalendarDays
-                    className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black"
-                    strokeWidth={1.6}
-                    aria-hidden="true"
-                  />
-                </div>
+              {/* Date of Birth — the site's own calendar (same as reservations
+                  and the admin forms). Title → year → month → day, so a
+                  birthday 30 years back is three taps, not 360. */}
+              <div className="min-w-0">
+                <DateField
+                  id="profile-dob"
+                  label="Date of Birth"
+                  value={dateOfBirth}
+                  onChange={(value) => {
+                    setDateOfBirth(value);
+                    setErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
+                  }}
+                  minDate={new Date(1900, 0, 1)}
+                  maxDate={todayDate}
+                  yearPicker
+                  showToday={false}
+                  clearable
+                  compact
+                  placeholder="mm/dd/yyyy"
+                />
                 {errors.dateOfBirth && <p className={ERROR}>{errors.dateOfBirth}</p>}
               </div>
 
