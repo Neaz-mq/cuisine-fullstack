@@ -50,6 +50,14 @@ model User {
   /// (auth.ts-এর signIn callback)।
   image     String?
   password  String?
+  /// When the password was last set or changed (customer panel → Change
+  /// Password, or a reset link). Null for older accounts and Google-only
+  /// accounts. Shown as "Last password change".
+  passwordChangedAt DateTime?
+  /// Two-step sign-in: after the right password, a 6-digit code is emailed
+  /// and must be entered too (see LoginCode, auth.ts). Google sign-in isn't
+  /// affected — Google protects that account itself.
+  twoFactorEnabled  Boolean   @default(false)
 
   // E.164 format (+8801785286936) — normalised client-side at signup so the
   // stored value is unambiguous regardless of how the customer typed it.
@@ -82,6 +90,22 @@ model User {
   // adjustment). Denormalized on purpose — displaying points for a user list
   // shouldn't require summing the whole ledger on every page view.
   loyaltyPoints Int @default(0)
+
+  // Customer panel → Profile Details (Figma). Both optional — a customer
+  // never has to fill them in. Date only (no time), so no time-zone drift.
+  dateOfBirth DateTime? @db.Date
+  /// "female" | "male" | "other" — see GENDER_OPTIONS in
+  /// lib/validations/account.ts. Null = "Prefer not to say".
+  gender      String?
+
+  // Customer panel → notification switches (Figma "Preferences").
+  // "Promotions & Offers" is `marketingConsent` above, not a new column.
+  /// Emails when an order is on its way, delivered or cancelled. The
+  /// order receipt is always sent — it isn't a notification.
+  notifyOrderUpdates    Boolean @default(true)
+  /// "Your favourites" on My Orders and the personal picks from
+  /// /api/recommendations. Off = everyone-gets-the-same popular dishes.
+  notifyRecommendations Boolean @default(true)
 
   orders              Order[]
   reservations        Reservation[]
@@ -119,6 +143,9 @@ model User {
   /// এই গ্রাহকের দেওয়া order-স্তরের রিভিউগুলো।
   orderReviews OrderReview[]
 
+  /// Emailed sign-in codes (two-step sign-in).
+  loginCodes LoginCode[]
+
   /// Customer's saved delivery addresses ("Home", "Work"…), managed from
   /// /account/profile and offered as one-tap choices at checkout.
   addresses CustomerAddress[]
@@ -145,6 +172,9 @@ model CustomerAddress {
   city      String
   state     String
   zip       String
+  /// Optional contact number for this address (E.164), e.g. the office
+  /// reception. Filled into checkout when the address is picked.
+  phone     String?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2344,4 +2374,25 @@ model PasswordResetToken {
   // small, but without it that delete degrades into a full table scan
   // exactly when the table has grown enough for it to matter.
   @@index([expiresAt])
+}
+
+/// A 6-digit code emailed for two-step sign-in (User.twoFactorEnabled).
+///
+///   LOGIN      — asked for right after the correct password (auth.ts).
+///   ENABLE_2FA — sent when the customer turns two-step sign-in on, so it
+///                is only switched on once we know the email arrives.
+///
+/// Only a SHA-256 of the code is stored. A code lasts 10 minutes and allows
+/// 5 wrong tries; a new code replaces older ones of the same purpose.
+model LoginCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
 }

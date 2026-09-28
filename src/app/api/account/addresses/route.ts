@@ -56,6 +56,7 @@ export async function POST(request: Request) {
           city: parsed.city,
           state: parsed.state,
           zip: parsed.zip,
+          phone: parsed.phone || null,
           isDefault: makeDefault,
         },
         select: ADDRESS_SELECT,

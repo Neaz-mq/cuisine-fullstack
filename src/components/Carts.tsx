@@ -14,7 +14,7 @@ import CountryCodeSelect, {
   DEFAULT_COUNTRY,
   type Country,
 } from "@/components/CountryCodeSelect";
-import type { CheckoutProfile } from "@/lib/checkout-profile";
+import { splitE164, type CheckoutProfile } from "@/lib/checkout-profile";
 import type { SavedAddress } from "@/lib/validations/account";
 import { examplePhone } from "@/lib/phone";
 import { toast } from "react-toastify";
@@ -428,6 +428,9 @@ const Carts = ({
    * un-select it naturally.
    */
   const pickSavedAddress = (saved: SavedAddress) => {
+    // The address's own contact number (Saved Addresses → phone), if it has one.
+    const savedPhone = saved.phone ? splitE164(saved.phone) : null;
+    const savedCountry = savedPhone ? COUNTRIES.find((c) => c.code === savedPhone.countryCode) : undefined;
     setFormData((prev) => ({
       ...prev,
       address: saved.address,
@@ -435,8 +438,17 @@ const Carts = ({
       city: saved.city,
       state: saved.state,
       zip: saved.zip,
+      ...(savedPhone ? { phoneNumber: savedPhone.number } : {}),
     }));
-    setErrors((prev) => ({ ...prev, address: undefined, city: undefined, state: undefined, zip: undefined }));
+    if (savedCountry) setPhoneCountry(savedCountry);
+    setErrors((prev) => ({
+      ...prev,
+      address: undefined,
+      city: undefined,
+      state: undefined,
+      zip: undefined,
+      ...(savedPhone ? { phoneNumber: undefined } : {}),
+    }));
   };
   const selectedAddressId =
     savedAddresses.find(

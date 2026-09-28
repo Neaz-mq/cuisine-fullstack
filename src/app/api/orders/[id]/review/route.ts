@@ -85,7 +85,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  if (parsed.comment.length === 0 && ratings.size === 0) {
+  const clearComment = parsed.clearComment && parsed.comment.length === 0;
+  if (clearComment && (access !== "owner" || !order.userId)) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  if (parsed.comment.length === 0 && ratings.size === 0 && !clearComment) {
     return NextResponse.json(
       { error: "Please rate a dish or write a few words about your experience" },
       { status: 400 }
@@ -96,6 +101,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const comment = parsed.comment || null;
 
   await prisma.$transaction([
+    // My Reviews → Edit, text removed: drop the written part.
+    ...(clearComment ? [prisma.orderReview.deleteMany({ where: { orderId: order.id } })] : []),
     ...(comment
       ? [
           prisma.orderReview.upsert({

@@ -1,141 +1,193 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MessageSquareText, PenLine, Star, UtensilsCrossed } from "lucide-react";
+import { MessageSquareText, UtensilsCrossed } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatOrderId } from "@/lib/format-order-id";
-import { CARD, CARD_SUBTITLE, CARD_TITLE, PRIMARY_BUTTON, SMALL_PRIMARY } from "@/components/account/ui";
+import { buildReviewEntries, orderTitle, uniqueDishes, type ReviewStatus } from "@/lib/customer-reviews";
+import { ReviewCardActions, WriteReviewButton } from "@/components/account/ReviewButtons";
+import { CARD, CARD_TITLE, PRIMARY_BUTTON } from "@/components/account/ui";
 
 export const metadata: Metadata = { title: "My Reviews" };
 
 /**
  * src/app/(main)/account/reviews/page.tsx — customer panel → My Reviews.
  *
- *   • Waiting for your review — delivered orders not reviewed yet. "Write
- *     a review" opens the order's page straight on the review form
- *     (/track/[id]?review=1), the same form as after delivery.
- *   • Your reviews — what the customer wrote about each order, with the
- *     dishes they rated, and whether it is on the site yet (reviews are
- *     approved by the restaurant first).
+ * Figma, two white cards 60px apart:
+ *   1. Rate Your Recent Orders — delivered orders not reviewed yet, each
+ *      with "Write a Review" (opens the review form right here).
+ *   2. My Reviews — one card per reviewed order: photo, dishes, "Delivered
+ *      … · Order #…", stars, the comment, and Delete / Edit. "View All"
+ *      shows every review (5 at first).
+ *
+ * Reviews are approved by the restaurant before they go public, so a
+ * small line tells the customer when one is still waiting or wasn't
+ * published — otherwise they wonder why it isn't on the site.
  */
 
-const STATUS: Record<string, { label: string; className: string }> = {
-  PENDING: { label: "Under review", className: "bg-[#FFF8E1] text-[#B98900]" },
-  APPROVED: { label: "Published", className: "bg-[#E8FFEC] text-[#0ECF00]" },
+const FIRST_PAGE = 5;
+const RATE_LIMIT = 5;
+
+const STATUS_NOTE: Record<ReviewStatus, { label: string; className: string } | null> = {
+  PENDING: { label: "Waiting for approval", className: "bg-[#FFF8E1] text-[#B98900]" },
   REJECTED: { label: "Not published", className: "bg-[#FAE7EC] text-[#D72A37]" },
+  APPROVED: null,
 };
 
-function Stars({ value, size = "h-4 w-4" }: { value: number; size?: string }) {
+const STAR_PATH =
+  "M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.33l-5.8 3.05 1.1-6.46-4.69-4.58 6.49-.95L12 2.5Z";
+
+/** Figma: five 20px stars, #FF9540, 4px apart. */
+function Stars({ value }: { value: number }) {
   return (
-    <span className="flex items-center gap-0.5" aria-label={`${value} out of 5 stars`}>
+    <span className="flex shrink-0 items-center gap-1" aria-label={`${value} out of 5 stars`} role="img">
       {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          className={`${size} ${n <= value ? "fill-[#FF9540] text-[#FF9540]" : "fill-transparent text-black/20"}`}
-          strokeWidth={1.5}
-          aria-hidden="true"
-        />
+        <svg key={n} viewBox="0 0 24 24" className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true">
+          <path d={STAR_PATH} fill={n <= value ? "#FF9540" : "#FFE3CC"} />
+        </svg>
       ))}
     </span>
   );
 }
 
-export default async function ReviewsPage() {
-  const session = await auth();
+/** Figma: 66px photo, radius 12, cream behind it. */
+function Thumb({ src }: { src: string | null }) {
+  return (
+    <span className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-white md:h-[66px] md:w-[66px]">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element -- menu photo from any allowed host
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <UtensilsCrossed className="h-5 w-5 text-black/30" aria-hidden="true" />
+      )}
+    </span>
+  );
+}
+
+const ROW_TITLE =
+  "line-clamp-2 font-frank-ruhl text-[20px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:line-clamp-1 md:text-[24px]";
+const ROW_SUB = "font-sora text-[13px] leading-[1.5] text-black/70 md:text-[14px]";
+
+export default async function ReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.user?.id) redirect("/login?callbackUrl=/account/reviews");
   const userId = session.user.id;
+  const showAll = params.all === "1";
 
-  const [settings, waiting, orderReviews, dishReviews] = await Promise.all([
+  const [settings, orders, comments, ratings] = await Promise.all([
     getRestaurantSettings(),
     prisma.order.findMany({
-      where: { userId, status: "DELIVERED", orderReview: null },
+      where: { userId, status: "DELIVERED" },
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 200,
       select: {
         id: true,
         createdAt: true,
-        items: { select: { quantity: true, menuItem: { select: { title: true, imageUrl: true } } } },
+        deliveredAt: true,
+        items: { select: { menuItemId: true, menuItem: { select: { title: true, imageUrl: true } } } },
       },
     }),
     prisma.orderReview.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-      select: { id: true, orderId: true, comment: true, status: true, createdAt: true },
+      where: { order: { userId } },
+      select: { orderId: true, comment: true, status: true, updatedAt: true },
     }),
     prisma.review.findMany({
       where: { userId },
-      orderBy: { updatedAt: "desc" },
-      take: 60,
       select: {
         id: true,
+        menuItemId: true,
         rating: true,
         comment: true,
         status: true,
         updatedAt: true,
-        menuItemId: true,
         menuItem: { select: { title: true, imageUrl: true } },
       },
     }),
   ]);
 
-  const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: settings.timezone });
-  const averageRating = dishReviews.length
-    ? dishReviews.reduce((sum, review) => sum + review.rating, 0) / dishReviews.length
-    : null;
+  const orderRows = orders.map((order) => ({
+    id: order.id,
+    createdAt: order.createdAt,
+    deliveredAt: order.deliveredAt,
+    items: order.items.map((item) => ({
+      menuItemId: item.menuItemId,
+      title: item.menuItem.title,
+      imageUrl: item.menuItem.imageUrl,
+    })),
+  }));
+
+  const { entries, reviewedOrderIds } = buildReviewEntries(
+    orderRows,
+    comments,
+    ratings.map((rating) => ({
+      id: rating.id,
+      menuItemId: rating.menuItemId,
+      rating: rating.rating,
+      comment: rating.comment,
+      status: rating.status,
+      updatedAt: rating.updatedAt,
+      title: rating.menuItem.title,
+      imageUrl: rating.menuItem.imageUrl,
+    }))
+  );
+
+  const toRate = orderRows.filter((order) => !reviewedOrderIds.has(order.id)).slice(0, RATE_LIMIT);
+  const shown = showAll ? entries : entries.slice(0, FIRST_PAGE);
+
+  const dateFmt = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: settings.timezone,
+  });
+  const deliveredLine = (date: Date | null, orderId: string | null) =>
+    [date ? `Delivered ${dateFmt.format(date)}` : null, orderId ? `Order ${formatOrderId(orderId)}` : null]
+      .filter(Boolean)
+      .join(" · ");
 
   return (
     <>
-      {/* Waiting for your review */}
-      <section aria-labelledby="to-review" className={`${CARD} flex flex-col gap-5`}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h2 id="to-review" className={CARD_TITLE}>
-              Waiting for Your Review
-            </h2>
-            <p className={CARD_SUBTITLE}>Tell us how it went — it takes under a minute and helps other food lovers.</p>
-          </div>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3]">
-            <PenLine className="h-[18px] w-[18px] text-black" strokeWidth={1.5} aria-hidden="true" />
-          </span>
+      {/* Figma: Rate Your Recent Orders */}
+      <section aria-labelledby="rate-orders" className={`${CARD} flex flex-col gap-6 md:gap-10`}>
+        <div className="flex flex-col gap-3 md:gap-4">
+          <h2 id="rate-orders" className={CARD_TITLE}>
+            Rate Your Recent Orders
+          </h2>
+          <p className="font-sora text-[14px] leading-[1.3] tracking-[-0.01em] text-black/70 md:text-[18px] md:leading-[1.14]">
+            {toRate.length > 0
+              ? "These orders were delivered — tell us how they were."
+              : "You're all caught up — every delivered order has a review."}
+          </p>
         </div>
 
-        {waiting.length === 0 ? (
-          <p className="rounded-[20px] bg-[#F9F6F3] px-5 py-6 text-center font-sora text-[14px] text-black/70">
-            You&apos;re all caught up — no delivered orders waiting for a review.
-          </p>
-        ) : (
+        {toRate.length > 0 && (
           <ul className="flex flex-col gap-4">
-            {waiting.map((order) => {
-              const cover = order.items.find((line) => line.menuItem.imageUrl)?.menuItem.imageUrl;
+            {toRate.map((order) => {
+              const dishes = uniqueDishes(order.items);
+              const line = deliveredLine(order.deliveredAt ?? order.createdAt, order.id);
               return (
                 <li
                   key={order.id}
-                  className="flex flex-col gap-4 rounded-[20px] bg-[#F9F6F3] p-4 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between md:px-[30px] md:py-5"
+                  className="flex flex-col gap-3 rounded-[20px] bg-[#F9F6F3] p-4 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between"
                 >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <span className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-white">
-                      {cover ? (
-                        <Image src={cover} alt="" fill sizes="56px" className="object-cover" />
-                      ) : (
-                        <UtensilsCrossed className="h-5 w-5 text-black/30" aria-hidden="true" />
-                      )}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-frank-ruhl text-[20px] font-semibold leading-[1.14] text-black">{formatOrderId(order.id)}</p>
-                      <p className="mt-1 line-clamp-1 font-sora text-[13px] text-black/70 md:text-[14px]">
-                        {dateFmt.format(order.createdAt)} ·{" "}
-                        {order.items.map((line) => line.menuItem.title).join(", ")}
-                      </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Thumb src={dishes.find((dish) => dish.imageUrl)?.imageUrl ?? null} />
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <Link href={`/track/${order.id}`} className={`${ROW_TITLE} hover:underline`}>
+                        {orderTitle(order.items)}
+                      </Link>
+                      <p className={ROW_SUB}>{line}</p>
                     </div>
                   </div>
-                  <Link href={`/track/${order.id}?review=1`} className={`${SMALL_PRIMARY} h-10 shrink-0 self-start px-5 min-[560px]:self-center`}>
-                    <Star className="h-3.5 w-3.5" aria-hidden="true" />
-                    Write a review
-                  </Link>
+                  <div className="self-end min-[560px]:self-center">
+                    <WriteReviewButton order={{ orderId: order.id, orderLabel: line, dishes }} />
+                  </div>
                 </li>
               );
             })}
@@ -143,113 +195,81 @@ export default async function ReviewsPage() {
         )}
       </section>
 
-      {/* Your reviews */}
-      <section aria-labelledby="my-reviews" className={`${CARD} flex flex-col gap-5`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Figma: My Reviews */}
+      <section aria-labelledby="my-reviews" className={`${CARD} flex flex-col gap-6 md:gap-10`}>
+        <div className="flex items-center justify-between gap-4">
           <h2 id="my-reviews" className={CARD_TITLE}>
             My Reviews
           </h2>
-          {averageRating !== null && (
-            <span className="flex items-center gap-2 font-sora text-[14px] text-black/70 md:text-[16px]">
-              <Star className="h-4 w-4 fill-[#FF9540] text-[#FF9540]" aria-hidden="true" />
-              <strong className="font-semibold text-black">{averageRating.toFixed(1)}</strong> average ·{" "}
-              {dishReviews.length} {dishReviews.length === 1 ? "dish" : "dishes"} rated
-            </span>
+          {entries.length > FIRST_PAGE && (
+            <Link
+              href={showAll ? "/account/reviews" : "/account/reviews?all=1"}
+              scroll={false}
+              className="shrink-0 font-sora text-[15px] leading-[1.14] tracking-[-0.01em] text-black/70 hover:text-black hover:underline md:text-[18px]"
+            >
+              {showAll ? "Show Less" : "View All"}
+            </Link>
           )}
         </div>
 
-        {orderReviews.length === 0 && dishReviews.length === 0 ? (
+        {entries.length === 0 ? (
           <div className="flex flex-col items-center gap-4 rounded-[20px] bg-[#F9F6F3] px-4 py-12 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white">
               <MessageSquareText className="h-6 w-6 text-black/60" strokeWidth={1.5} aria-hidden="true" />
             </span>
             <div>
               <p className="font-frank-ruhl text-[22px] font-semibold text-black">No reviews yet</p>
-              <p className="mt-1 font-sora text-[14px] text-black/70">After your order arrives you can rate it here.</p>
+              <p className="mt-1 font-sora text-[14px] text-black/70">
+                {toRate.length > 0 ? "Rate one of your orders above." : "After your order arrives you can rate it here."}
+              </p>
             </div>
-            <Link href="/menu" className={PRIMARY_BUTTON}>
-              Browse the menu
-            </Link>
+            {toRate.length === 0 && (
+              <Link href="/menu" className={PRIMARY_BUTTON}>
+                Browse the menu
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="flex flex-col gap-6">
-            {orderReviews.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <h3 className="font-frank-ruhl text-[20px] font-semibold text-black md:text-[22px]">About your orders</h3>
-                <ul className="flex flex-col gap-4">
-                  {orderReviews.map((review) => {
-                    const status = STATUS[review.status] ?? STATUS.PENDING;
-                    return (
-                      <li key={review.id} className="flex flex-col gap-3 rounded-[20px] bg-[#F9F6F3] p-4 md:px-[30px] md:py-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <Link
-                            href={`/track/${review.orderId}`}
-                            className="font-frank-ruhl text-[20px] font-semibold leading-[1.14] text-black hover:underline"
-                          >
-                            {formatOrderId(review.orderId)}
-                          </Link>
-                          <span className={`rounded-full px-3 py-1.5 font-sora text-[12px] font-semibold leading-none ${status.className}`}>
-                            {status.label}
+          <ul className="flex flex-col gap-4">
+            {shown.map((entry) => {
+              const note = STATUS_NOTE[entry.status];
+              const line = deliveredLine(entry.date, entry.orderId);
+              return (
+                <li key={entry.key} className="flex flex-col gap-5 rounded-[20px] bg-[#F9F6F3] p-4 md:gap-[25px]">
+                  <div className="flex flex-col gap-4 md:gap-[25px]">
+                    <div className="flex flex-col-reverse gap-3 min-[560px]:flex-row min-[560px]:items-start min-[560px]:justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Thumb src={entry.imageUrl} />
+                        <div className="flex min-w-0 flex-col gap-1.5">
+                          <p className={ROW_TITLE}>{entry.title}</p>
+                          {line && <p className={ROW_SUB}>{line}</p>}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 min-[560px]:flex-col min-[560px]:items-end">
+                        {entry.stars !== null && <Stars value={entry.stars} />}
+                        {note && (
+                          <span className={`rounded-full px-2.5 py-1 font-sora text-[11px] font-semibold leading-none ${note.className}`}>
+                            {note.label}
                           </span>
-                        </div>
-                        <p className="whitespace-pre-line break-words font-sora text-[14px] leading-[1.6] text-black md:text-[15px]">
-                          “{review.comment}”
-                        </p>
-                        <div className="flex flex-wrap items-center justify-between gap-2 font-sora text-[12px] text-black/60">
-                          <span>{dateFmt.format(review.createdAt)}</span>
-                          <Link href={`/track/${review.orderId}?review=1`} className="font-semibold text-black hover:underline">
-                            Edit review
-                          </Link>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
-            {dishReviews.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <h3 className="font-frank-ruhl text-[20px] font-semibold text-black md:text-[22px]">Dishes you rated</h3>
-                <ul className="grid grid-cols-1 gap-4 min-[640px]:grid-cols-2">
-                  {dishReviews.map((review) => {
-                    const status = STATUS[review.status] ?? STATUS.PENDING;
-                    return (
-                      <li key={review.id} className="flex min-w-0 gap-3 rounded-[20px] bg-[#F9F6F3] p-3">
-                        <Link
-                          href={`/menu/${review.menuItemId}`}
-                          className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-white"
-                        >
-                          {review.menuItem.imageUrl ? (
-                            <Image src={review.menuItem.imageUrl} alt={review.menuItem.title} fill sizes="64px" className="object-cover" />
-                          ) : (
-                            <UtensilsCrossed className="h-5 w-5 text-black/30" aria-hidden="true" />
-                          )}
-                        </Link>
-                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                          <Link
-                            href={`/menu/${review.menuItemId}`}
-                            className="line-clamp-1 font-frank-ruhl text-[18px] font-semibold leading-tight text-black hover:underline"
-                          >
-                            {review.menuItem.title}
-                          </Link>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Stars value={review.rating} />
-                            <span className={`rounded-full px-2 py-1 font-sora text-[10px] font-semibold leading-none ${status.className}`}>
-                              {status.label}
-                            </span>
-                          </div>
-                          {review.comment && (
-                            <p className="line-clamp-2 font-sora text-[12px] leading-[1.5] text-black/70">{review.comment}</p>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-          </div>
+                        )}
+                      </div>
+                    </div>
+                    {entry.comment && (
+                      <p className="whitespace-pre-line break-words font-sora text-[13px] leading-[1.5] text-black/70 md:max-w-[635px] md:text-[14px]">
+                        {entry.comment}
+                      </p>
+                    )}
+                  </div>
+                  <ReviewCardActions
+                    order={entry.orderId ? { orderId: entry.orderId, orderLabel: line, dishes: entry.dishes } : null}
+                    reviewId={entry.reviewId}
+                    ratings={entry.ratings}
+                    comment={entry.comment}
+                  />
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
     </>

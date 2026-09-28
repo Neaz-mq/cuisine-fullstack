@@ -13,6 +13,9 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { passwordMeetsRules } from "@/lib/password-rules";
+import { PASSWORD_RULES_MESSAGE } from "@/lib/validations/password";
+import PasswordRulesHint from "@/components/PasswordRulesHint";
 
 const PILL_BUTTON =
   "w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
@@ -160,6 +163,11 @@ function ResetPasswordForm() {
     // Confirm field-টা শুধু client-side — API-তে পাঠানো হয় না। এটা
     // টাইপো ধরার জন্য, নিরাপত্তার জন্য নয়, আর server-এ পাঠালে সেখানে
     // একই তুলনা আবার লিখতে হতো যার কোনো মানে নেই।
+    // Same password rule as sign up and the API (validations/password.ts).
+    if (!passwordMeetsRules(password)) {
+      setError(PASSWORD_RULES_MESSAGE);
+      return;
+    }
     if (password !== confirm) {
       setError("The two passwords don't match");
       return;
@@ -288,10 +296,11 @@ function ResetPasswordForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
+              aria-describedby="reset-password-rules"
               className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
-              placeholder="Min 6 characters"
+              placeholder="Min 8 characters"
             />
             <button
               type="button"
@@ -327,6 +336,8 @@ function ResetPasswordForm() {
               )}
             </button>
           </div>
+          {/* Live checklist — same rules as sign up and Change Password. */}
+          <PasswordRulesHint id="reset-password-rules" value={password} />
         </div>
 
         <div>
@@ -344,7 +355,7 @@ function ResetPasswordForm() {
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
             className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
             placeholder="Type it again"

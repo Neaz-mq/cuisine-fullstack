@@ -51,3 +51,10 @@ export function examplePhone(countryCode: string): string {
   const example = getExampleNumber(countryCode as CountryCode, examples);
   return example ? example.nationalNumber : "";
 }
+/**
+ * E.164 → the way people write it: "+880 1785-286936", "+1 629 555 0129".
+ * Anything that doesn't parse comes back unchanged.
+ */
+export function formatPhone(e164: string): string {
+  return parsePhoneNumberFromString(e164)?.formatInternational() ?? e164;
+}

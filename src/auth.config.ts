@@ -69,6 +69,18 @@ export const authConfig: NextAuthConfig = {
         if (name) token.name = name;
       }
 
+      /**
+       * Same for the profile photo (Profile Details → Change Photo):
+       * `update({ image })` after /api/account/avatar has saved it, or
+       * `update({ image: null })` after it was removed. Only an https URL
+       * or null — it's shown as an <img>, nothing else reads it.
+       */
+      if (trigger === "update" && session && "image" in (session as object)) {
+        const image = (session as { image?: unknown }).image;
+        if (image === null) token.picture = null;
+        else if (typeof image === "string" && image.startsWith("https://") && image.length <= 500) token.picture = image;
+      }
+
       if (user) {
         token.role = (user as { role?: string }).role;
         token.id = user.id;

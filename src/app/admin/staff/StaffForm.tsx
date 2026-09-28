@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SHIFTS, SHIFT_LABELS, type StaffShift } from "@/lib/staff-shift";
+import { passwordMeetsRules } from "@/lib/password-rules";
+import { PASSWORD_RULES_MESSAGE } from "@/lib/validations/password";
+import PasswordRulesHint from "@/components/PasswordRulesHint";
 
 const ROLE_OPTIONS = [
   "OWNER",
@@ -93,8 +96,9 @@ export default function StaffForm({
       setError("Name and email are required.");
       return;
     }
-    if (!isEdit && (!password || password.length < 8)) {
-      setError("Password must be at least 8 characters.");
+    // Same rule as sign up and Change Password (validations/password.ts).
+    if ((!isEdit || password) && !passwordMeetsRules(password)) {
+      setError(`${PASSWORD_RULES_MESSAGE}.`);
       return;
     }
 
@@ -177,6 +181,7 @@ export default function StaffForm({
           placeholder={isEdit ? "Leave blank to keep current password" : ""}
           className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
         />
+        <PasswordRulesHint value={password} />
       </div>
 
       <div>

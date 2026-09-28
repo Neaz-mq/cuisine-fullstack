@@ -15,6 +15,13 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 
+/** What to say for each two-step sign-in answer from auth.ts. */
+const TWO_STEP_MESSAGES: Record<string, string> = {
+  "2fa_invalid": "That code isn't right. Please check the email and try again.",
+  "2fa_expired": "That code has expired or had too many tries. Tap “Send a new code”.",
+  "2fa_send_failed": "We couldn't send your sign-in code. Please try again in a minute.",
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
@@ -22,6 +29,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Two-step sign-in: after the right password, the emailed 6-digit code.
+  const [step, setStep] = useState<"password" | "code">("password");
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -36,12 +47,24 @@ export default function LoginPage() {
     const result = await signIn("credentials", {
       email: form.email.trim().toLowerCase(),
       password: form.password,
+      ...(step === "code" ? { code: code.trim() } : {}),
       redirect: false,
     });
 
     if (!result?.ok || result.error) {
-      setError("Incorrect email or password");
       setLoading(false);
+      // Two-step sign-in answers (auth.ts) — see TWO_STEP_MESSAGES.
+      if (result?.code === "2fa_required") {
+        setStep("code");
+        setCode("");
+        setNotice(`We emailed a 6-digit code to ${form.email.trim()}. Enter it to finish signing in.`);
+        return;
+      }
+      if (result?.code && result.code in TWO_STEP_MESSAGES) {
+        setError(TWO_STEP_MESSAGES[result.code]);
+        return;
+      }
+      setError("Incorrect email or password");
       return;
     }
 
@@ -51,6 +74,28 @@ export default function LoginPage() {
     // customer session gets bounced back to "/" by that same page's
     // requireAdmin() check, so this is a no-op extra hop for them.
     router.push("/admin");
+  };
+
+  /** Two-step sign-in: ask for a fresh code (signs in again without one). */
+  const resendCode = async () => {
+    setError("");
+    setLoading(true);
+    const result = await signIn("credentials", {
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
+      redirect: false,
+    });
+    setLoading(false);
+    if (result?.code === "2fa_required") {
+      setCode("");
+      setNotice(`A new code is on its way to ${form.email.trim()}.`);
+    } else if (result?.code && result.code in TWO_STEP_MESSAGES) {
+      setError(TWO_STEP_MESSAGES[result.code]);
+    } else if (result?.ok && !result.error) {
+      router.push("/admin");
+    } else {
+      setError("Couldn't send a new code. Please try again.");
+    }
   };
 
   return (
@@ -227,7 +272,69 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */}
+            {/* Two-step sign-in — shown instead of the password form once
+                the password was right and a code was emailed. */}
+            {step === "code" ? (
+              <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
+                {notice && (
+                  <p className="rounded-xl bg-[#F9F6F3] lg:bg-white p-3 font-sora text-[13px] leading-[160%] text-black/70">{notice}</p>
+                )}
+                <div>
+                  <label
+                    htmlFor="login-code"
+                    className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
+                  >
+                    Sign-in Code <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="login-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    autoFocus
+                    value={code}
+                    onChange={(e) => {
+                      setCode(e.target.value.replace(/\D/g, ""));
+                      setError("");
+                    }}
+                    placeholder="000000"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-center font-semibold tracking-[0.5em] text-black placeholder-black/35 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={resendCode}
+                    disabled={loading}
+                    className="font-sora text-[12px] xl:text-[14px] font-semibold text-[#FF7100] hover:underline disabled:opacity-50"
+                  >
+                    Send a new code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("password");
+                      setCode("");
+                      setNotice("");
+                      setError("");
+                    }}
+                    className="font-sora text-[12px] xl:text-[14px] text-black hover:underline"
+                  >
+                    Use a different account
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || code.length !== 6}
+                  aria-busy={loading}
+                  className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {loading ? "Checking…" : "Verify & Login"}
+                </button>
+              </form>
+            ) : (
+            /* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */
             <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
               <div>
                 {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
@@ -407,6 +514,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </form>
+            )}
 
             {/* Google — একই pill (48px mobile), Sora 600 16px at black/100 */}
             <button

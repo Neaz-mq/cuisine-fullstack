@@ -35,7 +35,14 @@ export const orderReviewSchema = z
       .max(50)
       .optional()
       .default([]),
+    /**
+     * My Reviews → Edit: the customer deleted the text of a review they had
+     * written. With this set, an empty comment removes the saved comment
+     * instead of leaving the old one in place. (The tracking-page pop-up
+     * never sends it — there, an empty box just means "no comment".)
+     */
+    clearComment: z.boolean().optional().default(false),
   })
-  .refine((body) => body.comment.length > 0 || body.ratings.length > 0, {
+  .refine((body) => body.comment.length > 0 || body.ratings.length > 0 || body.clearComment, {
     message: "Please rate a dish or write a few words about your experience",
   });

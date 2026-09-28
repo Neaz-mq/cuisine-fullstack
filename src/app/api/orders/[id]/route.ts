@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScopeAny } from "@/lib/require-admin";
 import { orderStatusUpdateSchema } from "@/lib/validations/order";
@@ -9,6 +9,9 @@ import { cancelOrder } from "@/lib/cancel-order";
 import { transitionError } from "@/lib/order-state-machine";
 import { resolveOrderAccess } from "@/lib/order-access";
 import { findOrderForTracking, serializeTrackedOrder } from "@/lib/track-order";
+import { hasPermission } from "@/lib/permissions";
+import { isRecordNotFound } from "@/lib/prisma-errors";
+import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
 
 /**
  * GET /api/orders/[id] — /track/[orderId] পাতার poll endpoint.
@@ -96,6 +99,8 @@ export async function PATCH(
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
     }
+    // "Order Updates" email — after the response, never blocks staff.
+    after(() => sendOrderStatusEmail(id, "DELIVERED"));
     return NextResponse.json(result.order);
   }
 
@@ -114,10 +119,31 @@ export async function PATCH(
   // CANCELLED reverses everything the order had already claimed. Note this
   // is deliberately NOT a plain status write — see the doc comment above.
   if (status === "CANCELLED") {
+    // ⚠️ Cancelling a PAID card order also refunds the card (cancelOrder →
+    // refundOrder). Refunds are deliberately their own "refunds" scope —
+    // /api/admin/orders/[id]/refund checks it — so a kitchen, waiter or
+    // cashier account must not be able to reach the same refund through
+    // this door. They can still cancel unpaid and cash orders.
+    const payment = await prisma.order.findUnique({
+      where: { id },
+      select: { paymentMethod: true, paymentStatus: true },
+    });
+    const refundsCard =
+      payment?.paymentMethod === "ONLINE" &&
+      (payment.paymentStatus === "PAID" || payment.paymentStatus === "PARTIALLY_REFUNDED");
+    const actingRole = (authResult.user as { role?: string }).role;
+    if (refundsCard && !hasPermission(actingRole, "refunds")) {
+      return NextResponse.json(
+        { error: "This order was paid by card. Cancelling it refunds the customer, so only staff with refund access can do it." },
+        { status: 403 }
+      );
+    }
+
     const result = await cancelOrder(id, "Cancelled by staff");
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
     }
+    after(() => sendOrderStatusEmail(id, "CANCELLED"));
     return NextResponse.json(result.order);
   }
 
@@ -151,15 +177,34 @@ export async function PATCH(
    * status আবার সেট করলে আসল বেরোনোর সময়টা মুছে গিয়ে এখনকার সময়
    * বসত, আর ETA-র হিসাবও (পথে কত সময় পেরিয়েছে) ভুল হয়ে যেত।
    */
-  const updated = await prisma.order.update({
-    where: { id },
-    data: {
-      status,
-      ...(status === "OUT_FOR_DELIVERY" && existingOrder.dispatchedAt === null
-        ? { dispatchedAt: new Date() }
-        : {}),
-    },
-  });
+  // status in WHERE = atomic claim — if the order was cancelled or delivered
+  // a moment ago, don't drag it back to OUT_FOR_DELIVERY.
+  const updated = await prisma.order
+    .update({
+      where: { id, status: existingOrder.status },
+      data: {
+        status,
+        ...(status === "OUT_FOR_DELIVERY" && existingOrder.dispatchedAt === null
+          ? { dispatchedAt: new Date() }
+          : {}),
+      },
+    })
+    .catch((error: unknown) => {
+      if (isRecordNotFound(error)) return null;
+      throw error;
+    });
+
+  if (!updated) {
+    return NextResponse.json(
+      { error: "This order was just changed by someone else. Please refresh and try again." },
+      { status: 409 }
+    );
+  }
+
+  if (status === "OUT_FOR_DELIVERY") {
+    // Dine-in "Mark Ready" also lands here — the email helper skips those.
+    after(() => sendOrderStatusEmail(id, "OUT_FOR_DELIVERY"));
+  }
 
   return NextResponse.json(updated);
 }

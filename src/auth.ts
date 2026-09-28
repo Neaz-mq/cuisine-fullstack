@@ -1,9 +1,28 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isUploadedAvatar } from "@/lib/avatar";
+import { sendLoginCode, verifyLoginCode } from "@/lib/login-code";
+
+/**
+ * Two-step sign-in answers. Auth.js passes `code` back to the login page
+ * (signIn(...) → result.code), which shows the right message.
+ */
+class TwoFactorRequired extends CredentialsSignin {
+  code = "2fa_required";
+}
+class TwoFactorInvalid extends CredentialsSignin {
+  code = "2fa_invalid";
+}
+class TwoFactorExpired extends CredentialsSignin {
+  code = "2fa_expired";
+}
+class TwoFactorSendFailed extends CredentialsSignin {
+  code = "2fa_send_failed";
+}
 
 /**
  * auth.ts
@@ -24,6 +43,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        // Two-step sign-in: the 6-digit emailed code (second attempt only).
+        code: { label: "Code", type: "text" },
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
@@ -63,6 +84,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user.role !== "CUSTOMER" && user.staffProfile?.isActive === false) {
           return null;
         }
+
+        /**
+         * Two-step sign-in (My Account → Change Password). The password was
+         * right; now the emailed code must be too.
+         *
+         *   no code yet → email one, answer "2fa_required" (the login page
+         *                 then shows the code box);
+         *   code given  → check it: wrong → "2fa_invalid",
+         *                 too old / too many tries → "2fa_expired".
+         *
+         * The login rate limit above still counts every attempt, so codes
+         * can't be guessed.
+         */
+        if (user.twoFactorEnabled) {
+          const code = typeof credentials.code === "string" ? credentials.code.trim() : "";
+          if (!code) {
+            const sent = await sendLoginCode(user, "LOGIN");
+            throw sent ? new TwoFactorRequired() : new TwoFactorSendFailed();
+          }
+          const result = await verifyLoginCode(user.id, "LOGIN", code);
+          if (result === "invalid") throw new TwoFactorInvalid();
+          if (result === "expired") throw new TwoFactorExpired();
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -111,7 +156,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email as string },
+          include: { staffProfile: { select: { isActive: true } } },
         });
+
+        // Same rule as the Credentials login above: a deactivated staff
+        // member must not be able to sign in just by choosing "Continue
+        // with Google" with the same email.
+        if (
+          existingUser &&
+          existingUser.role !== "CUSTOMER" &&
+          existingUser.staffProfile?.isActive === false
+        ) {
+          return false;
+        }
         if (!existingUser) {
           const newUser = await prisma.user.create({
             data: {
@@ -128,10 +185,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.id = existingUser.id;
           (user as { role?: string }).role = existingUser.role;
 
-          // ছবিটা বদলে থাকলে তবেই লেখা হয়। প্রতিটা login-এ শর্তহীন
-          // update করলে প্রতিবার একটা অপ্রয়োজনীয় write হতো, অথচ
-          // মানটা বছরে হয়তো একবার বদলায়।
-          if (existingUser.image !== picture) {
+          // ⚠️ The customer uploaded their own photo (Profile Details →
+          // Change Photo): keep it. Google's picture must not overwrite
+          // it on every login — and the session shows the uploaded one.
+          if (isUploadedAvatar(existingUser.image)) {
+            user.image = existingUser.image;
+          } else if (existingUser.image !== picture) {
+            // ছবিটা বদলে থাকলে তবেই লেখা হয়। প্রতিটা login-এ শর্তহীন
+            // update করলে প্রতিবার একটা অপ্রয়োজনীয় write হতো, অথচ
+            // মানটা বছরে হয়তো একবার বদলায়।
             await prisma.user.update({
               where: { id: existingUser.id },
               data: { image: picture },

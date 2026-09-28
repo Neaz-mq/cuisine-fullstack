@@ -2,20 +2,17 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validations/parse";
-import { profileSchema } from "@/lib/validations/account";
+import { parseBirthDate, profileSchema } from "@/lib/validations/account";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { removeCustomerFromAudience, syncCustomerToAudience } from "@/lib/resend";
 
 /**
- * PATCH /api/account/profile — the signed-in customer's own name, phone
- * and "email me offers" choice (customer panel → Profile).
+ * PATCH /api/account/profile — the signed-in customer's own Profile
+ * Details: name, phone, date of birth and gender.
  *
  * Only ever touches the caller's own row (id from the session, never
  * from the body). Email isn't editable here — see validations/account.ts.
- *
- * Turning offers on/off also updates the Resend marketing list, the same
- * list the checkout checkbox and /admin/marketing use, so the choice is
- * respected everywhere straight away.
+ * The email/notification switches have their own route
+ * (/api/account/preferences), because each switch saves on its own.
  */
 export async function PATCH(request: Request) {
   const session = await auth();
@@ -35,34 +32,21 @@ export async function PATCH(request: Request) {
   if (parsed instanceof NextResponse) return parsed;
 
   try {
-    const current = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { email: true, marketingConsent: true },
-    });
-    if (!current) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-
-    const consentChanged = current.marketingConsent !== parsed.marketingConsent;
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         name: parsed.name,
         phone: parsed.phone || null,
-        marketingConsent: parsed.marketingConsent,
-        ...(consentChanged ? { marketingConsentAt: new Date() } : {}),
+        dateOfBirth: parsed.dateOfBirth ? parseBirthDate(parsed.dateOfBirth) : null,
+        gender: parsed.gender || null,
       },
-      select: { name: true, phone: true, marketingConsent: true },
+      select: { name: true, phone: true, dateOfBirth: true, gender: true },
     });
 
-    if (consentChanged) {
-      const [firstName, ...rest] = parsed.name.split(" ");
-      if (parsed.marketingConsent) {
-        await syncCustomerToAudience({ email: current.email, firstName, lastName: rest.join(" ") || undefined });
-      } else {
-        await removeCustomerFromAudience(current.email);
-      }
-    }
-
-    return NextResponse.json(user);
+    return NextResponse.json({
+      ...user,
+      dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().slice(0, 10) : "",
+    });
   } catch (error) {
     console.error("[account/profile] update failed:", error);
     return NextResponse.json({ error: "Couldn't save your details. Please try again." }, { status: 500 });

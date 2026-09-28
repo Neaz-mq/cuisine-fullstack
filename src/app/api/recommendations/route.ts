@@ -1,12 +1,20 @@
 // src/app/api/recommendations/route.ts
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { getRecommendationsForUser } from "@/lib/recommendations";
 
 export async function GET() {
   try {
     const session = await auth();
-    const userId = session?.user?.id ?? null;
+    let userId = session?.user?.id ?? null;
+
+    // Profile Details → "Product Recommendations" switched off: the same
+    // popular picks everyone gets, nothing based on their own orders.
+    if (userId) {
+      const prefs = await prisma.user.findUnique({ where: { id: userId }, select: { notifyRecommendations: true } });
+      if (prefs && !prefs.notifyRecommendations) userId = null;
+    }
 
     const recommendations = await getRecommendationsForUser(userId);
     return NextResponse.json(recommendations);

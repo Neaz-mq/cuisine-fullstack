@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { emailSchema } from "@/lib/validations/common";
 import { isValidPhone } from "@/lib/phone";
+import { newPasswordSchema } from "@/lib/validations/password";
 
 /**
  * src/lib/validations/auth.ts
@@ -14,10 +15,8 @@ import { isValidPhone } from "@/lib/phone";
 export const registerSchema = z.object({
   name: z.string().trim().min(1).optional(),
   email: emailSchema,
-  password: z
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .max(200, "Password is too long"),
+  // Same rule as Change Password and reset links (validations/password.ts).
+  password: newPasswordSchema,
 
   /**
    * E.164, বৈধতা যাচাই হয় libphonenumber দিয়ে — দৈর্ঘ্য ও prefix দুটোই

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { emailSchema, nonEmptyString } from "@/lib/validations/common";
 import { STAFF_ROLES } from "@/lib/permissions";
 import { SHIFTS } from "@/lib/staff-shift";
+import { newPasswordSchema } from "@/lib/validations/password";
 
 /**
  * src/lib/validations/staff.ts
@@ -40,7 +41,7 @@ export const createStaffSchema = z.object({
    * পুরনো StaffForm এখনো password পাঠায়, তাই ক্ষেত্রটা বাদ দেওয়া
    * হয়নি — শুধু ঐচ্ছিক করা হয়েছে। পাঠালে সেটাই ব্যবহার হয়।
    */
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  password: newPasswordSchema.optional(),
   role: staffRoleSchema,
   department: z.string().trim().optional().or(z.literal("")),
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT"]).default("FULL_TIME"),
@@ -76,7 +77,7 @@ export const updateStaffSchema = z
   .object({
     name: z.string().trim().min(1, "Name is required").optional(),
     role: staffRoleSchema.optional(),
-    password: z.string().min(8, "Password must be at least 8 characters").optional(),
+    password: newPasswordSchema.optional(),
     department: z.string().trim().nullable().optional(),
     employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT"]).optional(),
     phone: z.string().trim().nullable().optional(),

@@ -9,7 +9,7 @@ import {
   statusesForTab,
   topDishes,
 } from "@/lib/account";
-import { addressSchema, passwordSchema, profileSchema } from "@/lib/validations/account";
+import { addressSchema, parseBirthDate, passwordSchema, preferencesSchema, profileSchema } from "@/lib/validations/account";
 import { buildCheckoutProfile } from "@/lib/checkout-profile";
 
 describe("customer panel helpers", () => {
@@ -68,18 +68,53 @@ describe("customer panel helpers", () => {
 
 describe("account validation", () => {
   it("accepts a valid profile and an empty phone", () => {
-    expect(profileSchema.safeParse({ name: "Neaz", phone: "+8801785286930", marketingConsent: true }).success).toBe(true);
-    expect(profileSchema.safeParse({ name: "Neaz", phone: "", marketingConsent: false }).success).toBe(true);
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "+8801785286930" }).success).toBe(true);
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "" }).success).toBe(true);
+    expect(
+      profileSchema.safeParse({ name: "Neaz", phone: "", dateOfBirth: "1998-05-14", gender: "male" }).success
+    ).toBe(true);
   });
 
   it("rejects an empty name or a bad phone", () => {
-    expect(profileSchema.safeParse({ name: " ", phone: "", marketingConsent: false }).success).toBe(false);
-    expect(profileSchema.safeParse({ name: "Neaz", phone: "+88012", marketingConsent: false }).success).toBe(false);
+    expect(profileSchema.safeParse({ name: " ", phone: "" }).success).toBe(false);
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "+88012" }).success).toBe(false);
   });
 
-  it("needs a 6+ character new password", () => {
+  it("rejects a made-up birth date or gender", () => {
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "", dateOfBirth: "1998-02-31" }).success).toBe(false);
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "", dateOfBirth: "3000-01-01" }).success).toBe(false);
+    expect(profileSchema.safeParse({ name: "Neaz", phone: "", gender: "robot" }).success).toBe(false);
+  });
+
+  it("reads a birth date as a real calendar day", () => {
+    const today = new Date(2026, 8, 28);
+    expect(parseBirthDate("1998-05-14", today)?.toISOString()).toBe("1998-05-14T00:00:00.000Z");
+    expect(parseBirthDate("2024-02-29", today)).not.toBeNull();
+    expect(parseBirthDate("2023-02-29", today)).toBeNull();
+    expect(parseBirthDate("1899-12-31", today)).toBeNull();
+    expect(parseBirthDate("2026-09-29", today)).toBeNull();
+    expect(parseBirthDate("14/05/1998", today)).toBeNull();
+  });
+
+  it("needs at least one preference switch", () => {
+    expect(preferencesSchema.safeParse({}).success).toBe(false);
+    expect(preferencesSchema.safeParse({ orderUpdates: false }).success).toBe(true);
+    expect(preferencesSchema.safeParse({ marketingConsent: "yes" }).success).toBe(false);
+  });
+
+  it("accepts an address phone or none, but not a made-up one", () => {
+    const base = { label: "Office", address: "Road 1", city: "Dhaka", state: "Dhaka", zip: "1212" };
+    expect(addressSchema.safeParse(base).success).toBe(true);
+    expect(addressSchema.safeParse({ ...base, phone: "+8801785286930" }).success).toBe(true);
+    expect(addressSchema.safeParse({ ...base, phone: "12345" }).success).toBe(false);
+  });
+
+  it("needs a strong enough new password (8+, uppercase, number or symbol)", () => {
     expect(passwordSchema.safeParse({ newPassword: "12345" }).success).toBe(false);
-    expect(passwordSchema.safeParse({ currentPassword: "old", newPassword: "123456" }).success).toBe(true);
+    expect(passwordSchema.safeParse({ currentPassword: "old", newPassword: "abcdefgh" }).success).toBe(false);
+    expect(passwordSchema.safeParse({ currentPassword: "old", newPassword: "Abcdefgh" }).success).toBe(false);
+    expect(passwordSchema.safeParse({ currentPassword: "old", newPassword: "Abcdefg1" }).success).toBe(true);
+    expect(passwordSchema.safeParse({ newPassword: "Abcdefg!" }).success).toBe(true);
   });
 
   it("requires the main address fields", () => {
@@ -104,8 +139,8 @@ describe("checkout pre-fill with the address book", () => {
     zip: "1000",
   };
   const saved = [
-    { id: "a", label: "Work", address: "Office Rd", apartment: null, city: "Bogura", state: "Rajshahi", zip: "5800", isDefault: false },
-    { id: "b", label: "Home", address: "Home Rd", apartment: "2A", city: "Bogura", state: "Rajshahi", zip: "5800", isDefault: true },
+    { id: "a", label: "Work", address: "Office Rd", apartment: null, city: "Bogura", state: "Rajshahi", zip: "5800", phone: null, isDefault: false },
+    { id: "b", label: "Home", address: "Home Rd", apartment: "2A", city: "Bogura", state: "Rajshahi", zip: "5800", phone: "+8801711000000", isDefault: true },
   ];
 
   it("prefers the default saved address and the profile phone", () => {

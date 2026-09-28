@@ -19,6 +19,9 @@ import CountryCodeSelect, {
   type Country,
 } from "@/components/CountryCodeSelect";
 import { toE164, isValidPhone, examplePhone } from "@/lib/phone";
+import { passwordMeetsRules } from "@/lib/password-rules";
+import { PASSWORD_RULES_MESSAGE } from "@/lib/validations/password";
+import PasswordRulesHint from "@/components/PasswordRulesHint";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -101,6 +104,12 @@ export default function RegisterPage() {
 
     // Same helper the API's zod schema uses, so the two can't drift apart.
     if (!validatePhone(form.phone, country)) {
+      return;
+    }
+
+    // Same password rule as the API (validations/password.ts).
+    if (!passwordMeetsRules(form.password)) {
+      setError(PASSWORD_RULES_MESSAGE);
       return;
     }
     const phone = toE164(country.dial, form.phone);
@@ -472,10 +481,11 @@ export default function RegisterPage() {
                     value={form.password}
                     onChange={handleChange}
                     required
-                    minLength={6}
+                    minLength={8}
                     autoComplete="new-password"
+                    aria-describedby="register-password-rules"
                     className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
-                    placeholder="Min 6 characters"
+                    placeholder="Min 8 characters"
                   />
                   {/* Reachable by keyboard: someone typing a password with an
                       on-screen keyboard needs this as much as a mouse user. */}
@@ -513,6 +523,8 @@ export default function RegisterPage() {
                     )}
                   </button>
                 </div>
+                {/* Live checklist — same rules as Change Password and reset links. */}
+                <PasswordRulesHint id="register-password-rules" value={form.password} />
               </div>
 
               {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden।

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
@@ -7,6 +7,7 @@ import { geocodeAddressDetailed, type GeocodeFailure } from "@/lib/geocode";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
 import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
 import { canTransition, needsPreparingFirst } from "@/lib/order-state-machine";
+import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
 
 /**
  * POST /api/admin/orders/[id]/assign-rider
@@ -206,6 +207,9 @@ export async function POST(
       },
     }),
   ]);
+
+  // "Your order is on its way" — after the response (Order Updates switch).
+  after(() => sendOrderStatusEmail(id, "OUT_FOR_DELIVERY"));
 
   return NextResponse.json({ ...updatedOrder, mapWarning });
 }

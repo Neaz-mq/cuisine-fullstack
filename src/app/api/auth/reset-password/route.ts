@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { hashResetToken } from "@/lib/password-reset";
+import { newPasswordSchema } from "@/lib/validations/password";
 
 /**
  * src/app/api/auth/reset-password/route.ts
@@ -13,10 +14,8 @@ import { hashResetToken } from "@/lib/password-reset";
 
 const schema = z.object({
   token: z.string().min(1),
-  // register form-এর সাথে একই minimum (minLength={6})। দুই জায়গায় দুই
-  // নিয়ম হলে ব্যবহারকারী এমন password বসাতে পারতেন যা দিয়ে পরে
-  // register-ই করা যেত না।
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  // Same rule as sign up and Change Password (validations/password.ts).
+  password: newPasswordSchema,
 });
 
 /**
@@ -96,7 +95,7 @@ export async function POST(request: Request) {
 
     await tx.user.update({
       where: { id: record.userId },
-      data: { password: passwordHash },
+      data: { password: passwordHash, passwordChangedAt: new Date() },
     });
 
     /**

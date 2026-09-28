@@ -165,3 +165,18 @@ export function pageList(current: number, total: number): (number | null)[] {
   });
   return out;
 }
+
+/**
+ * "Last password change" on Change Password: "today", "3 days ago",
+ * "3 months ago", "2 years ago". Rounded down, like people say it.
+ */
+export function timeAgo(date: Date, now: Date = new Date()): string {
+  const days = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+  if (days < 7) return plural(days, "day");
+  if (days < 30) return plural(Math.floor(days / 7), "week");
+  if (days < 365) return plural(Math.max(1, Math.floor(days / 30)), "month");
+  return plural(Math.floor(days / 365), "year");
+}

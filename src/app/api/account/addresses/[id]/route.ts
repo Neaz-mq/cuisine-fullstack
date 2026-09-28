@@ -48,6 +48,7 @@ export async function PATCH(request: Request, { params }: Params) {
           city: parsed.city,
           state: parsed.state,
           zip: parsed.zip,
+          phone: parsed.phone || null,
           isDefault: makeDefault,
         },
         select: ADDRESS_SELECT,
@@ -94,4 +95,3 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Couldn't delete this address. Please try again." }, { status: 500 });
   }
 }
- 

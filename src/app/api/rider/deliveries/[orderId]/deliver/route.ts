@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { markOrderDelivered } from "@/lib/mark-order-delivered";
+import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
 
 /**
  * POST /api/rider/deliveries/[orderId]/deliver
@@ -36,6 +37,9 @@ export async function POST(
     const statusCode = result.error === "Order not found" ? 404 : 400;
     return NextResponse.json({ error: result.error }, { status: statusCode });
   }
+
+  // "Enjoy your meal" email — after the response (Order Updates switch).
+  after(() => sendOrderStatusEmail(orderId, "DELIVERED"));
 
   return NextResponse.json(result.order);
 }
