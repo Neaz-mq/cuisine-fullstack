@@ -21,11 +21,15 @@ export default function RangeFilter({
   defaultValue,
   surface = "cream",
   param = "range",
+  keepPage = false,
 }: {
   value: DashboardPeriod;
   defaultValue: DashboardPeriod;
   surface?: "cream" | "white";
   param?: string;
+  /** This filter doesn't change the paged list (e.g. an Overview period),
+   *  so leave the list on its current page. */
+  keepPage?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,7 +39,7 @@ export default function RangeFilter({
     const params = new URLSearchParams(searchParams.toString());
     if (next === defaultValue) params.delete(param);
     else params.set(param, next);
-    params.delete("page");
+    if (!keepPage) params.delete("page");
     router.push(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
   };
 

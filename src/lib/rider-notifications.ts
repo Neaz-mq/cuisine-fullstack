@@ -162,3 +162,19 @@ export async function countUnreadRiderNotifications(riderId: string): Promise<nu
   const feed = await getRiderNotifications(riderId, profile?.notificationsReadAt ?? null);
   return feed.filter((item) => !item.read).length;
 }
+
+/** Rider Notification page → "All ⌄": what kind of notification. */
+export const RIDER_NOTIFICATION_TYPES = [
+  { value: "ALL", label: "All" },
+  { value: "DELIVERY", label: "Deliveries" },
+  { value: "ORDER", label: "Waiting Orders" },
+  { value: "CHAT", label: "Messages" },
+  { value: "REVIEW", label: "Ratings" },
+  { value: "CANCELLED", label: "Cancelled" },
+] as const;
+
+export type RiderNotificationType = (typeof RIDER_NOTIFICATION_TYPES)[number]["value"];
+
+export function isRiderNotificationType(value: unknown): value is RiderNotificationType {
+  return RIDER_NOTIFICATION_TYPES.some((option) => option.value === value);
+}

@@ -35,6 +35,9 @@ export default function ChatModal({
   inactiveMessage,
   lastReadAt,
   onUnreadChange,
+  title = "Chat with Your Rider",
+  viewerRole = "CUSTOMER",
+  chatUrl,
 }: {
   open: boolean;
   onClose: () => void;
@@ -48,7 +51,14 @@ export default function ChatModal({
   lastReadAt?: number;
   /** ভেতরের ChatPanel থেকে আসা অপঠিত সংখ্যা — বোতামের badge-এর জন্য। */
   onUnreadChange?: (count: number) => void;
+  /** Rider panel: "Chat with Your Customer". */
+  title?: string;
+  /** Who is typing — their own messages go on the right, in orange. */
+  viewerRole?: "CUSTOMER" | "RIDER";
+  /** Rider panel: /api/rider/deliveries/[id]/chat. Default: the customer's. */
+  chatUrl?: string;
 }) {
+  const url = chatUrl ?? `/api/orders/${orderId}/chat`;
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -98,7 +108,7 @@ export default function ChatModal({
             id={`chat-modal-title-${orderId}`}
             className="font-frank-ruhl text-[22px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[28px]"
           >
-            Chat with Your Rider
+            {title}
           </h2>
           <button
             type="button"
@@ -122,9 +132,9 @@ export default function ChatModal({
 
         <ChatPanel
           orderId={orderId}
-          viewerRole="CUSTOMER"
-          fetchUrl={`/api/orders/${orderId}/chat`}
-          sendUrl={`/api/orders/${orderId}/chat`}
+          viewerRole={viewerRole}
+          fetchUrl={url}
+          sendUrl={url}
           otherPartyLabel={riderName}
           active={active}
           inactiveMessage={inactiveMessage}

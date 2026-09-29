@@ -90,6 +90,11 @@ export function formatMinutes(minutes: number): string {
 
 type LatLng = { lat: number; lng: number };
 
+/** Straight-line distance in km ("1.2 km remaining"). */
+export function distanceKm(a: LatLng, b: LatLng): number {
+  return haversine(a, b);
+}
+
 function haversine(a: LatLng, b: LatLng): number {
   const radians = (degrees: number) => (degrees * Math.PI) / 180;
   const dLat = radians(b.lat - a.lat);

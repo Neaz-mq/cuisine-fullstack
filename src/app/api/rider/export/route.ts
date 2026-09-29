@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -33,15 +34,23 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const rawRange = searchParams.get("range");
+  // Dashboard sends `range`; Delivery History sends its list period as `list`.
+  const rawRange = searchParams.get("range") ?? searchParams.get("list");
   const range = isDashboardPeriod(rawRange) ? rawRange : "all";
   const search = orderSearchFilter(searchParams.get("q"));
+  const rawStatus = searchParams.get("status");
+  const status: "DELIVERED" | "CANCELLED" | null =
+    rawStatus === "DELIVERED" ? "DELIVERED" : rawStatus === "CANCELLED" ? "CANCELLED" : null;
+  const filters: Prisma.DeliveryTrackingWhereInput[] = [
+    ...(search ? [{ order: search }] : []),
+    ...(status ? [{ order: { status } }] : []),
+  ];
 
   await getRestaurantSettings(); // restaurant time zone for "today"
   const rows = await prisma.deliveryTracking.findMany({
     where: {
       ...finishedWhere(authResult.user.id!, periodStart(range)),
-      ...(search ? { AND: [{ order: search }] } : {}),
+      AND: filters,
     },
     orderBy: { assignedAt: "desc" },
     take: MAX_ROWS,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AttributionControl,
   MapContainer,
@@ -115,6 +115,9 @@ export default function LiveDeliveryMap({
   riderImage,
   onOpenChat,
   unreadCount = 0,
+  remainingLabel,
+  heightClassName = "h-[300px] md:h-[440px] xl:h-[573px]",
+  topLeftSlot,
 }: {
   origin: LatLng;
   destination: LatLng | null;
@@ -136,6 +139,12 @@ export default function LiveDeliveryMap({
   onOpenChat?: () => void;
   /** rider-এর অপঠিত বার্তা — বোতামের কোণায় badge। */
   unreadCount?: number;
+  /** Rider panel: "1.2 km remaining", under the re-center button. */
+  remainingLabel?: string;
+  /** Map height. The rider panel's map is shorter (Figma 441px). */
+  heightClassName?: string;
+  /** Rider panel: a "Navigate" button, top-right under the map credit (Leaflet's zoom buttons are top-left). */
+  topLeftSlot?: ReactNode;
 }) {
   const [fitKey, setFitKey] = useState(0);
   const [relativeTime, setRelativeTime] = useState("");
@@ -165,7 +174,8 @@ export default function LiveDeliveryMap({
   const points = [start, ...(destination ? [destination] : [])];
 
   return (
-    <div className="relative isolate h-[300px] w-full overflow-hidden rounded-[20px] bg-black/5 md:h-[440px] xl:h-[573px]">
+    <div className={`relative isolate w-full overflow-hidden rounded-[20px] bg-black/5 ${heightClassName}`}>
+      {topLeftSlot && <div className="absolute right-3 top-8 z-[1000] md:right-4 md:top-9">{topLeftSlot}</div>}
       <MapContainer
         center={[start.lat, start.lng]}
         zoom={14}
@@ -249,6 +259,10 @@ export default function LiveDeliveryMap({
               <path d="M12 2v2.5M2 12h2.5M12 22v-2.5M22 12h-2.5" />
             </svg>
           </button>
+
+          {remainingLabel && (
+            <span className="font-sora text-[13px] leading-[1.6] text-white/70 md:text-[16px]">{remainingLabel}</span>
+          )}
 
           {riderName && (
             <div className="flex items-center gap-3 md:gap-5">

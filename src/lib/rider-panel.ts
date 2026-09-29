@@ -147,7 +147,10 @@ export const RIDER_DELIVERY_SELECT = {
       dispatchedAt: true,
       updatedAt: true,
       deliveryDistanceKm: true,
-      items: { select: { quantity: true } },
+      items: { select: { quantity: true, menuItem: { select: { title: true } } } },
+      // Registered customer's photo for Active Delivery → Customer (guests
+      // have none; the initial is shown instead).
+      user: { select: { image: true } },
     },
   },
 } satisfies Prisma.DeliveryTrackingSelect;
@@ -292,6 +295,15 @@ export type ActiveDelivery = {
   destLng: number | null;
   assignedAt: string;
   selfAssigned: boolean;
+  /** "4× Classic Roast Brew, 1× Borhani" */
+  itemsSummary: string;
+  /** When the rider picked it up (the order went out). ISO or null. */
+  pickedUpAt: string | null;
+  /** Last position the rider's phone sent, and when (ISO). */
+  riderLat: number;
+  riderLng: number;
+  riderUpdatedAt: string;
+  customerImage: string | null;
 };
 
 export function toActiveDelivery(row: RiderDeliveryRecord): ActiveDelivery {
@@ -313,6 +325,12 @@ export function toActiveDelivery(row: RiderDeliveryRecord): ActiveDelivery {
     destLng: row.destLng,
     assignedAt: row.assignedAt.toISOString(),
     selfAssigned: row.selfAssigned,
+    itemsSummary: order.items.map((item) => `${item.quantity}× ${item.menuItem.title}`).join(", "),
+    pickedUpAt: order.dispatchedAt?.toISOString() ?? null,
+    riderLat: row.riderLat,
+    riderLng: row.riderLng,
+    riderUpdatedAt: row.riderLocationUpdatedAt.toISOString(),
+    customerImage: order.user?.image ?? null,
   };
 }
 
