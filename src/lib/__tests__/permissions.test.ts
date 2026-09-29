@@ -38,14 +38,25 @@ describe("isStaffRole", () => {
 });
 
 describe("hasPermission — the core access-control matrix", () => {
-  it("OWNER and MANAGER can access every scope", () => {
+  it("OWNER can access every scope", () => {
     const allScopes = getScopesForRole("OWNER");
     for (const scope of allScopes) {
       expect(hasPermission("OWNER", scope)).toBe(true);
-      expect(hasPermission("MANAGER", scope)).toBe(true);
     }
     // Sanity check the matrix isn't accidentally empty.
     expect(allScopes.length).toBeGreaterThan(5);
+  });
+
+  it("MANAGER runs the restaurant but not money, customers or marketing (Figma manager panel)", () => {
+    for (const scope of [
+      "orders", "refunds", "kitchen", "suppliers", "menu", "categories", "tables",
+      "reservations", "reviews", "insights", "staff",
+    ] as const) {
+      expect(hasPermission("MANAGER", scope)).toBe(true);
+    }
+    for (const scope of ["settings", "inventory", "customers", "finance", "marketing", "coupons", "loyalty", "myDeliveries"] as const) {
+      expect(hasPermission("MANAGER", scope)).toBe(false);
+    }
   });
 
   it("WAITER can reach orders/tables/reservations but not staff or settings", () => {
@@ -83,7 +94,7 @@ describe("hasPermission — the core access-control matrix", () => {
     expect(hasPermission("OWNER", undefined)).toBe(false);
   });
 
-  it("marketing is OWNER/MANAGER-only — never given to operational staff", () => {
+  it("marketing is OWNER-only — never given to operational staff", () => {
     // ⚠️ নতুন role এলে এখানেও যোগ করতে হয়। তালিকাটা হাতে লেখা, তাই
     // ভুলে গেলে test সবুজই থাকে অথচ নতুন role-টা অরক্ষিত থেকে যায়।
     const nonManagement: StaffRole[] = [
@@ -196,8 +207,10 @@ describe("staff-facing labels stay role-appropriate", () => {
     expect(panelLabel("DELIVERY")).toBe("Rider Panel");
   });
 
-  it("OWNER/MANAGER see the real admin labels", () => {
+  it("OWNER sees admin labels, MANAGER sees manager labels", () => {
     expect(staffMenuLabel("OWNER")).toBe("Admin Dashboard");
-    expect(panelLabel("MANAGER")).toBe("Admin Panel");
+    expect(panelLabel("OWNER")).toBe("Admin Panel");
+    expect(staffMenuLabel("MANAGER")).toBe("Manager Dashboard");
+    expect(panelLabel("MANAGER")).toBe("Manager Panel");
   });
 });

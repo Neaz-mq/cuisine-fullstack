@@ -24,6 +24,10 @@ export type Scope =
   | "menu"
   | "categories"
   | "inventory"
+  // The Suppliers page (who we buy from, their contacts and delivery
+  // history). Split from "inventory" so a MANAGER can keep suppliers
+  // without seeing stock levels, costs and purchase entries.
+  | "suppliers"
   | "orders"
   // Issuing money back is deliberately its own scope, separate from
   // "orders". Plenty of staff need to move an order through its statuses;
@@ -41,12 +45,21 @@ export type Scope =
   | "insights"
   | "staff"
   | "marketing"
-  | "myDeliveries";
+  | "myDeliveries"
+  // The customer list (/admin/users) — who the restaurant's customers are,
+  // their contact details and spend. OWNER-only (Figma manager panel has no
+  // "Users"). Split from "staff", which a MANAGER needs for hiring.
+  | "customers"
+  // The restaurant's money at a glance: the dashboard's Total Revenue card
+  // and the AI business summary. OWNER-only — a MANAGER runs the shift
+  // (orders, kitchen, daily income), the owner sees the totals.
+  | "finance";
 
 const ALL_SCOPES: Scope[] = [
   "menu",
   "categories",
   "inventory",
+  "suppliers",
   "orders",
   "refunds",
   "kitchen",
@@ -60,15 +73,38 @@ const ALL_SCOPES: Scope[] = [
   "staff",
   "marketing",
   "myDeliveries",
+  "customers",
+  "finance",
 ];
 
 /**
- * The permission matrix. OWNER and MANAGER both get every scope — the
- * distinction between them isn't which admin sections they can open, it's
- * what they can do to *other staff* inside the Staff section (a MANAGER
- * can't create/edit/deactivate an OWNER, and can't see/edit nid or salary
- * — see the staff API routes for those checks, which are finer-grained
- * than this scope matrix supports).
+ * MANAGER — Dashboard (without Total Revenue), Staff, Suppliers, Kitchen,
+ * Orders, Payment (transactions only), Categories, Menu, Tables,
+ * Reservations, Notification, Insights, Reviews.
+ *
+ * Not theirs: Settings, Inventory (stock, costs, purchases), the customer
+ * list (Users), Offers and email broadcasts, Coupons, Loyalty, the revenue
+ * totals and payment summaries ("finance"), and a rider's My Deliveries.
+ */
+const MANAGER_SCOPES: Scope[] = ALL_SCOPES.filter(
+  (scope) =>
+    ![
+      "settings",
+      "inventory",
+      "customers",
+      "finance",
+      "marketing",
+      "coupons",
+      "loyalty",
+      "myDeliveries",
+    ].includes(scope)
+);
+
+/**
+ * The permission matrix. OWNER gets every scope. MANAGER gets the day-to-
+ * day running of the restaurant (MANAGER_SCOPES above) — and inside the
+ * Staff section still can't create/edit/deactivate an OWNER or see salary
+ * (see the staff API routes for those finer-grained checks).
  *
  * WAITER / CASHIER share "orders" (both touch order status at some point
  * in the flow), plus whatever's specific to their job. DELIVERY gets its
@@ -93,7 +129,7 @@ const ALL_SCOPES: Scope[] = [
  */
 const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
   OWNER: ALL_SCOPES,
-  MANAGER: ALL_SCOPES,
+  MANAGER: MANAGER_SCOPES,
   WAITER: ["orders", "tables", "reservations"],
   CASHIER: ["orders", "tables", "loyalty"],
   DELIVERY: ["myDeliveries"],
@@ -119,6 +155,7 @@ const SCOPE_PATH: Record<Scope, string> = {
   menu: "/admin/menu",
   categories: "/admin/categories",
   inventory: "/admin/inventory",
+  suppliers: "/admin/suppliers",
   orders: "/admin/orders",
   // No page of its own — refunds are issued from an order's detail page.
   // The path exists only so a role holding this scope and nothing else
@@ -137,6 +174,8 @@ const SCOPE_PATH: Record<Scope, string> = {
   // same scope and is reached from there.
   marketing: "/admin/offers",
   myDeliveries: "/admin/my-deliveries",
+  customers: "/admin/users",
+  finance: "/admin",
 };
 
 // Nav / redirect priority order — first scope in this list that a role has
@@ -150,6 +189,7 @@ const SCOPE_PRIORITY: Scope[] = [
   "menu",
   "categories",
   "inventory",
+  "suppliers",
   "coupons",
   "reviews",
   "loyalty",
@@ -157,6 +197,8 @@ const SCOPE_PRIORITY: Scope[] = [
   "settings",
   "insights",
   "marketing",
+  "customers",
+  "finance",
   // Last: nobody's home section is "refunds" — it has no page, and anyone
   // holding it holds "orders" too. Present only so the list stays
   // exhaustive over Scope.
@@ -225,7 +267,7 @@ export function firstAllowedPath(role?: string | null): string {
  * isn't going to an admin dashboard, they're going to their deliveries. */
 const STAFF_MENU_LABEL: Record<StaffRole, string> = {
   OWNER: "Admin Dashboard",
-  MANAGER: "Admin Dashboard",
+  MANAGER: "Manager Dashboard",
   WAITER: "Orders",
   CASHIER: "Orders",
   DELIVERY: "My Deliveries",
@@ -246,7 +288,7 @@ export function staffMenuLabel(role?: string | null): string {
  * doubt they're even looking at the right screen. */
 const PANEL_LABEL: Record<StaffRole, string> = {
   OWNER: "Admin Panel",
-  MANAGER: "Admin Panel",
+  MANAGER: "Manager Panel",
   WAITER: "Staff Panel",
   CASHIER: "Staff Panel",
   DELIVERY: "Rider Panel",

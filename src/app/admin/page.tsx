@@ -124,6 +124,10 @@ export default async function AdminDashboardPage({
   if (!hasPermission(role, "insights")) {
     redirect(firstAllowedPath(role));
   }
+  // Total Revenue + the AI business summary: OWNER only (permissions.ts).
+  const canSeeFinance = hasPermission(role, "finance");
+  // Kitchen Inventory card — needs "inventory" (not a MANAGER's).
+  const canSeeInventory = hasPermission(role, "inventory");
 
   const params = await searchParams;
   const q = params.q?.trim();
@@ -611,7 +615,11 @@ export default async function AdminDashboardPage({
         </div>
       </div>
 
-      <RevenueHeroCard amount={money(totalRevenue.toNumber())} deltaPercent={revenueDelta} />
+      {/* Total Revenue — OWNER only ("finance"). The manager's dashboard
+          (Figma) starts straight with the three order cards. */}
+      {canSeeFinance && (
+        <RevenueHeroCard amount={money(totalRevenue.toNumber())} deltaPercent={revenueDelta} />
+      )}
 
       {/* --- তিনটে stat card --- */}
       {/**
@@ -720,7 +728,7 @@ export default async function AdminDashboardPage({
         ))}
       </div>
 
-      <BusinessSummaryCard />
+      {canSeeFinance && <BusinessSummaryCard />}
 
       {/* --- Recent Orders --- */}
       {/* Figma card: Vertical, 1059×398, radius 20, padding 30, gap 20. */}
@@ -839,7 +847,9 @@ export default async function AdminDashboardPage({
         </div>
       </div>
 
-      {/* --- Kitchen Inventory --- */}
+      {/* --- Kitchen Inventory --- OWNER only: a MANAGER has no inventory access. */}
+      {canSeeInventory && (
+      <>
       {/* Figma card: Vertical, 1059×266, radius 20, padding 30, gap 24. */}
       <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -918,6 +928,8 @@ export default async function AdminDashboardPage({
           ))}
         </div>
       </div>
+      </>
+      )}
 
       {/* --- নিচের দুই কার্ড --- */}
       {/**
@@ -976,8 +988,9 @@ export default async function AdminDashboardPage({
             <div className="min-w-0">
               {/* Figma: Sora 400, 16px, Black/70 → অঙ্ক Frank Ruhl 600,
                   28px, #000000, মাঝে 9.58px ফাঁক। */}
+              {/* Manager's Figma calls this card "Daily Income". */}
               <p className="font-sora text-[16px] font-normal leading-none tracking-normal text-black/70">
-                Total Revenue
+                {canSeeFinance ? "Total Revenue" : "Daily Income"}
               </p>
               <p className="mt-[9.58px] font-frank-ruhl text-[28px] font-semibold leading-none tracking-normal text-black">
                 {money(rangeIncome)}

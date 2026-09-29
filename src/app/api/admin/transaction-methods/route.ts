@@ -16,7 +16,9 @@ import { transactionMethodsSchema } from "@/lib/validations/transaction-method";
  * ⚠️ scope "refunds" — /admin/payment পাতার layout যা চায়, ঠিক সেটাই।
  */
 export async function PATCH(req: NextRequest) {
-  const authResult = await requireApiScope("refunds");
+  // Turning payment/shipping methods on or off is the owner's call (the
+  // "Manage Methods" button sits in the owner-only summary cards).
+  const authResult = await requireApiScope("finance");
   if (authResult instanceof NextResponse) return authResult;
 
   const parsed = await parseBody(req, transactionMethodsSchema);

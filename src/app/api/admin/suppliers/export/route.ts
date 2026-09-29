@@ -14,12 +14,12 @@ import { isSupplierStatusFilter } from "@/lib/supplier-status";
  * সেটাই নামে (একই search, একই status-ছাঁকনি), শুধু page-এর ১০টা সারি
  * নয়, পুরোটা।
  *
- * ⚠️ scope "inventory", "staff" নয় — /api/admin/suppliers-এর সাথে
+ * ⚠️ scope "suppliers", "staff" নয় — /api/admin/suppliers-এর সাথে
  * মেলানো। পাতা আর তার API কখনো "কে ঢুকতে পারবে" নিয়ে দ্বিমত করা
  * উচিত নয়।
  */
 export async function GET(request: Request) {
-  const authResult = await requireApiScope("inventory");
+  const authResult = await requireApiScope("suppliers");
   if (authResult instanceof NextResponse) return authResult;
 
   // Users/Staff export-এর একই সীমা, একই কারণ: page limit ছাড়া পুরো

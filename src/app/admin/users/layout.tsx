@@ -9,6 +9,6 @@ export default async function UsersLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireStaff("staff");
+  await requireStaff("customers");
   return <>{children}</>;
 }

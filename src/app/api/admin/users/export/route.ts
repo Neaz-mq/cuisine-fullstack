@@ -28,7 +28,7 @@ import { getLoyaltyTiers } from "@/lib/loyalty-config";
  * দেখতে পান কেবল তিনিই নামাতে পারেন — কম নয়, বেশিও নয়।
  */
 export async function GET(request: Request) {
-  const authResult = await requireApiScope("staff");
+  const authResult = await requireApiScope("customers");
   if (authResult instanceof NextResponse) return authResult;
 
   // পুরো গ্রাহক-তালিকা, কোনো page limit ছাড়া — সস্তা query নয়, আর

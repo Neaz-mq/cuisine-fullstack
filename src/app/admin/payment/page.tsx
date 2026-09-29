@@ -3,6 +3,7 @@ import { Calendar, CircleCheck, Coins, TrendingDown, TrendingUp } from "lucide-r
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
+import { hasPermission } from "@/lib/permissions";
 import { formatOrderId } from "@/lib/format-order-id";
 import { formatAmount } from "@/lib/currency-format";
 import { orderSearchFilter } from "@/lib/order-search";
@@ -75,6 +76,7 @@ export default async function AdminPaymentPage({
   // layout.tsx-ও `requireStaff("refunds")` ডাকে; এখানে আবার ডাকা হয়
   // session-টার জন্য (নাম দেখাতে), আর সেটাই একমাত্র কারণ।
   const session = await requireStaff("refunds");
+  const canSeeFinance = hasPermission((session.user as { role?: string }).role, "finance");
   const params = await searchParams;
 
   const q = params.q?.trim();
@@ -332,6 +334,11 @@ export default async function AdminPaymentPage({
 
       <PaymentsToolbar status={status} />
 
+      {/* Overview + Payment Summary + Shipping Summary are the restaurant's
+          money — OWNER only ("finance"). A MANAGER sees just the
+          transactions list below. */}
+      {canSeeFinance && (
+      <>
       {/* --- Overview --- */}
       <section className="flex flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">
         {/* Figma "Frame 2147236238": শিরোনাম বাঁয়ে, সময়ের pill ডানে —
@@ -388,6 +395,8 @@ export default async function AdminPaymentPage({
         rows={shippingRows}
         money={money}
       />
+      </>
+      )}
 
       {/* --- Recent Transactions --- */}
       <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]">

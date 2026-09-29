@@ -5,7 +5,7 @@ import { createSupplierSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
 
 export async function GET(req: NextRequest) {
-  const authResult = await requireApiScope("inventory");
+  const authResult = await requireApiScope("suppliers");
   if (authResult instanceof NextResponse) return authResult;
 
   // ?includeInactive=true — the supplier picker on a new PurchaseOrder
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authResult = await requireApiScope("inventory");
+  const authResult = await requireApiScope("suppliers");
   if (authResult instanceof NextResponse) return authResult;
 
   const parsed = await parseBody(req, createSupplierSchema);

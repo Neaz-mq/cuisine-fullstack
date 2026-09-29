@@ -22,7 +22,9 @@ import { getPricingSettings } from "@/lib/get-settings";
  * might be, hence the rate limit below.
  */
 export async function POST(request: Request) {
-  const authResult = await requireApiScope("insights");
+  // The summary talks about revenue — same OWNER-only "finance" scope as
+  // the dashboard card that calls it.
+  const authResult = await requireApiScope("finance");
   if (authResult instanceof NextResponse) return authResult;
 
   const rateLimit = checkRateLimit(request, "admin-ai-summary", {

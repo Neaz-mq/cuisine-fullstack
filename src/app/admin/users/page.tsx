@@ -30,7 +30,7 @@ export default async function UsersPage({
   searchParams: Promise<{ q?: string; category?: string; page?: string; period?: string }>;
 }) {
   // layout-এও গেট আছে; এখানে session লাগে শুধু শিরোনামের নামটার জন্য।
-  const session = await requireStaff("staff");
+  const session = await requireStaff("customers");
 
   const params = await searchParams;
   const q = params.q?.trim();

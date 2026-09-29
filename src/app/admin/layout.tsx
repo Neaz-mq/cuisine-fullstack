@@ -32,7 +32,7 @@ type NavDef = {
  *    কাজ করা feature। সবচেয়ে কাছের গোষ্ঠীতে বসানো হয়েছে।
  *
  * scope গুলো নতুন করে বানানো হয়নি, বিদ্যমান matrix থেকেই নেওয়া:
- * Suppliers → "inventory" (ওর API route-ও ঠিক এই scope চায়),
+ * Suppliers → "suppliers" (ওর API route-ও ঠিক এই scope চায়),
  * Users → "staff", Payment → "refunds" (টাকা ফেরতের অধিকার আলাদা
  * scope, দেখুন permissions.ts), Notification → "orders"।
  */
@@ -48,9 +48,9 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
   {
     heading: "User Management",
     items: [
-      { label: "Users", href: "/admin/users", scope: "staff", icon: "users" },
+      { label: "Users", href: "/admin/users", scope: "customers", icon: "users" },
       { label: "Staff", href: "/admin/staff", scope: "staff", icon: "staff" },
-      { label: "Suppliers", href: "/admin/suppliers", scope: "inventory", icon: "suppliers" },
+      { label: "Suppliers", href: "/admin/suppliers", scope: "suppliers", icon: "suppliers" },
     ],
   },
   {
@@ -213,7 +213,9 @@ export default async function AdminLayout({
     ...(scopes.includes("kitchen")
       ? [{ label: "Kitchen Panel", href: "/admin/kitchen", icon: "kitchen" as const }]
       : []),
-    ...(scopes.includes("insights")
+    // "Manager Panel" is the owner's shortcut to the dashboard. A MANAGER
+    // is already in it, so the link would just point at the page they're on.
+    ...(scopes.includes("insights") && role !== "MANAGER"
       ? [{ label: "Manager Panel", href: "/admin", icon: "manager" as const }]
       : []),
   ];

@@ -71,9 +71,9 @@ export default async function SuppliersPage({
     dpage?: string;
   }>;
 }) {
-  // layout-এও "inventory" scope-এর গেট আছে; এখানে session লাগে শুধু
+  // layout-এও "suppliers" scope-এর গেট আছে; এখানে session লাগে শুধু
   // শিরোনামের নামটার জন্য।
-  const session = await requireStaff("inventory");
+  const session = await requireStaff("suppliers");
 
   const params = await searchParams;
   const q = params.q?.trim();
