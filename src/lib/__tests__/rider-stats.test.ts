@@ -12,6 +12,7 @@ import {
   paceHint,
   percentChange,
   sumEarnings,
+  sevenDayTotals,
 } from "@/lib/rider-stats";
 
 describe("rider earnings", () => {
@@ -100,5 +101,27 @@ describe("labels", () => {
     expect(etaMinutes(here, here)).toBe(1);
     // ~3.3 km north at 20 km/h ≈ 10 minutes
     expect(etaMinutes(here, { lat: 23.84, lng: 90.4125 })).toBe(10);
+  });
+});
+
+describe("sevenDayTotals", () => {
+  it("puts each delivery on its day and keeps empty days", () => {
+    const start = new Date(2026, 8, 23); // Sep 23, local midnight
+    const days = sevenDayTotals(
+      [
+        { deliveredAt: new Date(2026, 8, 23, 10), deliveryFee: 2, tipAmount: 1 },
+        { deliveredAt: new Date(2026, 8, 23, 22), deliveryFee: 2.5, tipAmount: 0 },
+        { deliveredAt: new Date(2026, 8, 29, 23, 59), deliveryFee: 3, tipAmount: 0.1 },
+        // outside the week — ignored
+        { deliveredAt: new Date(2026, 8, 30, 0, 1), deliveryFee: 9, tipAmount: 9 },
+        { deliveredAt: new Date(2026, 8, 22, 23), deliveryFee: 9, tipAmount: 9 },
+      ],
+      start
+    );
+    expect(days).toHaveLength(7);
+    expect(days[0]).toMatchObject({ total: 5.5, deliveries: 2 });
+    expect(days[3]).toMatchObject({ total: 0, deliveries: 0 });
+    expect(days[6]).toMatchObject({ total: 3.1, deliveries: 1 });
+    expect(days[6].date.getDate()).toBe(29);
   });
 });

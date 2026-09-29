@@ -35,6 +35,8 @@ import {
   Users,
   X,
   type LucideIcon,
+  HandCoins,
+  BadgeDollarSign,
 } from "lucide-react";
 
 /**
@@ -85,7 +87,10 @@ export type NavIcon =
   | "payout"
   | "earnings"
   | "cash"
-  | "profile";
+  | "cashOut"
+  | "profile"
+  // Owner: the riders' cash-out requests
+  | "riderPayouts";
 
 export const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -117,7 +122,9 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
   payout: Wallet,
   earnings: CircleDollarSign,
   cash: Banknote,
+  cashOut: HandCoins,
   profile: User,
+  riderPayouts: BadgeDollarSign,
 };
 
 /**
@@ -150,6 +157,8 @@ const NO_FILL_WHEN_ACTIVE = new Set<NavIcon>([
   "history",
   "earnings",
   "cash",
+  "cashOut",
+  "riderPayouts",
 ]);
 
 /**

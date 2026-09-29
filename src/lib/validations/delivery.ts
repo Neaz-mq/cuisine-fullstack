@@ -34,3 +34,38 @@ export const riderVehicleSchema = z.object({
     .max(30, "Keep the number plate under 30 characters")
     .transform((value) => value.toUpperCase()),
 });
+
+/** Rider panel → Cash Out → Payout Method (bank account or mobile wallet). */
+export const payoutMethodSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("BANK"),
+    bankName: z.string().trim().min(2, "Enter the bank's name").max(80),
+    accountName: z.string().trim().min(2, "Enter the name on the account").max(80),
+    accountNumber: z
+      .string()
+      .trim()
+      .transform((value) => value.replace(/[\s-]/g, ""))
+      .pipe(z.string().regex(/^\d{6,20}$/, "Account number should be 6–20 digits")),
+  }),
+  z.object({
+    kind: z.literal("WALLET"),
+    provider: z.enum(["bKash", "Nagad", "Rocket", "Upay"]),
+    number: z
+      .string()
+      .trim()
+      .transform((value) => value.replace(/[\s-]/g, ""))
+      .pipe(z.string().regex(/^(\+?88)?01\d{9}$/, "Enter the 11-digit wallet number, e.g. 01712345678")),
+  }),
+]);
+
+/** Rider panel → Cash Out → Confirm. Amount in the restaurant's currency. */
+export const payoutRequestSchema = z.object({
+  amount: z.number().positive("Enter an amount above zero").max(1_000_000),
+  method: z.enum(["BANK", "WALLET"]),
+});
+
+/** Admin → Rider Payouts: mark a request paid, or reject it. */
+export const payoutDecisionSchema = z.object({
+  action: z.enum(["PAID", "REJECTED"]),
+  note: z.string().trim().max(300).optional(),
+});

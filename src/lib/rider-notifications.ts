@@ -11,6 +11,7 @@
  *   • a customer rated the delivery                          → REVIEW
  *   • an order of theirs was cancelled                       → CANCELLED
  *   • an order is waiting for a rider (Available Orders)     → ORDER
+ *   • the owner paid (or rejected) a cash-out request        → PAYOUT
  *
  * "Unread" = happened after the rider last pressed "Mark All as Read"
  * (StaffProfile.notificationsReadAt, the same column the admin feed uses).
@@ -30,7 +31,7 @@ export async function getRiderNotifications(
   riderId: string,
   readAt: Date | null
 ): Promise<AdminNotification[]> {
-  const [trackings, messages, available] = await Promise.all([
+  const [trackings, messages, available, payouts] = await Promise.all([
     prisma.deliveryTracking.findMany({
       where: { riderId },
       orderBy: { assignedAt: "desc" },
@@ -65,6 +66,12 @@ export async function getRiderNotifications(
       select: { id: true, orderId: true, senderName: true, message: true, createdAt: true },
     }),
     findAvailableOrders(SOURCE_LIMIT),
+    prisma.riderPayout.findMany({
+      where: { riderId, processedAt: { not: null }, status: { in: ["PAID", "REJECTED"] } },
+      orderBy: { processedAt: "desc" },
+      take: SOURCE_LIMIT,
+      select: { id: true, amount: true, currency: true, status: true, destination: true, processedAt: true, note: true },
+    }),
   ]);
 
   const isRead = (at: Date) => readAt !== null && at.getTime() <= readAt.getTime();
@@ -150,6 +157,23 @@ export async function getRiderNotifications(
     });
   }
 
+  for (const payout of payouts) {
+    if (!payout.processedAt) continue;
+    const amount = formatAmount(payout.amount.toNumber(), payout.currency);
+    const paid = payout.status === "PAID";
+    feed.push({
+      id: `payout-${payout.id}`,
+      kind: "PAYOUT",
+      title: paid ? `Cash out of ${amount} paid` : `Cash out of ${amount} was not approved`,
+      description: paid
+        ? `Sent to ${payout.destination}`
+        : `${payout.note ? `Reason: ${payout.note} · ` : ""}The money is back in your balance`,
+      createdAt: payout.processedAt.toISOString(),
+      read: isRead(payout.processedAt),
+      href: `${BASE}/earnings`,
+    });
+  }
+
   return feed.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
@@ -171,6 +195,7 @@ export const RIDER_NOTIFICATION_TYPES = [
   { value: "CHAT", label: "Messages" },
   { value: "REVIEW", label: "Ratings" },
   { value: "CANCELLED", label: "Cancelled" },
+  { value: "PAYOUT", label: "Payouts" },
 ] as const;
 
 export type RiderNotificationType = (typeof RIDER_NOTIFICATION_TYPES)[number]["value"];

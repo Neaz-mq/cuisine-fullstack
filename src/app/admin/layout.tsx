@@ -61,6 +61,8 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
       { label: "Orders", href: "/admin/orders", scope: "orders", icon: "orders" },
       // (My Deliveries moved out: riders get their own menu — RIDER_NAV_SECTIONS.)
       { label: "Payment", href: "/admin/payment", scope: "refunds", icon: "payment" },
+      // Riders' cash-out requests — the restaurant's money, so "finance" (owner).
+      { label: "Rider Payouts", href: "/admin/rider-payouts", scope: "finance", icon: "riderPayouts" },
       { label: "Categories", href: "/admin/categories", scope: "categories", icon: "categories" },
       { label: "Menu", href: "/admin/menu", scope: "menu", icon: "menu" },
       { label: "Inventory", href: "/admin/inventory", scope: "inventory", icon: "inventory" },
@@ -124,6 +126,7 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
         icon: "payout",
         children: [
           { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
+          { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
           { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
         ],
       },
@@ -167,10 +170,12 @@ export default async function AdminLayout({
    * একা await করা হতো; এখন দুটো একসাথে, তাই query দুটো হলেও অপেক্ষা
    * একটারই সময় নেয়।
    */
-  const [pendingReviewCount, newOrdersCount, riderUnread] = await Promise.all([
+  const canSeeFinance = !isRider && scopes.includes("finance");
+  const [pendingReviewCount, newOrdersCount, riderUnread, pendingPayouts] = await Promise.all([
     canSeeReviews ? prisma.review.count({ where: { status: "PENDING" } }) : 0,
     canSeeOrders ? prisma.order.count({ where: { status: "PLACED" } }) : 0,
     isRider ? countUnreadRiderNotifications(session.user.id!) : 0,
+    canSeeFinance ? prisma.riderPayout.count({ where: { status: "PENDING" } }) : 0,
   ]);
 
   const badgeFor = (href: string): number | undefined => {
@@ -179,6 +184,8 @@ export default async function AdminLayout({
     // (status = PLACED) — দুই জায়গায় দুই রকম সংখ্যা দেখালে কোনটা সত্যি
     // সেটা নিয়েই সন্দেহ তৈরি হতো।
     if (href === "/admin/notifications") return newOrdersCount;
+    // Cash-out requests waiting for the owner to pay them.
+    if (href === "/admin/rider-payouts") return pendingPayouts || undefined;
     return undefined;
   };
 

@@ -25,7 +25,9 @@ export type NotificationKind =
   // Rider panel only: a customer's chat message, and an order of theirs
   // that was cancelled.
   | "CHAT"
-  | "CANCELLED";
+  | "CANCELLED"
+  // Rider panel only: the owner paid or rejected a cash-out request.
+  | "PAYOUT";
 
 /** "System Alerts" — low stock (admin) and a cancelled delivery (rider). */
 export function isAlertKind(kind: NotificationKind): boolean {

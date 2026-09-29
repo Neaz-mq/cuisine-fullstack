@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CalendarCheck,
   CircleX,
+  HandCoins,
   MessageCircle,
   PackageMinus,
   ShoppingBag,
@@ -21,6 +22,7 @@ const ICONS = {
   STOCK: PackageMinus,
   CHAT: MessageCircle,
   CANCELLED: CircleX,
+  PAYOUT: HandCoins,
 } as const;
 
 /**

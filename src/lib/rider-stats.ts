@@ -172,3 +172,31 @@ export function earningsByDay(
       total: roundMoney(bucket.fees + bucket.tips),
     }));
 }
+
+/**
+ * Earnings chart on the rider Earnings page: one bar per day for the seven
+ * days starting at `start` (local midnight), zero on days with nothing
+ * delivered — so the chart always has seven columns.
+ */
+export function sevenDayTotals(
+  rows: { deliveredAt: Date; deliveryFee: MoneyLike; tipAmount: MoneyLike }[],
+  start: Date
+): { date: Date; total: number; deliveries: number }[] {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + index);
+    return { date, total: 0, deliveries: 0 };
+  });
+  for (const row of rows) {
+    const index = days.findIndex((day, i) => {
+      const next = days[i + 1]?.date;
+      return row.deliveredAt >= day.date && (!next || row.deliveredAt < next);
+    });
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    if (index === -1 || row.deliveredAt >= end) continue;
+    days[index].total += toNumber(row.deliveryFee) + toNumber(row.tipAmount);
+    days[index].deliveries += 1;
+  }
+  return days.map((day) => ({ ...day, total: roundMoney(day.total) }));
+}
