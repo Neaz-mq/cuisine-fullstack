@@ -1,4 +1,4 @@
-import { getResendClient, EMAIL_FROM } from "@/lib/resend";
+import { getResendClient, EMAIL_FROM, describeEmailError } from "@/lib/resend";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { type Money, toMoney } from "@/lib/money";
@@ -79,7 +79,7 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
     const money = (value: Money) => formatAmountWithCode(value.toFixed(units), order.currency);
     const optionalMoney = (value: Money) => (value.greaterThan(0) ? money(value) : null);
 
-    await getResendClient().emails.send({
+    const { error: refused } = await getResendClient().emails.send({
       from: EMAIL_FROM,
       to: order.email,
       subject: `Order ${formatOrderId(order.id)} confirmed`,
@@ -121,6 +121,10 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
         trackingUrl: `${appUrl}/track/${order.id}`,
       }),
     });
+    // Resend returns a refusal instead of throwing — log it, or it vanishes.
+    if (refused) {
+      console.error(`Failed to send order confirmation email: ${describeEmailError(refused)}`);
+    }
   } catch (error) {
     console.error("Failed to send order confirmation email:", error);
   }

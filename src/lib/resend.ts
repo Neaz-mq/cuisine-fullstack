@@ -271,3 +271,38 @@ export async function getAudienceStats(): Promise<AudienceStats | null> {
     return null;
   }
 }
+
+/**
+ * A readable reason for a failed `emails.send`.
+ *
+ * ⚠️ Resend's `emails.send` does NOT throw when Resend refuses an email —
+ * it resolves with `{ data: null, error }`. Code that only wraps it in
+ * try/catch never notices, and the email silently never arrives.
+ *
+ * The most common refusal while building: sending from Resend's test
+ * address (onboarding@resend.dev) or from a domain that isn't verified.
+ * Resend then delivers ONLY to the email address that owns the Resend
+ * account — every other address (a rider, a customer) is refused with 403.
+ */
+export function describeEmailError(error: unknown): string {
+  const e = (error ?? {}) as { message?: string; name?: string; statusCode?: number };
+  const message = e.message ?? String(error);
+  const lower = message.toLowerCase();
+  if (lower.includes("testing emails") || lower.includes("own email address")) {
+    return `${message} — EMAIL_FROM uses Resend's test sender, which only delivers to your Resend account's own address. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on it (e.g. "Cuisine <no-reply@yourdomain.com>").`;
+  }
+  if (lower.includes("domain") && lower.includes("not verified")) {
+    return `${message} — the domain in EMAIL_FROM isn't verified in Resend yet (resend.com/domains).`;
+  }
+  if (e.statusCode === 401 || e.statusCode === 403 || lower.includes("api key")) {
+    return `${message} — check RESEND_API_KEY.`;
+  }
+  return message;
+}
+
+/** "ne•••@gmail.com" — enough to recognise the address in a log, not to harvest it. */
+export function maskEmail(email: string): string {
+  const [name, domain] = email.split("@");
+  if (!domain) return "•••";
+  return `${name.slice(0, 2)}•••@${domain}`;
+}

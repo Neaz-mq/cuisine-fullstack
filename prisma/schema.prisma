@@ -126,6 +126,8 @@ model User {
   // credentials login every other staff role uses; there is no separate
   // rider auth system.
   deliveries DeliveryTracking[] @relation("RiderDeliveries")
+  // Rider panel → Cash Out: the rider's payout requests.
+  riderPayouts RiderPayout[] @relation("RiderPayouts")
 
   // Staff member who recorded a given inventory change (manual purchase
   // entry, wastage, physical-count adjustment). Null on the StockMovement
@@ -282,6 +284,17 @@ model StaffProfile {
   vehicleType  String? // "Motorbike", "Bicycle", "Scooter", "Car", "On foot"
   vehicleModel String? // "Honda CB Hornet 160R"
   vehiclePlate String? // "DHAKA METRO-LA 12-3456"
+
+  // Rider panel → Cash Out → "Payout Method": where the rider wants their
+  // earnings sent. The rider fills these in themselves; only they and the
+  // owner (who pays the request) ever see them. Pages always `select` the
+  // fields they show — nothing includes the whole row for display.
+  payoutMethod             String? // "BANK" | "WALLET" — the one picked last
+  payoutBankName           String? // "Standard Chartered"
+  payoutBankAccountName    String? // name on the account
+  payoutBankAccountNumber  String?
+  payoutWalletProvider     String? // "bKash" | "Nagad" | "Rocket" | "Upay"
+  payoutWalletNumber       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2415,4 +2428,47 @@ model LoginCode {
   createdAt DateTime @default(now())
 
   @@index([userId, purpose])
+}
+
+/// Rider panel → Cash Out. A rider asks to be paid part or all of what
+/// they've earned (delivery fee + tip on each delivered order, see
+/// lib/rider-stats.ts). The owner pays it outside the app (bank transfer
+/// or mobile wallet) and marks it Paid on Admin → Rider Payouts, or
+/// rejects it. There is no automatic transfer.
+///
+/// Available balance = everything earned − payouts that are PENDING or
+/// PAID (lib/rider-payouts.ts). A REJECTED request goes back into it.
+model RiderPayout {
+  id      String @id @default(cuid())
+  riderId String
+  rider   User   @relation("RiderPayouts", fields: [riderId], references: [id], onDelete: Cascade)
+
+  amount   Decimal @db.Decimal(12, 3)
+  currency String
+
+  /// "BANK" | "WALLET"
+  method String
+  /// Where it goes, as shown to people: "Standard Chartered •••• 4821".
+  /// A snapshot — changing the payout method later doesn't rewrite it.
+  destination String
+  /// Full account details for the owner who sends the money
+  /// ("Standard Chartered · Ridoy Ahmed · A/C 0123456789"). Never shown
+  /// back to the rider's browser — they only see `destination`.
+  payTo       String?
+
+  status        RiderPayoutStatus @default(PENDING)
+  requestedAt   DateTime          @default(now())
+  processedAt   DateTime?
+  processedById String?
+  /// Owner's note on a rejection ("wrong account number").
+  note          String?
+
+  @@index([riderId, requestedAt])
+  @@index([status, requestedAt])
+}
+
+enum RiderPayoutStatus {
+  PENDING
+  PAID
+  REJECTED
 }

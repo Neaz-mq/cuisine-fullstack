@@ -263,3 +263,47 @@ export function Stars({ value, className = "" }: { value: number; className?: st
     </span>
   );
 }
+
+/** Figma "Overview" card inside a white section (cream, radius 16). */
+export function RiderOverviewCard({
+  label,
+  value,
+  hint,
+  icon,
+}: {
+  label: string;
+  value: string;
+  hint: ReactNode;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[120px] min-w-0 flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4 md:min-h-[142px]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-frank-ruhl text-[18px] font-medium leading-none text-black">{label}</span>
+        <IconCircle tone="white">{icon}</IconCircle>
+      </div>
+      <div className="flex flex-col gap-3">
+        <span className="font-frank-ruhl text-[22px] font-semibold leading-none text-black xl:text-[24px]">{value}</span>
+        <span className="font-sora text-[12px] leading-[1.3] text-black/70">{hint}</span>
+      </div>
+    </div>
+  );
+}
+
+const PAYOUT_CHIP: Record<string, { label: string; className: string }> = {
+  PAID: { label: "Paid", className: "bg-[#F1FEF3] text-[#0ECF00]" },
+  PENDING: { label: "Pending", className: "bg-[#FFEDE0] text-[#FF7100]" },
+  REJECTED: { label: "Rejected", className: "bg-[#FFE9EC] text-[#FF3F5C]" },
+};
+
+/** Paid / Pending / Rejected pill of a payout request. */
+export function PayoutChip({ status }: { status: string }) {
+  const chip = PAYOUT_CHIP[status] ?? { label: status, className: "bg-white text-black" };
+  return (
+    <span
+      className={`inline-flex h-8 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] leading-none min-[480px]:h-9 min-[480px]:text-[14px] ${chip.className}`}
+    >
+      {chip.label}
+    </span>
+  );
+}

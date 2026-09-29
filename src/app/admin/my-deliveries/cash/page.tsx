@@ -36,7 +36,7 @@ export default async function CashCollectedPage({ searchParams }: { searchParams
   return (
     <div className="flex flex-col gap-4">
       <RiderPageHeader
-        title="Cash Collected"
+        name={session.user.name ?? undefined}
         subtitle="Cash you took from customers on cash-on-delivery orders — hand it in to the restaurant at the end of your shift."
         now={now}
       />
