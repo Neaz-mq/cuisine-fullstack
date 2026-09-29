@@ -6,6 +6,12 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Award,
+  Banknote,
+  ChevronDown,
+  CircleDollarSign,
+  History,
+  PackageSearch,
+  Wallet,
   BadgePercent,
   Bell,
   BookOpen,
@@ -71,7 +77,15 @@ export type NavIcon =
   | "offers"
   | "coupons"
   | "loyalty"
-  | "settings";
+  | "settings"
+  // Rider panel (DELIVERY role)
+  | "available"
+  | "activeDelivery"
+  | "history"
+  | "payout"
+  | "earnings"
+  | "cash"
+  | "profile";
 
 export const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -97,6 +111,13 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
   coupons: BadgePercent,
   loyalty: Award,
   settings: Settings,
+  available: PackageSearch,
+  activeDelivery: Truck,
+  history: History,
+  payout: Wallet,
+  earnings: CircleDollarSign,
+  cash: Banknote,
+  profile: User,
 };
 
 /**
@@ -120,7 +141,16 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
  * নতুন কোনো icon ভরাট করলে বিশ্রী দেখালে শুধু এখানে তার নামটা যোগ
  * করলেই হবে — অন্য কোথাও কিছু বদলাতে হবে না।
  */
-const NO_FILL_WHEN_ACTIVE = new Set<NavIcon>(["orders", "menu", "tables"]);
+const NO_FILL_WHEN_ACTIVE = new Set<NavIcon>([
+  "orders",
+  "menu",
+  "tables",
+  // Rider panel: round icons whose meaning is the drawing inside (clock
+  // hands, the $ sign) — filled they became plain white discs.
+  "history",
+  "earnings",
+  "cash",
+]);
 
 /**
  * Icon-এ যে props গুলো active অবস্থা অনুযায়ী বদলায়।
@@ -143,6 +173,19 @@ export interface SidebarItem {
   icon: NavIcon;
   /** ডান পাশের ছোট গোল badge — 0 বা অনুপস্থিত হলে কিছুই দেখায় না। */
   badge?: number;
+  /**
+   * Active only on this exact path, not on the pages under it. The rider
+   * Dashboard lives at /admin/my-deliveries and its sections under it
+   * (/admin/my-deliveries/history …) — without this the Dashboard would
+   * light up together with whichever section is open.
+   */
+  exact?: boolean;
+  /**
+   * A dropdown group (Figma rider "Payout ⌄"): the item itself only opens
+   * and closes; its children are the links. Opens by itself when one of
+   * the children is the current page.
+   */
+  children?: SidebarItem[];
 }
 
 /**
@@ -251,8 +294,9 @@ interface AdminSidebarProps {
   name: string;
   email: string;
   sections: SidebarSection[];
-  /** System group-এ Settings — scope না থাকলে layout এটা পাঠায় না। */
-  settingsItem?: SidebarItem | null;
+  /** System group (above Logout): Settings for the admin panel, Profile +
+   *  Settings for the rider panel. The layout decides who sees what. */
+  systemItems?: SidebarItem[];
   /** xl-এর নিচে drawer খোলা কিনা — AdminShell থেকে। */
   mobileOpen?: boolean;
   onClose?: () => void;
@@ -267,8 +311,8 @@ interface AdminSidebarProps {
  * `/admin/menu/new` বা `/admin/orders/abc123`-এ গেলেও parent item
  * active থাকে।
  */
-export function isActivePath(pathname: string, href: string): boolean {
-  if (href === "/admin") return pathname === "/admin";
+export function isActivePath(pathname: string, href: string, exact = false): boolean {
+  if (href === "/admin" || exact) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -276,7 +320,7 @@ export default function AdminSidebar({
   name,
   email,
   sections,
-  settingsItem,
+  systemItems = [],
   mobileOpen = false,
   onClose,
   onNavigate,
@@ -353,9 +397,61 @@ export default function AdminSidebar({
    */
   const titleFor = (label: string) => (collapsed ? label : undefined);
 
+  /** Dropdown groups the user opened or closed by hand (href → open). A
+   *  group nobody touched is open exactly when one of its pages is. */
+  const [toggledGroups, setToggledGroups] = useState<Record<string, boolean>>({});
+
+  const renderEntry = (item: SidebarItem) => {
+    if (!item.children?.length) return renderItem(item);
+    // Collapsed rail: no room for a dropdown — the child links are shown as
+    // ordinary icons instead.
+    if (collapsed) return item.children.map(renderItem);
+    return renderGroup(item, item.children);
+  };
+
+  const renderGroup = (item: SidebarItem, children: SidebarItem[]) => {
+    const Icon = ICONS[item.icon];
+    const childActive = children.some((child) => isActivePath(pathname, child.href, child.exact));
+    const open = toggledGroups[item.href] ?? childActive;
+    const listId = `nav-group-${item.href.replace(/[^a-z0-9]+/gi, "-")}`;
+
+    return (
+      <div key={item.href} className="flex flex-col gap-3">
+        <div className="flex items-center gap-[7px]">
+          <span aria-hidden="true" className="h-[30px] w-[3px] shrink-0 opacity-0" />
+          <button
+            type="button"
+            onClick={() => setToggledGroups((prev) => ({ ...prev, [item.href]: !open }))}
+            aria-expanded={open}
+            aria-controls={listId}
+            className={`${ITEM_BASE} rounded-[12px] text-black hover:bg-[#F9F6F3] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] ${
+              childActive ? "font-semibold" : "font-normal"
+            }`}
+          >
+            <Icon className="h-6 w-6 shrink-0" {...iconStateProps(item.icon, false)} aria-hidden="true" />
+            <span className={`flex-1 truncate text-left ${ITEM_TEXT}`}>{item.label}</span>
+            {/* Figma: a small cream square with the arrow in it */}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] bg-[#F9F6F3]">
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+            </span>
+          </button>
+        </div>
+        {open && (
+          <div id={listId} className="flex flex-col gap-3 pl-6">
+            {children.map(renderItem)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderItem = (item: SidebarItem) => {
     const Icon = ICONS[item.icon];
-    const active = isActivePath(pathname, item.href);
+    const active = isActivePath(pathname, item.href, item.exact);
 
     return (
       /**
@@ -596,7 +692,7 @@ export default function AdminSidebar({
               <p className={HEADING_TEXT}>{section.heading}</p>
             )}
 
-            <div className="flex flex-col gap-3">{section.items.map(renderItem)}</div>
+            <div className="flex flex-col gap-3">{section.items.map(renderEntry)}</div>
           </div>
         ))}
 
@@ -621,7 +717,7 @@ export default function AdminSidebar({
           )}
 
           <div className="flex flex-col gap-3">
-            {settingsItem && renderItem(settingsItem)}
+            {systemItems.map(renderItem)}
 
             {/* Logout — dropdown-এর মতোই `signOut`, callbackUrl "/"।
                 Figma: icon, লেখা আর accent bar তিনটেই #D72A37। */}

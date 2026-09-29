@@ -71,11 +71,16 @@ export async function DELETE(request: Request) {
     );
     const ratingIds = ratings.filter((rating) => attribution.get(rating.id) === order.id).map((rating) => rating.id);
 
-    const [comments, dishRatings] = await prisma.$transaction([
+    const [comments, dishRatings, riderRatings] = await prisma.$transaction([
       prisma.orderReview.deleteMany({ where: { orderId: order.id } }),
       prisma.review.deleteMany({ where: { id: { in: ratingIds }, userId } }),
+      // The stars given to the rider are part of the same review.
+      prisma.deliveryTracking.updateMany({
+        where: { orderId: order.id, riderRating: { not: null } },
+        data: { riderRating: null, riderRatedAt: null },
+      }),
     ]);
-    if (comments.count === 0 && dishRatings.count === 0) {
+    if (comments.count === 0 && dishRatings.count === 0 && riderRatings.count === 0) {
       return NextResponse.json({ error: "Review not found." }, { status: 404 });
     }
     return NextResponse.json({ ok: true });

@@ -42,7 +42,12 @@ export const orderReviewSchema = z
      * never sends it — there, an empty box just means "no comment".)
      */
     clearComment: z.boolean().optional().default(false),
+    /**
+     * 1–5 stars for the rider who brought the order (restaurant's own
+     * delivery only). Shown in the rider panel's "Rating" card.
+     */
+    riderRating: z.number().int().min(1).max(5).optional(),
   })
-  .refine((body) => body.comment.length > 0 || body.ratings.length > 0 || body.clearComment, {
+  .refine((body) => body.comment.length > 0 || body.ratings.length > 0 || body.clearComment || body.riderRating !== undefined, {
     message: "Please rate a dish or write a few words about your experience",
   });

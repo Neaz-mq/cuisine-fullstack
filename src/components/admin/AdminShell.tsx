@@ -47,8 +47,9 @@ export default function AdminShell({
   panels,
   navItems,
   sections,
-  settingsItem,
+  systemItems = [],
   notificationSlot,
+  showClock = false,
   children,
 }: {
   name: string;
@@ -58,8 +59,10 @@ export default function AdminShell({
   panels: PanelLink[];
   navItems: { label: string; href: string }[];
   sections: SidebarSection[];
-  settingsItem?: SidebarItem | null;
+  systemItems?: SidebarItem[];
   notificationSlot?: ReactNode;
+  /** Rider panel (Figma): the current time in a pill next to the bell. */
+  showClock?: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -133,6 +136,7 @@ export default function AdminShell({
         panels={panels}
         navItems={navItems}
         notificationSlot={notificationSlot}
+        showClock={showClock}
         onMenuClick={openDrawer}
       />
 
@@ -143,7 +147,7 @@ export default function AdminShell({
           আর xl-এ পুরো label সহ কলামই বেশি কাজের। */}
       <AdminNavRail
         sections={sections}
-        settingsItem={settingsItem}
+        systemItems={systemItems}
         className="hidden md:flex xl:hidden"
       />
 
@@ -178,7 +182,7 @@ export default function AdminShell({
           name={name}
           email={email}
           sections={sections}
-          settingsItem={settingsItem}
+          systemItems={systemItems}
           mobileOpen={mobileOpen}
           onClose={closeDrawer}
           // একই পাতার link চাপলে pathname বদলায় না, তাই উপরের

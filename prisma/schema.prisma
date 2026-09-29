@@ -275,6 +275,14 @@ model StaffProfile {
   nid    String?
   salary Decimal? @db.Decimal(12, 3)
 
+  // Rider panel → Profile → "Vehicle". Only filled in for DELIVERY staff;
+  // the rider edits these themselves (the rest of this row is managed by
+  // the owner/manager on the Staff page). All optional — a new rider has
+  // no vehicle on file until they add one.
+  vehicleType  String? // "Motorbike", "Bicycle", "Scooter", "Car", "On foot"
+  vehicleModel String? // "Honda CB Hornet 160R"
+  vehiclePlate String? // "DHAKA METRO-LA 12-3456"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -885,7 +893,19 @@ model DeliveryTracking {
   assignedAt  DateTime  @default(now())
   deliveredAt DateTime?
 
+  // true when the rider took the order themselves from Rider panel →
+  // Available Orders; false when the owner/manager/kitchen assigned it.
+  // Only changes the wording in the rider's notifications.
+  selfAssigned Boolean @default(false)
+
+  // The customer's 1–5 star rating of the delivery, given with their
+  // order review once it has been delivered. Null until they rate. The
+  // rider panel's "Rating" card is the average of these.
+  riderRating  Int?
+  riderRatedAt DateTime?
+
   @@index([riderId])
+  @@index([riderId, deliveredAt])
 }
 
 // Rider <-> customer live chat for an OWN_DELIVERY order, same

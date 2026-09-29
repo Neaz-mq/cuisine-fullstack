@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import PasswordForm from "@/components/account/PasswordForm";
+import RiderVehicleForm from "@/components/admin/RiderVehicleForm";
 
 export const metadata: Metadata = { title: "My Profile" };
 
@@ -39,12 +41,15 @@ export default async function AdminProfilePage() {
       role: true,
       password: true,
       createdAt: true,
-      staffProfile: { select: { phone: true } },
+      staffProfile: { select: { phone: true, vehicleType: true, vehicleModel: true, vehiclePlate: true } },
     },
   });
   if (!user) return null;
 
   const name = user.name?.trim() || user.email.split("@")[0];
+  // Rider panel (Figma "Vehicle & Profile"): riders also keep their
+  // vehicle here, and their password lives under Settings in their menu.
+  const isRider = user.role === "DELIVERY";
   const rows = [
     { label: "Name", value: name },
     { label: "Email", value: user.email },
@@ -62,7 +67,9 @@ export default async function AdminProfilePage() {
         <h1 className="font-frank-ruhl text-[26px] font-semibold leading-tight tracking-[-0.01em] text-black md:text-[32px]">
           My Profile
         </h1>
-        <p className="mt-2 font-sora text-[13px] text-black/60">Your staff account and password.</p>
+        <p className="mt-2 font-sora text-[13px] text-black/60">
+          {isRider ? "Your rider details and vehicle." : "Your staff account and password."}
+        </p>
       </div>
 
       <section className="flex flex-col gap-5 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-6">
@@ -103,7 +110,27 @@ export default async function AdminProfilePage() {
         </p>
       </section>
 
-      <PasswordForm hasPassword={Boolean(user.password)} tone="white" />
+      {isRider && (
+        <RiderVehicleForm
+          initial={{
+            vehicleType: user.staffProfile?.vehicleType ?? "",
+            vehicleModel: user.staffProfile?.vehicleModel ?? "",
+            vehiclePlate: user.staffProfile?.vehiclePlate ?? "",
+          }}
+        />
+      )}
+
+      {isRider ? (
+        <p className="rounded-[16px] bg-white px-4 py-3 font-sora text-[13px] text-black/70">
+          Password and two-step sign-in are in{" "}
+          <Link href="/admin/my-deliveries/settings" className="font-semibold text-[#FF7100] hover:underline">
+            Settings
+          </Link>
+          .
+        </p>
+      ) : (
+        <PasswordForm hasPassword={Boolean(user.password)} tone="white" />
+      )}
     </div>
   );
 }

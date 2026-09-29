@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase-client";
  * src/components/ChatPanel.tsx
  *
  * Rider <-> customer live chat, shared by both sides of the conversation:
- *   - RiderDashboard.tsx renders one per assigned delivery
+ *   - my-deliveries/active/ActiveDeliveries.tsx renders one per delivery on the way
  *     (fetchUrl/sendUrl -> /api/rider/deliveries/[orderId]/chat)
  *   - OrderTrackingTimeline.tsx renders one for the customer
  *     (fetchUrl/sendUrl -> /api/orders/[id]/chat)

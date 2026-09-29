@@ -104,6 +104,9 @@ export const TRACK_ORDER_SELECT = {
        * যায়।
        */
       rider: { select: { name: true, image: true } },
+      // Whether the customer already gave the rider stars — the review
+      // pop-up only asks once.
+      riderRating: true,
     },
   },
 } as const satisfies Prisma.OrderSelect;
@@ -207,6 +210,13 @@ export type TrackedOrder = {
    */
   rider: { name: string; image: string | null } | null;
 
+  /**
+   * Delivered by the restaurant's own rider: their first name for the
+   * review pop-up's "Rate your rider", and whether that's already done.
+   * Null for any other order.
+   */
+  deliveredBy: { name: string; rated: boolean } | null;
+
   deliveryTracking: {
     riderLat: number | null;
     riderLng: number | null;
@@ -308,6 +318,14 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
             // জায়গা বা "null" দেখানোর চেয়ে ভালো।
             name: tracking.rider.name?.trim() || "Your rider",
             image: tracking.rider.image,
+          }
+        : null,
+
+    deliveredBy:
+      order.status === "DELIVERED" && tracking
+        ? {
+            name: tracking.rider.name?.trim().split(/\s+/)[0] || "Your rider",
+            rated: tracking.riderRating !== null,
           }
         : null,
 

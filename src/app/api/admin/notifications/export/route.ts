@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiStaff } from "@/lib/require-admin";
+import { requireApiScope } from "@/lib/require-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { toCsv } from "@/lib/csv";
 import { DEFAULT_OVERVIEW_RANGE, isSummaryRange, summaryRangeStart } from "@/lib/payment-filters";
@@ -18,7 +18,9 @@ import {
  * আরেক জিনিস পাওয়া যেত।
  */
 export async function GET(request: Request) {
-  const authResult = await requireApiStaff();
+  // "orders", the same as the Notification page itself — the feed lists
+  // every customer's orders, so any-staff (a rider, a cleaner) was too wide.
+  const authResult = await requireApiScope("orders");
   if (authResult instanceof NextResponse) return authResult;
 
   // বাকি export route-গুলোর একই সীমা।

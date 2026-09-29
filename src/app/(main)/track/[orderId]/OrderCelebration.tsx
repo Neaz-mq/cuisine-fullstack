@@ -61,6 +61,7 @@ export default function OrderCelebration({
   onClose,
   dishes = [],
   canRate = false,
+  riderName = null,
   startAt = "congrats",
 }: {
   open: boolean;
@@ -73,6 +74,9 @@ export default function OrderCelebration({
    * /api/orders/[id]/review). Guests only get the comment box.
    */
   canRate?: boolean;
+  /** Our own rider delivered it and hasn't been rated yet → "Rate your
+   *  rider" stars (guests too — they are the customer). */
+  riderName?: string | null;
   /** "review" when opened from the "Write a Review" button — skips the
    *  congratulations screen the customer has already seen. */
   startAt?: Step;
@@ -82,6 +86,7 @@ export default function OrderCelebration({
   const [comment, setComment] = useState("");
   // menuItemId → 1..5. A dish with no entry simply isn't rated.
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [riderRating, setRiderRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   // Each time the dialog opens, start on the requested screen. (Adjusting
@@ -93,7 +98,7 @@ export default function OrderCelebration({
   }
 
   const ratedCount = Object.keys(ratings).length;
-  const canSubmit = comment.trim().length > 0 || ratedCount > 0;
+  const canSubmit = comment.trim().length > 0 || ratedCount > 0 || riderRating > 0;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -135,6 +140,7 @@ export default function OrderCelebration({
         body: JSON.stringify({
           comment: text,
           ratings: Object.entries(ratings).map(([menuItemId, rating]) => ({ menuItemId, rating })),
+          ...(riderName && riderRating > 0 ? { riderRating } : {}),
         }),
       });
 
@@ -241,6 +247,15 @@ export default function OrderCelebration({
               />
             )}
 
+            {riderName && (
+              <DishRatings
+                heading="Rate your rider"
+                dishes={[{ menuItemId: "rider", title: `${riderName} · your delivery rider`, imageUrl: null }]}
+                ratings={{ rider: riderRating }}
+                onRate={(_id, rating) => setRiderRating(rating)}
+              />
+            )}
+
             {/* Figma "Fill": cream, radius 12, padding 12, উচ্চতা 121। */}
             <textarea
               value={comment}
@@ -294,10 +309,12 @@ export default function OrderCelebration({
  * is no un-rate — just don't touch a dish you don't want to rate).
  */
 function DishRatings({
+  heading = "Rate your dishes",
   dishes,
   ratings,
   onRate,
 }: {
+  heading?: string;
   dishes: ReviewDish[];
   ratings: Record<string, number>;
   onRate: (menuItemId: string, rating: number) => void;
@@ -305,7 +322,7 @@ function DishRatings({
   return (
     <div className="flex w-full flex-col gap-3">
       <p className="font-sora text-[13px] font-semibold leading-none text-black md:text-[14px]">
-        Rate your dishes
+        {heading}
       </p>
       <ul className="flex w-full flex-col gap-2">
         {dishes.map((dish) => {

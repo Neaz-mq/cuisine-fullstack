@@ -26,10 +26,18 @@ export async function POST(
 
   const tracking = await prisma.deliveryTracking.findUnique({
     where: { orderId },
-    select: { riderId: true },
+    select: { riderId: true, order: { select: { status: true } } },
   });
   if (!tracking || tracking.riderId !== riderId) {
     return NextResponse.json({ error: "Not your delivery" }, { status: 403 });
+  }
+  // An order the rider took from Available Orders is still in the kitchen
+  // until they press "Picked Up" — it can't be delivered before that.
+  if (tracking.order.status === "PREPARING" || tracking.order.status === "PLACED") {
+    return NextResponse.json(
+      { error: "Press “Picked Up” first — this order is still at the restaurant." },
+      { status: 409 }
+    );
   }
 
   const result = await markOrderDelivered(orderId);

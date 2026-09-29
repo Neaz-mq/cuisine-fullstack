@@ -4,6 +4,8 @@ import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   CalendarCheck,
+  CircleX,
+  MessageCircle,
   PackageMinus,
   ShoppingBag,
   Star,
@@ -17,6 +19,8 @@ const ICONS = {
   RESERVATION: CalendarCheck,
   REVIEW: Star,
   STOCK: PackageMinus,
+  CHAT: MessageCircle,
+  CANCELLED: CircleX,
 } as const;
 
 /**

@@ -16,7 +16,21 @@
  */
 
 
-export type NotificationKind = "ORDER" | "RESERVATION" | "REVIEW" | "STOCK" | "DELIVERY";
+export type NotificationKind =
+  | "ORDER"
+  | "RESERVATION"
+  | "REVIEW"
+  | "STOCK"
+  | "DELIVERY"
+  // Rider panel only: a customer's chat message, and an order of theirs
+  // that was cancelled.
+  | "CHAT"
+  | "CANCELLED";
+
+/** "System Alerts" — low stock (admin) and a cancelled delivery (rider). */
+export function isAlertKind(kind: NotificationKind): boolean {
+  return kind === "STOCK" || kind === "CANCELLED";
+}
 
 export type AdminNotification = {
   id: string;
@@ -49,7 +63,7 @@ export function notificationCounts(feed: AdminNotification[]) {
     unread,
     // "System Alerts" — কম-স্টকের মতো যেগুলো কোনো গ্রাহকের কাজ নয়,
     // সিস্টেম নিজে থেকে তুলেছে।
-    alerts: feed.filter((item) => item.kind === "STOCK").length,
+    alerts: feed.filter((item) => isAlertKind(item.kind)).length,
   };
 }
 
@@ -72,7 +86,7 @@ export function filterNotifications(
 
     if (status === "UNREAD" && item.read) return false;
     if (status === "READ" && !item.read) return false;
-    if (status === "ALERTS" && item.kind !== "STOCK") return false;
+    if (status === "ALERTS" && !isAlertKind(item.kind)) return false;
 
     if (needle) {
       // শিরোনাম আর বিবরণ দুটোতেই খোঁজা হয় — গ্রাহকের নাম, অর্ডার নম্বর

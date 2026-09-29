@@ -1,77 +1,19 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
-import { formatAmount } from "@/lib/currency-format";
+import { findActiveDeliveries, toActiveDelivery } from "@/lib/rider-panel";
 
 /**
- * GET /api/rider/deliveries
+ * GET /api/rider/deliveries — the signed-in rider's active deliveries
+ * (taken or assigned, not delivered, not cancelled). Rider panel → Active
+ * Delivery polls this every 15 seconds; the first list comes from the
+ * page itself, in the same shape (lib/rider-panel.ts toActiveDelivery).
  *
- * A rider's own active (not yet delivered) assignments — this is the
- * entire dataset /admin/my-deliveries needs. Deliberately scoped to
- * `riderId: session.user.id` at the query level, not filtered client-side
- * — a rider account should never even receive another rider's orders in
- * the response body, regardless of what the UI does with it.
+ * Only the rider's own orders — never anyone else's addresses.
  */
 export async function GET() {
   const authResult = await requireApiScope("myDeliveries");
   if (authResult instanceof NextResponse) return authResult;
-  const riderId = authResult.user.id;
 
-  const deliveries = await prisma.deliveryTracking.findMany({
-    where: { riderId, deliveredAt: null },
-    orderBy: { assignedAt: "asc" },
-    select: {
-      orderId: true,
-      destLat: true,
-      destLng: true,
-      riderLat: true,
-      riderLng: true,
-      riderLocationUpdatedAt: true,
-      assignedAt: true,
-      order: {
-        select: {
-          status: true,
-          firstName: true,
-          lastName: true,
-          phone: true,
-          address: true,
-          apartment: true,
-          city: true,
-          state: true,
-          zip: true,
-          totalAmount: true,
-          currency: true,
-          currencyMinorUnits: true,
-          paymentMethod: true,
-        },
-      },
-    },
-  });
-
-  return NextResponse.json(
-    deliveries
-      // A cancelled order can still have an open DeliveryTracking row if
-      // it was cancelled after dispatch — don't show it as an active job.
-      .filter((d) => d.order.status !== "CANCELLED")
-      .map((d) => ({
-        orderId: d.orderId,
-        status: d.order.status,
-        customerName: `${d.order.firstName} ${d.order.lastName}`,
-        phone: d.order.phone,
-        address: [d.order.address, d.order.apartment, d.order.city, d.order.state, d.order.zip]
-          .filter(Boolean)
-          .join(", "),
-        // এই order-এর নিজের currency অনুযায়ী সাজানো string। rider
-        // COD-এ ঠিক এই অঙ্কটাই হাতে নেবেন, তাই ভুল মুদ্রা বা ভুল দশমিক
-        // সরাসরি ভুল টাকা তোলা মানে।
-        totalAmount: formatAmount(
-          d.order.totalAmount.toFixed(d.order.currencyMinorUnits),
-          d.order.currency
-        ),
-        paymentMethod: d.order.paymentMethod,
-        destLat: d.destLat,
-        destLng: d.destLng,
-        assignedAt: d.assignedAt,
-      }))
-  );
+  const rows = await findActiveDeliveries(authResult.user.id!);
+  return NextResponse.json(rows.map(toActiveDelivery));
 }

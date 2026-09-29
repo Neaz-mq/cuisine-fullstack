@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
-import type { ReviewDish } from "@/lib/customer-reviews";
+import type { ReviewDish, ReviewRider } from "@/lib/customer-reviews";
 import ReviewDialog from "./ReviewDialog";
 import { GRADIENT } from "./ui";
 
@@ -18,6 +18,7 @@ type OrderInfo = {
   orderId: string;
   orderLabel: string;
   dishes: ReviewDish[];
+  rider?: ReviewRider | null;
 };
 
 export function WriteReviewButton({ order }: { order: OrderInfo }) {
@@ -40,6 +41,7 @@ export function WriteReviewButton({ order }: { order: OrderInfo }) {
         dishes={order.dishes}
         initialRatings={{}}
         initialComment=""
+        rider={order.rider ?? null}
         onClose={() => setOpen(false)}
         onSaved={() => router.refresh()}
       />
@@ -117,6 +119,7 @@ export function ReviewCardActions({
           dishes={order.dishes}
           initialRatings={ratings}
           initialComment={comment}
+          rider={order.rider ?? null}
           onClose={() => setEditing(false)}
           onSaved={() => router.refresh()}
         />
@@ -125,7 +128,7 @@ export function ReviewCardActions({
       <ConfirmDialog
         open={confirming}
         title="Delete this review?"
-        message="Your stars and comment will be removed, and it won't show on the site any more. You can write a new review later."
+        message="Your stars (for the food and the rider) and comment will be removed, and it won't show on the site any more. You can write a new review later."
         confirmLabel="Delete"
         pending={deleting}
         onConfirm={remove}

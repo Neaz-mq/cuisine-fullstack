@@ -7,6 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Menu, Search, X } from "lucide-react";
 import { useScreenTier } from "@/components/admin/useScreenTier";
+import LiveClock from "@/components/admin/LiveClock";
 
 export interface PanelLink {
   label: string;
@@ -49,6 +50,8 @@ interface AdminTopbarProps {
    * বসানোর জায়গা — এই component-কে permission নিয়ে ভাবতে হয় না।
    */
   notificationSlot?: React.ReactNode;
+  /** Rider panel: a live clock pill before the bell (large screens only). */
+  showClock?: boolean;
   /** xl-এর নিচে nav drawer খোলে — AdminShell থেকে। */
   onMenuClick?: () => void;
 }
@@ -118,6 +121,7 @@ export default function AdminTopbar({
   panels = [],
   navItems = EMPTY_NAV,
   notificationSlot,
+  showClock = false,
   onMenuClick,
 }: AdminTopbarProps) {
   const router = useRouter();
@@ -584,6 +588,10 @@ export default function AdminTopbar({
           >
             <Search className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
           </button>
+
+          {/* Rider panel: the time. lg and up only — on a phone the
+              status bar already shows it, and the row has no room. */}
+          {showClock && <LiveClock className="hidden lg:flex" />}
 
           {/* Bell — role অনুযায়ী layout থেকে আসে, বা কিছুই আসে না */}
           {notificationSlot}

@@ -127,8 +127,16 @@ const MANAGER_SCOPES: Scope[] = ALL_SCOPES.filter(
  * later (e.g. surfacing it inside the kitchen board itself), not full
  * "inventory" scope access.
  */
+/**
+ * OWNER — everything except "myDeliveries". That scope is the rider panel
+ * (a rider's own deliveries, earnings and cash). Only DELIVERY staff can
+ * be given a delivery, so for anyone else those pages were always empty;
+ * the owner follows riders from Orders instead.
+ */
+const OWNER_SCOPES: Scope[] = ALL_SCOPES.filter((scope) => scope !== "myDeliveries");
+
 const PERMISSION_MATRIX: Record<StaffRole, Scope[]> = {
-  OWNER: ALL_SCOPES,
+  OWNER: OWNER_SCOPES,
   MANAGER: MANAGER_SCOPES,
   WAITER: ["orders", "tables", "reservations"],
   CASHIER: ["orders", "tables", "loyalty"],
@@ -270,7 +278,7 @@ const STAFF_MENU_LABEL: Record<StaffRole, string> = {
   MANAGER: "Manager Dashboard",
   WAITER: "Orders",
   CASHIER: "Orders",
-  DELIVERY: "My Deliveries",
+  DELIVERY: "Rider Dashboard",
   KITCHEN: "Kitchen Display",
   // No panel to link to — the storefront is where they land.
   CLEANER: "Home",

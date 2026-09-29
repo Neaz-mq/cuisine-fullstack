@@ -47,6 +47,13 @@ describe("hasPermission — the core access-control matrix", () => {
     expect(allScopes.length).toBeGreaterThan(5);
   });
 
+  it("OWNER has every scope except the rider panel (only riders get deliveries)", () => {
+    expect(hasPermission("OWNER", "myDeliveries")).toBe(false);
+    for (const scope of ["settings", "finance", "customers", "orders", "refunds", "staff"] as const) {
+      expect(hasPermission("OWNER", scope)).toBe(true);
+    }
+  });
+
   it("MANAGER runs the restaurant but not money, customers or marketing (Figma manager panel)", () => {
     for (const scope of [
       "orders", "refunds", "kitchen", "suppliers", "menu", "categories", "tables",
@@ -202,8 +209,8 @@ describe("canViewSensitiveStaffFields — salary gate (nid is no longer gated)",
 });
 
 describe("staff-facing labels stay role-appropriate", () => {
-  it("DELIVERY sees 'My Deliveries' / 'Rider Panel', never 'Admin Dashboard'", () => {
-    expect(staffMenuLabel("DELIVERY")).toBe("My Deliveries");
+  it("DELIVERY sees 'Rider Dashboard' / 'Rider Panel', never 'Admin Dashboard'", () => {
+    expect(staffMenuLabel("DELIVERY")).toBe("Rider Dashboard");
     expect(panelLabel("DELIVERY")).toBe("Rider Panel");
   });
 

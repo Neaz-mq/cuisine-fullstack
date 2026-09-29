@@ -51,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       userId: true,
       firstName: true,
       items: { select: { menuItemId: true } },
+      deliveryTracking: { select: { riderId: true } },
     },
   });
 
@@ -85,12 +86,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
+  /**
+   * Rider stars: only for an order the restaurant's own rider delivered,
+   * and only from the customer (the account owner, or the guest holding
+   * the order link) — staff can open any tracking page and must not rate
+   * a colleague in a customer's name.
+   */
+  const riderRating = parsed.riderRating;
+  if (riderRating !== undefined) {
+    if (!order.deliveryTracking) {
+      return NextResponse.json({ error: "This order wasn't delivered by our own rider." }, { status: 400 });
+    }
+    if (access === "staff") {
+      return NextResponse.json({ error: "Only the customer can rate the rider." }, { status: 403 });
+    }
+  }
+
   const clearComment = parsed.clearComment && parsed.comment.length === 0;
   if (clearComment && (access !== "owner" || !order.userId)) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  if (parsed.comment.length === 0 && ratings.size === 0 && !clearComment) {
+  if (parsed.comment.length === 0 && ratings.size === 0 && !clearComment && riderRating === undefined) {
     return NextResponse.json(
       { error: "Please rate a dish or write a few words about your experience" },
       { status: 400 }
@@ -101,6 +118,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const comment = parsed.comment || null;
 
   await prisma.$transaction([
+    ...(riderRating !== undefined
+      ? [
+          prisma.deliveryTracking.update({
+            where: { orderId: order.id },
+            data: { riderRating, riderRatedAt: new Date() },
+          }),
+        ]
+      : []),
     // My Reviews → Edit, text removed: drop the written part.
     ...(clearComment ? [prisma.orderReview.deleteMany({ where: { orderId: order.id } })] : []),
     ...(comment
@@ -128,5 +153,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       : []),
   ]);
 
-  return NextResponse.json({ ok: true, rated: ratings.size }, { status: 201 });
+  return NextResponse.json(
+    { ok: true, rated: ratings.size, riderRated: riderRating !== undefined },
+    { status: 201 }
+  );
 }

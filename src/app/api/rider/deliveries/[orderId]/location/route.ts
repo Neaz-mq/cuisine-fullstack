@@ -23,7 +23,7 @@ const MAX_RIDER_DISTANCE_KM = 50;
  * POST /api/rider/deliveries/[orderId]/location
  *
  * The rider's own phone posts here every few seconds while
- * /admin/my-deliveries is open (see RiderDashboard.tsx's watchPosition
+ * /admin/my-deliveries is open (see active/ActiveDeliveries.tsx's watchPosition
  * loop). Ownership-checked: a rider can only ever update the
  * DeliveryTracking row where riderId matches THEIR OWN session, never an
  * order assigned to someone else — no amount of guessing another order's

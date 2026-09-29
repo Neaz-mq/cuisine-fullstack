@@ -91,6 +91,7 @@ export default async function ReviewsPage({
         createdAt: true,
         deliveredAt: true,
         items: { select: { menuItemId: true, menuItem: { select: { title: true, imageUrl: true } } } },
+        deliveryTracking: { select: { riderRating: true, rider: { select: { name: true } } } },
       },
     }),
     prisma.orderReview.findMany({
@@ -120,6 +121,14 @@ export default async function ReviewsPage({
       title: item.menuItem.title,
       imageUrl: item.menuItem.imageUrl,
     })),
+    // Our own rider brought it → the review form asks about them too. First
+    // name only — that's what the customer saw on the tracking page.
+    rider: order.deliveryTracking
+      ? {
+          name: order.deliveryTracking.rider.name?.trim().split(/\s+/)[0] || "Your rider",
+          rating: order.deliveryTracking.riderRating,
+        }
+      : null,
   }));
 
   const { entries, reviewedOrderIds } = buildReviewEntries(
@@ -186,7 +195,7 @@ export default async function ReviewsPage({
                     </div>
                   </div>
                   <div className="self-end min-[560px]:self-center">
-                    <WriteReviewButton order={{ orderId: order.id, orderLabel: line, dishes }} />
+                    <WriteReviewButton order={{ orderId: order.id, orderLabel: line, dishes, rider: order.rider }} />
                   </div>
                 </li>
               );
@@ -254,6 +263,12 @@ export default async function ReviewsPage({
                         )}
                       </div>
                     </div>
+                    {entry.rider?.rating && (
+                      <p className="flex flex-wrap items-center gap-2 font-sora text-[13px] text-black/70 md:text-[14px]">
+                        Rider {entry.rider.name}:
+                        <Stars value={entry.rider.rating} />
+                      </p>
+                    )}
                     {entry.comment && (
                       <p className="whitespace-pre-line break-words font-sora text-[13px] leading-[1.5] text-black/70 md:max-w-[635px] md:text-[14px]">
                         {entry.comment}
@@ -261,7 +276,11 @@ export default async function ReviewsPage({
                     )}
                   </div>
                   <ReviewCardActions
-                    order={entry.orderId ? { orderId: entry.orderId, orderLabel: line, dishes: entry.dishes } : null}
+                    order={
+                      entry.orderId
+                        ? { orderId: entry.orderId, orderLabel: line, dishes: entry.dishes, rider: entry.rider }
+                        : null
+                    }
                     reviewId={entry.reviewId}
                     ratings={entry.ratings}
                     comment={entry.comment}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { toast } from "react-toastify";
-import type { ReviewDish } from "@/lib/customer-reviews";
+import type { ReviewDish, ReviewRider } from "@/lib/customer-reviews";
 import { GRADIENT } from "./ui";
 
 /**
@@ -30,6 +30,7 @@ export default function ReviewDialog({
   dishes,
   initialRatings,
   initialComment,
+  rider = null,
   onClose,
   onSaved,
 }: {
@@ -40,11 +41,14 @@ export default function ReviewDialog({
   dishes: ReviewDish[];
   initialRatings: Record<string, number>;
   initialComment: string;
+  /** Restaurant's own rider delivered it: "Rate your rider" stars. */
+  rider?: ReviewRider | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [ratings, setRatings] = useState<Record<string, number>>(initialRatings);
   const [comment, setComment] = useState(initialComment);
+  const [riderRating, setRiderRating] = useState(rider?.rating ?? 0);
   const [saving, setSaving] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
 
@@ -54,6 +58,7 @@ export default function ReviewDialog({
     if (open) {
       setRatings(initialRatings);
       setComment(initialComment);
+      setRiderRating(rider?.rating ?? 0);
     }
   }
 
@@ -77,7 +82,7 @@ export default function ReviewDialog({
   const rated = Object.entries(ratings).filter(([, value]) => value >= 1);
   const trimmed = comment.trim();
   const clearComment = mode === "edit" && initialComment.trim() !== "" && trimmed === "";
-  const canSave = trimmed.length > 0 || rated.length > 0;
+  const canSave = trimmed.length > 0 || rated.length > 0 || riderRating > 0;
 
   const save = async () => {
     if (!canSave) return;
@@ -90,6 +95,9 @@ export default function ReviewDialog({
           comment: trimmed,
           ratings: rated.map(([menuItemId, rating]) => ({ menuItemId, rating })),
           clearComment,
+          // Only when it changed — re-sending the same stars would tell
+          // the rider they were rated again.
+          ...(rider && riderRating > 0 && riderRating !== rider.rating ? { riderRating } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -190,6 +198,43 @@ export default function ReviewDialog({
             })}
           </ul>
         </div>
+
+        {rider && (
+          <div className="flex flex-col gap-3">
+            <p className="font-frank-ruhl text-[16px] font-medium text-black">Rate your rider</p>
+            <div className="flex flex-col gap-2 rounded-[16px] bg-[#F9F6F3] p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+              <span className="min-w-0 break-words font-sora text-[14px] font-medium leading-[1.3] text-black">
+                {rider.name}
+                <span className="block font-normal text-black/60">Brought your order</span>
+              </span>
+              <div role="radiogroup" aria-label={`Rate ${rider.name}`} className="flex shrink-0 items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={riderRating === value}
+                    aria-label={`${value} star${value === 1 ? "" : "s"}`}
+                    onClick={() => setRiderRating(value)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:[outline:2px_solid_#FF9540]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-6 w-6"
+                      fill={value <= riderRating ? "#FF9540" : "none"}
+                      stroke="#FF9540"
+                      strokeWidth={1.5}
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d={STAR_PATH} />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <label className="flex flex-col gap-1.5">
           <span className="font-frank-ruhl text-[16px] font-medium text-black">Your review</span>

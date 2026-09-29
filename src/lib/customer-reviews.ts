@@ -20,11 +20,16 @@
 
 export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+/** The rider who delivered an order (restaurant's own delivery) and the
+ *  customer's stars for them, if given. */
+export type ReviewRider = { name: string; rating: number | null };
+
 export type OrderForReviews = {
   id: string;
   createdAt: Date;
   deliveredAt: Date | null;
   items: { menuItemId: string; title: string; imageUrl: string | null }[];
+  rider?: ReviewRider | null;
 };
 
 export type OrderCommentRow = {
@@ -65,6 +70,8 @@ export type ReviewEntry = {
   comment: string;
   status: ReviewStatus;
   updatedAt: Date;
+  /** Order entries only: the rider, and the stars they were given. */
+  rider: ReviewRider | null;
 };
 
 /** Each dish in an order once, in order. */
@@ -139,6 +146,11 @@ export function buildReviewEntries(
     group.ratings.push(rating);
     byOrder.set(orderId, group);
   }
+  // Only the rider was rated (no comment, no dish stars) — still a review
+  // of that order.
+  for (const order of orders) {
+    if (order.rider?.rating && !byOrder.has(order.id)) byOrder.set(order.id, { comment: null, ratings: [] });
+  }
 
   const entries: ReviewEntry[] = [];
   for (const [orderId, group] of byOrder) {
@@ -155,6 +167,7 @@ export function buildReviewEntries(
       ...(group.comment ? [group.comment.updatedAt.getTime()] : []),
       ...group.ratings.map((rating) => rating.updatedAt.getTime()),
     ];
+    if (times.length === 0) times.push((order.deliveredAt ?? order.createdAt).getTime());
     entries.push({
       key: `order-${orderId}`,
       orderId,
@@ -168,6 +181,7 @@ export function buildReviewEntries(
       comment: group.comment?.comment ?? group.ratings.find((rating) => rating.comment)?.comment ?? "",
       status: combinedStatus(statuses),
       updatedAt: new Date(Math.max(...times)),
+      rider: order.rider ?? null,
     });
   }
 
@@ -185,6 +199,7 @@ export function buildReviewEntries(
       comment: rating.comment ?? "",
       status: rating.status,
       updatedAt: rating.updatedAt,
+      rider: null,
     });
   }
 

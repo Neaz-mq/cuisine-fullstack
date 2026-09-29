@@ -9,6 +9,7 @@ import {
   type SidebarSection,
 } from "@/components/admin/AdminSidebar";
 import AdminShell from "@/components/admin/AdminShell";
+import { countUnreadRiderNotifications } from "@/lib/rider-notifications";
 
 type NavDef = {
   label: string;
@@ -58,12 +59,7 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
     items: [
       { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen", icon: "kitchen" },
       { label: "Orders", href: "/admin/orders", scope: "orders", icon: "orders" },
-      {
-        label: "My Deliveries",
-        href: "/admin/my-deliveries",
-        scope: "myDeliveries",
-        icon: "deliveries",
-      },
+      // (My Deliveries moved out: riders get their own menu — RIDER_NAV_SECTIONS.)
       { label: "Payment", href: "/admin/payment", scope: "refunds", icon: "payment" },
       { label: "Categories", href: "/admin/categories", scope: "categories", icon: "categories" },
       { label: "Menu", href: "/admin/menu", scope: "menu", icon: "menu" },
@@ -95,6 +91,51 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
   },
 ];
 
+/**
+ * Rider panel (DELIVERY role) — Figma rider sidebar. A separate menu, not
+ * the admin one filtered: a rider's pages are all their own (their
+ * deliveries, their earnings), none of them are admin sections.
+ *
+ * "Payout" is a dropdown: Earnings (delivery fees + tips) and Cash
+ * Collected (cash-on-delivery money to hand in).
+ */
+const RIDER_BASE = "/admin/my-deliveries";
+
+const RIDER_NAV_SECTIONS: SidebarSection[] = [
+  {
+    heading: "Overview",
+    items: [{ label: "Dashboard", href: RIDER_BASE, icon: "dashboard", exact: true }],
+  },
+  {
+    heading: "Deliveries",
+    items: [
+      { label: "Available Orders", href: `${RIDER_BASE}/available`, icon: "available" },
+      { label: "Active Delivery", href: `${RIDER_BASE}/active`, icon: "activeDelivery" },
+      { label: "Delivery History", href: `${RIDER_BASE}/history`, icon: "history" },
+      { label: "Notification", href: `${RIDER_BASE}/notifications`, icon: "notification" },
+    ],
+  },
+  {
+    heading: "Earnings",
+    items: [
+      {
+        label: "Payout",
+        href: `${RIDER_BASE}/payout`,
+        icon: "payout",
+        children: [
+          { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
+          { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
+        ],
+      },
+    ],
+  },
+];
+
+const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
+  { label: "Profile", href: "/admin/profile", icon: "profile" },
+  { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
+];
+
 /** System group — Figma-তে Settings আর Logout একসাথে পায়ের কাছে।
  *  Logout-এর কোনো scope লাগে না, তাই সেটা AdminSidebar নিজেই আঁকে;
  *  এখান থেকে শুধু Settings যায়। */
@@ -115,6 +156,7 @@ export default async function AdminLayout({
   const scopes = getScopesForRole(role);
 
   const canSee = (scope: Scope | null) => scope === null || scopes.includes(scope);
+  const isRider = role === "DELIVERY";
 
   const canSeeReviews = scopes.includes("reviews");
   const canSeeOrders = scopes.includes("orders");
@@ -125,9 +167,10 @@ export default async function AdminLayout({
    * একা await করা হতো; এখন দুটো একসাথে, তাই query দুটো হলেও অপেক্ষা
    * একটারই সময় নেয়।
    */
-  const [pendingReviewCount, newOrdersCount] = await Promise.all([
+  const [pendingReviewCount, newOrdersCount, riderUnread] = await Promise.all([
     canSeeReviews ? prisma.review.count({ where: { status: "PENDING" } }) : 0,
     canSeeOrders ? prisma.order.count({ where: { status: "PLACED" } }) : 0,
+    isRider ? countUnreadRiderNotifications(session.user.id!) : 0,
   ]);
 
   const badgeFor = (href: string): number | undefined => {
@@ -151,22 +194,29 @@ export default async function AdminLayout({
    * section-টাই বাদ — নাহলে KITCHEN role-এর কাছে "User Management"
    * heading-টা ঝুলে থাকত, নিচে কিছু ছাড়াই।
    */
-  const sections: SidebarSection[] = NAV_SECTIONS.map((section) => ({
-    heading: section.heading,
-    items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
-  })).filter((section) => section.items.length > 0);
+  const sections: SidebarSection[] = isRider
+    ? RIDER_NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.href === `${RIDER_BASE}/notifications` ? { ...item, badge: riderUnread } : item
+        ),
+      }))
+    : NAV_SECTIONS.map((section) => ({
+        heading: section.heading,
+        items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
+      })).filter((section) => section.items.length > 0);
 
   const settingsItem = canSee(SETTINGS_NAV.scope) ? toSidebarItem(SETTINGS_NAV) : null;
+  const systemItems: SidebarItem[] = isRider ? RIDER_SYSTEM_ITEMS : settingsItem ? [settingsItem] : [];
 
   /**
    * Topbar-এর search এই একই ছাঁকা তালিকা থেকেই খোঁজে (Settings সহ), তাই
    * search কখনো এমন page দেখাতে পারে না যেটা sidebar-এ নেই — অর্থাৎ
    * খুললে 403 খেতে হবে এমন কিছু।
    */
-  const searchableNavItems = [
-    ...sections.flatMap((section) => section.items),
-    ...(settingsItem ? [settingsItem] : []),
-  ].map((item) => ({ label: item.label, href: item.href }));
+  const searchableNavItems = [...sections.flatMap((section) => section.items), ...systemItems]
+    .flatMap((item) => item.children ?? [item])
+    .map((item) => ({ label: item.label, href: item.href }));
 
   /* Which bell (if any) makes sense depends on the role, not just
      "is staff" — a bell that navigates somewhere the viewer can't
@@ -187,7 +237,7 @@ export default async function AdminLayout({
         fetchUrl="/api/rider/notifications"
         countKey="newAssignmentsCount"
         latestKey="latestAssignedAt"
-        navigateTo="/admin/my-deliveries"
+        navigateTo="/admin/my-deliveries/active"
         ariaLabel="New delivery assignment notifications"
       />
     ) : canSeeOrders ? (
@@ -241,8 +291,9 @@ export default async function AdminLayout({
         panels={panels}
         navItems={searchableNavItems}
         sections={sections}
-        settingsItem={settingsItem}
+        systemItems={systemItems}
         notificationSlot={notificationBell}
+        showClock={isRider}
       >
         {children}
       </AdminShell>

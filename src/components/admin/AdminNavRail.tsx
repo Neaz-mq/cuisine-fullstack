@@ -28,11 +28,11 @@ import {
  */
 export default function AdminNavRail({
   sections,
-  settingsItem,
+  systemItems = [],
   className = "",
 }: {
   sections: SidebarSection[];
-  settingsItem?: SidebarItem | null;
+  systemItems?: SidebarItem[];
   className?: string;
 }) {
   const pathname = usePathname();
@@ -43,10 +43,11 @@ export default function AdminNavRail({
    * এখানে সেই ক্রমেই বাঁ থেকে ডানে, যাতে একই যন্ত্রের অভ্যাস দুই
    * জায়গায় কাজে লাগে।
    */
-  const items = [
-    ...sections.flatMap((section) => section.items),
-    ...(settingsItem ? [settingsItem] : []),
-  ];
+  // A dropdown group (rider "Payout") has no page of its own — its
+  // children go in the row as ordinary icons.
+  const items = [...sections.flatMap((section) => section.items), ...systemItems].flatMap(
+    (item) => item.children ?? [item]
+  );
 
   return (
     <nav
@@ -57,7 +58,7 @@ export default function AdminNavRail({
     >
       {items.map((item) => {
         const Icon = ICONS[item.icon];
-        const active = isActivePath(pathname, item.href);
+        const active = isActivePath(pathname, item.href, item.exact);
 
         return (
           <Link
