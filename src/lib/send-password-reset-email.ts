@@ -1,4 +1,5 @@
-import { getResendClient, EMAIL_FROM, describeEmailError, maskEmail } from "@/lib/resend";
+import { createHash } from "node:crypto";
+import { sendEmail } from "@/lib/send-email";
 import PasswordResetEmail from "@/emails/PasswordResetEmail";
 import { RESET_TOKEN_TTL_MS } from "@/lib/password-reset";
 
@@ -34,34 +35,26 @@ export async function sendPasswordResetEmail({
   const expiresInMinutes = Math.round(RESET_TOKEN_TTL_MS / 60_000);
   const subject = "Reset your Cuisine password";
 
-  let failure: unknown = null;
-  try {
-    // ⚠️ Resend doesn't throw when it refuses an email — it returns
-    // `{ error }`. Before, only the try/catch was here, so a refused reset
-    // email (e.g. Resend's test sender, which only delivers to the Resend
-    // account's own address) vanished without a single log line.
-    const { error } = await getResendClient().emails.send({
-      from: EMAIL_FROM,
-      to,
-      subject,
-      react: PasswordResetEmail({
-        firstName,
-        resetUrl,
-        expiresInMinutes,
-        previewText: subject,
-      }),
-    });
-    if (error) failure = error;
-  } catch (error) {
-    failure = error;
-  }
-
-  if (!failure) return true;
+  // sendEmail logs the outcome, retries hiccups and adds a plain-text part
+  // (lib/send-email.ts). The key is one per reset link: a retry never sends
+  // a second copy, and the key doesn't reveal the token.
+  const result = await sendEmail({
+    tag: "password-reset",
+    to,
+    subject,
+    react: PasswordResetEmail({
+      firstName,
+      resetUrl,
+      expiresInMinutes,
+      previewText: subject,
+    }),
+    idempotencyKey: `password-reset/${createHash("sha256").update(resetUrl).digest("hex").slice(0, 40)}`,
+  });
+  if (result.ok) return true;
 
   // ⚠️ resetUrl কখনো log করা যাবে না — ওতে plaintext token আছে, আর
   // log সাধারণত DB-র চেয়ে বেশি জায়গায় ছড়ায় (Sentry, CI, ফাইল)।
   // token ফাঁস হওয়া মানে account হাতছাড়া।
-  console.error(`[password-reset] email to ${maskEmail(to)} was not sent: ${describeEmailError(failure)}`);
 
   // The one exception: `next dev` on your own computer (NODE_ENV is
   // "development" only there — never on Vercel or `next start`). The log
@@ -72,3 +65,4 @@ export async function sendPasswordResetEmail({
   }
   return false;
 }
+

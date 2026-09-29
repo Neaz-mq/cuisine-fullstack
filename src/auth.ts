@@ -65,7 +65,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const email = credentials.email as string;
+        // Same form as sign-up and forgot-password store/look it up:
+        // "  Mumu@Gmail.com" must find mumu@gmail.com.
+        const email = String(credentials.email).trim().toLowerCase();
         const password = credentials.password as string;
         const user = await prisma.user.findUnique({
           where: { email },
@@ -155,7 +157,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const picture = user.image ?? null;
 
         const existingUser = await prisma.user.findUnique({
-          where: { email: user.email as string },
+          where: { email: (user.email as string).trim().toLowerCase() },
           include: { staffProfile: { select: { isActive: true } } },
         });
 
@@ -172,7 +174,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!existingUser) {
           const newUser = await prisma.user.create({
             data: {
-              email: user.email as string,
+              email: (user.email as string).trim().toLowerCase(),
               name: user.name,
               image: picture,
               role: "CUSTOMER",

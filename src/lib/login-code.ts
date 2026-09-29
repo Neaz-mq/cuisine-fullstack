@@ -1,6 +1,6 @@
 import { createHash, randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getResendClient, EMAIL_FROM } from "@/lib/resend";
+import { sendEmail } from "@/lib/send-email";
 import LoginCodeEmail from "@/emails/LoginCodeEmail";
 
 /**
@@ -51,27 +51,19 @@ export async function sendLoginCode(
     }),
   ]);
 
-  try {
-    const { error } = await getResendClient().emails.send({
-      from: EMAIL_FROM,
-      to: user.email,
-      subject: purpose === "LOGIN" ? `${code} is your Cuisine sign-in code` : `${code} is your Cuisine verification code`,
-      react: LoginCodeEmail({
-        firstName: user.name?.trim().split(" ")[0] || "there",
-        code,
-        purpose,
-        minutes: Math.round(LOGIN_CODE_TTL_MS / 60_000),
-      }),
-    });
-    if (error) {
-      console.error("[login-code] email failed:", error);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error("[login-code] email failed:", error);
-    return false;
-  }
+  // Retries, plain text and the log line: lib/send-email.ts.
+  const result = await sendEmail({
+    tag: "login-code",
+    to: user.email,
+    subject: purpose === "LOGIN" ? `${code} is your Cuisine sign-in code` : `${code} is your Cuisine verification code`,
+    react: LoginCodeEmail({
+      firstName: user.name?.trim().split(" ")[0] || "there",
+      code,
+      purpose,
+      minutes: Math.round(LOGIN_CODE_TTL_MS / 60_000),
+    }),
+  });
+  return result.ok;
 }
 
 /**

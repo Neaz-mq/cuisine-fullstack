@@ -291,6 +291,9 @@ export function describeEmailError(error: unknown): string {
   if (lower.includes("testing emails") || lower.includes("own email address")) {
     return `${message} — EMAIL_FROM uses Resend's test sender, which only delivers to your Resend account's own address. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on it (e.g. "Cuisine <no-reply@yourdomain.com>").`;
   }
+  if (e.name === "daily_quota_exceeded" || e.name === "monthly_quota_exceeded") {
+    return `${message} — the Resend plan's email limit is used up; emails stop until it resets or the plan is upgraded.`;
+  }
   if (lower.includes("domain") && lower.includes("not verified")) {
     return `${message} — the domain in EMAIL_FROM isn't verified in Resend yet (resend.com/domains).`;
   }

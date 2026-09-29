@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -9,6 +9,7 @@ import {
   resetPasswordUrl,
 } from "@/lib/password-reset";
 import { sendPasswordResetEmail } from "@/lib/send-password-reset-email";
+import { maskEmail } from "@/lib/resend";
 
 /**
  * src/app/api/auth/forgot-password/route.ts
@@ -95,11 +96,25 @@ export async function POST(request: Request) {
     // response-এর সময় বা ফলাফলে ছাপ না ফেলে (উপরের timing মন্তব্য
     // দ্রষ্টব্য)। helper নিজে কখনো throw করে না, তাই এটা unhandled
     // rejection তৈরি করবে না।
-    void sendPasswordResetEmail({
-      to: email,
-      firstName,
-      resetUrl: resetPasswordUrl(token),
-    });
+    // ⚠️ after(), not a bare `void`. On Vercel the function can be frozen
+    // the moment the response is sent, and an un-awaited promise then just
+    // stops — the reset email silently never arrives. after() runs the send
+    // once the response is out (so the timing stays the same for existing
+    // and unknown emails) and keeps the function alive until it finishes.
+    after(() =>
+      sendPasswordResetEmail({
+        to: email,
+        firstName,
+        resetUrl: resetPasswordUrl(token),
+      })
+    );
+  }
+
+  if (!user) {
+    // Server log only (the response stays the same for every address).
+    // Answers "why didn't the reset email come?" in Vercel → Logs: there
+    // is no account with that exact address — a typo, or it was deleted.
+    console.info(`[password-reset] no account for ${maskEmail(email)} — nothing sent`);
   }
 
   return NextResponse.json(GENERIC_OK);

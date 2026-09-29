@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getResendClient, EMAIL_FROM, describeEmailError } from "@/lib/resend";
+import { sendEmail } from "@/lib/send-email";
 import { formatOrderId } from "@/lib/format-order-id";
 import { formatAmountWithCode } from "@/lib/currency-format";
 import OrderStatusEmail from "@/emails/OrderStatusEmail";
@@ -90,8 +90,11 @@ export async function sendOrderStatusEmail(orderId: string, status: OrderUpdateS
     const code = formatOrderId(order.id);
     const trackUrl = `${appUrl}/track/${order.id}${copy.review ? "?review=1" : ""}`;
 
-    const { error: refused } = await getResendClient().emails.send({
-      from: EMAIL_FROM,
+    // Logs sent/failed itself, retries hiccups (lib/send-email.ts). One
+    // email per order + status, even if this runs twice.
+    await sendEmail({
+      tag: `order-status:${status}`,
+      idempotencyKey: `order-status/${order.id}/${status}`,
       to: order.email as string,
       subject: copy.subject(code),
       react: OrderStatusEmail({
@@ -107,10 +110,6 @@ export async function sendOrderStatusEmail(orderId: string, status: OrderUpdateS
         settingsUrl: order.user ? `${appUrl}/account/profile#preferences` : null,
       }),
     });
-    // Resend returns a refusal instead of throwing — log it, or it vanishes.
-    if (refused) {
-      console.error(`[order-status-email] couldn't send ${status} email for ${orderId}: ${describeEmailError(refused)}`);
-    }
   } catch (error) {
     console.error(`[order-status-email] couldn't send ${status} email for ${orderId}:`, error);
   }

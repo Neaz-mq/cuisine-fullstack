@@ -1,4 +1,4 @@
-import { getResendClient, EMAIL_FROM, describeEmailError } from "@/lib/resend";
+import { sendEmail } from "@/lib/send-email";
 import { formatOrderId } from "@/lib/format-order-id";
 import OrderConfirmationEmail from "@/emails/OrderConfirmationEmail";
 import { type Money, toMoney } from "@/lib/money";
@@ -79,8 +79,11 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
     const money = (value: Money) => formatAmountWithCode(value.toFixed(units), order.currency);
     const optionalMoney = (value: Money) => (value.greaterThan(0) ? money(value) : null);
 
-    const { error: refused } = await getResendClient().emails.send({
-      from: EMAIL_FROM,
+    // Logs sent/failed itself, retries hiccups (lib/send-email.ts). One
+    // confirmation per order, even if the payment webhook fires twice.
+    await sendEmail({
+      tag: "order-confirmation",
+      idempotencyKey: `order-confirmation/${order.id}`,
       to: order.email,
       subject: `Order ${formatOrderId(order.id)} confirmed`,
       react: OrderConfirmationEmail({
@@ -121,10 +124,6 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail) {
         trackingUrl: `${appUrl}/track/${order.id}`,
       }),
     });
-    // Resend returns a refusal instead of throwing — log it, or it vanishes.
-    if (refused) {
-      console.error(`Failed to send order confirmation email: ${describeEmailError(refused)}`);
-    }
   } catch (error) {
     console.error("Failed to send order confirmation email:", error);
   }
