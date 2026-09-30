@@ -104,18 +104,31 @@ export default function SiteTopBar({
        * ব্রাউজার y-অক্ষে `auto` ধরে নিয়ে একটা বাড়তি উল্লম্ব
        * scrollbar এনে ফেলে।
        */}
-      <div className="mx-auto flex max-w-[1280px] items-center gap-6 overflow-x-auto overflow-y-hidden px-4 py-2.5 md:justify-center md:gap-[46px] md:px-10 xl:px-0">
-        <span className="flex shrink-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:text-[14px]">
+      {/* Phones (below 768px): one centred line — the hours, with a green /
+          red dot for "kitchen open / closed". The address and the status
+          text join in from 768px. (It used to be a sideways-scrolling strip
+          on phones, which cut the address in half.) */}
+      <div className="mx-auto flex max-w-[1280px] items-center justify-center gap-6 overflow-hidden px-4 py-2.5 md:gap-8 md:px-10 lg:gap-[46px] xl:px-0">
+        <span className="flex min-w-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:shrink-0 md:text-[14px]">
           <AlarmClock className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-          Open from {formatHour(openHour)} - {formatHour(closeHour)}
+          <span className="truncate">
+            Open from {formatHour(openHour)} - {formatHour(closeHour)}
+          </span>
+          {isOpen !== null && (
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full md:hidden ${isOpen ? "bg-[#0ECF00]" : "bg-[#FF3F5C]"}`}
+              role="img"
+              aria-label={isOpen ? "Kitchen available" : "Kitchen closed"}
+            />
+          )}
         </span>
 
-        <span className="flex shrink-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:text-[14px]">
+        <span className="hidden shrink-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:flex md:text-[14px]">
           <MapPin className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
           {address}
         </span>
 
-        <span className="flex shrink-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:text-[14px]">
+        <span className="hidden shrink-0 items-center gap-2 whitespace-nowrap font-sora text-[12px] font-medium leading-[1.7] text-white md:flex md:text-[14px]">
           <ChefHat className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
           {/**
            * ⚠️ `isOpen === null` মানে এখনো মাপা হয়নি (প্রথম render)।

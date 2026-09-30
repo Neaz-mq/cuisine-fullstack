@@ -37,7 +37,7 @@ function StoreButton({
       // App publish হলে আসল লিংক এখানে বসাবেন।
       href="#"
       aria-label={label}
-      className={`flex h-12 items-center justify-center gap-1.5 rounded-full px-5 font-sora text-[13px] font-semibold leading-[1.6] transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-14 md:px-6 md:text-[16px] ${
+      className={`flex h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.6] transition-opacity min-[400px]:px-5 hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-14 md:px-6 md:text-[16px] ${
         variant === "apple" ? "bg-[#FF9540] text-white" : "bg-black text-white"
       }`}
     >
@@ -64,7 +64,8 @@ export default function OneAppSection() {
 
   return (
     <section
-      className="bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]"
+      // overflow-hidden: the slide-in (x ±24px) must not widen the page on phones
+      className="overflow-hidden bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]"
       aria-label="Get the Cuisine app"
     >
       <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-12 lg:flex-row lg:justify-between lg:gap-10">
@@ -72,7 +73,7 @@ export default function OneAppSection() {
         <motion.div
           {...fromLeft}
           transition={{ duration: 0.6, ease: EASE }}
-          className="flex max-w-[526px] flex-col items-start gap-9 text-center lg:text-left"
+          className="flex w-full max-w-[526px] flex-col items-center gap-9 text-center lg:items-start lg:text-left"
         >
           <div className="flex flex-col items-center gap-4 lg:items-start">
             <h2 className="font-frank-ruhl text-[28px] font-semibold leading-[1.15] tracking-[-0.01em] text-black md:text-[40px] xl:text-[64px]">
@@ -101,7 +102,7 @@ export default function OneAppSection() {
             </div>
 
             <span
-              className="h-[56px] w-[1.5px] bg-black/20"
+              className="hidden h-[56px] w-[1.5px] bg-black/20 min-[400px]:block"
               aria-hidden="true"
             />
 
@@ -126,7 +127,7 @@ export default function OneAppSection() {
           </div>
 
           {/* Store buttons */}
-          <div className="flex items-center justify-center gap-4 lg:justify-start">
+          <div className="flex w-full flex-wrap items-center justify-center gap-3 min-[400px]:gap-4 lg:justify-start">
             <StoreButton
               icon={<FaApple className="h-5 w-5" aria-hidden="true" />}
               label="Apple Store"

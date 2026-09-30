@@ -102,7 +102,11 @@ export default function Footer() {
       {/* Container — mirrors the 1280px content width used across every landing section */}
       <div className="flex w-full max-w-[1280px] flex-col items-center gap-12 md:gap-16 xl:gap-[78px]">
         {/* Content: top (logo/desc/social) + menu columns + contact */}
-        <div className="flex w-full flex-col items-start gap-12 md:flex-row md:justify-between md:gap-10 xl:gap-[80px]">
+        {/* Brand beside the link columns only from 1280px (xl). At 768–1279
+            the four columns squeezed "Customer Services" and "My Account"
+            onto two lines each; there the brand sits on top and the three
+            link columns share the row under it. */}
+        <div className="flex w-full flex-col items-start gap-10 md:gap-12 xl:flex-row xl:justify-between xl:gap-[80px]">
           {/* Top: logo + description + socials */}
           <div className="flex w-full max-w-[370px] flex-col items-start gap-[30px]">
             <div className="flex flex-col items-start gap-4">
@@ -139,7 +143,7 @@ export default function Footer() {
           </div>
 
           {/* Menus: Customer Services + Our Information + Contact Info — one row, three columns */}
-          <div className="flex w-full flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-10 md:w-auto md:flex-1 md:flex-nowrap md:justify-between md:gap-10 xl:gap-16">
+          <div className="grid w-full grid-cols-1 gap-10 min-[480px]:grid-cols-2 min-[480px]:gap-x-8 md:grid-cols-3 xl:flex xl:w-auto xl:flex-1 xl:justify-between xl:gap-16">
             <div className="flex flex-col items-start gap-4">
               <h3 className="font-frank-ruhl text-[18px] font-semibold leading-[1.3] text-white">
                 Customer Services
@@ -162,7 +166,7 @@ export default function Footer() {
               </div>
             </div>
 
-            <div className="flex w-full max-w-[300px] flex-col items-start gap-4 sm:w-auto">
+            <div className="flex w-full max-w-[300px] flex-col items-start gap-4 min-[480px]:col-span-2 md:col-span-1 xl:w-auto">
               <h3 className="font-frank-ruhl text-[18px] font-semibold leading-[1.3] text-white">
                 Contact Info
               </h3>

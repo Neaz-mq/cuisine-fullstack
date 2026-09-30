@@ -30,12 +30,14 @@ export const metadata: Metadata = {
  */
 export default function ChefsPage() {
   return (
-    <main>
+    // A <div>, not a second <main>: the (main) layout already wraps every
+    // page in <main>, and a page must have only one.
+    <div>
       <ChefsHero />
       <OurJourney />
       <MeetTheExperts />
       <WhyGuestsChooseUs />
       <MenuCTA />
-    </main>
+    </div>
   );
 }

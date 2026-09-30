@@ -119,7 +119,7 @@ export default function TodaysOffers({ offers }: { offers: MenuOffer[] }) {
   if (offers.length === 0) return null;
 
   return (
-    <section className="bg-white px-4 py-12 md:px-[50px] md:py-[100px] xl:px-20">
+    <section className="bg-white px-4 py-12 md:px-10 md:py-[100px] xl:px-20">
       <div className="mx-auto flex max-w-[1280px] flex-col gap-[30px]">
         {/* Frame 2147236051: row, space-between, gap 60। */}
         <div className="flex items-center justify-between gap-6 md:gap-[60px]">

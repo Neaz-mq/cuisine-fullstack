@@ -14,8 +14,10 @@ import {
   LayoutDashboard,
   LogOut,
   MapPin,
+  Menu as MenuIcon,
   Star,
   UserRound,
+  X,
 } from "lucide-react";
 import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
 import { useCart } from "@/context/CartContext";
@@ -110,6 +112,33 @@ export default function Navbar() {
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Phone/tablet menu (below lg the nav links don't fit in the row).
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileRef = useRef<HTMLDivElement>(null);
+  // Close the phone menu after navigating (adjusting state during render,
+  // not in an effect — the React-recommended way).
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setMobileOpen(false);
+    setMenuOpen(false);
+  }
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (mobileRef.current && !mobileRef.current.contains(e.target as Node)) setMobileOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileOpen]);
 
   // Close the dropdown on outside click — same pattern as
   // AccountMenu.tsx / AdminTopbar.tsx.
@@ -143,18 +172,18 @@ export default function Navbar() {
         {/* ⚠️ Smaller gaps and wordmark below 390px: when signed in, the
             logo + avatar + cart were wider than a 320px phone and the page
             scrolled sideways. From 390px up it's the Figma size. */}
-        <div className="flex w-full items-center justify-between gap-3 min-[390px]:gap-6">
+        <div ref={mobileRef} className="relative flex w-full items-center justify-between gap-2 min-[390px]:gap-6">
           {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center gap-2 min-[390px]:gap-3">
+          <Link href="/" className="flex min-w-0 shrink-0 items-center gap-1.5 min-[390px]:gap-3">
             <Image
               src="/logo.svg"
               alt="Cuisine logo"
               width={40}
               height={40}
-              className="h-10 w-10"
+              className="h-9 w-9 min-[390px]:h-10 min-[390px]:w-10"
               priority
             />
-            <span className="font-frank-ruhl text-[22px] font-bold leading-[1.26] tracking-[-0.01em] text-black min-[390px]:text-[28px]">
+            <span className="font-frank-ruhl text-[20px] font-bold leading-[1.26] tracking-[-0.01em] text-black min-[390px]:text-[28px]">
               Cuisine
             </span>
           </Link>
@@ -178,19 +207,25 @@ export default function Navbar() {
           </nav>
 
           {/* Auth buttons + cart */}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 min-[390px]:gap-2">
             {status === "loading" ? (
               // Session still resolving — avoid a Login/SignUp flash
               // right before it turns into the avatar.
               <div className="h-[46px] w-[46px] animate-pulse rounded-full bg-black/10" />
             ) : session ? (
-              <div className="relative" ref={menuRef}>
+              // No `relative` here: the dropdown anchors to the whole row, so
+              // on a 320px phone it opens inside the screen, not off the left.
+              <div ref={menuRef}>
                 <button
                   type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
+                  onClick={() => {
+                    setMobileOpen(false);
+                    setMenuOpen((prev) => !prev);
+                  }}
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  className="flex h-[46px] items-center gap-2 rounded-full border border-black/10 bg-white pl-1 pr-3 transition-colors hover:bg-black/[0.03] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                  aria-label="Account menu"
+                  className="flex h-[42px] items-center gap-2 rounded-full border border-black/10 bg-white pl-1 pr-1 transition-colors min-[390px]:h-[46px] min-[390px]:pr-3 hover:bg-black/[0.03] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                 >
                   {session.user?.image ? (
                     <Image
@@ -213,7 +248,7 @@ export default function Navbar() {
                     {displayName}
                   </span>
                   <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-black/50 transition-transform ${
+                    className={`hidden h-4 w-4 shrink-0 text-black/50 transition-transform min-[390px]:block ${
                       menuOpen ? "rotate-180" : ""
                     }`}
                   />
@@ -222,7 +257,7 @@ export default function Navbar() {
                 {menuOpen && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-50 mt-2 w-[240px] rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+                    className="absolute right-0 top-full z-50 mt-2 w-[240px] max-w-full rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
                   >
                     <div className="truncate px-3.5 pb-2 pt-1 font-sora text-[13px] text-black/50">
                       {session.user?.email}
@@ -279,7 +314,7 @@ export default function Navbar() {
               <>
                 <Link
                   href="/login"
-                  className="flex h-[46px] items-center justify-center rounded-full border border-black px-5 font-sora text-[16px] font-semibold leading-[1.3] text-black transition-opacity hover:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                  className="hidden h-[46px] items-center justify-center rounded-full border border-black px-5 min-[420px]:flex font-sora text-[16px] font-semibold leading-[1.3] text-black transition-opacity hover:opacity-70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                 >
                   Log In
                 </Link>
@@ -293,7 +328,7 @@ export default function Navbar() {
                   */}
                 <Link
                   href="/register"
-                  className="flex h-[46px] items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+                  className="hidden h-[46px] items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] px-5 min-[640px]:flex font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                 >
                   Sign Up
                 </Link>
@@ -311,7 +346,7 @@ export default function Navbar() {
               aria-label={
                 cartCount > 0 ? `Cart, ${cartCount} items` : "Cart"
               }
-              className="relative flex h-[46px] w-[46px] items-center justify-center rounded-full bg-black transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
+              className="relative flex h-[42px] w-[42px] items-center justify-center rounded-full bg-black transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[390px]:h-[46px] min-[390px]:w-[46px]"
             >
               <FaShoppingCart className="h-[18px] w-[18px] text-white" />
               {/* Badge only renders when there's actually something in the cart */}
@@ -321,7 +356,67 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
+
+            {/* Phone/tablet menu button — the page links don't fit in the
+                row below 1024px (lg), so they live in this menu. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setMobileOpen((open) => !open);
+              }}
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+              aria-controls="site-mobile-menu"
+              className="flex h-[42px] w-[42px] items-center justify-center rounded-full border border-black/15 bg-white text-black transition-colors hover:bg-black/[0.04] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[390px]:h-[46px] min-[390px]:w-[46px] lg:hidden"
+            >
+              {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <MenuIcon className="h-5 w-5" aria-hidden="true" />}
+            </button>
           </div>
+        
+          {/* Phone/tablet menu panel */}
+          {mobileOpen && (
+            <nav
+              id="site-mobile-menu"
+              aria-label="Main"
+              className="absolute left-0 right-0 top-full z-50 mt-3 flex flex-col gap-1 rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)] lg:hidden"
+            >
+              {navLinks.map((link) => {
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`rounded-[14px] px-4 py-3 font-sora text-[16px] transition-colors hover:bg-black/[0.05] ${
+                      isActive ? "bg-[#F9F6F3] font-semibold text-[#141921]" : "text-black/75"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+              {status !== "loading" && !session && (
+                <div className="mt-1 grid grid-cols-2 gap-2 border-t border-black/5 p-2 pt-3 min-[640px]:hidden">
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex h-[46px] items-center justify-center rounded-full border border-black font-sora text-[15px] font-semibold text-black"
+                  >
+                    Log In
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex h-[46px] items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] font-sora text-[15px] font-semibold text-white"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
+            </nav>
+          )}
         </div>
 
         {/* Divider */}

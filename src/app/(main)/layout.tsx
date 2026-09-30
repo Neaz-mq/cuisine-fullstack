@@ -34,7 +34,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <SiteNavbar />
       {/* Footer-টা এই মোড়কের বাইরে নয় — এখন আর `ml-20` নেই, তাই
           full-bleed পটভূমির জন্য আলাদা করে রাখার দরকারও নেই। */}
-      <main className="flex-1">{children}</main>
+      {/* overflow-x-clip: a section's slide-in animation (or one element a
+          few px too wide) can never make the whole page scroll sideways on
+          a phone. `clip`, not `hidden` — it doesn't break sticky elements. */}
+      <main className="flex-1 overflow-x-clip">{children}</main>
       <Footer />
       {/* "Ask Cuisine AI" — shown only when the free Groq key is set (see /api/ai/chat). */}
       {process.env.GROQ_API_KEY ? <AiAssistant /> : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import FoodCard, { type MenuCardItem } from "./FoodCard";
 
 const FOCUS_RING =
@@ -119,6 +119,26 @@ export default function MenuBrowser({
 }) {
   // null = "All"। শ্রেণির id, নাম নয় — দুটো শ্রেণির নাম এক হতে পারে।
   const [selected, setSelected] = useState<string | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
+
+  // Picking a category (a chip, or "View All" far down the page) swaps the
+  // list below. Bring the reader back to the top of the list so they see
+  // what they picked — otherwise, after "View All" on a phone, they are
+  // left scrolled past the (now shorter) list.
+  const choose = (id: string | null) => {
+    setSelected(id);
+    // Phones: slide the chip row so the picked chip is in view.
+    const row = chipsRef.current;
+    const chip = row?.querySelector<HTMLElement>(`[data-category="${id ?? "all"}"]`);
+    if (row && chip && row.scrollWidth > row.clientWidth) {
+      row.scrollTo({ left: chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2, behavior: "smooth" });
+    }
+    const top = topRef.current;
+    if (top && top.getBoundingClientRect().top < 0) {
+      top.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   const visible = selected
     ? categories.filter((category) => category.id === selected)
@@ -128,7 +148,7 @@ export default function MenuBrowser({
     <section className="bg-[#F9F6F3] px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]">
       <div className="mx-auto flex max-w-[1280px] flex-col gap-8 xl:gap-10">
         {/* Frame 2147236057: column, gap 30। */}
-        <div className="flex flex-col gap-5 xl:gap-[30px]">
+        <div ref={topRef} className="flex scroll-mt-4 flex-col gap-5 xl:gap-[30px]">
           <h2 className="font-frank-ruhl text-[28px] font-semibold leading-[1.14] tracking-[-0.01em] text-black md:text-[34px] xl:text-[40px]">
             Categories
           </h2>
@@ -141,14 +161,18 @@ export default function MenuBrowser({
            * শ্রেণির সংখ্যা নকশার হাতে নয়। চোদ্দটা হলে এক সারিতে চাপাতে
            * গিয়ে হয় লেখা কাটত, নয় আড়াআড়ি scroll লাগত।
            */}
-          <div className="flex flex-wrap gap-3 xl:gap-4">
+          {/* Phones: one row you swipe sideways (13 chips wrapped into 8
+              rows and pushed the dishes a whole screen down). From 768px
+              they wrap as in Figma. */}
+          <div ref={chipsRef} className="relative -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:flex-wrap md:gap-3 md:overflow-visible md:px-0 md:pb-0 xl:gap-4 [&::-webkit-scrollbar]:hidden">
             {/* ⚠️ "All"-এ কোনো আইকন নেই — Figma-তেও নেই, আর থাকলে
                 ওটা একটা শ্রেণির নাম বলে ভুল হতো। */}
             <button
               type="button"
-              onClick={() => setSelected(null)}
+              data-category="all"
+              onClick={() => choose(null)}
               aria-pressed={selected === null}
-              className={`flex h-12 shrink-0 items-center justify-center rounded-[90px] px-5 font-sora text-[14px] font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
+              className={`flex h-11 shrink-0 items-center justify-center rounded-[90px] px-5 font-sora text-[14px] md:h-12 font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
                 selected === null
                   ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
                   : "border border-black text-black hover:bg-black hover:text-white"
@@ -161,9 +185,10 @@ export default function MenuBrowser({
               <button
                 key={category.id}
                 type="button"
-                onClick={() => setSelected(category.id)}
+                data-category={category.id}
+                onClick={() => choose(category.id)}
                 aria-pressed={selected === category.id}
-                className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-[90px] px-5 font-sora text-[14px] font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
+                className={`flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[90px] px-4 font-sora text-[14px] md:h-12 md:px-5 font-semibold leading-[1.6] transition-colors xl:h-14 xl:px-6 xl:text-[16px] ${
                   selected === category.id
                     ? "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white"
                     : "border border-black text-black hover:bg-black hover:text-white"
@@ -217,7 +242,7 @@ export default function MenuBrowser({
                   {selected === null && category.items.length > PREVIEW_COUNT && (
                     <button
                       type="button"
-                      onClick={() => setSelected(category.id)}
+                      onClick={() => choose(category.id)}
                       className={`shrink-0 font-sora text-[14px] font-normal leading-[1.14] tracking-[-0.01em] text-black/70 underline-offset-4 transition-colors hover:text-black hover:underline xl:text-[20px] ${FOCUS_RING}`}
                     >
                       View All
@@ -230,10 +255,30 @@ export default function MenuBrowser({
                     Nothing in this category yet.
                   </p>
                 ) : (
-                  /* Frame 2147235270: row, gap 16 — তিনটে কার্ড। */
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  /* Frame 2147235270: row, gap 16 — তিনটে কার্ড।
+                     "All" below 1280px: the three preview cards sit in a row
+                     you swipe (like food apps) — one below the other they
+                     made the page ~25,000px long on a phone, and in two
+                     columns the third card was left alone on its row.
+                     One category picked: a normal grid. */
+                  <div
+                    className={
+                      selected === null
+                        ? "-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] md:-mx-10 md:px-10 xl:mx-0 xl:grid xl:grid-cols-3 xl:overflow-visible xl:px-0 xl:pb-0 [&::-webkit-scrollbar]:hidden"
+                        : "grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+                    }
+                  >
                     {items.map((item) => (
-                      <FoodCard key={item.id} item={item} />
+                      <div
+                        key={item.id}
+                        className={
+                          selected === null
+                            ? "flex w-[82%] max-w-[340px] shrink-0 snap-start scroll-ml-4 md:w-[340px] md:scroll-ml-10 xl:w-auto xl:max-w-none [&>*]:min-w-0 [&>*]:flex-1"
+                            : "flex [&>*]:min-w-0 [&>*]:flex-1"
+                        }
+                      >
+                        <FoodCard item={item} />
+                      </div>
                     ))}
                   </div>
                 )}
