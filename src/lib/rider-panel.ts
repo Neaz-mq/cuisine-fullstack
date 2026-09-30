@@ -19,6 +19,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { areaLabel, deliveryEarning } from "@/lib/rider-stats";
 import { formatAmount } from "@/lib/currency-format";
+import { DEFAULT_RIDER_PREFERENCES, availableOrderFilter, type RiderPreferences } from "@/lib/rider-preferences";
 
 /** How many deliveries one rider may hold at once (taken or assigned, not
  *  yet delivered). Stops one rider from grabbing every available order. */
@@ -103,9 +104,31 @@ export function toAvailableOrder(order: AvailableOrderRecord): AvailableOrder {
   };
 }
 
-export async function findAvailableOrders(limit = 50): Promise<AvailableOrder[]> {
+/** A rider's Settings (radius, cash, alerts). Defaults if not set yet. */
+export async function getRiderPreferences(riderId: string): Promise<RiderPreferences> {
+  const profile = await prisma.staffProfile.findUnique({
+    where: { userId: riderId },
+    select: { riderMaxRadiusKm: true, riderAcceptsCash: true, riderNewOrderAlerts: true, riderEarningsSummary: true },
+  });
+  if (!profile) return DEFAULT_RIDER_PREFERENCES;
+  return {
+    maxRadiusKm: profile.riderMaxRadiusKm ?? null,
+    acceptsCash: profile.riderAcceptsCash,
+    newOrderAlerts: profile.riderNewOrderAlerts,
+    earningsSummary: profile.riderEarningsSummary,
+  };
+}
+
+/** "Waiting for a rider", narrowed to what this rider accepts (Settings). */
+export function availableOrderWhereFor(prefs: RiderPreferences | null): Prisma.OrderWhereInput {
+  const extra = prefs ? availableOrderFilter(prefs) : [];
+  return extra.length ? { AND: [AVAILABLE_ORDER_WHERE, ...extra] } : AVAILABLE_ORDER_WHERE;
+}
+
+/** Waiting orders; pass the rider's Settings to show only what they accept. */
+export async function findAvailableOrders(limit = 50, prefs: RiderPreferences | null = null): Promise<AvailableOrder[]> {
   const orders = await prisma.order.findMany({
-    where: AVAILABLE_ORDER_WHERE,
+    where: availableOrderWhereFor(prefs),
     orderBy: [{ preparingAt: "asc" }, { createdAt: "asc" }],
     take: limit,
     select: AVAILABLE_ORDER_SELECT,

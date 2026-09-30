@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { profileSchema } from "@/lib/validations/account";
 
 /**
  * src/lib/validations/delivery.ts
@@ -68,4 +69,47 @@ export const payoutRequestSchema = z.object({
 export const payoutDecisionSchema = z.object({
   action: z.enum(["PAID", "REJECTED"]),
   note: z.string().trim().max(300).optional(),
+});
+
+/**
+ * Rider panel → My Profile → "Save Change" (profile + vehicle in one go).
+ * Name, phone, date of birth and gender follow the customer profile rules;
+ * `phone` is the work phone (StaffProfile.phone) customers may see.
+ * `nid` is only accepted while none is on file — after that the
+ * restaurant changes it (it's an identity document).
+ */
+export const riderProfileSchema = profileSchema.extend({
+  address: z.string().trim().max(200, "Keep the address under 200 characters"),
+  nid: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => value === "" || /^\d{10}$|^\d{13}$|^\d{17}$/.test(value.replace(/\s+/g, "")), "NID should be 10, 13 or 17 digits")
+    .transform((value) => value.replace(/\s+/g, ""))
+    .optional()
+    .default(""),
+  drivingLicenseNumber: z
+    .string()
+    .trim()
+    .max(30, "Keep the licence number under 30 characters")
+    .transform((value) => value.toUpperCase()),
+}).merge(riderVehicleSchema);
+
+/** Staff page → rider's documents: approve, or reject with a reason. */
+export const documentDecisionSchema = z
+  .object({
+    action: z.enum(["VERIFIED", "REJECTED"]),
+    note: z.string().trim().max(300).optional().default(""),
+  })
+  .refine((value) => value.action === "VERIFIED" || value.note.length > 0, {
+    message: "Tell the rider why, so they can fix it",
+    path: ["note"],
+  });
+
+/** Rider panel → Settings → Delivery Preferences + Notifications. */
+export const riderPreferencesSchema = z.object({
+  maxRadiusKm: z.union([z.null(), z.literal(3), z.literal(5), z.literal(8), z.literal(10), z.literal(15)]),
+  acceptsCash: z.boolean(),
+  newOrderAlerts: z.boolean(),
+  earningsSummary: z.boolean(),
 });

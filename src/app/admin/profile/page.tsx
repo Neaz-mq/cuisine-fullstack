@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import PasswordForm from "@/components/account/PasswordForm";
-import RiderVehicleForm from "@/components/admin/RiderVehicleForm";
+import { splitE164 } from "@/lib/checkout-profile";
+import { getRestaurantSettings } from "@/lib/get-settings";
+import { isUploadedAvatar } from "@/lib/avatar";
+import { GENDER_OPTIONS } from "@/lib/validations/account";
+import { describeAllDocuments } from "@/lib/rider-documents";
+import RiderProfileForm from "./RiderProfileForm";
 
 export const metadata: Metadata = { title: "My Profile" };
 
@@ -20,6 +24,10 @@ export const metadata: Metadata = { title: "My Profile" };
  *
  * Staff don't get the customer panel (orders, rewards, addresses): staff
  * accounts are for work. See SiteNavbar.tsx.
+ *
+ * Riders (DELIVERY) get their own Figma page instead — RiderProfileForm:
+ * they keep their contact details, vehicle and documents up to date
+ * themselves, because the restaurant needs them current to send them out.
  */
 
 function roleLabel(role: string) {
@@ -32,6 +40,8 @@ function roleLabel(role: string) {
 
 export default async function AdminProfilePage() {
   const session = await requireAdmin();
+  if ((session.user as { role?: string }).role === "DELIVERY") return <RiderProfile userId={session.user!.id!} />;
+
   const user = await prisma.user.findUnique({
     where: { id: session.user!.id },
     select: {
@@ -41,15 +51,12 @@ export default async function AdminProfilePage() {
       role: true,
       password: true,
       createdAt: true,
-      staffProfile: { select: { phone: true, vehicleType: true, vehicleModel: true, vehiclePlate: true } },
+      staffProfile: { select: { phone: true } },
     },
   });
   if (!user) return null;
 
   const name = user.name?.trim() || user.email.split("@")[0];
-  // Rider panel (Figma "Vehicle & Profile"): riders also keep their
-  // vehicle here, and their password lives under Settings in their menu.
-  const isRider = user.role === "DELIVERY";
   const rows = [
     { label: "Name", value: name },
     { label: "Email", value: user.email },
@@ -68,7 +75,7 @@ export default async function AdminProfilePage() {
           My Profile
         </h1>
         <p className="mt-2 font-sora text-[13px] text-black/60">
-          {isRider ? "Your rider details and vehicle." : "Your staff account and password."}
+          Your staff account and password.
         </p>
       </div>
 
@@ -110,27 +117,75 @@ export default async function AdminProfilePage() {
         </p>
       </section>
 
-      {isRider && (
-        <RiderVehicleForm
-          initial={{
-            vehicleType: user.staffProfile?.vehicleType ?? "",
-            vehicleModel: user.staffProfile?.vehicleModel ?? "",
-            vehiclePlate: user.staffProfile?.vehiclePlate ?? "",
-          }}
-        />
-      )}
-
-      {isRider ? (
-        <p className="rounded-[16px] bg-white px-4 py-3 font-sora text-[13px] text-black/70">
-          Password and two-step sign-in are in{" "}
-          <Link href="/admin/my-deliveries/settings" className="font-semibold text-[#FF7100] hover:underline">
-            Settings
-          </Link>
-          .
-        </p>
-      ) : (
-        <PasswordForm hasPassword={Boolean(user.password)} tone="white" />
-      )}
+      <PasswordForm hasPassword={Boolean(user.password)} tone="white" />
     </div>
+  );
+}
+
+async function RiderProfile({ userId }: { userId: string }) {
+  const [user, settings] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        name: true,
+        email: true,
+        image: true,
+        createdAt: true,
+        dateOfBirth: true,
+        gender: true,
+        staffProfile: {
+          select: {
+            phone: true,
+            address: true,
+            nid: true,
+            hireDate: true,
+            vehicleType: true,
+            vehicleModel: true,
+            vehiclePlate: true,
+            drivingLicenseNumber: true,
+          },
+        },
+        riderDocuments: {
+          select: { type: true, status: true, expiresAt: true, uploadedAt: true, fileName: true, note: true },
+        },
+      },
+    }),
+    getRestaurantSettings(), // restaurant time zone for "today"
+  ]);
+  if (!user) return null;
+
+  const profile = user.staffProfile;
+  // Work phones typed on the Staff page may not be in +880 form — keep the
+  // digits then, under the default country.
+  const phone = profile?.phone ? (splitE164(profile.phone) ?? { number: profile.phone.replace(/\D/g, ""), countryCode: null }) : null;
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: settings.timezone }).format(now);
+  const memberSince = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: settings.timezone }).format(
+    profile?.hireDate ?? user.createdAt
+  );
+
+  return (
+    <RiderProfileForm
+      today={today}
+      nowIso={now.toISOString()}
+      documents={describeAllDocuments(user.riderDocuments, now)}
+      initial={{
+        name: user.name ?? "",
+        email: user.email,
+        image: user.image,
+        hasUploadedPhoto: isUploadedAvatar(user.image),
+        phoneCountryCode: phone?.countryCode ?? null,
+        phoneNumber: phone?.number ?? "",
+        address: profile?.address ?? "",
+        nid: profile?.nid ?? "",
+        dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().slice(0, 10) : "",
+        gender: GENDER_OPTIONS.some((option) => option.value === user.gender) ? (user.gender as string) : "",
+        memberSinceLabel: memberSince,
+        vehicleType: profile?.vehicleType ?? "",
+        vehicleModel: profile?.vehicleModel ?? "",
+        vehiclePlate: profile?.vehiclePlate ?? "",
+        drivingLicenseNumber: profile?.drivingLicenseNumber ?? "",
+      }}
+    />
   );
 }

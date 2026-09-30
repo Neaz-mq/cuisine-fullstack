@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
-import { ACTIVE_DELIVERY_WHERE, findAvailableOrders, MAX_ACTIVE_DELIVERIES, withoutAddress } from "@/lib/rider-panel";
+import { ACTIVE_DELIVERY_WHERE, findAvailableOrders, getRiderPreferences, MAX_ACTIVE_DELIVERIES, withoutAddress } from "@/lib/rider-panel";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import { RiderPageHeader } from "../rider-ui";
 import AvailableOrders from "./AvailableOrders";
@@ -15,8 +15,10 @@ export const metadata = { title: "Available Orders" };
  */
 export default async function AvailableOrdersPage() {
   const session = await requireStaff("myDeliveries");
+  // Only the orders this rider accepts (Settings → Delivery Preferences).
+  const prefs = await getRiderPreferences(session.user.id!);
   const [orders, activeCount] = await Promise.all([
-    findAvailableOrders(),
+    findAvailableOrders(50, prefs),
     prisma.deliveryTracking.count({ where: ACTIVE_DELIVERY_WHERE(session.user.id!) }),
   ]);
 

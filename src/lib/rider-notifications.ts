@@ -11,7 +11,10 @@
  *   • a customer rated the delivery                          → REVIEW
  *   • an order of theirs was cancelled                       → CANCELLED
  *   • an order is waiting for a rider (Available Orders)     → ORDER
+ *     (only with "New Order Alerts" on, and only orders their
+ *     Settings accept — radius, cash)
  *   • the owner paid (or rejected) a cash-out request        → PAYOUT
+ *   • the restaurant verified (or rejected) a document       → DOCUMENT
  *
  * "Unread" = happened after the rider last pressed "Mark All as Read"
  * (StaffProfile.notificationsReadAt, the same column the admin feed uses).
@@ -19,9 +22,10 @@
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
 import { formatAmount } from "@/lib/currency-format";
-import { findAvailableOrders } from "@/lib/rider-panel";
+import { findAvailableOrders, getRiderPreferences } from "@/lib/rider-panel";
 import { areaLabel, deliveryEarning } from "@/lib/rider-stats";
 import type { AdminNotification } from "@/lib/notification-filters";
+import { documentLabel } from "@/lib/rider-documents";
 
 const SOURCE_LIMIT = 30;
 
@@ -31,7 +35,8 @@ export async function getRiderNotifications(
   riderId: string,
   readAt: Date | null
 ): Promise<AdminNotification[]> {
-  const [trackings, messages, available, payouts] = await Promise.all([
+  const prefs = await getRiderPreferences(riderId);
+  const [trackings, messages, available, payouts, documents] = await Promise.all([
     prisma.deliveryTracking.findMany({
       where: { riderId },
       orderBy: { assignedAt: "desc" },
@@ -65,12 +70,16 @@ export async function getRiderNotifications(
       take: SOURCE_LIMIT,
       select: { id: true, orderId: true, senderName: true, message: true, createdAt: true },
     }),
-    findAvailableOrders(SOURCE_LIMIT),
+    prefs.newOrderAlerts ? findAvailableOrders(SOURCE_LIMIT, prefs) : Promise.resolve([]),
     prisma.riderPayout.findMany({
       where: { riderId, processedAt: { not: null }, status: { in: ["PAID", "REJECTED"] } },
       orderBy: { processedAt: "desc" },
       take: SOURCE_LIMIT,
       select: { id: true, amount: true, currency: true, status: true, destination: true, processedAt: true, note: true },
+    }),
+    prisma.riderDocument.findMany({
+      where: { riderId, reviewedAt: { not: null }, status: { in: ["VERIFIED", "REJECTED"] } },
+      select: { id: true, type: true, status: true, reviewedAt: true, note: true },
     }),
   ]);
 
@@ -174,6 +183,25 @@ export async function getRiderNotifications(
     });
   }
 
+  for (const doc of documents) {
+    if (!doc.reviewedAt) continue;
+    const label = documentLabel(doc.type);
+    const verified = doc.status === "VERIFIED";
+    feed.push({
+      id: `document-${doc.id}-${doc.reviewedAt.getTime()}`,
+      kind: "DOCUMENT",
+      title: verified ? `${label} verified` : `${label} needs a new upload`,
+      description: verified
+        ? "The restaurant checked it — you're all set"
+        : doc.note
+          ? `Reason: ${doc.note}`
+          : "Please upload it again from your Profile",
+      createdAt: doc.reviewedAt.toISOString(),
+      read: isRead(doc.reviewedAt),
+      href: "/admin/profile",
+    });
+  }
+
   return feed.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
@@ -196,6 +224,7 @@ export const RIDER_NOTIFICATION_TYPES = [
   { value: "REVIEW", label: "Ratings" },
   { value: "CANCELLED", label: "Cancelled" },
   { value: "PAYOUT", label: "Payouts" },
+  { value: "DOCUMENT", label: "Documents" },
 ] as const;
 
 export type RiderNotificationType = (typeof RIDER_NOTIFICATION_TYPES)[number]["value"];

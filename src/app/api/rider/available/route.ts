@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
-import { ACTIVE_DELIVERY_WHERE, findAvailableOrders, MAX_ACTIVE_DELIVERIES, withoutAddress } from "@/lib/rider-panel";
+import { ACTIVE_DELIVERY_WHERE, findAvailableOrders, getRiderPreferences, MAX_ACTIVE_DELIVERIES, withoutAddress } from "@/lib/rider-panel";
 
 /**
  * GET /api/rider/available — Rider panel → Available Orders (polled every
@@ -17,8 +17,9 @@ export async function GET() {
   const authResult = await requireApiScope("myDeliveries");
   if (authResult instanceof NextResponse) return authResult;
 
+  const prefs = await getRiderPreferences(authResult.user.id!);
   const [orders, activeCount] = await Promise.all([
-    findAvailableOrders(),
+    findAvailableOrders(50, prefs),
     prisma.deliveryTracking.count({ where: ACTIVE_DELIVERY_WHERE(authResult.user.id!) }),
   ]);
 

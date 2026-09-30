@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CalendarCheck,
   CircleX,
+  FileCheck,
   HandCoins,
   MessageCircle,
   PackageMinus,
@@ -23,6 +24,7 @@ const ICONS = {
   CHAT: MessageCircle,
   CANCELLED: CircleX,
   PAYOUT: HandCoins,
+  DOCUMENT: FileCheck,
 } as const;
 
 /**

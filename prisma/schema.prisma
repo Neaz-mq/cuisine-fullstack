@@ -128,6 +128,8 @@ model User {
   deliveries DeliveryTracking[] @relation("RiderDeliveries")
   // Rider panel → Cash Out: the rider's payout requests.
   riderPayouts RiderPayout[] @relation("RiderPayouts")
+  /// Rider panel → Profile → Documents (driving licence, registration, insurance).
+  riderDocuments RiderDocument[] @relation("RiderDocuments")
 
   // Staff member who recorded a given inventory change (manual purchase
   // entry, wastage, physical-count adjustment). Null on the StockMovement
@@ -284,6 +286,7 @@ model StaffProfile {
   vehicleType  String? // "Motorbike", "Bicycle", "Scooter", "Car", "On foot"
   vehicleModel String? // "Honda CB Hornet 160R"
   vehiclePlate String? // "DHAKA METRO-LA 12-3456"
+  drivingLicenseNumber String? // "DL-99213847" — the rider fills it in on Profile
 
   // Rider panel → Cash Out → "Payout Method": where the rider wants their
   // earnings sent. The rider fills these in themselves; only they and the
@@ -309,6 +312,21 @@ model StaffProfile {
   ///
   /// null = কখনো চিহ্নিত করেননি, অর্থাৎ সবই অপঠিত।
   notificationsReadAt DateTime?
+
+  // Rider panel → Settings (riders only; lib/rider-preferences.ts).
+  /// Only show waiting orders whose drop-off is this far from the kitchen
+  /// or closer. null = any distance.
+  riderMaxRadiusKm     Int?
+  /// false = the rider doesn't carry cash: cash-on-delivery orders are
+  /// hidden from their Available Orders.
+  riderAcceptsCash     Boolean   @default(true)
+  /// "New Order Alerts": waiting orders appear in their notifications/badge.
+  riderNewOrderAlerts  Boolean   @default(true)
+  /// "Earnings Summary": an email at the end of each day they delivered.
+  riderEarningsSummary Boolean   @default(true)
+  /// Restaurant day the last summary email was sent — the daily job
+  /// never sends the same day twice.
+  riderSummarySentOn   DateTime? @db.Date
 }
 
 model Category {
@@ -2470,5 +2488,46 @@ model RiderPayout {
 enum RiderPayoutStatus {
   PENDING
   PAID
+  REJECTED
+}
+
+/// A rider's paperwork — one row per kind (the newest upload replaces the
+/// old one). The file sits in the PRIVATE "rider-documents" storage bucket:
+/// an ID card or licence must never have a public link. Pages open it
+/// through a short-lived signed URL, only for the rider and staff managers.
+///
+/// The rider uploads → PENDING. The owner/manager checks it on the Staff
+/// page → VERIFIED or REJECTED (with a reason the rider sees).
+model RiderDocument {
+  id      String @id @default(cuid())
+  riderId String
+  rider   User   @relation("RiderDocuments", fields: [riderId], references: [id], onDelete: Cascade)
+
+  /// "DRIVING_LICENSE" | "VEHICLE_REGISTRATION" | "INSURANCE" (lib/rider-documents.ts)
+  type String
+
+  /// Path inside the "rider-documents" bucket — never a public URL.
+  filePath  String
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+
+  /// The date printed on the document; "Renew Soon" 30 days before.
+  expiresAt DateTime? @db.Date
+
+  status       RiderDocumentStatus @default(PENDING)
+  /// Why it was rejected ("photo is blurry") — shown to the rider.
+  note         String?
+  uploadedAt   DateTime            @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+
+  @@unique([riderId, type])
+  @@index([status, uploadedAt])
+}
+
+enum RiderDocumentStatus {
+  PENDING
+  VERIFIED
   REJECTED
 }

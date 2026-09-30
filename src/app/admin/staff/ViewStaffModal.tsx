@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import UserAvatar from "@/components/admin/UserAvatar";
+import RiderDocumentsReview from "./RiderDocumentsReview";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import { ROLE_LABELS } from "@/lib/staff-roles";
 import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
@@ -310,6 +311,10 @@ function ViewStaffModalContent({ open, onClose, staffId, canManage, isSelf, onEd
              */}
             <ReadOnlyField label="Status" value={isActive ? "Active" : "Inactive"} />
           </div>
+
+          {/* Riders keep their vehicle and papers on their own Profile;
+              the restaurant checks the uploads here. */}
+          {staff.role === "DELIVERY" && <RiderDocumentsReview staffId={staff.id} canManage={canManage} />}
 
         </>
       )}

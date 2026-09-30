@@ -4,7 +4,8 @@ import { requireStaff } from "@/lib/require-admin";
 import { timeAgo } from "@/lib/account";
 import PasswordForm from "@/components/account/PasswordForm";
 import SecurityCard from "@/components/account/SecurityCard";
-import { RiderPageHeader } from "../rider-ui";
+import { getRiderPreferences } from "@/lib/rider-panel";
+import RiderPreferencesForm from "./RiderPreferencesForm";
 
 export const metadata = { title: "Settings" };
 
@@ -13,7 +14,8 @@ export const metadata = { title: "Settings" };
  * and two-step sign-in (a code emailed at every password sign-in). The
  * same forms and APIs as the customer's Change Password page.
  *
- * Name, phone and vehicle are on Profile.
+ * Above them (Figma): Delivery Preferences and Notifications —
+ * RiderPreferencesForm. Name, phone and vehicle are on Profile.
  */
 export default async function RiderSettingsPage() {
   const session = await requireStaff("myDeliveries");
@@ -22,6 +24,7 @@ export default async function RiderSettingsPage() {
     select: { email: true, password: true, passwordChangedAt: true, twoFactorEnabled: true },
   });
   if (!user) redirect("/login");
+  const prefs = await getRiderPreferences(session.user.id!);
 
   const hasPassword = Boolean(user.password);
   const lastChangeLabel = !hasPassword
@@ -32,7 +35,7 @@ export default async function RiderSettingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <RiderPageHeader title="Settings" subtitle="Your password and sign-in security." now={new Date()} />
+      <RiderPreferencesForm initial={prefs} name={session.user.name ?? ""} nowIso={new Date().toISOString()} />
       <PasswordForm hasPassword={hasPassword} tone="white" />
       <SecurityCard
         lastChangeLabel={lastChangeLabel}

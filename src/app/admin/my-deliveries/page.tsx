@@ -16,12 +16,13 @@ import { formatAmount } from "@/lib/currency-format";
 import { formatOrderId } from "@/lib/format-order-id";
 import { isDashboardPeriod, periodStart, type DashboardPeriod } from "@/lib/dashboard-period";
 import {
-  AVAILABLE_ORDER_WHERE,
   RIDER_DELIVERY_SELECT,
+  availableOrderWhereFor,
   daysAgo,
   deliveredBetween,
   findActiveDeliveries,
   finishedWhere,
+  getRiderPreferences,
   startOfToday,
   toRiderDelivery,
 } from "@/lib/rider-panel";
@@ -87,6 +88,8 @@ export default async function RiderDashboardPage({
   const today = startOfToday(now);
   const weekStart = daysAgo(today, 6);
 
+  // "Available Orders" counts only what this rider accepts (Settings).
+  const prefs = await getRiderPreferences(riderId);
   const [todayRows, sameDayLastWeek, weekRows, active, rating, availableCount, recentRows] = await Promise.all([
     deliveredBetween(riderId, today),
     deliveredBetween(riderId, daysAgo(today, 7), daysAgo(today, 6)),
@@ -97,7 +100,7 @@ export default async function RiderDashboardPage({
       _avg: { riderRating: true },
       _count: { riderRating: true },
     }),
-    prisma.order.count({ where: AVAILABLE_ORDER_WHERE }),
+    prisma.order.count({ where: availableOrderWhereFor(prefs) }),
     prisma.deliveryTracking.findMany({
       where: finishedWhere(riderId, periodStart(range, now)),
       orderBy: { assignedAt: "desc" },
