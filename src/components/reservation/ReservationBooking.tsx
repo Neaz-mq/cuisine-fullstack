@@ -902,14 +902,19 @@ function SuccessModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="reservation-success-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      // ⚠️ `overflow-y-auto` + কার্ডে `my-auto`: ছোট উচ্চতার পর্দায় (ফোন
+      // landscape, ~320px) কার্ডটা viewport-এর চেয়ে লম্বা হয়ে উপর-নিচ
+      // কেটে যেত আর নিচের বোতাম দুটো নাগালের বাইরে থাকত। `items-center`
+      // দিয়ে সরাসরি কেন্দ্রে রাখলে উপরের অংশ scroll করেও পাওয়া যায় না,
+      // তাই `my-auto` — জায়গা থাকলে কেন্দ্রে, না থাকলে scroll।
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/40 p-4"
       // ⚠️ backdrop-এ ক্লিক করলে বন্ধ — কিন্তু কার্ডের ভেতরে ক্লিক
       // যেন উপরে না ওঠে, তাই কার্ডে stopPropagation।
       onClick={onClose}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]"
+        className="mx-auto my-auto flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]"
       >
         <span
           aria-hidden="true"

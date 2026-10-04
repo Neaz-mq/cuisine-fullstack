@@ -130,6 +130,25 @@ export default function AiAssistant() {
   const [speechSupported] = useState(() => getRecognition() !== null);
   const [preferBangla, setPreferBangla] = useState(false);
 
+  // Footer-এর উপরে ভেসে থাকার জন্য: footer যতটা পর্দায় উঠেছে, বোতাম ততটা উপরে ওঠে।
+  const [lift, setLift] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      const footer = document.querySelector("footer");
+      if (!footer) return setLift(0);
+      const visible = window.innerHeight - footer.getBoundingClientRect().top;
+      setLift(Math.max(0, Math.round(visible)));
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -317,7 +336,8 @@ export default function AiAssistant() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8 }}
             aria-label="Ask Cuisine AI — your food assistant"
-            className={`group fixed bottom-4 right-4 z-[60] flex h-14 items-center gap-2 rounded-full ${GRADIENT} px-3 font-sora text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(255,112,80,0.35)] transition-transform hover:scale-[1.03] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:3px] min-[640px]:bottom-6 min-[640px]:right-6`}
+            style={{ "--lift": `${lift}px` } as React.CSSProperties}
+            className={`group fixed bottom-[calc(1rem+var(--lift))] right-4 z-[60] flex h-14 items-center gap-2 rounded-full ${GRADIENT} px-3 font-sora text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(255,112,80,0.35)] transition-transform hover:scale-[1.03] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:3px] min-[640px]:bottom-[calc(1.5rem+var(--lift))] min-[640px]:right-6`}
           >
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
               <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
