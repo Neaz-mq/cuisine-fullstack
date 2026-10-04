@@ -9,7 +9,9 @@ import { toast } from "react-toastify";
 import ChatModal from "@/components/ChatModal";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import FilterMenu from "@/components/admin/FilterMenu";
+import { COUNTRIES } from "@/components/CountryCodeSelect";
 import { formatOrderId } from "@/lib/format-order-id";
+import { formatPhone, toDialablePhone } from "@/lib/phone";
 import { distanceKm, etaMinutes } from "@/lib/rider-stats";
 import type { ActiveDelivery } from "@/lib/rider-panel";
 
@@ -362,6 +364,9 @@ function DeliveryView({
   onOpenChat: () => void;
 }) {
   const waiting = d.status !== "OUT_FOR_DELIVERY";
+  // Call dials the full international number (+8801785286934), not the bare
+  // national digits stored on the order — see toDialablePhone.
+  const callPhone = toDialablePhone(d.phone, COUNTRIES.find((c) => c.name === d.country)?.dial);
   const destination = d.destLat !== null && d.destLng !== null ? { lat: d.destLat, lng: d.destLng } : null;
 
   // Where the rider is: this phone's own GPS, else the last position the
@@ -536,14 +541,14 @@ function DeliveryView({
               <div className="flex min-w-0 flex-col gap-1">
                 <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">{d.customerName}</p>
                 <p className="break-words font-sora text-[12px] leading-[1.7] text-black/70">{d.address}</p>
-                <a href={`tel:${d.phone}`} className="w-fit font-sora text-[13px] font-semibold text-black hover:underline">
-                  {d.phone}
+                <a href={`tel:${callPhone}`} className="w-fit font-sora text-[13px] font-semibold text-black hover:underline">
+                  {formatPhone(callPhone)}
                 </a>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <a
-                href={`tel:${d.phone}`}
+                href={`tel:${callPhone}`}
                 className="flex h-[50px] items-center justify-center gap-2 rounded-full bg-[#E8FFEC] px-3 font-sora text-[15px] font-semibold leading-none text-[#0ECF00] transition-opacity hover:opacity-80 md:text-[16px]"
               >
                 <Phone className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />

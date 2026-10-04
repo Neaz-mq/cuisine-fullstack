@@ -58,3 +58,34 @@ export function examplePhone(countryCode: string): string {
 export function formatPhone(e164: string): string {
   return parsePhoneNumberFromString(e164)?.formatInternational() ?? e164;
 }
+
+/**
+ * অর্ডারে সংরক্ষিত নম্বর → ফোনে ডায়াল করার মতো E.164 ("+8801785286934")।
+ *
+ * ⚠️ checkout-এ `Order.phone`-এ কেবল জাতীয় নম্বর যায় ("1785286934"),
+ * দেশের কোড আলাদা — `Order.country`-তে দেশের নাম। সেই নম্বর সরাসরি
+ * `tel:`-এ দিলে ফোন দেশের কোড ছাড়াই ডায়াল করে, ফলে বিদেশি বা ভুল
+ * নম্বরে কল যেত।
+ *
+ * ⚠️ DB-তে সংরক্ষিত মান ইচ্ছাকৃতভাবে বদলানো হয়নি: first-time coupon
+ * যাচাই (order-checkout-shared.ts) আর guest-গ্রাহক চেনা (getCustomerKey)
+ * নম্বরের অঙ্ক মিলিয়ে কাজ করে — সংরক্ষণের ধরন বদলালে পুরনো অর্ডারের
+ * সাথে মিলত না। তাই রূপান্তরটা দেখানোর/কল করার মুহূর্তে।
+ *
+ *  • আগে থেকে "+" থাকলে সেটাই (অঙ্ক রেখে)
+ *  • দেশের কোড ছাড়াই কেউ পুরোটা লিখে ফেললে ("8801785286934") সেটা চিনে নেয়
+ *  • শুরুর 0 (trunk prefix) বাদ — toE164 দেখুন
+ *  • দেশ জানা না থাকলে অঙ্কগুলোই, অনুমান করে কোড বসানো হয় না
+ */
+export function toDialablePhone(phone: string, dial: string | null | undefined): string {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (trimmed.startsWith("+")) return `+${digits}`;
+  if (!dial) return digits;
+
+  const dialDigits = dial.replace(/\D/g, "");
+  if (digits.startsWith(dialDigits) && parsePhoneNumberFromString(`+${digits}`)?.isValid()) {
+    return `+${digits}`;
+  }
+  return toE164(dial, trimmed);
+}

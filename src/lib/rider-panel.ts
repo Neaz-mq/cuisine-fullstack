@@ -156,6 +156,7 @@ export const RIDER_DELIVERY_SELECT = {
       firstName: true,
       lastName: true,
       phone: true,
+      country: true,
       address: true,
       apartment: true,
       city: true,
@@ -306,6 +307,8 @@ export type ActiveDelivery = {
   status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY";
   customerName: string;
   phone: string;
+  /** Country picked beside the phone at checkout — gives the dial code for Call. */
+  country: string | null;
   address: string;
   area: string;
   itemCount: number;
@@ -338,6 +341,7 @@ export function toActiveDelivery(row: RiderDeliveryRecord): ActiveDelivery {
     status: order.status as ActiveDelivery["status"],
     customerName: `${order.firstName} ${order.lastName}`.trim(),
     phone: order.phone,
+    country: order.country,
     address: [order.address, order.apartment, order.city, order.state, order.zip].filter(Boolean).join(", "),
     area: areaLabel(order),
     itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
