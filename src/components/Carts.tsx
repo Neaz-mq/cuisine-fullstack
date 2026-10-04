@@ -1236,28 +1236,28 @@ const Carts = ({
       <div className="flex flex-col gap-3">
         {/* Uber Eats */}
         <label
-          className={`flex items-center justify-between border 3xl:px-4 3xl:py-3 2xl:px-4 2xl:py-3 xl:px-4 xl:py-3 lg:px-4 lg:py-3 md:px-4 md:py-3 sm:px-2 sm:py-1 cursor-pointer ${
+          className={`flex items-center justify-between gap-3 border px-3 py-3 md:px-4 cursor-pointer ${
             selectedShipping === "uber-eats" ? "border-gray-500 bg-gray-50" : "border-gray-200"
           }`}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751346396/63cecf750aa7463091b17adf_5310366-uber-eats-logo-png-and-vector-logo-download-uber-eats-png-3500_3500_preview_thtrrl.png"
               alt="Uber Eats"
               width={48}
               height={48}
-              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8 object-contain"
+              className="h-10 w-10 shrink-0 md:h-12 md:w-12 object-contain"
             />
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-gray-800 sm:text-[11px] 3xl:text-[16px] 2xl:text-[16px] xl:text-[16px] lg:text-[16px] md:text-[15px]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <p className="font-semibold text-gray-800 text-[13px] md:text-[15px] lg:text-[16px]">
                   Uber eats
                 </p>
                 <span className="bg-green-100 text-green-700 text-[8px] px-2 py-0.5 rounded-full">
                   Suggested
                 </span>
               </div>
-              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
+              <p className="text-xs md:text-sm text-gray-500">
                 {kitchenEta
                   ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.UBER_EATS.min)}/${formatMinutes(
                       kitchenEta.etaByMethod.UBER_EATS.max
@@ -1266,7 +1266,7 @@ const Carts = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
+          <div className="flex shrink-0 items-center gap-3 md:gap-4 text-green-800 font-semibold text-xs md:text-sm">
             {shippingFeeLabel}
             <input
               type="radio"
@@ -1281,23 +1281,23 @@ const Carts = ({
 
         {/* Food Panda */}
         <label
-          className={`flex items-center justify-between border px-4 py-3 cursor-pointer ${
+          className={`flex items-center justify-between gap-3 border px-3 py-3 md:px-4 cursor-pointer ${
             selectedShipping === "food-panda" ? "border-gray-500 bg-gray-50" : "border-gray-200"
           }`}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751346468/Group_973_w3ofel.png"
               alt="Food Panda"
               width={48}
               height={48}
-              className="3xl:w-12 3xl:h-12 2xl:w-12 2xl:h-12 xl:w-12 xl:h-12 md:w-12 md:h-12 sm:w-8 sm:h-8 object-contain"
+              className="h-10 w-10 shrink-0 md:h-12 md:w-12 object-contain"
             />
-            <div>
-              <p className="font-semibold text-gray-800 sm:text-[11px] 3xl:text-[16px] 2xl:text-[16px] xl:text-[16px] lg:text-[16px] md:text-[15px]">
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-800 text-[13px] md:text-[15px] lg:text-[16px]">
                 Food panda
               </p>
-              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
+              <p className="text-xs md:text-sm text-gray-500">
                 {kitchenEta
                   ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.FOOD_PANDA.min)}/${formatMinutes(
                       kitchenEta.etaByMethod.FOOD_PANDA.max
@@ -1306,7 +1306,7 @@ const Carts = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
+          <div className="flex shrink-0 items-center gap-3 md:gap-4 text-green-800 font-semibold text-xs md:text-sm">
             {shippingFeeLabel}
             <input
               type="radio"
@@ -1321,24 +1321,24 @@ const Carts = ({
 
         {/* Restaurant's own delivery rider — live GPS tracked */}
         <label
-          className={`flex items-center justify-between border px-4 py-3 cursor-pointer ${
+          className={`flex items-center justify-between gap-3 border px-3 py-3 md:px-4 cursor-pointer ${
             selectedShipping === "own-delivery" ? "border-gray-500 bg-gray-50" : "border-gray-200"
           }`}
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-[#2C6252]/10 flex items-center justify-center shrink-0">
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#2C6252]/10 flex items-center justify-center shrink-0">
               <Truck className="w-6 h-6 text-[#2C6252]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-gray-800 sm:text-[11px] 3xl:text-[16px] 2xl:text-[16px] xl:text-[16px] lg:text-[16px] md:text-[15px]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <p className="font-semibold text-gray-800 text-[13px] md:text-[15px] lg:text-[16px]">
                   Our Own Delivery
                 </p>
                 <span className="bg-green-100 text-green-700 text-[8px] px-2 py-0.5 rounded-full">
                   Live tracking
                 </span>
               </div>
-              <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-500">
+              <p className="text-xs md:text-sm text-gray-500">
                 {kitchenEta
                   ? `Delivery time: ${formatMinutes(kitchenEta.etaByMethod.OWN_DELIVERY.min)}/${formatMinutes(
                       kitchenEta.etaByMethod.OWN_DELIVERY.max
@@ -1347,7 +1347,7 @@ const Carts = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 sm:flex-col 3xl:flex-row 2xl:flex-row xl:flex-row lg:flex-row md:flex-row text-green-800 font-semibold 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs">
+          <div className="flex shrink-0 items-center gap-3 md:gap-4 text-green-800 font-semibold text-xs md:text-sm">
             {shippingFeeLabel}
             <input
               type="radio"
@@ -1383,7 +1383,7 @@ const Carts = ({
               <span className="w-5 h-5 mt-1 inline-block rounded-full border-2 border-gray-400 flex-shrink-0 bg-[#2C6252]"></span>
               <div>
                 <p className="font-semibold text-gray-800">Pay at Table</p>
-                <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                <p className="text-xs md:text-sm text-gray-600">
                   A staff member will collect payment at your table when your order is ready.
                 </p>
               </div>
@@ -1413,7 +1413,7 @@ const Carts = ({
                   ></span>
                   <div>
                     <p className="font-semibold text-gray-800">{method.label}</p>
-                    <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600">
+                    <p className="text-xs md:text-sm text-gray-600">
                       {method.description}
                     </p>
                   </div>
@@ -1425,32 +1425,32 @@ const Carts = ({
       </div>
 
       {!isDineIn && paymentMethod === "online" && (
-        <div className="mt-8 p-6 border border-gray-200 space-y-4">
-          <div className="flex items-center 3xl:gap-8 2xl:gap-8 xl:gap-8 lg:gap-8 md:gap-8 sm:gap-4 flex-wrap">
+        <div className="mt-6 space-y-4 border border-gray-200 p-4 md:mt-8 md:p-6">
+          <div className="flex items-center gap-4 md:gap-8 flex-wrap">
             <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348676/pngegg_84_rh7u9t.png"
               alt="Mastercard"
               width={64}
               height={40}
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
+              className="h-7 md:h-10 w-auto object-contain"
             />
             <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348700/pngegg_85_i6czbr.png"
               alt="Visa"
               width={64}
               height={40}
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
+              className="h-7 md:h-10 w-auto object-contain"
             />
             <Image
               src="https://res.cloudinary.com/dxohwanal/image/upload/v1751348721/pngegg_86_icrxs1.png"
               alt="American Express"
               width={64}
               height={40}
-              className="3xl:h-10 2xl:h-10 xl:h-10 lg:h-10 md:h-10 sm:h-6 w-auto object-contain"
+              className="h-7 md:h-10 w-auto object-contain"
             />
           </div>
 
-          <p className="3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-xs text-gray-600 flex items-start gap-2">
+          <p className="text-xs md:text-sm text-gray-600 flex items-start gap-2">
             <span className="text-[#2C6252] text-lg">&#128274;</span>
             You&apos;ll enter your card details securely on Stripe&apos;s payment page after
             clicking &quot;Confirm your order&quot; below — we never see or store your card
@@ -1464,7 +1464,7 @@ const Carts = ({
               onChange={(e) => setIsAgreedToTerms(e.target.checked)}
               className="form-checkbox h-4 w-4 text-green-600 rounded"
             />
-            <span className="text-gray-700 3xl:text-sm 2xl:text-sm xl:text-sm lg:text-sm md:text-sm sm:text-[11px]">
+            <span className="text-gray-700 text-xs md:text-sm">
               If you agree this condition please mark
             </span>
           </label>
@@ -1511,9 +1511,9 @@ const Carts = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-success-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/40 p-4"
     >
-      <div className="flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]">
+      <div className="mx-auto my-auto flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]">
         <span
           aria-hidden="true"
           className="flex h-[140px] w-[140px] items-center justify-center rounded-full bg-[#FEF0E3] md:h-[194px] md:w-[194px]"
