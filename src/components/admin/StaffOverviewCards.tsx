@@ -30,13 +30,16 @@ import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period"
  * /admin/staff-এ আছে, তাই কেউ হারিয়ে যায় না — কিন্তু এই সারির
  * যোগফল মোট কর্মীসংখ্যা নয়, সেটা জেনে রাখা দরকার।
  *
- * Managers-এ OWNER আর MANAGER দুটোই: মালিক নিজেও রেস্তোরাঁ চালান, আর
- * তাঁকে বাদ দিলে যোগফল কর্মীসংখ্যার সাথে মিলত না।
+ * ⚠️ Managers-এ কেবল MANAGER role। আগে OWNER-ও গোনা হতো, ফলে ডাটাবেসে
+ * একজন মাত্র MANAGER থাকলেও কার্ডে ৩ (২ OWNER + ১ MANAGER) দেখাত — যা
+ * "Managers" নামের সাথে মেলে না। OWNER-দের কার্ড নেই (CASHIER-এর মতোই),
+ * তাঁরা পুরো staff তালিকায় ঠিকই আছেন আর role ছাঁকনিতে "Owner" দিয়ে
+ * খোঁজা যায়।
  */
 const STAFF_GROUPS = [
   {
     label: "Managers",
-    roles: ["OWNER", "MANAGER"] as const,
+    roles: ["MANAGER"] as const,
     hint: "Restaurant Management",
     icon: Briefcase,
   },

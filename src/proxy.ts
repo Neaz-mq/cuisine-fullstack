@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
 import { isStaffRole } from "@/lib/permissions";
+import { PANEL_PREFIXES, publicPrefixForRole, toInternalPath, toPublicPath } from "@/lib/panel-url";
 
 /**
  * src/proxy.ts
@@ -32,7 +33,10 @@ export default auth((req) => {
   const role = (req.auth?.user as { role?: string } | undefined)?.role;
   const { pathname } = req.nextUrl;
 
-  const isOnAdmin = pathname.startsWith("/admin");
+  const isOnPanelUrl = PANEL_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  const isOnAdmin = pathname.startsWith("/admin") || isOnPanelUrl;
   const isOnAccount = pathname.startsWith("/account");
 
   if (isOnAdmin) {
@@ -43,6 +47,27 @@ export default auth((req) => {
     }
     if (!isStaffRole(role)) {
       return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    // The staff panel lives under /admin for every role, but a Manager sees
+    // /manager and a Rider sees /rider (see lib/panel-url.ts):
+    //   /manager|/rider URL  → rewritten internally to /admin/... for the
+    //                          matching role, redirected to /admin for others
+    //   /admin URL as Manager/Rider → redirected to their own prefix (GET only)
+    const ownPrefix = publicPrefixForRole(role);
+    if (isOnPanelUrl) {
+      const target = req.nextUrl.clone();
+      target.pathname = toInternalPath(pathname);
+      const matches = ownPrefix && (pathname === ownPrefix || pathname.startsWith(`${ownPrefix}/`));
+      return matches ? NextResponse.rewrite(target) : NextResponse.redirect(target);
+    }
+    if (ownPrefix && (req.method === "GET" || req.method === "HEAD")) {
+      const publicPath = toPublicPath(role, pathname);
+      if (publicPath !== pathname) {
+        const target = req.nextUrl.clone();
+        target.pathname = publicPath;
+        return NextResponse.redirect(target);
+      }
     }
     return NextResponse.next();
   }

@@ -8,6 +8,7 @@ import {
   type StaffRole,
 } from "@/lib/permissions";
 import { nextEmployeeId } from "@/lib/staff";
+import { shouldSendPanelInvite } from "@/lib/staff-roles";
 import { createStaffSchema } from "@/lib/validations/staff";
 import { parseBody } from "@/lib/validations/parse";
 import { type MoneyInput, toMoney } from "@/lib/money";
@@ -189,7 +190,10 @@ export async function POST(req: NextRequest) {
    * link আসার আগেই যে কেউ ওটা দিয়ে ঢুকে পড়তে পারত। random মানে
    * কার্যত কোনো password নেই, অথচ schema-র শর্তও ভাঙে না।
    */
-  const shouldInvite = !password;
+  // ⚠️ ইমেইল শুধু panel-ওয়ালা role-কে (Owner/Manager/Rider) — Chef, Waiter,
+  // Cashier, Cleaner-এর ইমেইল দেওয়া থাকলেও কিছু যায় না। কারণ ও তালিকা:
+  // lib/staff-roles.ts → PANEL_INVITE_ROLES।
+  const shouldInvite = !password && shouldSendPanelInvite(role);
   const hashedPassword = await bcrypt.hash(
     password ?? randomBytes(32).toString("base64url"),
     10

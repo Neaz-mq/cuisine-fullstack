@@ -117,26 +117,26 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
       { label: "Notification", href: `${RIDER_BASE}/notifications`, icon: "notification" },
     ],
   },
-  {
-    heading: "Earnings",
-    items: [
-      {
-        label: "Payout",
-        href: `${RIDER_BASE}/payout`,
-        icon: "payout",
-        children: [
-          { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
-          { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
-          { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
-        ],
-      },
-    ],
-  },
+  // {
+  //   heading: "Earnings",
+  //   items: [
+  //     {
+  //       label: "Payout",
+  //       href: `${RIDER_BASE}/payout`,
+  //       icon: "payout",
+  //       children: [
+  //         { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
+  //         { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
+  //         { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
+  //       ],
+  //     },
+  //   ],
+  // },
 ];
 
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
-  { label: "Profile", href: "/admin/profile", icon: "profile" },
-  { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
+  // { label: "Profile", href: "/admin/profile", icon: "profile" },
+  // { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
 ];
 
 /** System group — Figma-তে Settings আর Logout একসাথে পায়ের কাছে।
@@ -263,18 +263,14 @@ export default async function AdminLayout({
    * হিসাব permissions.ts-এ একবারই লেখা আছে। এখানে role নাম ধরে শর্ত
    * লিখলে নতুন role যোগ হলে এই তালিকা নীরবে ভুল হয়ে যেত।
    *
-   * "Manager Panel" মানে dashboard — Figma-র নাম রাখা হয়েছে, কিন্তু
-   * href সেই page যেখানে ব্যবস্থাপনার সব কিছু আছে।
    */
   const panels: PanelLink[] = [
     ...(scopes.includes("kitchen")
       ? [{ label: "Kitchen Panel", href: "/admin/kitchen", icon: "kitchen" as const }]
       : []),
-    // "Manager Panel" is the owner's shortcut to the dashboard. A MANAGER
-    // is already in it, so the link would just point at the page they're on.
-    ...(scopes.includes("insights") && role !== "MANAGER"
-      ? [{ label: "Manager Panel", href: "/admin", icon: "manager" as const }]
-      : []),
+    // ⚠️ "Manager Panel" শর্টকাট ইচ্ছাকৃতভাবে বাদ। Dropdown-এ এখন কেবল
+    // Profile, (scope থাকলে) Kitchen Panel আর Logout। Dashboard-এ যেতে
+    // sidebar-এর "Dashboard" লিঙ্ক আছে, তাই আলাদা শর্টকাট অপ্রয়োজনীয়।
   ];
 
   const displayName = session.user.name || panelLabel(role);

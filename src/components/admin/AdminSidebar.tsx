@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toInternalPath } from "@/lib/panel-url";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -320,7 +321,11 @@ interface AdminSidebarProps {
  * `/admin/menu/new` বা `/admin/orders/abc123`-এ গেলেও parent item
  * active থাকে।
  */
-export function isActivePath(pathname: string, href: string, exact = false): boolean {
+export function isActivePath(rawPathname: string, href: string, exact = false): boolean {
+  // Managers browse under /manager and riders under /rider (the proxy
+  // rewrites both to /admin/...), but the menu hrefs are all /admin/... —
+  // compare them on the same base.
+  const pathname = toInternalPath(rawPathname);
   if (href === "/admin" || exact) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
