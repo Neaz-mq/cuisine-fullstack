@@ -215,7 +215,7 @@ export type TrackedOrder = {
    * review pop-up's "Rate your rider", and whether that's already done.
    * Null for any other order.
    */
-  deliveredBy: { name: string; rated: boolean } | null;
+  deliveredBy: { name: string; image: string | null; rated: boolean } | null;
 
   deliveryTracking: {
     riderLat: number | null;
@@ -325,6 +325,9 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
       order.status === "DELIVERED" && tracking
         ? {
             name: tracking.rider.name?.trim().split(/\s+/)[0] || "Your rider",
+            // "Rate your rider" দেখানোর সময় রাইডারের ছবিও লাগে (live map-এর
+            // `rider.image`-এর মতোই), তাই এখানেও পাঠানো হয়।
+            image: tracking.rider.image,
             rated: tracking.riderRating !== null,
           }
         : null,

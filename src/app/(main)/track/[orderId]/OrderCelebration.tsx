@@ -62,6 +62,7 @@ export default function OrderCelebration({
   dishes = [],
   canRate = false,
   riderName = null,
+  riderImage = null,
   startAt = "congrats",
 }: {
   open: boolean;
@@ -77,6 +78,8 @@ export default function OrderCelebration({
   /** Our own rider delivered it and hasn't been rated yet → "Rate your
    *  rider" stars (guests too — they are the customer). */
   riderName?: string | null;
+  /** The rider's profile photo, shown beside their name. Null → initial. */
+  riderImage?: string | null;
   /** "review" when opened from the "Write a Review" button — skips the
    *  congratulations screen the customer has already seen. */
   startAt?: Step;
@@ -250,7 +253,7 @@ export default function OrderCelebration({
             {riderName && (
               <DishRatings
                 heading="Rate your rider"
-                dishes={[{ menuItemId: "rider", title: `${riderName} · your delivery rider`, imageUrl: null }]}
+                dishes={[{ menuItemId: "rider", title: `${riderName} · your delivery rider`, imageUrl: riderImage }]}
                 ratings={{ rider: riderRating }}
                 onRate={(_id, rating) => setRiderRating(rating)}
               />
@@ -333,6 +336,11 @@ function DishRatings({
               className="flex flex-col gap-2 rounded-[12px] bg-[#F9F6F3] p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between"
             >
               <span className="flex min-w-0 items-center gap-3">
+                {/* ⚠️ রাইডারের ছবি গোল (মানুষ), খাবারের ছবি গোলাকার-চৌকো। আর
+                    `referrerPolicy="no-referrer"` লাগে: রাইডারের ছবি প্রায়ই
+                    Google-এর avatar (lh3.googleusercontent.com), যেটা Referer
+                    পেলে অনেক সময় ছবি না দিয়ে খালি ফেরায়। ছবি না থাকলে বা
+                    লোড না হলে নামের প্রথম অক্ষর — আগের মতো ফাঁকা সাদা বাক্স নয়। */}
                 {dish.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- small thumbnail from any allowed host
                   <img
@@ -340,8 +348,18 @@ function DishRatings({
                     alt=""
                     width={40}
                     height={40}
-                    className="h-10 w-10 shrink-0 rounded-[8px] object-cover"
+                    referrerPolicy="no-referrer"
+                    className={`h-10 w-10 shrink-0 object-cover ${
+                      dish.menuItemId === "rider" ? "rounded-full" : "rounded-[8px]"
+                    }`}
                   />
+                ) : dish.menuItemId === "rider" ? (
+                  <span
+                    aria-hidden="true"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white font-frank-ruhl text-[18px] font-semibold text-black/70"
+                  >
+                    {dish.title.charAt(0).toUpperCase()}
+                  </span>
                 ) : (
                   <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-[8px] bg-white" />
                 )}

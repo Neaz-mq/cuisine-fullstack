@@ -627,6 +627,7 @@ export default function OrderTrackingTimeline({
         dishes={reviewDishes}
         canRate={order.isMemberOrder}
         riderName={order.deliveredBy && !order.deliveredBy.rated ? order.deliveredBy.name : null}
+        riderImage={order.deliveredBy && !order.deliveredBy.rated ? order.deliveredBy.image : null}
         startAt={celebrationStart}
       />
     </div>
