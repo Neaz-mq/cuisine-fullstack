@@ -180,7 +180,7 @@ export default async function RiderPayoutsPage({
               return (
                 <li
                   key={p.id}
-                  className="grid gap-x-6 gap-y-4 rounded-[16px] bg-[#F9F6F3] p-4 min-[560px]:grid-cols-2 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_190px_220px] xl:items-center"
+                  className="grid gap-x-6 gap-y-4 rounded-[16px] bg-[#F9F6F3] p-4 min-[560px]:grid-cols-2 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_230px_220px] xl:items-center"
                 >
                   <div className="flex min-w-0 flex-col gap-1.5">
                     <span className="truncate font-frank-ruhl text-[18px] font-medium leading-none text-black">
@@ -207,7 +207,7 @@ export default async function RiderPayoutsPage({
                     )}
                   </div>
                   <div className="flex items-center gap-3 xl:justify-end">
-                    <span className="whitespace-nowrap font-frank-ruhl text-[20px] font-semibold leading-none text-black">
+                    <span className="min-w-[96px] whitespace-nowrap text-right font-frank-ruhl text-[20px] font-semibold leading-none tabular-nums text-black">
                       {amount}
                     </span>
                     <PayoutChip status={p.status} />

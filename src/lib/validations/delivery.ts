@@ -71,6 +71,35 @@ export const payoutDecisionSchema = z.object({
   note: z.string().trim().max(300).optional(),
 });
 
+/** Rider panel → Cash Collected → "Hand In Cash": the rider reports cash handed to the restaurant. */
+export const cashHandInSchema = z.object({
+  amount: z.number().positive("Enter an amount above zero").max(1_000_000),
+  note: z.string().trim().max(200).optional(),
+});
+
+/** Rider cancels a hand-in report the restaurant hasn't confirmed yet. */
+export const cashHandInCancelSchema = z.object({
+  action: z.literal("CANCEL"),
+});
+
+/** Admin → Rider Cash → "Record Cash": cash the owner received, recorded directly. */
+export const cashRecordSchema = z.object({
+  riderId: z.string().trim().min(1, "Select a rider"),
+  amount: z.number().positive("Enter an amount above zero").max(1_000_000),
+  note: z.string().trim().max(200).optional(),
+});
+
+/** Admin → Rider Cash: confirm a rider's hand-in report, or dispute it (a reason is required). */
+export const cashDecisionSchema = z
+  .object({
+    action: z.enum(["CONFIRM", "DISPUTE"]),
+    note: z.string().trim().max(300).optional(),
+  })
+  .refine((value) => value.action !== "DISPUTE" || Boolean(value.note), {
+    message: "Say why you're disputing it — the rider will see this",
+    path: ["note"],
+  });
+
 /**
  * Rider panel → My Profile → "Save Change" (profile + vehicle in one go).
  * Name, phone, date of birth and gender follow the customer profile rules;

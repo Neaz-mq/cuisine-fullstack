@@ -189,7 +189,11 @@ export default async function RiderNotificationsPage({
                 : "No notifications in this period."}
           </EmptyNote>
         ) : (
-          <NotificationFeed notifications={pageItems} />
+          <NotificationFeed
+            notifications={pageItems}
+            markReadUrl="/api/rider/notifications/read"
+            showReadDot
+          />
         )}
 
         {total > 0 && (

@@ -128,6 +128,8 @@ model User {
   deliveries DeliveryTracking[] @relation("RiderDeliveries")
   // Rider panel → Cash Out: the rider's payout requests.
   riderPayouts RiderPayout[] @relation("RiderPayouts")
+  /// Rider panel → Cash Collected: cash the rider handed in to the restaurant.
+  cashRemittances CashRemittance[] @relation("RiderCashRemittances")
   /// Rider panel → Profile → Documents (driving licence, registration, insurance).
   riderDocuments RiderDocument[] @relation("RiderDocuments")
 
@@ -153,6 +155,27 @@ model User {
   /// Customer's saved delivery addresses ("Home", "Work"…), managed from
   /// /account/profile and offered as one-tap choices at checkout.
   addresses CustomerAddress[]
+
+  /// Notifications this person opened one by one (see NotificationRead).
+  notificationReads NotificationRead[]
+}
+
+/// A single notification the person has opened.
+///
+/// ⚠️ StaffProfile.notificationsReadAt is ONE timestamp ("Mark All as Read"),
+/// so it cannot say "this one is read, that older one is not". The feed has
+/// no table of its own (lib/rider-notifications.ts builds it from orders,
+/// chat, payouts…), so the feed item's own id ("delivered-<orderId>") is
+/// stored here instead. Mark All as Read clears a person's rows — everything
+/// older than the timestamp is read anyway.
+model NotificationRead {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String
+  readAt         DateTime @default(now())
+
+  @@unique([userId, notificationId])
 }
 
 /// A customer's saved delivery address — the "address book" every
@@ -2489,6 +2512,54 @@ enum RiderPayoutStatus {
   PENDING
   PAID
   REJECTED
+}
+
+/// Cash a rider handed in to the restaurant.
+///
+/// The rider collects cash on cash-on-delivery orders — the restaurant's
+/// money (lib/rider-cash.ts). Every hand-in is a row here, so both sides have
+/// the same record:
+///
+///   source RIDER  the rider reported it → PENDING until the owner decides
+///   source ADMIN  the owner recorded cash they received → CONFIRMED at once
+///
+/// Only CONFIRMED rows reduce what the rider owes. PENDING rows reduce what
+/// the rider can still report. Rows are never deleted: a mistake becomes
+/// CANCELLED (rider) or DISPUTED (owner, with a reason) and stays visible.
+model CashRemittance {
+  id      String @id @default(cuid())
+  riderId String
+  rider   User   @relation("RiderCashRemittances", fields: [riderId], references: [id], onDelete: Cascade)
+
+  amount   Decimal @db.Decimal(12, 3)
+  currency String
+
+  source CashRemittanceSource
+  status CashRemittanceStatus @default(PENDING)
+
+  /// What the rider wrote when reporting it ("gave to Sumon at the counter").
+  riderNote String?
+  /// The owner's note — required on a dispute, and shown to the rider.
+  adminNote String?
+
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedById String?
+
+  @@index([riderId, createdAt])
+  @@index([status, createdAt])
+}
+
+enum CashRemittanceStatus {
+  PENDING
+  CONFIRMED
+  DISPUTED
+  CANCELLED
+}
+
+enum CashRemittanceSource {
+  RIDER
+  ADMIN
 }
 
 /// A rider's paperwork — one row per kind (the newest upload replaces the

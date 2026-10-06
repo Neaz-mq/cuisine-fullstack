@@ -45,8 +45,12 @@ export * from "@/lib/notification-filters";
 const SOURCE_LIMIT = 40;
 
 
-export async function getAdminNotifications(readAt: Date | null): Promise<AdminNotification[]> {
-  const [settings, orders, deliveries, reservations, reviews, lowStock] = await Promise.all([
+export async function getAdminNotifications(
+  readAt: Date | null,
+  /** The viewer — lets notifications they opened one by one count as read. */
+  userId?: string
+): Promise<AdminNotification[]> {
+  const [settings, orders, deliveries, reservations, reviews, lowStock, opened] = await Promise.all([
     // Settings → Notifications — the two stock-alert switches.
     prisma.restaurantSettings.findUnique({
       where: { id: "singleton" },
@@ -116,7 +120,15 @@ export async function getAdminNotifications(readAt: Date | null): Promise<AdminN
         updatedAt: true,
       },
     }),
+    // Notifications this person opened one by one (see NotificationRead).
+    userId
+      ? prisma.notificationRead.findMany({
+          where: { userId },
+          select: { notificationId: true },
+        })
+      : Promise.resolve([] as { notificationId: string }[]),
   ]);
+  const openedIds = new Set(opened.map((row) => row.notificationId));
 
   // ⚠️ `readAt` null মানে staff কখনো "সব পড়া হয়েছে" চাপেননি — তখন
   // সবই অপঠিত, আর সেটাই ঠিক আচরণ।
@@ -224,6 +236,27 @@ export async function getAdminNotifications(readAt: Date | null): Promise<AdminN
     }),
   ];
 
+  // Opening a notification marks just that one as read, on top of the
+  // "Mark All as Read" timestamp.
+  for (const item of feed) {
+    if (!item.read && openedIds.has(item.id)) item.read = true;
+  }
+
   // নতুনগুলো আগে।
   return feed.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * Sidebar badge on "Notification": how many are still unread for THIS
+ * person — the same feed, the same "Mark All as Read" timestamp and the
+ * same one-by-one opens as the page itself, so the number always matches
+ * what the page shows (and drops the moment something is read).
+ */
+export async function countUnreadAdminNotifications(userId: string): Promise<number> {
+  const profile = await prisma.staffProfile.findUnique({
+    where: { userId },
+    select: { notificationsReadAt: true },
+  });
+  const feed = await getAdminNotifications(profile?.notificationsReadAt ?? null, userId);
+  return feed.filter((item) => !item.read).length;
 }

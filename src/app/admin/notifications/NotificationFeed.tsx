@@ -1,7 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CalendarCheck,
   CircleX,
@@ -75,10 +76,53 @@ function dayLabel(iso: string) {
  */
 export default function NotificationFeed({
   notifications,
+  markReadUrl,
+  showReadDot = false,
 }: {
   notifications: AdminNotification[];
+  /**
+   * When set, opening an unread notification POSTs `{ id }` here first, so
+   * just that one becomes read (rider panel). Left out = plain links, as
+   * before (admin panel).
+   */
+  markReadUrl?: string;
+  /** Read items get a green dot instead of no dot (unread stays orange). */
+  showReadDot?: boolean;
 }) {
   const isClient = useIsClient();
+  const router = useRouter();
+  // Ids opened in this tab — flips the dot at once, before the server
+  // re-render brings the real `read` flag back.
+  const [openedIds, setOpenedIds] = useState<ReadonlySet<string>>(new Set());
+
+  async function handleOpen(event: MouseEvent<HTMLAnchorElement>, item: AdminNotification) {
+    if (!markReadUrl || item.read || openedIds.has(item.id)) return;
+
+    setOpenedIds((prev) => new Set(prev).add(item.id));
+    const request = fetch(markReadUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id }),
+      keepalive: true,
+    });
+
+    // New tab / window: let the browser do its thing, the request still goes.
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+      void request.catch(() => {});
+      return;
+    }
+
+    // Same tab: wait for the write BEFORE navigating, otherwise the sidebar
+    // badge (rendered by the layout) can be counted before the row exists.
+    event.preventDefault();
+    try {
+      await request;
+    } catch {
+      // Offline etc. — still open the page; it just stays unread.
+    }
+    router.push(item.href);
+    router.refresh();
+  }
 
   /**
    * দিন ধরে ভাগ — Figma-র "Today" / "Yesterday" শিরোনাম।
@@ -114,10 +158,12 @@ export default function NotificationFeed({
               <div className="flex flex-col gap-3">
                 {items.map((item) => {
                   const Icon = ICONS[item.kind];
+                  const isRead = item.read || openedIds.has(item.id);
                   return (
                     <Link
                       key={item.id}
                       href={item.href}
+                      onClick={(event) => void handleOpen(event, item)}
                       className="flex items-center gap-4 rounded-[16px] bg-[#F9F6F3] p-4 transition-colors hover:bg-black/[0.04] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                     >
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black">
@@ -137,11 +183,19 @@ export default function NotificationFeed({
                         <span className="whitespace-nowrap font-sora text-[12px] leading-none text-black/70">
                           {relativeTime(item.createdAt)}
                         </span>
-                        {/* Figma-র ছোট কমলা বিন্দু — কেবল অপঠিতগুলোয়। */}
-                        {!item.read && (
+                        {/* Figma-র ছোট কমলা বিন্দু — অপঠিতগুলোয়। showReadDot
+                            থাকলে পঠিতগুলোয় সবুজ (rider panel)। */}
+                        {!isRead && (
                           <span
                             className="h-2 w-2 rounded-full bg-[#FF9540]"
                             aria-label="Unread"
+                            role="img"
+                          />
+                        )}
+                        {isRead && showReadDot && (
+                          <span
+                            className="h-2 w-2 rounded-full bg-[#22C55E]"
+                            aria-label="Read"
                             role="img"
                           />
                         )}

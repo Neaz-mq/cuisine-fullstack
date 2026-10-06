@@ -238,7 +238,7 @@ export default async function EarningsPage({
                     )}
                   </span>
                   <span className="flex shrink-0 items-center justify-between gap-4 min-[480px]:justify-end">
-                    <span className="whitespace-nowrap font-frank-ruhl text-[16px] font-medium leading-none text-black">
+                    <span className="min-w-[80px] whitespace-nowrap text-right font-frank-ruhl text-[16px] font-medium leading-none tabular-nums text-black">
                       {formatAmount(p.amount.toNumber(), p.currency)}
                     </span>
                     <PayoutChip status={p.status} />

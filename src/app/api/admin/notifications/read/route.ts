@@ -20,10 +20,15 @@ export async function POST() {
 
   const userId = authResult.user.id;
 
-  const result = await prisma.staffProfile.updateMany({
-    where: { userId },
-    data: { notificationsReadAt: new Date() },
-  });
+  const [result] = await prisma.$transaction([
+    prisma.staffProfile.updateMany({
+      where: { userId },
+      data: { notificationsReadAt: new Date() },
+    }),
+    // Everything is older than the new timestamp now, so the one-by-one
+    // rows (NotificationRead) carry no information any more.
+    prisma.notificationRead.deleteMany({ where: { userId } }),
+  ]);
 
   return NextResponse.json({ ok: true, updated: result.count });
 }

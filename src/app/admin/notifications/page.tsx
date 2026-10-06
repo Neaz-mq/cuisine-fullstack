@@ -71,7 +71,10 @@ export default async function AdminNotificationsPage({
     select: { notificationsReadAt: true },
   });
 
-  const feed = await getAdminNotifications(profile?.notificationsReadAt ?? null);
+  const feed = await getAdminNotifications(
+    profile?.notificationsReadAt ?? null,
+    session.user.id
+  );
 
   /**
    * ⚠️ Overview-র গণনা কেবল সময়সীমা মানে, খোঁজা বা status নয়।
@@ -167,7 +170,11 @@ export default async function AdminNotificationsPage({
         <h2 className="font-frank-ruhl text-[24px] font-semibold leading-none text-black xl:text-[30px]">
           Notification
         </h2>
-        <NotificationFeed notifications={notifications} />
+        <NotificationFeed
+          notifications={notifications}
+          markReadUrl="/api/admin/notifications/read-item"
+          showReadDot
+        />
       </section>
     </div>
   );

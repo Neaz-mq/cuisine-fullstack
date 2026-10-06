@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/AdminSidebar";
 import AdminShell from "@/components/admin/AdminShell";
 import { countUnreadRiderNotifications } from "@/lib/rider-notifications";
+import { countUnreadAdminNotifications } from "@/lib/admin-notifications";
 
 type NavDef = {
   label: string;
@@ -63,6 +64,8 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
       { label: "Payment", href: "/admin/payment", scope: "refunds", icon: "payment" },
       // Riders' cash-out requests — the restaurant's money, so "finance" (owner).
       { label: "Rider Payouts", href: "/admin/rider-payouts", scope: "finance", icon: "riderPayouts" },
+      // Cash riders collected on delivery and hand back — money coming IN, same authority.
+      { label: "Rider Cash", href: "/admin/rider-cash", scope: "finance", icon: "riderCash" },
       { label: "Categories", href: "/admin/categories", scope: "categories", icon: "categories" },
       { label: "Menu", href: "/admin/menu", scope: "menu", icon: "menu" },
       { label: "Inventory", href: "/admin/inventory", scope: "inventory", icon: "inventory" },
@@ -117,21 +120,21 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
       { label: "Notification", href: `${RIDER_BASE}/notifications`, icon: "notification" },
     ],
   },
-  // {
-  //   heading: "Earnings",
-  //   items: [
-  //     {
-  //       label: "Payout",
-  //       href: `${RIDER_BASE}/payout`,
-  //       icon: "payout",
-  //       children: [
-  //         { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
-  //         { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
-  //         { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
-  //       ],
-  //     },
-  //   ],
-  // },
+  {
+    heading: "Earnings",
+    items: [
+      {
+        label: "Payout",
+        href: `${RIDER_BASE}/payout`,
+        icon: "payout",
+        children: [
+          { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
+          { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
+          // { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
+        ],
+      },
+    ],
+  },
 ];
 
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
@@ -171,21 +174,25 @@ export default async function AdminLayout({
    * একটারই সময় নেয়।
    */
   const canSeeFinance = !isRider && scopes.includes("finance");
-  const [pendingReviewCount, newOrdersCount, riderUnread, pendingPayouts] = await Promise.all([
+  const [pendingReviewCount, riderUnread, pendingPayouts, pendingCash, adminUnread] = await Promise.all([
     canSeeReviews ? prisma.review.count({ where: { status: "PENDING" } }) : 0,
-    canSeeOrders ? prisma.order.count({ where: { status: "PLACED" } }) : 0,
     isRider ? countUnreadRiderNotifications(session.user.id!) : 0,
     canSeeFinance ? prisma.riderPayout.count({ where: { status: "PENDING" } }) : 0,
+    // Rider hand-in reports waiting for the owner to confirm.
+    canSeeFinance ? prisma.cashRemittance.count({ where: { status: "PENDING" } }) : 0,
+    // Same people who can open /admin/notifications (the "orders" scope).
+    !isRider && canSeeOrders ? countUnreadAdminNotifications(session.user.id!) : 0,
   ]);
 
   const badgeFor = (href: string): number | undefined => {
     if (href === "/admin/reviews") return pendingReviewCount;
-    // Figma-র Notification badge। NotificationBell-এর সাথে একই সংখ্যা
-    // (status = PLACED) — দুই জায়গায় দুই রকম সংখ্যা দেখালে কোনটা সত্যি
-    // সেটা নিয়েই সন্দেহ তৈরি হতো।
-    if (href === "/admin/notifications") return newOrdersCount;
+    // Notification badge = this person's UNREAD notifications, so it
+    // matches the page and drops when they read one. (It used to be the
+    // number of PLACED orders, which never changed on reading.)
+    if (href === "/admin/notifications") return adminUnread || undefined;
     // Cash-out requests waiting for the owner to pay them.
     if (href === "/admin/rider-payouts") return pendingPayouts || undefined;
+    if (href === "/admin/rider-cash") return pendingCash || undefined;
     return undefined;
   };
 

@@ -49,7 +49,10 @@ export async function GET(request: Request) {
     select: { notificationsReadAt: true },
   });
 
-  const feed = await getAdminNotifications(profile?.notificationsReadAt ?? null);
+  const feed = await getAdminNotifications(
+    profile?.notificationsReadAt ?? null,
+    authResult.user.id
+  );
   const rows = filterNotifications(feed, {
     q,
     status,

@@ -176,6 +176,11 @@ const CHIP: Record<string, string> = {
   PLACED: "bg-[#E5EDFF] text-[#0090FF]",
   COD: "bg-[#FFF2DA] text-[#C77C00]",
   ONLINE: "bg-[#E5EDFF] text-[#0090FF]",
+  // Cash Collected: has this order's cash been handed in? (lib/cash-ledger.ts)
+  HANDED_IN: "bg-[#F1FEF3] text-[#0ECF00]",
+  PARTIAL: "bg-[#FFF2DA] text-[#C77C00]",
+  AWAITING: "bg-[#FFEDE0] text-[#FF7100]",
+  DUE: "bg-[#FFE9EC] text-[#FF3F5C]",
 };
 
 const CHIP_LABEL: Record<string, string> = {
@@ -186,6 +191,10 @@ const CHIP_LABEL: Record<string, string> = {
   PLACED: "Waiting for pickup",
   COD: "Cash",
   ONLINE: "Paid online",
+  HANDED_IN: "Handed in",
+  PARTIAL: "Partly handed in",
+  AWAITING: "Awaiting confirmation",
+  DUE: "Not handed in",
 };
 
 export function StatusChip({ status, label }: { status: string; label?: string }) {
@@ -294,6 +303,10 @@ const PAYOUT_CHIP: Record<string, { label: string; className: string }> = {
   PAID: { label: "Paid", className: "bg-[#F1FEF3] text-[#0ECF00]" },
   PENDING: { label: "Pending", className: "bg-[#FFEDE0] text-[#FF7100]" },
   REJECTED: { label: "Rejected", className: "bg-[#FFE9EC] text-[#FF3F5C]" },
+  // Cash hand-ins (CashRemittance) share the same pill.
+  CONFIRMED: { label: "Confirmed", className: "bg-[#F1FEF3] text-[#0ECF00]" },
+  DISPUTED: { label: "Disputed", className: "bg-[#FFE9EC] text-[#FF3F5C]" },
+  CANCELLED: { label: "Cancelled", className: "bg-[#F9F6F3] text-black/60" },
 };
 
 /** Paid / Pending / Rejected pill of a payout request. */
@@ -301,7 +314,7 @@ export function PayoutChip({ status }: { status: string }) {
   const chip = PAYOUT_CHIP[status] ?? { label: status, className: "bg-white text-black" };
   return (
     <span
-      className={`inline-flex h-8 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] leading-none min-[480px]:h-9 min-[480px]:text-[14px] ${chip.className}`}
+      className={`inline-flex h-8 w-[88px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] leading-none min-[480px]:h-9 min-[480px]:w-[100px] min-[480px]:text-[14px] ${chip.className}`}
     >
       {chip.label}
     </span>

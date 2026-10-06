@@ -14,10 +14,13 @@
  *     (only with "New Order Alerts" on, and only orders their
  *     Settings accept — radius, cash)
  *   • the owner paid (or rejected) a cash-out request        → PAYOUT
+ *   • the owner confirmed (or disputed) a cash hand-in, or
+ *     recorded cash they received from the rider             → PAYOUT
  *   • the restaurant verified (or rejected) a document       → DOCUMENT
  *
  * "Unread" = happened after the rider last pressed "Mark All as Read"
- * (StaffProfile.notificationsReadAt, the same column the admin feed uses).
+ * (StaffProfile.notificationsReadAt, the same column the admin feed uses)
+ * AND not opened one by one (NotificationRead).
  */
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
@@ -36,7 +39,7 @@ export async function getRiderNotifications(
   readAt: Date | null
 ): Promise<AdminNotification[]> {
   const prefs = await getRiderPreferences(riderId);
-  const [trackings, messages, available, payouts, documents] = await Promise.all([
+  const [trackings, messages, available, payouts, handovers, documents, opened] = await Promise.all([
     prisma.deliveryTracking.findMany({
       where: { riderId },
       orderBy: { assignedAt: "desc" },
@@ -77,11 +80,24 @@ export async function getRiderNotifications(
       take: SOURCE_LIMIT,
       select: { id: true, amount: true, currency: true, status: true, destination: true, processedAt: true, note: true },
     }),
+    // Cash hand-ins the owner has answered (or recorded themselves).
+    prisma.cashRemittance.findMany({
+      where: { riderId, decidedAt: { not: null }, status: { in: ["CONFIRMED", "DISPUTED"] } },
+      orderBy: { decidedAt: "desc" },
+      take: SOURCE_LIMIT,
+      select: { id: true, amount: true, currency: true, status: true, source: true, adminNote: true, decidedAt: true },
+    }),
     prisma.riderDocument.findMany({
       where: { riderId, reviewedAt: { not: null }, status: { in: ["VERIFIED", "REJECTED"] } },
       select: { id: true, type: true, status: true, reviewedAt: true, note: true },
     }),
+    // Notifications the rider opened one by one (see NotificationRead).
+    prisma.notificationRead.findMany({
+      where: { userId: riderId },
+      select: { notificationId: true },
+    }),
   ]);
+  const openedIds = new Set(opened.map((row) => row.notificationId));
 
   const isRead = (at: Date) => readAt !== null && at.getTime() <= readAt.getTime();
   const feed: AdminNotification[] = [];
@@ -183,6 +199,29 @@ export async function getRiderNotifications(
     });
   }
 
+  for (const handover of handovers) {
+    if (!handover.decidedAt) continue;
+    const amount = formatAmount(handover.amount.toNumber(), handover.currency);
+    const confirmed = handover.status === "CONFIRMED";
+    feed.push({
+      id: `cash-${handover.id}`,
+      kind: "PAYOUT",
+      title: confirmed
+        ? handover.source === "ADMIN"
+          ? `Cash received: ${amount}`
+          : `Cash hand-in of ${amount} confirmed`
+        : `Cash hand-in of ${amount} was not confirmed`,
+      description: confirmed
+        ? handover.source === "ADMIN"
+          ? "The restaurant recorded the cash you handed in"
+          : "The restaurant received it — it's off what you owe"
+        : `${handover.adminNote ? `Reason: ${handover.adminNote} · ` : ""}It still counts as with you`,
+      createdAt: handover.decidedAt.toISOString(),
+      read: isRead(handover.decidedAt),
+      href: `${BASE}/cash`,
+    });
+  }
+
   for (const doc of documents) {
     if (!doc.reviewedAt) continue;
     const label = documentLabel(doc.type);
@@ -200,6 +239,12 @@ export async function getRiderNotifications(
       read: isRead(doc.reviewedAt),
       href: "/admin/profile",
     });
+  }
+
+  // Opening a notification marks just that one as read, on top of the
+  // "Mark All as Read" timestamp.
+  for (const item of feed) {
+    if (!item.read && openedIds.has(item.id)) item.read = true;
   }
 
   return feed.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
