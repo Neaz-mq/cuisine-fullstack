@@ -130,7 +130,7 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
         children: [
           { label: "Earnings", href: `${RIDER_BASE}/earnings`, icon: "earnings" },
           { label: "Cash Out", href: `${RIDER_BASE}/cash-out`, icon: "cashOut" },
-          // { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
+          { label: "Cash Collected", href: `${RIDER_BASE}/cash`, icon: "cash" },
         ],
       },
     ],
@@ -138,8 +138,8 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
 ];
 
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
-  // { label: "Profile", href: "/admin/profile", icon: "profile" },
-  // { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
+  { label: "Profile", href: "/admin/profile", icon: "profile" },
+  { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
 ];
 
 /** System group — Figma-তে Settings আর Logout একসাথে পায়ের কাছে।

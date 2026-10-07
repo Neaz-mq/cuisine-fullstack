@@ -197,12 +197,25 @@ const CHIP_LABEL: Record<string, string> = {
   DUE: "Not handed in",
 };
 
-export function StatusChip({ status, label }: { status: string; label?: string }) {
+/**
+ * `fixedWidth` gives every pill in a list the same width, so the amount
+ * column and the pills line up row after row even when the labels differ
+ * ("Handed in" vs "Awaiting confirmation"). 190px fits the longest label.
+ */
+export function StatusChip({
+  status,
+  label,
+  fixedWidth = false,
+}: {
+  status: string;
+  label?: string;
+  fixedWidth?: boolean;
+}) {
   return (
     <span
       className={`inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] leading-none min-[480px]:text-[14px] ${
-        CHIP[status] ?? "bg-[#F9F6F3] text-black"
-      }`}
+        fixedWidth ? "w-[150px] min-[480px]:w-[190px]" : ""
+      } ${CHIP[status] ?? "bg-[#F9F6F3] text-black"}`}
     >
       {label ?? CHIP_LABEL[status] ?? status}
     </span>
@@ -240,7 +253,9 @@ export function RiderListRow({
       </span>
       <span className="flex shrink-0 items-center gap-3 min-[480px]:gap-6">
         {amount && (
-          <span className="whitespace-nowrap font-frank-ruhl text-[16px] font-medium leading-none text-black">{amount}</span>
+          <span className="min-w-[88px] whitespace-nowrap text-right font-frank-ruhl text-[16px] font-medium leading-none tabular-nums text-black">
+            {amount}
+          </span>
         )}
         {chip}
       </span>
@@ -306,7 +321,7 @@ const PAYOUT_CHIP: Record<string, { label: string; className: string }> = {
   // Cash hand-ins (CashRemittance) share the same pill.
   CONFIRMED: { label: "Confirmed", className: "bg-[#F1FEF3] text-[#0ECF00]" },
   DISPUTED: { label: "Disputed", className: "bg-[#FFE9EC] text-[#FF3F5C]" },
-  CANCELLED: { label: "Cancelled", className: "bg-[#F9F6F3] text-black/60" },
+  CANCELLED: { label: "Cancelled", className: "bg-[#ECE8E3] text-black/60" },
 };
 
 /** Paid / Pending / Rejected pill of a payout request. */

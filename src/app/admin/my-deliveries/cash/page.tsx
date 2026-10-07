@@ -141,7 +141,7 @@ export default async function CashCollectedPage({ searchParams }: { searchParams
                       : ""
                   }${row?.status === "PARTIAL" ? ` · ${formatAmount(owedHere, d.currency)} still to hand in` : ""}`}
                   amount={formatAmount(d.totalAmount, d.currency)}
-                  chip={<StatusChip status={row?.status ?? "DUE"} />}
+                  chip={<StatusChip status={row?.status ?? "DUE"} fixedWidth />}
                 />
               );
             })}

@@ -8,7 +8,7 @@ import {
   ClipboardList,
   Gift,
   Lock,
-  LogOut,
+  LogOut, 
   MapPin,
   Star,
   UserRound,
