@@ -355,6 +355,12 @@ model StaffProfile {
 model Category {
   id        String     @id @default(cuid())
   name      String     @unique
+  /// মেনুতে শ্রেণি কোন ক্রমে দেখাবে — ছোট সংখ্যা আগে।
+  ///
+  /// ⚠️ ডিফল্ট ৯৯৯, ০ নয়: নতুন শ্রেণি যোগ করলে সেটা আপনা থেকে সবার
+  /// শেষে যায়। ০ দিলে নতুনটা সবার আগে চলে আসত। দুটোর মান সমান হলে
+  /// নাম ধরে সাজানো হয় (আগের আচরণ)।
+  sortOrder Int        @default(999)
   menuItems MenuItem[]
 
   // Coupons restricted to "only this category" — see the restriction note

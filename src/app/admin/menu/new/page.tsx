@@ -3,7 +3,7 @@ import MenuItemForm from "../MenuItemForm";
 
 export default async function NewMenuItemPage() {
   const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: { id: true, name: true },
   });
 

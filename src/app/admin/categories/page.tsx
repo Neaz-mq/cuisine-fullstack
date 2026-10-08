@@ -77,7 +77,7 @@ export default async function AdminCategoriesPage({
    * সবচেয়ে কম DB-ঘা। (Inventory-র শ্রেণি-ভাগেও একই যুক্তি।)
    */
   const rows = await prisma.category.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,

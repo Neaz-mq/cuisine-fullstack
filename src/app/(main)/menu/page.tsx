@@ -80,7 +80,7 @@ export default async function MenuPage() {
    */
   const [categoryRows, ratingRows, couponRows] = await Promise.all([
     prisma.category.findMany({
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,

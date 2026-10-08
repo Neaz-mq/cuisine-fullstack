@@ -41,7 +41,7 @@ export async function GET() {
           },
         },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
     const nonEmptyCategories = categories.filter((c) => c.menuItems.length > 0);

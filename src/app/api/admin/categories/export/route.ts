@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     : DEFAULT_CATEGORY_FILTER;
 
   const rows = await prisma.category.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       name: true,
       menuItems: {

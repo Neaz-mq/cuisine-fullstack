@@ -20,20 +20,14 @@ const prisma = new PrismaClient({ adapter });
 // ---------------------------------------------------------------------------
 // Category list 
 // ---------------------------------------------------------------------------
+// ক্রমটাই মেনুতে দেখানোর ক্রম — নিচের সূচক থেকে Category.sortOrder বসে।
 const categories = [
+  "Appetizer",
   "Burgers",
   "Chicken",
   "Pizza",
-  "Salad",
-  "Appetizer",
-  "Drinks",
-  "Signature",
-  "Mushroom",
   "Coffee",
-  "Popular",
-  "Weekly Special",
-  "Feast",
-  "Limited Offer",
+  "Drinks",
 ];
 
 // ---------------------------------------------------------------------------
@@ -155,44 +149,6 @@ const menuItems = [
     category: "Pizza",
   },
 
-  // ---- Items.jsx: SALAD ----
-  {
-    title: "Garden Fresh Salad",
-    description:
-      "Crisp, fresh greens with a mix of vibrant vegetables and a light vinaigrette dressing.",
-    price: 6.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752130270/menu11_yizlj0.webp",
-    category: "Salad",
-  },
-  {
-    title: "Caesar Salad Chicken",
-    description:
-      "Classic Caesar salad with grilled chicken, croutons, and Parmesan cheese.",
-    price: 8.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752130270/menu11_yizlj0.webp",
-    category: "Salad",
-  },
-  {
-    title: "Mediterranean Quinoa Salad",
-    description:
-      "A hearty and healthy salad with quinoa, olives, feta, and sun-dried tomatoes.",
-    price: 9.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752130540/menu12_jowol9.webp",
-    category: "Salad",
-  },
-  {
-    title: "Cobb Salad Supreme",
-    description:
-      "A rich Cobb salad with chicken, bacon, avocado, egg, and blue cheese.",
-    price: 10.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752130540/menu12_jowol9.webp",
-    category: "Salad",
-  },
-
   // ---- Items.jsx: APPETIZER ----
   {
     title: "Crispy French Fries",
@@ -267,136 +223,6 @@ const menuItems = [
     imageUrl:
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752129320/menu7_worqnh.webp",
     category: "Drinks",
-  },
-
-  // ---- Category.jsx: Signature ----
-  {
-    title: "Crispy Fried Chicken (Signature)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 14,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Crispy Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 12,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Crispy Hot Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 10,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Fried Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 8,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Normal Fried Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 6,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Average Fried Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 4,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-  {
-    title: "Thai Fried Chicken",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 2,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Signature",
-  },
-
-  // ---- Category.jsx: Mushroom ----
-  {
-    title: "Mozila Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 16,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Donald Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 14,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Sticky Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 10,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Mehoniz Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 10,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Italian Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 9,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Hot Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 6,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
-  },
-  {
-    title: "Normal Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 4,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121724/order2_hizrrd.webp",
-    category: "Mushroom",
   },
 
   // ---- Category.jsx: Coffee ----
@@ -528,192 +354,6 @@ const menuItems = [
       "https://res.cloudinary.com/dxohwanal/image/upload/v1752122232/order4_vzsqsc.webp",
     category: "Pizza",
   },
-
-  // ---- Popular.jsx ----
-  {
-    title: "Classic Roast Brew",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 12,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Popular",
-  },
-  {
-    title: "Cheesy Crust Deluxe",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 14,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752122232/order4_vzsqsc.webp",
-    category: "Popular",
-  },
-  {
-    title: "Classic Roast Special",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 16,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752121470/order1_ea6o5o.webp",
-    category: "Popular",
-  },
-  {
-    title: "Cheesy Crust Superior",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 18,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752122232/order4_vzsqsc.webp",
-    category: "Popular",
-  },
-
-  // ---- Signature.jsx 
-  {
-    title: "Classic Combo",
-    description:
-      "Succulent, spice-rubbed lamb chops grilled to perfection and served with fresh greens.",
-    price: 7.89,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052166/signature1_gyjebg.webp",
-    category: "Signature",
-  },
-  {
-    title: "Chicken Delight",
-    description:
-      "Succulent, spice-rubbed lamb chops grilled to perfection and served with fresh greens.",
-    price: 8.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052270/signature2_wasgom.webp",
-    category: "Signature",
-  },
-  {
-    title: "Family Feast",
-    description:
-      "Succulent, spice-rubbed lamb chops grilled to perfection and served with fresh greens.",
-    price: 19.89,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052450/signature3_td2pb9.webp",
-    category: "Signature",
-  },
-  {
-    title: "Mega Meal",
-    description:
-      "Succulent, spice-rubbed lamb chops grilled to perfection and served with fresh greens.",
-    price: 29.99,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052734/signature4_ec4hsr.webp",
-    category: "Signature",
-  },
-
-  // ---- Weekly.jsx ----
-  {
-    title: "Crispy Chicken Wings",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 10,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752131105/menu14_ic1vqr.webp",
-    category: "Weekly Special",
-  },
-  {
-    title: "Santa's Stuffed Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 12,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752131180/menu15_b2jpqw.webp",
-    category: "Weekly Special",
-  },
-  {
-    title: "Classic Roast Brew (Weekly)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 14,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752131250/menu16_kvd8lx.webp",
-    category: "Weekly Special",
-  },
-  {
-    title: "Cheesy Crust Deluxe (Weekly)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 16,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752131326/menu17_i0xaie.webp",
-    category: "Weekly Special",
-  },
-
-  // ---- Feast.jsx ----
-  {
-    title: "Crispy Chicken Wings (Feast)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 12,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752126479/offer12_wn37pv.webp",
-    category: "Feast",
-  },
-  {
-    title: "Santa's Stuff Mushrooms",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 14,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752126715/offer13_jefv2j.webp",
-    category: "Feast",
-  },
-  {
-    title: "Classic Roast Brew (Feast)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 16,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752127012/offer14_viddzm.webp",
-    category: "Feast",
-  },
-  {
-    title: "Cheesy Crust Deluxe (Feast)",
-    description:
-      "Our menu is carefully crafted by expert chefs who bring creativity",
-    price: 18,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752127252/offer15_fc5m1h.webp",
-    category: "Feast",
-  },
-
-  // ---- Limited.jsx ----
-  {
-    title: "Main Courses",
-    description: "Succulent, space-rubbed lamb chops grilled to...",
-    price: 200,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752123186/offer1_xts2ue.webp",
-    category: "Limited Offer",
-  },
-  {
-    title: "Salads & Sides",
-    description: "Succulent, space-rubbed lamb chops grilled to...",
-    price: 165,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752123462/offer2_mqlcmt.webp",
-    category: "Limited Offer",
-  },
-  {
-    title: "Dessert Items",
-    description: "Succulent, space-rubbed lamb chops grilled to...",
-    price: 110,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752123699/offer3_w3cpxv.webp",
-    category: "Limited Offer",
-  },
-  {
-    title: "Soft Drinks",
-    description: "Succulent, space-rubbed lamb chops grilled to...",
-    price: 90,
-    imageUrl:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752123936/offer4_wsne9i.webp",
-    category: "Limited Offer",
-  },
 ];
 
 async function main() {
@@ -722,11 +362,13 @@ async function main() {
   // 1) Create all Category rows (upsert — skip if exists, create if not)
   const categoryMap = new Map<string, string>(); // name -> id
 
-  for (const name of categories) {
+  for (let index = 0; index < categories.length; index++) {
+    const name = categories[index];
+    const sortOrder = index + 1;
     const category = await prisma.category.upsert({
       where: { name },
-      update: {},
-      create: { name },
+      update: { sortOrder },
+      create: { name, sortOrder },
     });
     categoryMap.set(name, category.id);
   }
@@ -734,7 +376,7 @@ async function main() {
 
   // 2) Create MenuItem rows — capped at SEED_ITEMS_PER_CATEGORY per category
   //
-  // The full source list (menuItems) has 72 items across 13 categories.
+  // The full source list (menuItems) has 34 items across 6 categories.
   // For local/testing purposes we only need a handful per category, not the
   // whole set — so we take the first N per category here. Bump this number
   // (or seed the full `menuItems` array directly) whenever real menu data

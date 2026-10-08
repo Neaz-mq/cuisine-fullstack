@@ -119,7 +119,7 @@ export default async function AdminOffersPage({
     date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz });
 
   const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: { id: true, name: true },
   });
   const categoryIds = new Set(categories.map((c) => c.id));

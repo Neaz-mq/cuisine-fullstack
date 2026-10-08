@@ -12,7 +12,7 @@ export default async function EditMenuItemPage({
 
   const [item, categories, inventoryItems] = await Promise.all([
     prisma.menuItem.findUnique({ where: { id } }),
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },

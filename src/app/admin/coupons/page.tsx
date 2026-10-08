@@ -108,7 +108,7 @@ export default async function AdminCouponsPage({ searchParams }: { searchParams:
   const listWhere = couponListWhere({ q, status, type }, now);
 
   const [categories, liveCoupons, totalClaims, expiringSoon, listTotal] = await Promise.all([
-    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     prisma.coupon.findMany({
       where: liveCouponWhere(now),
       orderBy: { createdAt: "desc" },

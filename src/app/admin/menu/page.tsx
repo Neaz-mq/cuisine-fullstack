@@ -79,7 +79,7 @@ export default async function AdminMenuPage({
    * একই যুক্তি, আর সেখানেও একই কথা লেখা আছে।
    */
   const rows = await prisma.category.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
