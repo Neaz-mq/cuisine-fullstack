@@ -30,18 +30,53 @@
  * বদলে দিন; component-এ কিছু করতে হবে না।
  */
 
-export type HeroDish = {
-  id: string;
-  name: string;
-  image: string;
-};
-
 export type HeroNutrient = {
   label: string;
   value: string;
   /** Figma-তে চারটে ঘরের চারটে আলাদা রঙ (Inner Card)। */
   tint: string;
 };
+
+export type HeroDish = {
+  id: string;
+  name: string;
+  image: string;
+  /**
+   * এই খাবারের নিজের চারটে পুষ্টি-ঘর (Energy · Carbs · Fats · Protein)।
+   * সারিটা ঘোরার সময় মাঝের বড় কার্ডে যে খাবার আসে, ঘরগুলো তারই
+   * সংখ্যা দেখায়। না দিলে `Hero`-র `nutrients` prop (ডিফল্ট:
+   * `HERO_NUTRIENTS`) বসে — তাই পুরনো ব্যবহার ভাঙে না।
+   */
+  nutrients?: HeroNutrient[];
+};
+
+/**
+ * চারটে ঘরের রঙ — Figma-র Inner Card। সব খাবারে একই, তাই একবারই লেখা।
+ */
+const NUTRIENT_TINTS = {
+  energy: "#EDF7E8",
+  carbs: "#F9F6F3",
+  fats: "#F6F6E8",
+  protein: "#E8F0F6",
+} as const;
+
+/**
+ * চারটে সংখ্যা থেকে চারটে ঘর বানায় — রঙ, লেবেল আর একক (Kcal / gm)
+ * এক জায়গায় থাকে, তাই প্রতিটা খাবারে শুধু সংখ্যা লিখলেই হয়।
+ */
+function heroNutrients(
+  kcal: number,
+  carbs: number,
+  fats: number,
+  protein: number,
+): HeroNutrient[] {
+  return [
+    { label: "Energy", value: `${kcal} Kcal`, tint: NUTRIENT_TINTS.energy },
+    { label: "Carbs", value: `${carbs} gm`, tint: NUTRIENT_TINTS.carbs },
+    { label: "Fats", value: `${fats} gm`, tint: NUTRIENT_TINTS.fats },
+    { label: "Protein", value: `${protein} gm`, tint: NUTRIENT_TINTS.protein },
+  ];
+}
 
 /**
  * Hero-র ছবির সারি — মাঝেরটা বড় (Figma Frame 2147236011, 645×399),
@@ -50,31 +85,44 @@ export type HeroNutrient = {
  * ⚠️ ক্রমটা গুরুত্বপূর্ণ: `Hero` ধরে নেয় **মাঝেরটাই** নায়ক, অর্থাৎ
  * তালিকার তৃতীয় জিনিসটা। পাঁচটার কম দিলে ও নিজেই সামলে নেয়, কিন্তু
  * পাঁচটাই দিলে Figma-র বিন্যাসটা হুবহু মেলে।
+ *
+ * ⚠️ পুষ্টির সংখ্যাগুলো **একটা সাধারণ পরিবেশনের আনুমানিক মান** — ল্যাবে
+ * মাপা নয়। প্রতিটার ক্যালরি = ৪×কার্ব + ৪×প্রোটিন + ৯×চর্বি, মোটামুটি
+ * মেলানো (আগের 459 Kcal · 36 · 44 · 55 পরস্পরের সাথে মিলত না)। নিজের
+ * রান্নাঘরের আসল মাপ জানা থাকলে নিচের সংখ্যা বদলে দিন।
  */
 export const HERO_DISHES: HeroDish[] = [
   {
-    id: "lamb",
-    name: "Grilled lamb chop",
+    id: "french-fries",
+    name: "French Fries",
     image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051031/buffet1_ek10ch.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791454501/French_fry_zkotbt.webp",
+    // মাঝারি এক বাটি।
+    nutrients: heroNutrients(380, 48, 19, 5),
   },
   {
-    id: "sandwich",
-    name: "Special sandwich",
+    id: "coffee",
+    name: "Cappuccino Coffee",
     image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051554/buffet4_cwwunl.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791454789/capacino_coffee_ajp0e8.webp",
+    // এক কাপ (প্রায় ৩৫০ ml), পুরো দুধে।
+    nutrients: heroNutrients(150, 12, 8, 8),
   },
   {
-    id: "combo",
-    name: "Classic combo platter",
+    id: "pizza",
+    name: "Classic Pizza",
     image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052166/signature1_gyjebg.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791453589/Pizza_rtajjl.webp",
+    // দুই টুকরো।
+    nutrients: heroNutrients(470, 56, 18, 22),
   },
   {
-    id: "steak",
-    name: "Pan-seared steak",
+    id: "burger",
+    name: "Chicken Burger",
     image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051401/buffet3_brkpjm.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791453819/Burger_ewimpe.webp",
+    // একটা পুরো burger, cheese সহ।
+    nutrients: heroNutrients(540, 42, 28, 30),
   },
   {
     // ⚠️ আগে এখানে "Family Feast" (signature3) ছিল — কিন্তু ওটা
@@ -82,30 +130,27 @@ export const HERO_DISHES: HeroDish[] = [
     // পালা করে মাঝের বড় ঘরে এসে বসত, আর তখন পুষ্টির ঘরগুলো
     // (459 Kcal · 36 gm …) মানুষের ছবির উপরে ভাসত — অর্থহীন।
     // পাঁচটাই এখন প্লেটে সাজানো খাবার, Figma-র মতো।
-    id: "steak-super",
-    name: "Grilled super steak",
+    id: "chicken-fry",
+    name: "Chicken Fry",
     image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051223/buffet2_lv0gz5.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791454192/Chicken_Fry_hnvlnb.webp",
+    // চার টুকরো।
+    nutrients: heroNutrients(380, 12, 22, 34),
   },
 ];
 
 /**
- * মাঝের ছবির উপরে ভাসা চারটে পুষ্টি-ঘর।
+ * ডিফল্ট চারটে ঘর — শুধু তখন কাজে লাগে যখন কোনো খাবারে নিজের
+ * `nutrients` দেওয়া নেই (যেমন পরে backend থেকে এমন খাবার এলো যার
+ * পুষ্টি-তথ্য নেই)। মানগুলো আগের মতোই রাখা।
  *
- * ⚠️ সংখ্যাগুলো আপাতত স্থির, আর সেটা লুকোনোর কিছু নেই: `MenuItem`-এ
- * পুষ্টির কোনো মাঠই নেই (আছে শুধু title, description, price, imageUrl,
- * isAvailable)। সত্যিকারের সংখ্যা দেখাতে হলে চারটে কলাম + একটা
- * migration লাগবে, আর form-এ ঘরগুলো। বললেই করে দেব।
- *
- * ততদিন এগুলো marketing-এর লেখা, ডেটা নয় — তাই এখানে, `lib`-এ,
- * component-এর ভেতরে ছড়িয়ে নয়।
+ * ⚠️ এই comment-এর আগের সংস্করণে লেখা ছিল `MenuItem`-এ পুষ্টির কোনো
+ * মাঠ নেই — সেটা এখন সত্যি নয়: `calories`, `fatGrams`, `proteinGrams`,
+ * `carbGrams` কলামগুলো schema-তে আছে (optional)। তাই পরের ধাপ হলো
+ * খাবারগুলোকে মেনুর পদের সাথে মেলানো, যাতে এই সংখ্যাগুলো আসে
+ * সরাসরি database থেকে — লেখা থেকে নয়।
  */
-export const HERO_NUTRIENTS: HeroNutrient[] = [
-  { label: "Energy", value: "459 Kcal", tint: "#EDF7E8" },
-  { label: "Carbs", value: "36 gm", tint: "#F9F6F3" },
-  { label: "Fats", value: "44 gm", tint: "#F6F6E8" },
-  { label: "Protein", value: "55 gm", tint: "#E8F0F6" },
-];
+export const HERO_NUTRIENTS: HeroNutrient[] = heroNutrients(459, 36, 44, 55);
 
 export type DeliveryBrand = {
   name: string;

@@ -295,7 +295,7 @@ export default function Hero({
              * অবস্থায় দেখা যায় না।
              */}
             <figcaption className="absolute inset-x-2 bottom-3 flex flex-wrap justify-center gap-1.5 md:inset-x-4 md:bottom-4 md:gap-3">
-              {nutrients.map((nutrient, i) => (
+              {(dish.nutrients ?? nutrients).map((nutrient, i) => (
                 <motion.span
                   key={nutrient.label}
                   initial={reduceMotion ? false : { opacity: 0, y: 12 }}
