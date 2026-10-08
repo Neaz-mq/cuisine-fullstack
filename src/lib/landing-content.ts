@@ -154,10 +154,27 @@ export const HERO_NUTRIENTS: HeroNutrient[] = heroNutrients(459, 36, 44, 55);
 
 export type DeliveryBrand = {
   name: string;
-  /** ব্র্যান্ডের নিজের রঙ — logo না থাকায় নামটাই সেই রঙে লেখা হয়। */
+  /** ব্র্যান্ডের নিজের রঙ — logo না থাকলে নামটাই সেই রঙে লেখা হয়। */
   color: string;
   /** কয়েকটা ব্র্যান্ড wordmark-এ italic (Wolt), কয়েকটা নয়। */
   italic?: boolean;
+  /**
+   * Figma-র মাপ (px, 1440px পর্দায়) — প্রতিটা logo-র নিজের বাক্স:
+   * foodpanda 160×35 · foodi 88×35 · deliveroo 119×40 · swiggy 136×40 ·
+   * Wolt 103×35 · talabat 162×35। logo এই বাক্স ভরে বসে।
+   */
+  width: number;
+  height: number;
+  /**
+   * আসল logo-র URL (আপনার Cloudinary)। থাকলে `BrandStrip` লেখার বদলে
+   * ছবি বসায়; না থাকলে `name` ব্র্যান্ড-রঙে লেখা থাকে। অর্থাৎ একটা
+   * একটা করে logo পেলেই এখানে `logo:` বসালে হয় — বাকিগুলো নষ্ট হয় না।
+   *
+   * ⚠️ ছবির চারপাশে ফাঁকা (transparent) জায়গা থাকলে logo বাক্সে ছোট
+   * দেখায়। Cloudinary-র URL-এ `/upload/` -এর ঠিক পরে `e_trim/` বসালে
+   * ফাঁকাটুকু কেটে যায় — foodpanda-তে তাই করা আছে।
+   */
+  logo?: string;
 };
 
 /**
@@ -168,17 +185,56 @@ export type DeliveryBrand = {
  * আর আমার কাছে ফাইলও নেই। এলোমেলো জায়গা থেকে logo টেনে আনলে সেটা
  * আইনি ঝুঁকি, আর ভুল সংস্করণ বসার সম্ভাবনাও বেশি।
  *
- * তাই আপাতত প্রতিটা নাম তার নিজের ব্র্যান্ড-রঙে লেখা — জায়গা,
- * ব্যবধান আর মাপ ঠিক Figma-র, শুধু ছবির বদলে লেখা। SVG পেলে
- * `BrandStrip`-এ `<span>`-টা `<img>` করে দিলেই হবে।
+ * তাই যেগুলোর logo আপনি Cloudinary-তে তুলেছেন (এখন: foodpanda)
+ * সেগুলো `logo:` দিয়ে ছবি হিসেবে বসে; বাকিগুলো আপাতত নিজের
+ * ব্র্যান্ড-রঙে লেখা। নতুন logo পেলে শুধু ওই ব্র্যান্ডের সারিতে
+ * `logo: "https://…"` যোগ করুন — component ছুঁতে হবে না।
  */
 export const DELIVERY_BRANDS: DeliveryBrand[] = [
-  { name: "foodpanda", color: "#D70F64" },
-  { name: "foodi", color: "#E23744" },
-  { name: "deliveroo", color: "#00CCBC" },
-  { name: "swiggy", color: "#FC8019" },
-  { name: "Wolt", color: "#00C2E8", italic: true },
-  { name: "talabat", color: "#FF5A00" },
+  {
+    name: "foodpanda",
+    color: "#D70F64",
+    width: 160,
+    height: 35,
+    // e_trim: ছবির চারপাশের ফাঁকা অংশ কেটে ফেলে, তাই logo পুরো বাক্স ভরে।
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791457309/Foodpanda_d9lgmf.webp",
+  },
+  {
+    name: "foodi",
+    color: "#E23744",
+    width: 88,
+    height: 35,
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791457742/foodi_kikkpe.webp",
+  },
+  {
+    name: "deliveroo",
+    color: "#00CCBC",
+    width: 119,
+    height: 40,
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791457937/deliverro_cqpuny.webp",
+  },
+  {
+    name: "swiggy",
+    color: "#FC8019",
+    width: 136,
+    height: 40,
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791458153/swiggy_vfl4ku.webp",
+  },
+  {
+    name: "Wolt",
+    color: "#00C2E8",
+    italic: true,
+    width: 103,
+    height: 35,
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791458319/wolt_mkpt9u.webp",
+  },
+  {
+    name: "talabat",
+    color: "#FF5A00",
+    width: 162,
+    height: 35,
+    logo: "https://res.cloudinary.com/dzi3u164c/image/upload/e_trim/v1791458510/talabat_poc6ml.webp",
+  },
 ];
 
 /* ── TopBar আর Navbar-এর লেখা ──────────────────────────────────────── */
