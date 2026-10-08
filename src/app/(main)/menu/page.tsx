@@ -8,6 +8,7 @@ import MenuHero from "@/components/menu/MenuHero";
 import TodaysOffers, { type MenuOffer } from "@/components/menu/TodaysOffers";
 import MenuBrowser, { type MenuBrowserCategory } from "@/components/menu/MenuBrowser";
 import SignatureSection from "@/components/landing/SignatureSection";
+import { getSignatureDishes } from "@/lib/signature-dishes";
 import MenuComboCta from "@/components/menu/MenuComboCta";
 
 export const metadata: Metadata = {
@@ -78,7 +79,7 @@ export default async function MenuPage() {
    * হয় (`Promise.all`), ধারাবাহিকভাবে নয়। কোনোটা অন্যটার ফলের উপর
    * নির্ভর করে না, তাই পরপর `await` করলে শুধু অপেক্ষার সময়টাই যোগ হতো।
    */
-  const [categoryRows, ratingRows, couponRows] = await Promise.all([
+  const [categoryRows, ratingRows, couponRows, signatureDishes] = await Promise.all([
     prisma.category.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: {
@@ -151,6 +152,9 @@ export default async function MenuPage() {
         restrictedItems: { select: { id: true } },
       },
     }),
+
+    // "Our Signature" — তিন শ্রেণি থেকে তিনটে পদ (lib/signature-dishes.ts)।
+    getSignatureDishes(),
   ]);
 
   const ratingByItem = new Map(
@@ -334,7 +338,7 @@ export default async function MenuPage() {
           ওখানে (ProductDetail.tsx), আর সেখানেই ওই যাচাইটার কথা
           লেখা আছে। */}
       <MenuBrowser categories={categories} />
-      <SignatureSection />
+      <SignatureSection dishes={signatureDishes} />
       <MenuComboCta />
     </>
   );

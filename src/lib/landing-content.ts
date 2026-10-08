@@ -337,64 +337,30 @@ export const SERVICES: ServiceItem[] = [
 /* ── "Our Signature" section ──────────────────────────────────────── */
 
 export type SignatureDish = {
+  /** DB-র MenuItem.id — React key আর লিংকের জন্য। */
+  id: string;
   name: string;
-  rating: string;
-  /** Figma-র চারটে ছোট chip: সময় · ক্যালরি · চর্বি · প্রোটিন। */
+  /** অনুমোদিত review না থাকলে null — তখন তারা দেখানো হয় না। */
+  rating: string | null;
+  /** সময় · ক্যালরি · চর্বি · প্রোটিন — যেগুলোর মান DB-তে আছে কেবল সেগুলো। */
   chips: string[];
   description: string;
-  image: string;
+  /** ছবি না থাকলে null — তখন আইকন বসে। */
+  image: string | null;
   href: string;
 };
 
 /**
- * তিনটে signature পদ (Figma Frame 2147235270)।
- *
- * ⚠️ ছবিগুলো আবারও আপনার নিজের Cloudinary থেকে — Buffet/Signature-এ
- * এগুলোই চলছে, তাই লোড হওয়া নিশ্চিত আর `next.config.ts` ছুঁতে হয় না।
- *
- * ⚠️ chip-এর সংখ্যাগুলো (৩০ min · ৬১৫ kcal …) স্থির — `MenuItem`-এ
- * রান্নার সময় বা পুষ্টির কোনো মাঠ নেই। Hero-র পুষ্টি-ঘরের মতোই
- * এগুলো আপাতত marketing-এর লেখা; কলাম যোগ করলে এখান থেকেই সরাসরি
- * DB-তে যাবে।
+ * ⚠️ আগে এখানে হাতে লেখা `SIGNATURE_DISHES` ছিল (Chic Burger, Beef Pizza,
+ * Spicy Hotdog) — নাম আর ছবি মিলত না, আর মেনুতে ওই পদ নাও থাকতে পারত।
+ * এখন কার্ডগুলো আসে `lib/signature-dishes.ts` থেকে, সরাসরি database থেকে।
  */
-export const SIGNATURE_DISHES: SignatureDish[] = [
-  {
-    name: "Chic Burger",
-    rating: "4.7",
-    chips: ["30 min", "615 kcal", "65 Fats", "45 Protein"],
-    description:
-      "A juicy chicken patty topped with fresh lettuce, melted cheese, and our signature sauce.",
-    image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051554/buffet4_cwwunl.webp",
-    href: "/menu",
-  },
-  {
-    name: "Beef Pizza",
-    rating: "4.6",
-    chips: ["25 min", "540 kcal", "34 Fats", "76 Protein"],
-    description:
-      "Loaded with seasoned beef, melted mozzarella, and fresh toppings on a perfectly baked crust.",
-    image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752052166/signature1_gyjebg.webp",
-    href: "/menu",
-  },
-  {
-    name: "Spicy Hotdog",
-    rating: "4.9",
-    chips: ["20 min", "545 kcal", "56 Fats", "76 Protein"],
-    description:
-      "Packed with smoky flavor, spicy seasoning, and crisp vegetables for a delicious Irish in every bite.",
-    image:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752051401/buffet3_brkpjm.webp",
-    href: "/menu",
-  },
-];
 
 /** নিচের চওড়া পটির ছবি (Frame 2147236019, radius 30)। */
 export const SIGNATURE_BANNER = {
   title: "Deep Blue Delights",
   image:
-    "https://res.cloudinary.com/dxohwanal/image/upload/v1752052450/signature3_td2pb9.webp",
+    "https://res.cloudinary.com/dzi3u164c/image/upload/v1791470110/deep_blue_qdyadv.webp",
 };
 
 /* ── "Combo Deals" section ────────────────────────────────────────── */

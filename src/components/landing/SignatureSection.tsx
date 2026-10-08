@@ -3,12 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
-import { Star } from "lucide-react";
-import {
-  SIGNATURE_BANNER,
-  SIGNATURE_DISHES,
-  type SignatureDish,
-} from "@/lib/landing-content";
+import { Star, UtensilsCrossed } from "lucide-react";
+import { SIGNATURE_BANNER, type SignatureDish } from "@/lib/landing-content";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -24,9 +20,10 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
  * বাইরে**। তাই পুরো মানটা আক্ষরিকভাবে লেখা।
  */
 export default function SignatureSection({
-  dishes = SIGNATURE_DISHES,
+  dishes = [],
   banner = SIGNATURE_BANNER,
 }: {
+  /** `getSignatureDishes()` থেকে — page (server) পাঠায়। */
   dishes?: SignatureDish[];
   banner?: { title: string; image: string };
 }) {
@@ -76,10 +73,11 @@ export default function SignatureSection({
         {/* Frame 2147236012: column, gap 40। */}
         <div className="flex flex-col gap-8 xl:gap-10">
           {/* Frame 2147235270: row, gap 16 — তিনটে কার্ড। */}
+          {dishes.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {dishes.map((dish, index) => (
               <motion.article
-                key={dish.name}
+                key={dish.id}
                 initial={reduceMotion ? false : { opacity: 0, y: 28 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.2 }}
@@ -90,13 +88,26 @@ export default function SignatureSection({
               >
                 {/* Frame 2147225236: ছবির ঘর, radius 24, BG #F9F6F3। */}
                 <div className="relative aspect-[392/240] w-full overflow-hidden rounded-[24px] bg-[#F9F6F3]">
-                  <Image
-                    src={dish.image}
-                    alt={dish.name}
-                    fill
-                    sizes="(min-width: 1024px) 392px, (min-width: 768px) 50vw, 100vw"
-                    className="object-cover"
-                  />
+                  {dish.image ? (
+                    /* `unoptimized` — FoodCard-এর মতোই: ছবি Supabase বা
+                       Cloudinary যেকোনো host থেকে আসতে পারে। */
+                    <Image
+                      src={dish.image}
+                      alt={dish.name}
+                      fill
+                      sizes="(min-width: 1024px) 392px, (min-width: 768px) 50vw, 100vw"
+                      unoptimized
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center">
+                      <UtensilsCrossed
+                        className="h-10 w-10 text-black/15"
+                        strokeWidth={1.2}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  )}
 
                   {/* Rectangle 34628975: উপর থেকে কালোর দিকে gradient —
                       সাদা pill-টা ছবির উপরে পড়ার জন্য। */}
@@ -116,25 +127,27 @@ export default function SignatureSection({
                 </div>
 
                 {/* Frame 2147235266: column, padding 0 12px, gap 20। */}
-                <div className="flex flex-col gap-5 px-3">
+                <div className="flex flex-1 flex-col justify-between gap-5 px-3">
                   <div className="flex flex-col gap-3">
                     {/* Frame 2147236014: row, gap 20 — নাম + রেটিং। */}
                     <div className="flex items-center justify-between gap-5">
-                      <h3 className="min-w-0 font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
+                      <h3 className="min-w-0 truncate font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black xl:text-[24px]">
                         {dish.name}
                       </h3>
 
-                      <span className="flex shrink-0 items-center gap-1 font-sora text-[14px] font-normal leading-none text-black xl:text-[16px]">
-                        {/* ⚠️ `fill` আর `stroke` দুটোই #FF9540 — শুধু
-                            `text-[#FF9540]` দিলে lucide-এর তারাটা ফাঁপা
-                            থাকত, Figma-তে ভরাট। */}
-                        <Star
-                          className="h-4 w-4 fill-[#FF9540] text-[#FF9540]"
-                          strokeWidth={1.5}
-                          aria-hidden="true"
-                        />
-                        {dish.rating}
-                      </span>
+                      {dish.rating !== null && (
+                        <span className="flex shrink-0 items-center gap-1 font-sora text-[14px] font-normal leading-none text-black xl:text-[16px]">
+                          {/* ⚠️ `fill` আর `stroke` দুটোই #FF9540 — শুধু
+                              `text-[#FF9540]` দিলে lucide-এর তারাটা ফাঁপা
+                              থাকত, Figma-তে ভরাট। */}
+                          <Star
+                            className="h-4 w-4 fill-[#FF9540] text-[#FF9540]"
+                            strokeWidth={1.5}
+                            aria-hidden="true"
+                          />
+                          {dish.rating}
+                        </span>
+                      )}
                     </div>
 
                     {/**
@@ -156,7 +169,7 @@ export default function SignatureSection({
                       ))}
                     </ul>
 
-                    <p className="font-sora text-[13px] font-normal leading-[1.7] text-black/70 xl:text-[14px]">
+                    <p className="line-clamp-3 font-sora text-[13px] font-normal leading-[1.7] text-black/70 xl:text-[14px]">
                       {dish.description}
                     </p>
                   </div>
@@ -173,6 +186,7 @@ export default function SignatureSection({
               </motion.article>
             ))}
           </div>
+          )}
 
           {/**
            * Frame 2147236020: row, gap 114 — বাঁয়ে বড় লেখা, ডানে

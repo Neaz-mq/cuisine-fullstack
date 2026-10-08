@@ -128,7 +128,7 @@ export default function LoginPage() {
           <Image
             // Figma login design-এর pizza ছবি। register page-এ burger —
             // ইচ্ছাকৃতভাবে আলাদা, যাতে দুই page দেখতে এক না লাগে।
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787500553/922b8aca023c79d7047eec92062315def5a3e681_ijyev9.webp"
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791470597/Login_rnro3q.webp"
             alt="Great food, delivered with care"
             fill
             priority
