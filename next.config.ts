@@ -113,6 +113,17 @@ const csp = [
     "https://lh3.googleusercontent.com",
     supabaseOrigin
   ),
+  // ⚠️ media-src — <video>/<audio> এই directive দিয়ে নিয়ন্ত্রিত হয়, img-src
+  // দিয়ে নয়। এটা সেট না থাকলে browser চুপচাপ `default-src 'self'`-এ ফিরে
+  // যায় (console-এ: "'media-src' was not explicitly set, so 'default-src'
+  // is used as a fallback") আর বাইরের যেকোনো ভিডিও block হয়।
+  //
+  // "Our Guests" section-এর ভিডিও (components/landing/GuestsSection.tsx)
+  // Cloudinary থেকে আসে — তাই res.cloudinary.com এখানে স্পষ্ট করে দিতে
+  // হয়েছে। img-src-এর মতোই domain দিয়ে মেলে, তাই দুটো Cloudinary
+  // cloud name (dxohwanal + dzi3u164c) একসাথেই ধরা পড়ে। `blob:` রাখা হয়েছে
+  // ভবিষ্যতে ব্রাউজারে তৈরি/প্রি-লোড করা media-র জন্য।
+  directive("media-src", "'self'", "blob:", "https://res.cloudinary.com"),
   directive("font-src", "'self'", "data:"),
   // Supabase origin for storage uploads/reads and API calls (https), PLUS
   // the wss:// variant for Realtime's WebSocket connection (chat) — see

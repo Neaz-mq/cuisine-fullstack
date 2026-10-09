@@ -129,7 +129,7 @@ export default function ComboSection({ deals }: { deals: ComboDeal[] }) {
               </div>
 
               {/* Frame 2147235266: column, padding 0 12px, gap 20। */}
-              <div className="flex flex-col gap-5 px-3">
+              <div className="flex flex-1 flex-col gap-5 px-3">
                 <div className="flex flex-col gap-3">
                   {/* Frame 2147236014: row, gap 20 — নাম + রেটিং। */}
                   <div className="flex items-center justify-between gap-5">
@@ -197,6 +197,11 @@ export default function ComboSection({ deals }: { deals: ComboDeal[] }) {
                 </p>
 
                 {/**
+                 * ⚠️ `mt-auto` + উপরের `flex-1` — কার্ডগুলো grid-এ সমান উচ্চতা পায়,
+                 * কিন্তু ভেতরের লেখা (description/তালিকা) ছোট-বড় হলে দাম ও বোতাম
+                 * ভিন্ন উচ্চতায় বসত। এখন ফাঁকা জায়গাটা দাম-সারির উপরে জমে, তাই
+                 * তিন কার্ডেরই দাম ও বোতাম একই লাইনে থাকে।
+                 *
                  * Frame 2147236028: row, gap 20 — বাঁয়ে দাম, ডানে বোতাম।
                  *
                  * ⚠️ `flex-wrap` — Figma-তে দুটো এক সারিতে ধরে (368px),
@@ -204,7 +209,7 @@ export default function ComboSection({ deals }: { deals: ComboDeal[] }) {
                  * একসাথে আঁটে না; ভাঁজ না দিলে বোতামটা চেপে গিয়ে
                  * লেখা কাটা যেত।
                  */}
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
                   {/* Frame 2147236152: row, gap 12। */}
                   <p className="flex items-baseline gap-3">
                     <span className="font-frank-ruhl text-[20px] font-medium leading-none text-black xl:text-[24px]">

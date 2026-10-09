@@ -377,9 +377,8 @@ export type GuestStory = {
 /**
  * দুটো প্রশংসাপত্র, মাঝের ভিডিও-ছবির দুপাশে (Figma Frame 2147235980)।
  *
- * ⚠️ মুখের ছবি দুটো Cloudinary-র `chef*` — প্রজেক্টে ওগুলোই একমাত্র
- * মানুষের ছবি যা নিশ্চিতভাবে লোড হয়। আসল খদ্দেরের ছবি এলে এখানেই
- * বদলাবেন।
+ * মুখের ছবি দুটো এখন আসল খদ্দেরের (Cloudinary, dzi3u164c account)।
+ * নাম/ছবি বদলাতে চাইলে শুধু এখানেই বদলাবেন।
  */
 export const GUEST_STORIES: GuestStory[] = [
   {
@@ -387,28 +386,34 @@ export const GUEST_STORIES: GuestStory[] = [
     statLabel: "Guest Satisfaction",
     quote:
       "The seasonal menu completely redefined what fresh dining means to us. Every single dish feels deeply intentional, bursting with authentic flavors that keep us coming back every week.",
-    name: "Ridoy Ahmed",
+    name: "Smith",
     role: "Regular Guest",
     avatar:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752057824/chef1_aauap9.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1775280183/4_gxrtp2.webp",
   },
   {
     stat: "2x",
     statLabel: "Faster Delivery",
     quote:
       "Getting my Friday night gourmet burgers used to take an hour of waiting. Now, I access piping hot, restaurant-quality food in half the time.",
-    name: "Elena Rostova",
+    name: "Alex Hales",
     role: "Weekend Diner",
     avatar:
-      "https://res.cloudinary.com/dxohwanal/image/upload/v1752058500/chef2_ivfy0a.webp",
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1739354768/men2_pleix9.jpg",
   },
 ];
 
-/** মাঝের বড় ছবিটা (Frame 2147235978, 488×479, radius 20)। */
+/**
+ * মাঝের ভিডিও (Frame 2147235978, 488×479, radius 20)।
+ *
+ * `poster` — ক্লিকের আগে যে thumbnail দেখায়। `src` — আসল mp4।
+ * GuestsSection `src` সরাসরি চালায় (কোনো URL transformation ছাড়া)।
+ */
 export const GUEST_VIDEO = {
-  image:
-    "https://res.cloudinary.com/dxohwanal/image/upload/v1752052734/signature4_ec4hsr.webp",
-  alt: "Guests sharing a meal together",
+  src: "https://res.cloudinary.com/dzi3u164c/video/upload/v1791556207/ORO_Food_Wine_Hamburger_reel_Dreamer_Studio_uyljbh.mp4",
+  poster:
+    "https://res.cloudinary.com/dzi3u164c/image/upload/v1791556797/Thumbnail_k6euu2.webp",
+  alt: "Guests enjoying a gourmet burger and wine at our restaurant",
 };
 
 /* ── "FAQ" section ────────────────────────────────────────────────── */

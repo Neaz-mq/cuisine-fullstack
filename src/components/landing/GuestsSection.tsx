@@ -1,8 +1,9 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
-import { Play } from "lucide-react";
+import { Loader2, Play } from "lucide-react";
 import {
   GUEST_STORIES,
   GUEST_VIDEO,
@@ -46,7 +47,17 @@ function StoryCard({ story }: { story: GuestStory }) {
       {/* Frame 2147235976: row, gap 12 — ছবি + নাম/পরিচয়। */}
       <figcaption className="flex items-center gap-3">
         <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-white">
-          <Image src={story.avatar} alt={story.name} fill sizes="48px" className="object-cover" />
+          {/* ⚠️ `unoptimized` — avatar এখন আলাদা Cloudinary account (dzi3u164c)-এ;
+              next/image-এর remotePatterns-এ সেটা না থাকলেও যেন ছবি আসে
+              (Signature/Combo কার্ডেও একই কারণে `unoptimized`)। */}
+          <Image
+            src={story.avatar}
+            alt={story.name}
+            fill
+            unoptimized
+            sizes="48px"
+            className="object-cover"
+          />
         </span>
 
         <span className="flex min-w-0 flex-col gap-1.5">
@@ -62,12 +73,123 @@ function StoryCard({ story }: { story: GuestStory }) {
   );
 }
 
+/**
+ * মাঝের ভিডিও — একই 488×479 ঘরের ভেতরেই চলে, কোনো modal/redirect নেই।
+ *
+ * তিনটে অবস্থা: idle (thumbnail + play) → loading (বোতামে spinner) →
+ * playing (cover fade-out, controls আসে)।
+ *
+ * ⚠️ cover সরে `onPlaying` event-এ, ক্লিকের মুহূর্তে নয়। আগে ক্লিকেই cover
+ * সরে যেত, তাই ভিডিও লোড না হলে (duration 0:00) ব্যবহারকারী দেখত শুধু
+ * মরা controls। এখন ভিডিও সত্যিই চালু হলে তবেই cover সরে; না হলে
+ * thumbnail-এ থেকে যায় আর কারণ দেখায়।
+ *
+ * ⚠️ শুধু আসল `src` — আগের `vc_h264` সংস্করণ বাদ। Cloudinary বড় ভিডিওর
+ * নতুন transformation প্রথমবার বানাতে সময় নেয় (অনুরোধ ঝুলে থাকে বা
+ * 423 দেয়), আর সেই সময় `<video>` আটকে থাকত।
+ *
+ * মসৃণতা: `<video>` শুরু থেকেই DOM-এ (`preload="auto"`), তাই ক্লিকে
+ * mount-এর খরচ নেই; fade শুধু opacity/transform।
+ */
+function GuestVideo({
+  src,
+  poster,
+  alt,
+}: {
+  src: string;
+  poster: string;
+  alt: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [state, setState] = useState<"idle" | "loading" | "playing">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const start = () => {
+    const el = videoRef.current;
+    if (!el || state === "loading") return;
+    setError(null);
+    setState("loading");
+    // play() একটা Promise — reject হলে (autoplay নীতি, লোড-ব্যর্থতা) cover ফিরিয়ে দিই।
+    el.play().catch(() => {
+      setState("idle");
+      setError((prev) => prev ?? "Couldn't start the video. Please try again.");
+    });
+  };
+
+  return (
+    <div className="relative h-[280px] w-full overflow-hidden rounded-[20px] bg-black lg:h-[479px]">
+      <video
+        ref={videoRef}
+        src={src}
+        poster={poster}
+        aria-label={alt}
+        preload="auto"
+        playsInline
+        controls={state === "playing"}
+        onPlaying={() => setState("playing")}
+        onEnded={() => {
+          setState("idle");
+          if (videoRef.current) videoRef.current.currentTime = 0;
+        }}
+        onError={() => {
+          setState("idle");
+          setError("Video couldn't be loaded.");
+        }}
+        className="h-full w-full object-cover"
+      />
+
+      {/* Cover: thumbnail + হালকা আভা + 80×80 play বোতাম
+          (Frame 2147235980: BG rgba(0,0,0,0.2), radius 100, 44px আইকন)।
+          ⚠️ `cursor-pointer` — Tailwind v4-এ <button>-এর ডিফল্ট cursor
+          এখন `default`, তাই স্পষ্ট করে দিতে হয়। */}
+      <button
+        type="button"
+        onClick={start}
+        aria-label="Play guest video"
+        tabIndex={state === "playing" ? -1 : 0}
+        className={`group isolate absolute inset-0 flex cursor-pointer items-center justify-center bg-black/10 transition-opacity duration-500 ease-out focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-4px] ${
+          state === "playing" ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+      >
+        {/* `unoptimized` — আলাদা Cloudinary account, remotePatterns-এ না থাকলেও চলবে। */}
+        <Image
+          src={poster}
+          alt=""
+          fill
+          unoptimized
+          sizes="(min-width: 1024px) 488px, 100vw"
+          className="-z-10 object-cover"
+        />
+        <span
+          aria-hidden="true"
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-black/20 backdrop-blur-[2px] transition-transform duration-300 ease-out will-change-transform group-hover:scale-110 xl:h-20 xl:w-20"
+        >
+          {state === "loading" ? (
+            <Loader2 className="h-7 w-7 animate-spin text-white xl:h-9 xl:w-9" strokeWidth={1.5} />
+          ) : (
+            <Play className="h-7 w-7 fill-white text-white xl:h-9 xl:w-9" strokeWidth={1.5} />
+          )}
+        </span>
+
+        {error && (
+          <span
+            role="alert"
+            className="absolute inset-x-4 bottom-4 rounded-full bg-white/90 px-4 py-2 text-center font-sora text-[12px] leading-none text-black"
+          >
+            {error}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function GuestsSection({
   stories = GUEST_STORIES,
   video = GUEST_VIDEO,
 }: {
   stories?: GuestStory[];
-  video?: { image: string; alt: string };
+  video?: { src: string; poster: string; alt: string };
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -125,31 +247,7 @@ export default function GuestsSection({
             transition={{ duration: 0.55, ease: EASE }}
             className="order-first lg:order-none"
           >
-            <div className="relative h-[280px] w-full overflow-hidden rounded-[20px] bg-white lg:h-[479px]">
-              <Image
-                src={video.image}
-                alt={video.alt}
-                fill
-                sizes="(min-width: 1024px) 488px, 100vw"
-                className="object-cover"
-              />
-
-              {/**
-               * Frame 2147235980: 80×80, BG rgba(0,0,0,0.2), radius 100,
-               * ভেতরে 44px play আইকন।
-               *
-               * ⚠️ `<button>` নয়, নিছক সাজসজ্জা (`aria-hidden`) —
-               * কোনো ভিডিও এখনো নেই। বোতাম বানালে ট্যাব করে ওখানে
-               * পৌঁছে চাপলে কিছুই হতো না, যা ভাঙা বোতামের মতোই।
-               * ভিডিও এলে এটাকে `<button>` করে player খুলবেন।
-               */}
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/20 backdrop-blur-[2px] xl:h-20 xl:w-20"
-              >
-                <Play className="h-7 w-7 fill-white text-white xl:h-9 xl:w-9" strokeWidth={1.5} />
-              </span>
-            </div>
+            <GuestVideo src={video.src} poster={video.poster} alt={video.alt} />
           </motion.figure>
 
           {stories.map((story, index) => (
