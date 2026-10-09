@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
-import { FaApple, FaGooglePlay, FaStar, FaQrcode } from "react-icons/fa";
+import { FaApple, FaGooglePlay, FaStar } from "react-icons/fa";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -13,6 +13,12 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
  * row layout (mobile-এ column), padding 100px 80px, gap ~49px।
  * বাম দিকে heading + subtext + QR/rating row + store বোতাম, ডান
  * দিকে rounded (30px) ছবি-কার্ড।
+ *
+ * ⚠️ ডান দিকের কার্ডে কোনো bg-white বা shadow নেই — Figma-তে কার্ডটা
+ * শুধু radius 30px দিয়ে ছবি কেটে রাখে, আলাদা কোনো বাক্স/ছায়া নয়।
+ *
+ * ⚠️ QR কোড আসে public/qr.png থেকে (আগের FaQrcode আইকন সরানো হয়েছে)।
+ * আসল app link বদলালে ছবিটা নতুন QR দিয়ে replace করুন।
  *
  * ⚠️ এটা পুরনো `Deliver.tsx`-এর জায়গা নিচ্ছে (page.tsx-এ import
  * বদলানো হয়েছে)। `Deliver.tsx` ফাইলটা মোছা হয়নি — অন্য কোথাও
@@ -68,7 +74,7 @@ export default function OneAppSection() {
       className="overflow-hidden bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]"
       aria-label="Get the Cuisine app"
     >
-      <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-12 lg:flex-row lg:justify-between lg:gap-10">
+      <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-12 lg:flex-row lg:items-stretch lg:justify-between lg:gap-10">
         {/* Left: copy + QR/rating + store buttons */}
         <motion.div
           {...fromLeft}
@@ -90,19 +96,21 @@ export default function OneAppSection() {
           {/* QR block + divider + rating */}
           <div className="flex flex-wrap items-center justify-center gap-5 lg:justify-start">
             <div className="flex items-center gap-2.5">
-              <span
-                className="flex h-[70px] w-[70px] shrink-0 items-center justify-center rounded-2xl bg-[#F9F6F3] md:h-[88px] md:w-[88px]"
-                aria-hidden="true"
-              >
-                <FaQrcode className="h-8 w-8 text-black md:h-10 md:w-10" />
-              </span>
+              {/* public/qr.png — Figma-তে QR-এর পেছনে কোনো বক্স নেই */}
+              <Image
+                src="/qr.png"
+                alt="QR code to download the Cuisine app"
+                width={88}
+                height={88}
+                className="h-[70px] w-[70px] shrink-0 md:h-[88px] md:w-[88px]"
+              />
               <span className="max-w-[134px] text-left font-sora text-[13px] leading-[1.6] text-black/70 md:text-[16px]">
                 Scan to download the Cuisine app
               </span>
             </div>
 
             <span
-              className="hidden h-[56px] w-[1.5px] bg-black/20 min-[400px]:block"
+              className="hidden h-[56px] w-[1.5px] bg-black/20 min-[400px]:block md:h-[69px]"
               aria-hidden="true"
             />
 
@@ -116,7 +124,7 @@ export default function OneAppSection() {
                   aria-hidden="true"
                 >
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <FaStar key={i} className="h-3 w-3 text-black" />
+                    <FaStar key={i} className="h-4 w-4 text-black" />
                   ))}
                 </span>
               </div>
@@ -141,25 +149,19 @@ export default function OneAppSection() {
           </div>
         </motion.div>
 
-        {/* Right: rounded photo card */}
+        {/* Right: rider ছবি — desktop-এ বাম কনটেন্টের সমান উচ্চতা (lg:items-stretch + lg:aspect-auto)।
+            ⚠️ object-contain: ছবির হাত/শরীর কখনো কাটা পড়ে না (object-cover আর overflow-hidden সরানো হয়েছে)। */}
         <motion.div
           {...fromRight}
           transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
-          className="relative aspect-[604/468] w-full max-w-[604px] overflow-hidden rounded-[30px] bg-white shadow-[0_20px_60px_-20px_rgba(0,0,0,0.25)]"
+          className="relative aspect-[604/468] w-full max-w-[604px] lg:aspect-auto lg:min-h-[320px]"
         >
-          {/*
-            ⚠️ Placeholder: Figma-তে দুইজন বন্ধু খাবার খাচ্ছে এমন একটা
-            আসল ছবি আছে, যেটা আমার কাছে নেই। আপাতত সাইটে আগে থেকেই
-            ব্যবহৃত delivery ছবিটা বসানো হলো (Cloudinary-তে already
-            whitelisted, তাই বিল্ড ভাঙবে না)। আসল ছবিটা Cloudinary-তে
-            আপলোড করে নিচের src বদলে দিন।
-          */}
           <Image
-            src="https://res.cloudinary.com/dxohwanal/image/upload/v1752053930/deliver1_a5xpyd.webp"
-            alt="Friends enjoying a meal ordered through Cuisine"
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791560604/riders_odpldl.webp"
+            alt="Delivery rider with a Cuisine order"
             fill
             sizes="(min-width: 1024px) 604px, 90vw"
-            className="object-cover"
+            className="object-contain object-right"
           />
         </motion.div>
       </div>
