@@ -412,7 +412,7 @@ export const GUEST_STORIES: GuestStory[] = [
 export const GUEST_VIDEO = {
   src: "https://res.cloudinary.com/dzi3u164c/video/upload/v1791556207/ORO_Food_Wine_Hamburger_reel_Dreamer_Studio_uyljbh.mp4",
   poster:
-    "https://res.cloudinary.com/dzi3u164c/image/upload/v1791556797/Thumbnail_k6euu2.webp",
+    "https://res.cloudinary.com/dzi3u164c/image/upload/v1791558320/Thumb_kkjve4.webp",
   alt: "Guests enjoying a gourmet burger and wine at our restaurant",
 };
 
