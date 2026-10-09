@@ -22,6 +22,7 @@ import {
   CreditCard,
   LayoutDashboard,
   LayoutGrid,
+  Layers,
   Lightbulb,
   LogOut,
   Navigation,
@@ -72,6 +73,7 @@ export type NavIcon =
   | "payment"
   | "categories"
   | "menu"
+  | "combos"
   | "inventory"
   | "tables"
   | "reservations"
@@ -109,6 +111,7 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
   payment: CreditCard,
   categories: LayoutGrid,
   menu: BookOpen,
+  combos: Layers,
   inventory: Package,
   tables: Table,
   reservations: CalendarCheck,
@@ -155,6 +158,7 @@ export const ICONS: Record<NavIcon, LucideIcon> = {
 const NO_FILL_WHEN_ACTIVE = new Set<NavIcon>([
   "orders",
   "menu",
+  "combos",
   "tables",
   // Rider panel: round icons whose meaning is the drawing inside (clock
   // hands, the $ sign) — filled they became plain white discs.

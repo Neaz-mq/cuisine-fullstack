@@ -432,6 +432,9 @@ model MenuItem {
   // Product offers ("20% off Chic Burger until Aug 6") — see ProductOffer.
   offers ProductOffer[]
 
+  // Combos this item is a component of (home page "Combo Deals").
+  comboItems ComboItem[]
+
   // The recipe / Bill-of-Materials for this item — see MenuItemIngredient
   // below. Empty (the default) means no inventory deduction happens when
   // this item is ordered, which keeps every existing menu item working
@@ -2607,4 +2610,45 @@ enum RiderDocumentStatus {
   PENDING
   VERIFIED
   REJECTED
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Combo — a named bundle of MenuItems for the home page "Combo Deals" section.
+//
+// A combo has NO price of its own: its price is the sum of its components'
+// current prices (menu price + any live ProductOffer). "Order Now" adds each
+// component to the cart as an ordinary line, so checkout needs no combo logic.
+// To discount a combo, put a ProductOffer on its component items.
+// ─────────────────────────────────────────────────────────────────────────
+model Combo {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  /// Falls back to the first component's image when null.
+  imageUrl    String?
+  /// Hide from the home page without deleting.
+  isActive    Boolean  @default(true)
+  /// Lower first.
+  sortOrder   Int      @default(999)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items ComboItem[]
+
+  @@index([isActive, sortOrder])
+}
+
+model ComboItem {
+  id         String @id @default(cuid())
+  quantity   Int    @default(1)
+
+  combo      Combo    @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  comboId    String
+  // Restrict (default): a menu item that is part of a combo cannot be deleted
+  // until it is removed from the combo, so a combo never silently shrinks.
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItemId String
+
+  @@unique([comboId, menuItemId])
+  @@index([menuItemId])
 }

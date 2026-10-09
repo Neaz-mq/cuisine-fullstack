@@ -8,6 +8,7 @@ import GuestsSection from "@/components/landing/GuestsSection";
 import FaqSection from "@/components/landing/FaqSection";
 import OneAppSection from "@/components/landing/OneAppSection";
 import { getSignatureDishes } from "@/lib/signature-dishes";
+import { getHomeCombos } from "@/lib/combos";
 
 /**
  * ⚠️ প্রতিটা request-এ নতুন render — "Our Signature" কার্ড এখন database
@@ -34,7 +35,10 @@ export const dynamic = "force-dynamic";
  * নিচের `<Deliver />` এখনো পুরনো নকশার।
  */
 export default async function Home() {
-  const signatureDishes = await getSignatureDishes();
+  const [signatureDishes, combos] = await Promise.all([
+    getSignatureDishes(),
+    getHomeCombos(),
+  ]);
 
   return (
     <div>
@@ -43,7 +47,7 @@ export default async function Home() {
       <AboutUs />
       <ServicesSection />
       <SignatureSection dishes={signatureDishes} />
-      <ComboSection />
+      <ComboSection deals={combos} />
       <GuestsSection />
       <FaqSection />
       <OneAppSection />

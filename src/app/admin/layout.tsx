@@ -68,6 +68,8 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
       { label: "Rider Cash", href: "/admin/rider-cash", scope: "finance", icon: "riderCash" },
       { label: "Categories", href: "/admin/categories", scope: "categories", icon: "categories" },
       { label: "Menu", href: "/admin/menu", scope: "menu", icon: "menu" },
+      // Bundles of menu items for the home page "Combo Deals" — same "menu" scope.
+      { label: "Combos", href: "/admin/combos", scope: "menu", icon: "combos" },
       { label: "Inventory", href: "/admin/inventory", scope: "inventory", icon: "inventory" },
       { label: "Tables", href: "/admin/tables", scope: "tables", icon: "tables" },
       {

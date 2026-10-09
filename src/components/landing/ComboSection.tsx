@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
-import { CircleCheck, Star } from "lucide-react";
-import { COMBO_DEALS, type ComboDeal } from "@/lib/landing-content";
+import { CircleCheck, Star, UtensilsCrossed } from "lucide-react";
+import ComboOrderButton from "@/components/landing/ComboOrderButton";
+import type { ComboDeal } from "@/lib/combo-pricing";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -26,8 +26,11 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
  * একটা component-এ দুটোই ধরাতে গেলে prop দিয়ে শাখা বানাতে হতো,
  * আর তখন কোনটা কোথায় বদলাচ্ছে সেটা পড়ে বোঝা কঠিন হতো।
  */
-export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDeal[] }) {
+export default function ComboSection({ deals }: { deals: ComboDeal[] }) {
   const reduceMotion = useReducedMotion();
+
+  // No active, fully-available combo → hide the whole section.
+  if (deals.length === 0) return null;
 
   return (
     <section className="bg-[#F9F6F3] px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]">
@@ -69,7 +72,7 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {deals.map((deal, index) => (
             <motion.article
-              key={deal.name}
+              key={deal.id}
               initial={reduceMotion ? false : { opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
@@ -80,13 +83,26 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
             >
               {/* Frame 2147225236: ছবির ঘর, radius 24, BG #F9F6F3। */}
               <div className="relative aspect-[392/240] w-full overflow-hidden rounded-[24px] bg-[#F9F6F3]">
-                <Image
-                  src={deal.image}
-                  alt={deal.name}
-                  fill
-                  sizes="(min-width: 1024px) 392px, (min-width: 768px) 50vw, 100vw"
-                  className="object-cover"
-                />
+                {deal.image ? (
+                  /* `unoptimized` — same as FoodCard: images come from
+                     Supabase / arbitrary hosts. */
+                  <Image
+                    src={deal.image}
+                    alt={deal.name}
+                    fill
+                    unoptimized
+                    sizes="(min-width: 1024px) 392px, (min-width: 768px) 50vw, 100vw"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">
+                    <UtensilsCrossed
+                      className="h-10 w-10 text-black/20"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
+                  </span>
+                )}
 
                 {/* Rectangle 34628975: উপরে হালকা কালো gradient, যাতে
                     দুটো সাদা pill ছবির উপরে পড়া যায়। */}
@@ -100,9 +116,11 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
                 />
 
                 {/* Frame 2147235206: 51×30 — ছাড়ের ব্যাজ, বাঁ-উপরে। */}
-                <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] font-normal leading-none text-black">
-                  {deal.discount}
-                </span>
+                {deal.discount && (
+                  <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] font-normal leading-none text-black">
+                    {deal.discount}
+                  </span>
+                )}
 
                 {/* Frame 2147235205: 114×30 — ডান-উপরে। */}
                 <span className="absolute right-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] font-normal leading-none text-black">
@@ -119,6 +137,7 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
                       {deal.name}
                     </h3>
 
+                    {deal.rating && (
                     <span className="flex shrink-0 items-center gap-1 font-sora text-[14px] font-normal leading-none text-black xl:text-[16px]">
                       {/* ⚠️ `fill` আর `stroke` দুটোই #FF9540 — শুধু
                           `text-` দিলে lucide-এর তারা ফাঁপা থাকত। */}
@@ -129,19 +148,22 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
                       />
                       {deal.rating}
                     </span>
+                    )}
                   </div>
 
                   {/* Frame 2147225242: row, gap 6 — চারটে chip। */}
-                  <ul className="flex flex-wrap gap-1.5">
-                    {deal.chips.map((chip) => (
-                      <li
-                        key={chip}
-                        className="whitespace-nowrap rounded-[30px] bg-[#F9F6F3] px-2 py-1 font-sora text-[11px] font-normal leading-[1.5] text-black/70 xl:text-[12px]"
-                      >
-                        {chip}
-                      </li>
-                    ))}
-                  </ul>
+                  {deal.chips.length > 0 && (
+                    <ul className="flex flex-wrap gap-1.5">
+                      {deal.chips.map((chip) => (
+                        <li
+                          key={chip}
+                          className="whitespace-nowrap rounded-[30px] bg-[#F9F6F3] px-2 py-1 font-sora text-[11px] font-normal leading-[1.5] text-black/70 xl:text-[12px]"
+                        >
+                          {chip}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 {/**
@@ -191,20 +213,20 @@ export default function ComboSection({ deals = COMBO_DEALS }: { deals?: ComboDea
                     {/* ⚠️ `line-through` কেবল দেখতে; screen reader-এ
                         "আগের দাম" কথাটা না থাকলে দুটো দাম পাশাপাশি
                         শুনে বিভ্রান্তি হতো। */}
-                    <span className="font-frank-ruhl text-[14px] font-medium leading-none text-black/40 line-through xl:text-[16px]">
-                      <span className="sr-only">Was </span>
-                      {deal.wasPrice}
-                    </span>
+                    {deal.wasPrice && (
+                      <span className="font-frank-ruhl text-[14px] font-medium leading-none text-black/40 line-through xl:text-[16px]">
+                        <span className="sr-only">Was </span>
+                        {deal.wasPrice}
+                      </span>
+                    )}
                   </p>
 
                   {/* Button: padding 14px 24px, radius 100, gradient,
                       লেখা Sora 600 16px সাদা। */}
-                  <Link
-                    href={deal.href}
+                  <ComboOrderButton
+                    combo={deal}
                     className="flex h-[46px] items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[14px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] xl:h-[52px] xl:text-[16px]"
-                  >
-                    Order Now
-                  </Link>
+                  />
                 </div>
               </div>
             </motion.article>
