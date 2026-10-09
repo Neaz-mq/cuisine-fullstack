@@ -282,6 +282,8 @@ export async function POST(req: NextRequest) {
       price: m(item.price),
       originalPrice: item.originalPrice ? m(item.originalPrice) : null,
     })),
+    // What combo deals took off (already inside `subtotal`) — the cart says so.
+    comboSavings: m(resolution.comboSavings),
     offerSavings: m(
       resolvedItems.reduce(
         (total, item) =>

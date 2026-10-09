@@ -29,14 +29,21 @@ const fields = {
   /** Supabase Storage public URL from /api/admin/upload-image. null = use the first item's image. */
   imageUrl: z.string().url("That doesn't look like a valid image URL").nullable().optional(),
   isActive: z.boolean(),
+  /** Taken off when a cart holds every item of the combo. 0 = no discount. */
+  discountPercent: z
+    .number()
+    .int("Discount must be a whole number")
+    .min(0, "Discount cannot be negative")
+    .max(90, "Discount can be at most 90%"),
   sortOrder: z.number().int().min(0, "Order must be 0 or more").max(9999, "Order is too large"),
   items: itemsSchema,
 };
 
-// isActive / sortOrder fall back to true / 999 in the route.
+// isActive / discountPercent / sortOrder fall back to true / 0 / 999 in the route.
 export const createComboSchema = z.object({
   ...fields,
   isActive: fields.isActive.optional(),
+  discountPercent: fields.discountPercent.optional(),
   sortOrder: fields.sortOrder.optional(),
 });
 

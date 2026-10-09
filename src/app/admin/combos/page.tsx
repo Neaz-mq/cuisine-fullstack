@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
-import { ZERO, toMoney } from "@/lib/money";
-import { HOME_COMBO_LIMIT, comboStatuses } from "@/lib/combo-pricing";
+import { ZERO } from "@/lib/money";
+import { HOME_COMBO_LIMIT, comboStatuses, comboUnitPrice } from "@/lib/combo-pricing";
 import Pagination from "@/app/admin/orders/Pagination";
 import CombosToolbar from "./CombosToolbar";
 import ComboRow, { type ComboRowData } from "./ComboRow";
@@ -42,6 +42,7 @@ export default async function AdminCombosPage({
         description: true,
         imageUrl: true,
         isActive: true,
+        discountPercent: true,
         sortOrder: true,
         items: {
           orderBy: { id: "asc" },
@@ -92,7 +93,12 @@ export default async function AdminCombosPage({
 
   const data: ComboRowData[] = pageRows.map((row) => {
     const total = row.items.reduce(
-      (sum, i) => sum.plus(toMoney(i.menuItem.price).times(i.quantity)),
+      (sum, i) =>
+        sum.plus(
+          comboUnitPrice(i.menuItem.price, row.discountPercent, settings.currencyMinorUnits).times(
+            i.quantity
+          )
+        ),
       ZERO
     );
     return {
@@ -102,6 +108,7 @@ export default async function AdminCombosPage({
       imageUrl: row.imageUrl,
       thumb: row.imageUrl ?? row.items.find((i) => i.menuItem.imageUrl)?.menuItem.imageUrl ?? null,
       isActive: row.isActive,
+      discountPercent: row.discountPercent,
       sortOrder: row.sortOrder,
       items: row.items.map((i) => ({
         menuItemId: i.menuItem.id,
@@ -146,8 +153,8 @@ export default async function AdminCombosPage({
           </h2>
           <p className="max-w-[640px] font-sora text-[12px] leading-[1.7] text-black/70 md:text-[13px]">
             The home page shows the first {HOME_COMBO_LIMIT} live combos, lowest display order first.
-            A combo&apos;s price is its items&apos; current prices added up. To discount it, add an
-            offer to the items on the Offers page.
+            A combo&apos;s price is its items&apos; prices added up, less the combo discount. The
+            discount applies whenever a customer&apos;s cart holds every item of the combo.
           </p>
         </div>
 

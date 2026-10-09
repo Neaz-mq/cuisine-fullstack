@@ -24,9 +24,9 @@ import { MAX_COMBO_ITEMS } from "@/lib/validations/combo";
  * "Add Combo" / "Edit Combo". Built from the same modal-ui pieces as the
  * Category, Staff and Table modals, so it looks and behaves like them.
  *
- * There is no price field on purpose: the home page adds up the chosen items'
- * current prices (with any live offer). To discount a combo, put an offer on
- * its items — see the note on the Combos page.
+ * There is no price field on purpose: a combo's price is its items' prices
+ * added up, less the discount percent below. The discount is applied at
+ * checkout whenever a cart holds every item of the combo.
  */
 export type MenuOption = { value: string; label: string };
 
@@ -36,6 +36,7 @@ export type ComboDraft = {
   description: string;
   imageUrl: string | null;
   isActive: boolean;
+  discountPercent: number;
   sortOrder: number;
   items: { menuItemId: string; quantity: number }[];
 };
@@ -65,6 +66,7 @@ function ComboFormModalContent({ open, onClose, menuOptions, combo }: Props) {
   const [description, setDescription] = useState(combo?.description ?? "");
   const [imageUrl, setImageUrl] = useState<string | null>(combo?.imageUrl ?? null);
   const [isActive, setIsActive] = useState(combo?.isActive ?? true);
+  const [discount, setDiscount] = useState(String(combo?.discountPercent ?? 0));
   const [sortOrder, setSortOrder] = useState(String(combo?.sortOrder ?? 1));
   const [lines, setLines] = useState<Line[]>(
     combo
@@ -100,6 +102,11 @@ function ComboFormModalContent({ open, onClose, menuOptions, combo }: Props) {
       return setError("Each quantity must be a whole number from 1 to 99.");
     }
 
+    const percent = Number(discount);
+    if (!Number.isInteger(percent) || percent < 0 || percent > 90) {
+      return setError("Discount must be a whole number from 0 to 90.");
+    }
+
     const order = Number(sortOrder);
     if (!Number.isInteger(order) || order < 0 || order > 9999) {
       return setError("Display order must be a whole number from 0 to 9999.");
@@ -116,6 +123,7 @@ function ComboFormModalContent({ open, onClose, menuOptions, combo }: Props) {
           description: trimmedDescription,
           imageUrl,
           isActive,
+          discountPercent: percent,
           sortOrder: order,
           items,
         }),
@@ -209,6 +217,26 @@ function ComboFormModalContent({ open, onClose, menuOptions, combo }: Props) {
           maxLength={300}
           className={TEXTAREA}
         />
+      </div>
+
+      <div>
+        <label htmlFor="combo-discount" className={LABEL}>
+          Combo discount (%)
+        </label>
+        <input
+          id="combo-discount"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={90}
+          value={discount}
+          onChange={(event) => setDiscount(event.target.value)}
+          className={FIELD}
+        />
+        <p className="mt-1.5 font-sora text-[12px] leading-[1.6] text-black/60">
+          Taken off only when a customer buys every item in this combo together. Each item alone
+          stays at its normal price. Use 0 for no discount.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

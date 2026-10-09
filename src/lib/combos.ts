@@ -30,6 +30,7 @@ export async function getHomeCombos(limit = HOME_COMBO_LIMIT): Promise<ComboDeal
       name: true,
       description: true,
       imageUrl: true,
+      discountPercent: true,
       items: {
         orderBy: { id: "asc" },
         select: {
@@ -93,7 +94,8 @@ export async function getHomeCombos(limit = HOME_COMBO_LIMIT): Promise<ComboDeal
       offers,
       isMember,
       settings.currency,
-      settings.currencyMinorUnits
+      settings.currencyMinorUnits,
+      combo.discountPercent
     );
 
     return {

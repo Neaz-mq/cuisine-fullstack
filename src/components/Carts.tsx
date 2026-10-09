@@ -55,6 +55,8 @@ type Quote = {
   taxMode: "INCLUSIVE" | "EXCLUSIVE";
   tipEnabled: boolean;
   subtotal: string;
+  /** Already inside `subtotal` — shown as a note, never subtracted again. */
+  comboSavings: string;
   discountAmount: string;
   tierDiscountAmount: string;
   serviceCharge: string;
@@ -2424,6 +2426,12 @@ const Carts = ({
                   <span>Subtotal</span>
                   <span>{bill ? money(bill.subtotal) : `${currency} ${subtotal.toFixed(2)}`}</span>
                 </div>
+
+                {bill && isPositive(bill.comboSavings) && (
+                  <p className="-mt-1 text-right text-[12px] text-[#2C6252]">
+                    Includes {money(bill.comboSavings)} combo savings
+                  </p>
+                )}
 
                 {bill && isPositive(bill.discountAmount) && (
                   <div className="flex justify-between">

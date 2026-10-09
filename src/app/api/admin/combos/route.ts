@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       description: parsed.description,
       imageUrl: parsed.imageUrl ?? null,
       isActive: parsed.isActive ?? true,
+      discountPercent: parsed.discountPercent ?? 0,
       sortOrder: parsed.sortOrder ?? 999,
       items: { create: parsed.items },
     },

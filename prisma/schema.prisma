@@ -2616,9 +2616,9 @@ enum RiderDocumentStatus {
 // Combo — a named bundle of MenuItems for the home page "Combo Deals" section.
 //
 // A combo has NO price of its own: its price is the sum of its components'
-// current prices (menu price + any live ProductOffer). "Order Now" adds each
-// component to the cart as an ordinary line, so checkout needs no combo logic.
-// To discount a combo, put a ProductOffer on its component items.
+// current prices, less `discountPercent`. "Order Now" adds each component to
+// the cart as an ordinary line; checkout (resolveOrderItems) charges the
+// discounted price for every full set of the combo's items in the cart.
 // ─────────────────────────────────────────────────────────────────────────
 model Combo {
   id          String   @id @default(cuid())
@@ -2628,6 +2628,9 @@ model Combo {
   imageUrl    String?
   /// Hide from the home page without deleting.
   isActive    Boolean  @default(true)
+  /// Percent off, applied at checkout when a cart holds every item of the combo
+  /// (see applyComboDiscounts). 0 = no discount.
+  discountPercent Int  @default(0)
   /// Lower first.
   sortOrder   Int      @default(999)
   createdAt   DateTime @default(now())

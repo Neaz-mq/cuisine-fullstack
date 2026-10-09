@@ -43,6 +43,7 @@ export async function PATCH(
         description: parsed.description,
         imageUrl: parsed.imageUrl,
         isActive: parsed.isActive,
+        discountPercent: parsed.discountPercent,
         sortOrder: parsed.sortOrder,
         ...(parsed.items ? { items: { create: parsed.items } } : {}),
       },

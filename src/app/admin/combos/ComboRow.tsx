@@ -28,9 +28,10 @@ export type ComboRowData = {
   /** What to show as the thumbnail here: own photo, else first item's. */
   thumb: string | null;
   isActive: boolean;
+  discountPercent: number;
   sortOrder: number;
   items: { menuItemId: string; title: string; quantity: number }[];
-  /** Items added up at plain menu prices (offers are applied on the home page). */
+  /** Items added up at menu prices, after the combo discount. */
   totalLabel: string;
   status: ComboStatus;
 };
@@ -117,7 +118,12 @@ export default function ComboRow({
 
           <p className="font-sora text-[12px] leading-[1.5] text-black">
             <span className="font-semibold">{combo.totalLabel}</span>
-            <span className="text-black/60"> at menu prices · order {combo.sortOrder}</span>
+            <span className="text-black/60">
+              {combo.discountPercent > 0
+                ? ` after ${combo.discountPercent}% combo discount`
+                : " at menu prices, no discount"}
+              {` · order ${combo.sortOrder}`}
+            </span>
           </p>
 
           {combo.status.detail && (

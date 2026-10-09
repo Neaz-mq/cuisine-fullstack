@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { type Money, toMoney, ZERO, sum, minMoney, applyRate } from "@/lib/money";
 import { effectivePrice, findLiveOffers } from "@/lib/product-offers";
+import { applyComboDiscounts } from "@/lib/combo-pricing";
 
 export const SHIPPING_METHODS = ["UBER_EATS", "FOOD_PANDA", "OWN_DELIVERY"] as const;
 export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
@@ -127,7 +128,9 @@ export interface ResolvedItem {
  */
 export async function resolveOrderItems(
   items: IncomingItem[]
-): Promise<{ ok: true; items: ResolvedItem[] } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; items: ResolvedItem[]; comboSavings: Money } | { ok: false; error: string }
+> {
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, error: "Cart is empty" };
   }
@@ -185,7 +188,44 @@ export async function resolveOrderItems(
 
   await applyProductOffers(resolved);
 
-  return { ok: true, items: resolved };
+  // Combo discounts come last, on top of the (offer-adjusted) line prices.
+  // May split a line in two, so use the returned list from here on.
+  const combos = await applyComboPricing(resolved);
+
+  return { ok: true, items: combos.items, comboSavings: combos.savings };
+}
+
+/**
+ * Charges the combo price for every full set of an active combo's items in the
+ * cart. Runs here — the one place line prices are decided — so the cart quote,
+ * the order and the Stripe session all agree. Admin discount % lives on Combo.
+ */
+async function applyComboPricing(
+  items: ResolvedItem[]
+): Promise<{ items: ResolvedItem[]; savings: Money }> {
+  const cartItemIds = [...new Set(items.map((item) => item.menuItemId))];
+
+  // Only combos whose every item is in the cart can apply.
+  const rows = await prisma.combo.findMany({
+    where: {
+      isActive: true,
+      discountPercent: { gt: 0 },
+      items: { every: { menuItemId: { in: cartItemIds } } },
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      discountPercent: true,
+      items: { select: { menuItemId: true, quantity: true } },
+    },
+  });
+  if (rows.length === 0) return { items, savings: ZERO };
+
+  const { getRestaurantSettings } = await import("@/lib/get-settings");
+  const settings = await getRestaurantSettings();
+
+  const result = applyComboDiscounts(items, rows, settings.currencyMinorUnits);
+  return { items: result.lines, savings: result.savings };
 }
 
 /**
