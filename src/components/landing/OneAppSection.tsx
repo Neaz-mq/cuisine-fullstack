@@ -243,16 +243,21 @@ export default function OneAppSection() {
                 style={{ transformOrigin: "75% 100%" }}
                 className="h-full transform-gpu will-change-transform"
               >
-                <Image
-                  src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791560604/riders_odpldl.webp"
-                  alt="Delivery rider with a Cuisine order"
-                  width={1208}
-                  height={936}
-                  sizes="(min-width: 1280px) 714px, (min-width: 1024px) 55vw, 90vw"
-                  priority
-                  className="block h-auto w-full object-contain object-right lg:h-full lg:w-auto lg:max-w-full"
-                />
-              </motion.div>
+                {/* ⚠️ ছবির ভেতরেই উপরে-নিচে সাদা padding আছে, তাই দৃশ্যমান rider বাম কলামের
+                    চেয়ে ~১২% ছোট দেখাত। lg-তে সামান্য scale করে উচ্চতা মেলানো হয়েছে
+                    (শুধু transform, ডান-কেন্দ্র থেকে)। মিলছে না মনে হলে 1.13 বদলান। */}
+                <div className="h-full lg:origin-[85%_50%] lg:scale-[1.13]">
+                  <Image
+                    src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791560604/riders_odpldl.webp"
+                    alt="Delivery rider with a Cuisine order"
+                    width={1208}
+                    height={936}
+                    sizes="(min-width: 1280px) 714px, (min-width: 1024px) 55vw, 90vw"
+                    priority
+                    className="block h-auto w-full object-contain object-right lg:h-full lg:w-auto lg:max-w-full"
+                  />
+                </div>
+                </motion.div>
             </motion.div>
 
             {/* হালকা speed streak — ছবির ডান দিকের ফাঁকা জায়গায় */}
@@ -264,7 +269,7 @@ export default function OneAppSection() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, ease: EASE, delay: 0.7 }}
-              className="absolute left-0 top-[8%] z-10"
+              className="absolute left-0 top-[8%] z-10 lg:top-5"
             >
               <motion.div
                 animate={reduceMotion ? undefined : { y: [0, -6, 0] }}
