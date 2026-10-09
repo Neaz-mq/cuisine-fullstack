@@ -197,14 +197,14 @@ export default function OrderCelebration({
             <Link
               href="/"
               onClick={dismiss}
-              className="flex h-[46px] flex-1 items-center justify-center rounded-full border border-black px-5 font-sora text-[15px] font-semibold leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
+              className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full border border-black px-5 font-sora text-[15px] font-semibold leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
             >
               Go to Home
             </Link>
             <button
               type="button"
               onClick={() => setStep("review")}
-              className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
+              className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
             >
               Food Review
             </button>
@@ -274,7 +274,7 @@ export default function OrderCelebration({
               <button
                 type="button"
                 onClick={dismiss}
-                className="flex h-[46px] flex-1 items-center justify-center rounded-full border border-black px-5 font-sora text-[15px] font-semibold leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
+                className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full border border-black px-5 font-sora text-[15px] font-semibold leading-none text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:text-[16px]"
               >
                 Skip
               </button>
@@ -285,7 +285,7 @@ export default function OrderCelebration({
                    (orderReviewSchema), তাই এখানে আটকানো মানে একটা অকারণ
                    round trip আর একটা error toast কম। */
                 disabled={submitting || !canSubmit}
-                className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] disabled:opacity-50 md:text-[16px]"
+                className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[15px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] disabled:opacity-50 md:text-[16px]"
               >
                 {submitting ? "Sending…" : "Submit"}
               </button>

@@ -424,7 +424,7 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
               type="button"
               onClick={handleAddToCart}
               disabled={!item.isAvailable}
-              className={`flex h-[46px] flex-1 items-center justify-center rounded-[90px] border border-black px-5 font-sora text-[16px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-black ${FOCUS_RING}`}
+              className={`flex h-[46px] shrink-0 min-[480px]:flex-1 items-center justify-center rounded-[90px] border border-black px-5 font-sora text-[16px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-black ${FOCUS_RING}`}
             >
               Add to Cart
             </button>
@@ -433,7 +433,7 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
               type="button"
               onClick={handleBuyNow}
               disabled={!item.isAvailable}
-              className={`flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+              className={`flex h-[46px] shrink-0 min-[480px]:flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
             >
               Buy Now
             </button>

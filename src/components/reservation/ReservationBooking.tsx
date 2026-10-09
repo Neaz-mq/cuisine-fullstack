@@ -962,13 +962,13 @@ function SuccessModal({
         <div className="flex w-full flex-col gap-2 min-[420px]:flex-row">
           <Link
             href="/"
-            className="flex h-[46px] flex-1 items-center justify-center rounded-full border border-black font-sora text-[16px] font-semibold text-black transition-colors hover:bg-black hover:text-white"
+            className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full border border-black font-sora text-[16px] font-semibold text-black transition-colors hover:bg-black hover:text-white"
           >
             Go to Home
           </Link>
           <Link
             href={reservationId ? `/my-reservations?ref=${reservationId}` : "/my-reservations"}
-            className="flex h-[46px] flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="flex h-[46px] shrink-0 min-[420px]:flex-1 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] font-sora text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
           >
             Reservation Details
           </Link>
