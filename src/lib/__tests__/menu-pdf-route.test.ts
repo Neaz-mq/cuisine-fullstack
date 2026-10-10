@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// PDF বানানো (ফন্ট parse + embed) CPU-ভারী: local-এ ~১s, ধীর CI runner-এ কয়েক গুণ। vitest-এর
+// ডিফল্ট ৫s সেখানে অকারণে ফেল করায় (GitHub Actions-এ একবার করেছেও) — তাই এই ফাইলে সীমা ২০s।
+vi.setConfig({ testTimeout: 20_000 });
+
 const dec = (n: number) => ({ toNumber: () => n, equals: (o: { toNumber(): number }) => o.toNumber() === n });
 
 const findMany = vi.fn();
@@ -89,10 +93,13 @@ describe("GET /api/menu/pdf", () => {
   });
 
   it("rate-limits one client after 20 downloads in the window", async () => {
-    findMany.mockResolvedValue(category([menuItem]));
+    // ⚠️ খালি মেনু (→ 503) ইচ্ছাকৃত: rate limit DB আর PDF বানানোর আগেই যাচাই হয়, তাই
+    // এই test-এ ২১টা আসল PDF বানানোর দরকার নেই। আগে বানানো হতো — local-এ ৪.৬s, ধীর CI-তে
+    // vitest-এর ৫s সীমা পেরিয়ে "Test timed out" দিত।
+    findMany.mockResolvedValue([]);
     const same = () =>
       GET(new Request("http://localhost:3000/api/menu/pdf", { headers: { "x-forwarded-for": "203.0.113.9" } }));
-    for (let i = 0; i < 20; i++) expect((await same()).status).toBe(200);
+    for (let i = 0; i < 20; i++) expect((await same()).status).not.toBe(429);
     const blocked = await same();
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get("Retry-After")).toBeTruthy();

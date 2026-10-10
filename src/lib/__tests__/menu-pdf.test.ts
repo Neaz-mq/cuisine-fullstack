@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { buildMenuPdf, wrap, type MenuPdfData, type MenuPdfItem } from "@/lib/menu-pdf";
+
+// PDF বানানো (ফন্ট parse + embed) CPU-ভারী: local-এ ~১s, ধীর CI runner-এ কয়েক গুণ। vitest-এর
+// ডিফল্ট ৫s সেখানে অকারণে ফেল করায় (GitHub Actions-এ একবার করেছেও) — তাই এই ফাইলে সীমা ২০s।
+vi.setConfig({ testTimeout: 20_000 });
 
 const item = (over: Partial<MenuPdfItem> = {}): MenuPdfItem => ({
   title: "Chic Burger",
