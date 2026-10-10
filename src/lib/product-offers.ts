@@ -121,8 +121,7 @@ export async function findLiveOffers(
   menuItemIds: string[],
   now: Date = new Date()
 ): Promise<Map<string, LiveOffer>> {
-  const result = new Map<string, LiveOffer>();
-  if (menuItemIds.length === 0) return result;
+  if (menuItemIds.length === 0) return new Map<string, LiveOffer>();
 
   const rows = await prisma.productOffer.findMany({
     where: { menuItemId: { in: menuItemIds }, ...liveOfferWhere(now) },
@@ -130,6 +129,33 @@ export async function findLiveOffers(
     select: LIVE_OFFER_SELECT,
   });
 
+  return newestOfferPerItem(rows);
+}
+
+/**
+ * সব চালু offer, কোনো id-তালিকা ছাড়াই — /menu-র জন্য।
+ *
+ * ⚠️ কেন আলাদা: `findLiveOffers` আগে মেনুর পদের id চায়, অর্থাৎ পদগুলো আগে
+ * আনতে হয়, তারপর offer। দুটো পরপর = দুটো পুরো network round-trip। চালু
+ * offer সংখ্যায় অল্প (হাতে গোনা), তাই সব একসাথে এনে Map-এ রাখলে পদের
+ * query-র সাথে **সমান্তরালে** চালানো যায়; যে পদ মেনুতে নেই তার offer
+ * কখনো খোঁজা হয় না, তাই বাড়তি কিছু দেখায়ও না।
+ */
+export async function findAllLiveOffers(
+  now: Date = new Date()
+): Promise<Map<string, LiveOffer>> {
+  const rows = await prisma.productOffer.findMany({
+    where: liveOfferWhere(now),
+    orderBy: { createdAt: "desc" },
+    select: LIVE_OFFER_SELECT,
+  });
+
+  return newestOfferPerItem(rows);
+}
+
+/** `createdAt desc` ক্রমে আসা সারি থেকে প্রতিটা পদের সবচেয়ে নতুন offer। */
+function newestOfferPerItem(rows: LiveOffer[]): Map<string, LiveOffer> {
+  const result = new Map<string, LiveOffer>();
   for (const row of rows) {
     if (!result.has(row.menuItemId)) result.set(row.menuItemId, row);
   }

@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatAmount } from "@/lib/currency-format";
 import { auth } from "@/auth";
-import { displayPrice, findLiveOffers } from "@/lib/product-offers";
+import { displayPrice, findAllLiveOffers } from "@/lib/product-offers";
 import MenuHero from "@/components/menu/MenuHero";
 import TodaysOffers, { type MenuOffer } from "@/components/menu/TodaysOffers";
 import MenuBrowser, { type MenuBrowserCategory } from "@/components/menu/MenuBrowser";
-import SignatureSection from "@/components/landing/SignatureSection";
-import { getSignatureDishes } from "@/lib/signature-dishes";
+import MenuHighlights from "@/components/menu/MenuHighlights";
+import { buildMenuHighlights } from "@/lib/menu-highlights";
 import MenuComboCta from "@/components/menu/MenuComboCta";
 
 export const metadata: Metadata = {
@@ -46,16 +46,19 @@ export const dynamic = "force-dynamic";
  *   1. Hero            #F9F6F3 — "Our Full Menu" pill + বড় শিরোনাম
  *   2. Today's Offers  সাদা — তিনটে রঙিন কুপন-কার্ড
  *   3. Categories      #F9F6F3 — chip + শ্রেণিভিত্তিক Food Card
- *   4. Signature       gradient — হোমপেজের `SignatureSection`
+ *   4. Chef's Picks    gradient — `MenuHighlights`: রেটিং / রান্নার সময় / প্রোটিন
  *   5. Combo CTA       সাদা — শিরোনাম + দুটো বোতাম
  *
  * উপরের কালো পটি, navbar আর Footer `(main)/layout.tsx`-এ — সব পাতায়
  * এক, তাই এখানে নেই।
  *
- * ⚠️ চতুর্থ অংশটা হোমপেজের component-টাই, নতুন করে লেখা হয়নি। Figma-র
- * menu Frame 2147236008 আর home Frame 2147236005 — মাপ, রঙ, কার্ডের
- * গড়ন, এমনকি "Deep Blue Delights" banner পর্যন্ত হুবহু এক। দুটো আলাদা
- * ফাইল রাখলে একটায় বদল করে অন্যটা ভুলে যাওয়া কেবল সময়ের ব্যাপার।
+ * ⚠️ চতুর্থ অংশ আগে হোমপেজের `SignatureSection` ছিল — একই তিনটে কার্ড দুই
+ * পাতায় দেখাত। এখন মেনু-পাতার নিজস্ব `MenuHighlights`: পটভূমি সেই একই
+ * gradient, কিন্তু ভেতরে তিনটে তালিকা (Guest Favorites, Ready in a Flash,
+ * Protein Packed)। কোনো নতুন query নেই — নিচে বানানো `categories` থেকেই
+ * `buildMenuHighlights()` তালিকা বার করে (lib/menu-highlights.ts), তাই দাম
+ * (অফার-সহ), রেটিং, সময় মেনু-তালিকার সাথে হুবহু মেলে।
+ * `SignatureSection` আর `getSignatureDishes()` এখন শুধু হোমপেজে।
  *
  * ⚠️ পঞ্চম অংশটা কিন্তু `landing/ComboSection` **নয়**, যদিও শিরোনাম
  * প্রায় এক। ওটা তিনটে combo কার্ড সহ আস্ত একটা section, এটা কেবল
@@ -70,8 +73,6 @@ export const dynamic = "force-dynamic";
  * আন্দাজে মোছা নয়।
  */
 export default async function MenuPage() {
-  const settings = await getRestaurantSettings();
-  const units = settings.currencyMinorUnits;
   const now = new Date();
 
   /**
@@ -79,7 +80,8 @@ export default async function MenuPage() {
    * হয় (`Promise.all`), ধারাবাহিকভাবে নয়। কোনোটা অন্যটার ফলের উপর
    * নির্ভর করে না, তাই পরপর `await` করলে শুধু অপেক্ষার সময়টাই যোগ হতো।
    */
-  const [categoryRows, ratingRows, couponRows, signatureDishes] = await Promise.all([
+  const [settings, categoryRows, ratingRows, couponRows, liveOffers, session] = await Promise.all([
+    getRestaurantSettings(),
     prisma.category.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: {
@@ -153,9 +155,15 @@ export default async function MenuPage() {
       },
     }),
 
-    // "Our Signature" — তিন শ্রেণি থেকে তিনটে পদ (lib/signature-dishes.ts)।
-    getSignatureDishes(),
+    // ⚠️ আগে এই দুটো (offer, session) উপরের query-গুলোর **পরে** চলত — কারণ
+    // offer-এর query-তে পদের id লাগত। এখন সব চালু offer একসাথে আনা হয়
+    // (সংখ্যায় অল্প), তাই পুরো পাতার database কাজ এক ধাপে: settings,
+    // মেনু, রেটিং, কুপন, offer, আর session সবাই সমান্তরালে। আগে ছিল
+    // তিন ধাপ = তিনটে পুরো network round-trip।
+    findAllLiveOffers(now),
+    auth(),
   ]);
+  const units = settings.currencyMinorUnits;
 
   const ratingByItem = new Map(
     ratingRows.map((row) => [row.menuItemId, row._avg.rating])
@@ -163,10 +171,6 @@ export default async function MenuPage() {
 
   // Product offers (/admin/offers): the price shown here is the price
   // checkout charges. Members-only offers need to know who is looking.
-  const [liveOffers, session] = await Promise.all([
-    findLiveOffers(categoryRows.flatMap((row) => row.menuItems.map((item) => item.id)), now),
-    auth(),
-  ]);
   const isMember = Boolean(session?.user?.id);
 
   // ব্যবহারের সীমা পেরোনো কুপন কোথাও দেখানো হয় না — কার্ডেও না,
@@ -329,6 +333,9 @@ export default async function MenuPage() {
       };
     });
 
+  // "Chef's Picks" — উপরের `categories` থেকেই, আলাদা query ছাড়া।
+  const highlights = buildMenuHighlights(categories);
+
   return (
     <>
       <MenuHero />
@@ -338,7 +345,7 @@ export default async function MenuPage() {
           ওখানে (ProductDetail.tsx), আর সেখানেই ওই যাচাইটার কথা
           লেখা আছে। */}
       <MenuBrowser categories={categories} />
-      <SignatureSection dishes={signatureDishes} />
+      <MenuHighlights groups={highlights} />
       <MenuComboCta />
     </>
   );

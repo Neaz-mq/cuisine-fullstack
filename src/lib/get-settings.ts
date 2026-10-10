@@ -8,11 +8,25 @@ import { applyServerTimezone } from "@/lib/server-timezone";
  * থাকে (fresh database), ডিফল্ট মান দিয়ে একটা তৈরি করে দেয়।
  */
 export async function getRestaurantSettings() {
-  const settings = await prisma.restaurantSettings.upsert({
+  /**
+   * ⚠️ আগে প্রতিটা পাতার প্রতিটা request-এ `upsert` চলত — অর্থাৎ শুধু
+   * settings *পড়ার* জন্য database-এ একটা **লেখার** query (row lock সহ)।
+   * Supabase-এ দূরের region থেকে সেটা প্রতি request-এ বাড়তি অপেক্ষা।
+   *
+   * এখন সাধারণ পথে শুধু একটা হালকা `findUnique`। row না থাকলে (fresh
+   * database) তবেই `upsert` — আর সেটা race-safe: দুটো request একসাথে
+   * এসে দুটোই তৈরি করতে গেলেও `upsert` একটাই row রাখে।
+   */
+  const existing = await prisma.restaurantSettings.findUnique({
     where: { id: "singleton" },
-    update: {},
-    create: { id: "singleton" },
   });
+  const settings =
+    existing ??
+    (await prisma.restaurantSettings.upsert({
+      where: { id: "singleton" },
+      update: {},
+      create: { id: "singleton" },
+    }));
   // Keep the server clock on the restaurant's time zone — so a change in
   // Settings applies straight away (see lib/server-timezone.ts).
   applyServerTimezone(settings.timezone);
