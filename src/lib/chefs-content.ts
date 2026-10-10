@@ -148,7 +148,7 @@ export const EXPERTS_HEADING = "Meet the Experts Behind Every Dish";
 // ── Why Guests Choose Us ─────────────────────────────────────────────
 
 export const WHY_US_IMAGE =
-  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791626012/fc84998f11ec30016ab4acf393060cd1e0beb305_qbf8kv.jpg";
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791630803/Untitled_isjm2l.webp";
 
 export type WhyUsCard = { title: string; description: string };
 
