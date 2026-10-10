@@ -198,7 +198,7 @@ export default function RegisterPage() {
             min-w-0: grid child যেন কখনো নিজের content-এর কারণে column ছাড়িয়ে না যায় */}
         <div className="hidden lg:block relative rounded-[16px] xl:rounded-[22px] overflow-hidden w-full min-w-0 h-full">
           <Image
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787220856/signup_czzdi1.webp"
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791631359/b457d7c5999bb470fd9a2cf97391d41dc715e5ea_oclzzf.jpg"
             alt="Great food, delivered with care"
             fill
             priority

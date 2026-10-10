@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
           <Image
             // Figma forgot-password design-এর ছবি। login-এ pizza, register-এ
             // burger — তিন page-এ তিনটে, ইচ্ছাকৃতভাবে।
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791471019/forget_hqcdge.webp"
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791631611/e07f2ff3501ab463298a1af3cfd6da761f10b803_sxhz7m.jpg"
             alt="Great food, delivered with care"
             fill
             priority

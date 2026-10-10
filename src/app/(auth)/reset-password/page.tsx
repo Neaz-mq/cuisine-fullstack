@@ -59,7 +59,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
             // forgot-password page-এর সাথে একই ছবি — ইচ্ছাকৃতভাবে। ব্যবহারকারী
             // ওই page থেকেই email হয়ে এখানে আসেন, তাই একই ছবি দেখলে বোঝা যায়
             // এটা একই প্রবাহের পরের ধাপ। login-এ pizza, register-এ burger।
-            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1787501234/e07f2ff3501ab463298a1af3cfd6da761f10b803_xkhcwx.webp"
+            src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791631611/e07f2ff3501ab463298a1af3cfd6da761f10b803_sxhz7m.jpg"
             alt="Great food, delivered with care"
             fill
             priority
