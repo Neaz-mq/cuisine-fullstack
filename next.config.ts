@@ -131,6 +131,16 @@ const csp = [
   // ingest origin is included so browser-side error/crash reports aren't
   // silently dropped — see the sentryIngestOrigin comment above.
   directive("connect-src", "'self'", supabaseOrigin, supabaseWsOrigin, sentryIngestOrigin),
+  // Live Kitchen ভিডিও modal (components/landing/LiveKitchenModal.tsx) আর
+  // Banner.tsx YouTube iframe খোলে। frame-src না থাকলে browser চুপচাপ
+  // `default-src 'self'`-এ ফিরে যায় আর iframe ফাঁকা দেখায়। শুধু
+  // nocookie ও youtube.com — আর কোনো সাইট frame হতে পারবে না।
+  directive(
+    "frame-src",
+    "'self'",
+    "https://www.youtube-nocookie.com",
+    "https://www.youtube.com"
+  ),
   // No site should ever be able to iframe this app (clickjacking).
   directive("frame-ancestors", "'none'"),
   directive("form-action", "'self'"),

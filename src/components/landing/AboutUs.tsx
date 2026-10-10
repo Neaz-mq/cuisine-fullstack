@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 /* Figma: the round white button holds an arrow (vuesax arrow-right). */
 import { ChevronRight } from "lucide-react";
+import LiveKitchenModal from "./LiveKitchenModal";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -64,6 +66,7 @@ function Mark({
 
 export default function AboutUs() {
   const reduceMotion = useReducedMotion();
+  const [kitchenOpen, setKitchenOpen] = useState(false);
 
   /**
    * ⚠️ `whileInView`, `animate` নয় — এই section পাতার অনেক নিচে।
@@ -137,13 +140,16 @@ export default function AboutUs() {
           </Link>
 
           {/* Figma: padding `14px 6px 14px 24px` — ডান দিকটা মাত্র 6,
-              কারণ ভেতরের সাদা গোল বোতামটাই (44px) ডান কিনারা ভরায়। */}
-          <Link
-            /* ⚠️ `/kitchen-live` নামে কোনো পাতা নেই — খুঁজে দেখেছি।
-               ভাঙা লিঙ্ক দেওয়ার চেয়ে `/chefs`-এ পাঠানো ভালো, ওটাই
-               এখন রান্নাঘরের সবচেয়ে কাছের পাতা। সত্যিকারের Live
-               Kitchen পাতা বানালে এখানেই বদলাবেন। */
-            href="/chefs"
+              কারণ ভেতরের সাদা গোল বোতামটাই (44px) ডান কিনারা ভরায়।
+
+              ⚠️ এটা <Link> নয়, <button>: "Live Kitchen" কোনো পাতা নয়,
+              একটা action (ভিডিও দেখা)। Read More আর এটা আগে দুটোই
+              /chefs-এ যেত — দুই বোতামের একই গন্তব্য মানে একটা বাড়তি।
+              এখন ভিডিও modal-এ খোলে, ব্যবহারকারী পাতা ছেড়ে যায় না। */}
+          <button
+            type="button"
+            onClick={() => setKitchenOpen(true)}
+            aria-haspopup="dialog"
             className="group flex h-[50px] items-center justify-center gap-3 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] py-3.5 pl-6 pr-1.5 font-sora text-[14px] font-semibold leading-[1.6] text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] xl:h-14 xl:text-[16px]"
           >
             Live Kitchen
@@ -154,9 +160,11 @@ export default function AboutUs() {
                 aria-hidden="true"
               />
             </span>
-          </Link>
+          </button>
         </motion.div>
       </div>
+
+      <LiveKitchenModal open={kitchenOpen} onClose={() => setKitchenOpen(false)} />
     </section>
   );
 }
