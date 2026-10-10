@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
@@ -36,6 +36,47 @@ const LIVE_KITCHEN_VIDEO_ID = "LVI8veUnSLQ";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+/** useSyncExternalStore-এর subscribe — শোনার মতো কিছু নেই, তাই খালি। */
+const subscribeNoop = () => () => {};
+
+/**
+ * ভিডিও + লোডিং spinner।
+ *
+ * ⚠️ আলাদা component কেন: `videoReady` state-টা modal খোলার সময় নতুন
+ * করে `false` থেকে শুরু হওয়া চাই। আগে effect-এ `setVideoReady(false)`
+ * দিয়ে reset করা হতো — সেটা lint-এ নিষিদ্ধ (set-state-in-effect)। এখন
+ * modal বন্ধ হলে এই component unmount হয়, আবার খুললে নতুন করে mount —
+ * state আপনা থেকেই reset, কোনো effect ছাড়া।
+ */
+function VideoFrame() {
+  const [videoReady, setVideoReady] = useState(false);
+
+  return (
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
+      {/* লোডিং spinner — ভিডিও তৈরি হলে মিলিয়ে যায়। */}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
+          videoReady ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+      >
+        <span className="h-10 w-10 animate-spin rounded-full border-[3px] border-white/20 border-t-[#FF9540]" />
+      </div>
+
+      <iframe
+        className={`h-full w-full transition-opacity duration-700 ease-out ${
+          videoReady ? "opacity-100" : "opacity-0"
+        }`}
+        src={`https://www.youtube-nocookie.com/embed/${LIVE_KITCHEN_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+        title="Live Kitchen"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
+        onLoad={() => setVideoReady(true)}
+      />
+    </div>
+  );
+}
+
 export default function LiveKitchenModal({
   open,
   onClose,
@@ -48,14 +89,15 @@ export default function LiveKitchenModal({
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // SSR-এ document নেই; client-এ বসার পরই portal বানানো যায়।
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  // iframe লোড শেষ হয়েছে কিনা — spinner ↔ ভিডিওর fade-এর জন্য।
-  const [videoReady, setVideoReady] = useState(false);
-  useEffect(() => {
-    if (open) setVideoReady(false);
-  }, [open]);
+  // ⚠️ `useEffect(() => setMounted(true), [])` লিখলে ESLint-এর
+  // react-hooks/set-state-in-effect rule (Next 16) CI ভেঙে দেয়।
+  // useSyncExternalStore-এ server snapshot=false, client snapshot=true —
+  // hydration-safe, আর effect-ও লাগে না।
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -145,28 +187,7 @@ export default function LiveKitchenModal({
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
 
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
-              {/* লোডিং spinner — ভিডিও তৈরি হলে মিলিয়ে যায়। */}
-              <div
-                aria-hidden="true"
-                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
-                  videoReady ? "pointer-events-none opacity-0" : "opacity-100"
-                }`}
-              >
-                <span className="h-10 w-10 animate-spin rounded-full border-[3px] border-white/20 border-t-[#FF9540]" />
-              </div>
-
-              <iframe
-                className={`h-full w-full transition-opacity duration-700 ease-out ${
-                  videoReady ? "opacity-100" : "opacity-0"
-                }`}
-                src={`https://www.youtube-nocookie.com/embed/${LIVE_KITCHEN_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
-                title="Live Kitchen"
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                allowFullScreen
-                onLoad={() => setVideoReady(true)}
-              />
-            </div>
+            <VideoFrame />
           </motion.div>
         </motion.div>
       )}
