@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import DownloadMenuButton from "@/components/menu/DownloadMenuButton";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -25,10 +26,10 @@ const FOCUS_RING =
  * designer একই শিরোনাম দুই জায়গায় ব্যবহার করেছেন, তাই দেখে ভুল হওয়া
  * সহজ — কিন্তু একটা দিয়ে অন্যটা চালানো যায় না।
  *
- * ⚠️ "Download Menu" আসলে কিছু download করে না — কোনো PDF তৈরির
- * ব্যবস্থা এই অ্যাপে নেই, আর মেনু তো এই পাতাতেই। ওটা `/order`-এ
- * পাঠায়, যেখানে পুরো তালিকা এক জায়গায়। সত্যিকারের PDF চাইলে আলাদা
- * একটা route লাগবে, সেটা এই নকশার বাইরে।
+ * ⚠️ "Download Menu" এখন সত্যিকারের PDF নামায় — `DownloadMenuButton` (client
+ * component) `GET /api/menu/pdf` ডাকে, loading → saved অবস্থা দেখায়। আগে এটা
+ * `/order`-এ পাঠাত, কিছুই download হতো না। PDF বানানোর যুক্তি
+ * `lib/menu-pdf.ts`-এ; কোন দাম/পদ যাবে সেটা `app/api/menu/pdf/route.ts`-এ।
  *
  * ⚠️ "Book a Table" যায় `/reservation`-এ — `SiteNavbar`-এর
  * "Reservation" লিঙ্কটা যেখানে যায়, ঠিক সেখানেই। কিন্তু **ওই পাতাটা
@@ -69,14 +70,7 @@ export default function MenuComboCta({
 
         {/* Frame 2147236401: row, gap 12। */}
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {showMenuLink && (
-            <Link
-              href="/order"
-              className={`flex h-[52px] items-center justify-center rounded-[90px] border border-black px-6 font-sora text-[15px] font-semibold leading-[1.6] text-black transition-colors hover:bg-black hover:text-white xl:h-14 ${FOCUS_RING}`}
-            >
-              Download Menu
-            </Link>
-          )}
+          {showMenuLink && <DownloadMenuButton />}
 
           {/**
            * Figma: padding 14px 6px 14px 24px — ডান দিকটা কম, কারণ
