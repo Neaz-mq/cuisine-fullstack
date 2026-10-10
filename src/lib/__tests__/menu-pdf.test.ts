@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import { buildMenuPdf, wrap, type MenuPdfData, type MenuPdfItem } from "@/lib/menu-pdf";
 
 // PDF বানানো (ফন্ট parse + embed) CPU-ভারী: local-এ ~১s, ধীর CI runner-এ কয়েক গুণ। vitest-এর
@@ -30,6 +31,13 @@ const base = (over: Partial<MenuPdfData> = {}): MenuPdfData => ({
   categories: [{ name: "Signature", items: [item(), item({ title: "Pasta" })] }],
   ...over,
 });
+
+const jpeg = async () =>
+  new Uint8Array(
+    await sharp({ create: { width: 320, height: 320, channels: 3, background: { r: 255, g: 148, b: 64 } } })
+      .jpeg()
+      .toBuffer()
+  );
 
 const text = (bytes: Uint8Array) => Buffer.from(bytes).toString("latin1");
 
@@ -89,6 +97,36 @@ describe("buildMenuPdf", () => {
     // placeholder নম্বর (\"+0123-456-789\") ছাপা গ্রাহকের হাতে যাবে — তাই ফাঁকা হলে লাইনটাই নেই।
     const doc = await PDFDocument.load(await buildMenuPdf(base({ phone: undefined })));
     expect(doc.getPageCount()).toBe(1);
+  });
+});
+
+describe("buildMenuPdf with photos", () => {
+  it("embeds the photos as images (two per category at most) and stays valid", async () => {
+    const photo = await jpeg();
+    const cats = ["Appetizer", "Burgers", "Coffee"].map((name) => ({
+      name,
+      items: [item(), item({ title: "B" }), item({ title: "C" })],
+      photos: [photo, photo, photo], // তৃতীয়টা উপেক্ষিত হওয়ার কথা
+    }));
+    const bytes = await buildMenuPdf(base({ categories: cats }));
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
+    // প্রতি শ্রেণিতে ২টা, ৩ শ্রেণি => ৬টা image XObject
+    expect(text(bytes).match(/\/Subtype\s*\/Image/g)?.length).toBe(6);
+  });
+
+  it("skips corrupt photo bytes instead of failing, and draws the category without a photo", async () => {
+    const bytes = await buildMenuPdf(
+      base({ categories: [{ name: "Broken", items: [item()], photos: [new Uint8Array([1, 2, 3, 4])] }] })
+    );
+    expect(text(bytes).startsWith("%PDF-")).toBe(true);
+    expect(text(bytes).match(/\/Subtype\s*\/Image/g)).toBeNull();
+  });
+
+  it("flows a long photo category over several pages without clipping", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => item({ title: `Dish ${i + 1}` }));
+    const bytes = await buildMenuPdf(base({ categories: [{ name: "Big", items: many, photos: [await jpeg()] }] }));
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1);
   });
 });
 

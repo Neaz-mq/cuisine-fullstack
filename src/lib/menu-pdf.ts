@@ -1,4 +1,18 @@
-import { PDFDocument, PDFFont, PDFPage, rgb, LineCapStyle } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFFont,
+  PDFImage,
+  PDFPage,
+  LineCapStyle,
+  appendBezierCurve,
+  clip,
+  closePath,
+  endPath,
+  moveTo,
+  popGraphicsState,
+  pushGraphicsState,
+  rgb,
+} from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import { symbolFor } from "@/lib/currency-format";
@@ -11,19 +25,24 @@ import {
 /**
  * src/lib/menu-pdf.ts
  *
- * গ্রাহকের "Download Menu" PDF — A4, একটা cover header (লোগো, ঠিকানা,
- * সময়, QR), তারপর শ্রেণি অনুযায়ী দুই-কলামের তালিকা, প্রতি পাতায় footer।
+ * গ্রাহকের "Download Menu" PDF — poster-ধাঁচের রেস্তোরাঁ মেনু, A4:
  *
- * ⚠️ এই ফাইলে কোনো database বা network নেই — কেবল `data` ঢুকলে PDF বাইট
- * বেরোয়। কারণ: (১) vitest-এ DB ছাড়াই যাচাই করা যায়, (২) কোন দাম/offer
- * দেখাবে সেই সিদ্ধান্ত route-এর, আঁকার যুক্তি এখানকার — দুটো গুলিয়ে গেলে
- * প্রতিবার ডিজাইন বদলাতে query-ও ছুঁতে হতো।
+ *   • গাঢ় (#141921) পটভূমি, কমলা (#FF9540) আর গোলাপি (#FF70C6) — সাইটের রঙ
+ *   • প্রতিটা শ্রেণি = কমলা pill-লেবেল + পদের তালিকা, আর উল্টো পাশে কমলা
+ *     "band"-এ বসা গোল খাবারের ছবি (পাতার কিনারা পর্যন্ত গড়ানো), পাশ বদলাতে বদলাতে
+ *   • ছবি না থাকলে (বা আনা না গেলে) শ্রেণিটা ছবিহীন দুই-কলামে আঁকা হয়
+ *   • প্রতি পাতার তলায় ঠিকানা/সময়ের pill, পাতা নম্বর, দাম-কর লাইন
  *
- * ⚠️ ফন্ট: Sora + Frank Ruhl Libre (সাইটের ফন্ট), latin subset। তাই যে
- * অক্ষর ফন্টে নেই (বাংলা নাম, ৳ ₹ ইত্যাদি) সেটা কখনো সরাসরি আঁকা হয় না —
- * `clean()` ওগুলোকে "?" করে দেয়, আর মুদ্রার চিহ্ন না থাকলে `formatPrice()`
- * ISO কোডে ("BDT 105.00") নামে। না করলে pdf-lib encode করতে গিয়ে throw
- * করত, আর একটা পদের নামের জন্য পুরো মেনু ডাউনলোড বন্ধ হয়ে যেত।
+ * ⚠️ এই ফাইলে কোনো database বা network নেই — কেবল `data` (ছবির বাইটসহ) ঢুকলে
+ * PDF বাইট বেরোয়। ছবি আনা `menu-pdf-photos.ts`-এর কাজ, কোন দাম/offer যাবে সেটা
+ * route-এর; আঁকার যুক্তি এখানে। না আলাদা করলে ডিজাইন বদলাতে query-ও ছুঁতে হতো,
+ * আর test-এ DB/network লাগত।
+ *
+ * ⚠️ ফন্ট: Sora + Frank Ruhl Libre (সাইটের ফন্ট), latin subset। যে অক্ষর ফন্টে
+ * নেই (বাংলা নাম, ৳ ₹ ইত্যাদি) সেটা কখনো সরাসরি আঁকা হয় না — `clean()` "?" করে
+ * দেয়, আর মুদ্রার চিহ্ন না থাকলে `formatPrice()` ISO কোডে ("BDT 105.00") নামে।
+ * না করলে pdf-lib encode করতে গিয়ে throw করত, আর একটা পদের নামের জন্য পুরো
+ * মেনু ডাউনলোড বন্ধ হয়ে যেত।
  */
 
 export type MenuPdfItem = {
@@ -40,14 +59,19 @@ export type MenuPdfItem = {
   calories: number | null;
 };
 
-export type MenuPdfCategory = { name: string; items: MenuPdfItem[] };
+export type MenuPdfCategory = {
+  name: string;
+  items: MenuPdfItem[];
+  /** JPEG বাইট, সর্বোচ্চ ২টা ব্যবহার হয়। খালি/না থাকলে ছবিহীন নকশা। */
+  photos?: Uint8Array[];
+};
 
 export type MenuPdfData = {
   restaurantName: string;
   address: string;
   /** যেমন "10:00 AM – 10:00 PM"। */
   hoursLabel: string;
-  /** ঐচ্ছিক — ফাঁকা হলে লাইনটাই আঁকা হয় না (placeholder নম্বর ছাপা হয় না)। */
+  /** ঐচ্ছিক — ফাঁকা হলে pill-টাই আঁকা হয় না (placeholder নম্বর ছাপা হয় না)। */
   phone?: string;
   /** QR যেখানে নিয়ে যাবে (পুরো URL)। */
   qrUrl: string;
@@ -65,26 +89,39 @@ export type MenuPdfData = {
 /* ── ডিজাইন ───────────────────────────────────────────────────────── */
 
 const A4 = { w: 595.28, h: 841.89 };
-const MARGIN = 44;
+const MARGIN = 40;
 const CONTENT_W = A4.w - MARGIN * 2;
-const COL_GAP = 28;
+const COL_GAP = 26;
 const COL_W = (CONTENT_W - COL_GAP) / 2;
 
 const COLOR = {
-  ink: rgb(0.078, 0.098, 0.129), // #141921
-  grey: rgb(0.36, 0.37, 0.4),
-  mute: rgb(0.55, 0.56, 0.6),
-  line: rgb(0.906, 0.886, 0.863), // #E7E2DC
-  cream: rgb(0.976, 0.965, 0.953), // #F9F6F3
+  bg: rgb(0.078, 0.098, 0.129), // #141921 — সাইটের শিরোনামের কালো
+  white: rgb(1, 1, 1),
+  soft: rgb(0.76, 0.77, 0.8), // বর্ণনা
+  mute: rgb(0.55, 0.57, 0.62), // meta, footer
+  dots: rgb(0.34, 0.37, 0.43), // leader বিন্দু
+  card: rgb(0.11, 0.13, 0.17), // পটভূমির চেয়ে সামান্য হালকা
   orange: rgb(1, 0.584, 0.251), // #FF9540
   pink: rgb(1, 0.439, 0.776), // #FF70C6
-  white: rgb(1, 1, 1),
 };
 
-const FOOTER_H = 46;
-const BOTTOM_LIMIT = A4.h - FOOTER_H - 10; // top-based y; এর নিচে কিছু আঁকা চলবে না
+const FOOTER_TOP = A4.h - 64; // top-based; footer এখান থেকে শুরু
+const BOTTOM_LIMIT = FOOTER_TOP - 14; // এর নিচে কনটেন্ট আঁকা চলবে না
+
+// ছবির বৃত্ত: ring (কমলা) ঘিরে photo; band পাতার কিনারা পর্যন্ত।
+const RING_R = 88;
+const PHOTO_R = RING_R - 5;
+const PHOTO_GAP = 24;
+const LIST_W = CONTENT_W - RING_R * 2 - PHOTO_GAP;
+const FEATURE_MIN_H = RING_R * 2 + 12;
+
+const PILL_H = 22;
+const AFTER_PILL = 18;
+const ITEM_GAP = 14;
+const SECTION_GAP = 30;
 
 type Fonts = { sora: PDFFont; soraBold: PDFFont; serif: PDFFont };
+type Rgb = ReturnType<typeof rgb>;
 
 /* ── ছোট সহায়ক ──────────────────────────────────────────────────── */
 
@@ -172,7 +209,10 @@ function clamp(lines: string[], max: number, font: PDFFont, size: number, width:
   return kept;
 }
 
-/** গোল-কোণা আয়তক্ষেত্র — pdf-lib-এ radius নেই, তাই SVG path। (x, y) = উপরের-বাঁ, top-based। */
+/** top-based y -> PDF y। */
+const Y = (top: number) => A4.h - top;
+
+/** গোল-কোণা আয়তক্ষেত্র — pdf-lib-এ radius নেই, তাই SVG path। (x, top) = উপরের-বাঁ। */
 function roundedRect(
   page: PDFPage,
   x: number,
@@ -180,36 +220,77 @@ function roundedRect(
   w: number,
   h: number,
   r: number,
-  opts: { fill?: ReturnType<typeof rgb>; stroke?: ReturnType<typeof rgb>; strokeWidth?: number }
+  opts: { fill?: Rgb; stroke?: Rgb; strokeWidth?: number }
 ) {
+  const rr = Math.min(r, w / 2, h / 2);
   const path =
-    `M ${r} 0 H ${w - r} Q ${w} 0 ${w} ${r} V ${h - r} Q ${w} ${h} ${w - r} ${h} ` +
-    `H ${r} Q 0 ${h} 0 ${h - r} V ${r} Q 0 0 ${r} 0 Z`;
+    `M ${rr} 0 H ${w - rr} Q ${w} 0 ${w} ${rr} V ${h - rr} Q ${w} ${h} ${w - rr} ${h} ` +
+    `H ${rr} Q 0 ${h} 0 ${h - rr} V ${rr} Q 0 0 ${rr} 0 Z`;
   page.drawSvgPath(path, {
     x,
-    y: A4.h - top,
+    y: Y(top),
     color: opts.fill,
     borderColor: opts.stroke,
     borderWidth: opts.strokeWidth ?? 0,
   });
 }
 
-/** ফাঁক-ফাঁক অক্ষরের ছোট label ("ADDRESS")। */
+function spacedWidth(text: string, font: PDFFont, size: number, tracking: number): number {
+  let w = 0;
+  for (const ch of text) w += font.widthOfTextAtSize(ch, size) + tracking;
+  return Math.max(0, w - tracking);
+}
+
+/** ফাঁক-ফাঁক অক্ষরের লেখা ("THE MENU")। baselineTop = baseline-এর top-based y। */
 function spaced(
+  page: PDFPage,
+  text: string,
+  x: number,
+  baselineTop: number,
+  font: PDFFont,
+  size: number,
+  color: Rgb,
+  tracking = 1.2
+) {
+  let cx = x;
+  for (const ch of text) {
+    page.drawText(ch, { x: cx, y: Y(baselineTop), size, font, color });
+    cx += font.widthOfTextAtSize(ch, size) + tracking;
+  }
+}
+
+/** pill: কমলা ভরাট (লেবেল) বা শুধু ধার (তথ্য)। চওড়া ফেরত দেয়। */
+function pill(
   page: PDFPage,
   text: string,
   x: number,
   top: number,
   font: PDFFont,
-  size: number,
-  color: ReturnType<typeof rgb>,
-  tracking = 1.2
-) {
-  let cx = x;
-  for (const ch of text) {
-    page.drawText(ch, { x: cx, y: A4.h - top, size, font, color });
-    cx += font.widthOfTextAtSize(ch, size) + tracking;
+  opts: {
+    h?: number;
+    size: number;
+    padX?: number;
+    tracking?: number;
+    fill?: Rgb;
+    stroke?: Rgb;
+    color: Rgb;
+    radius?: number;
   }
+): number {
+  const h = opts.h ?? PILL_H;
+  const padX = opts.padX ?? 12;
+  const tracking = opts.tracking ?? 0;
+  const textW = tracking ? spacedWidth(text, font, opts.size, tracking) : font.widthOfTextAtSize(text, opts.size);
+  const w = textW + padX * 2;
+  roundedRect(page, x, top, w, h, opts.radius ?? 6, {
+    fill: opts.fill,
+    stroke: opts.stroke,
+    strokeWidth: opts.stroke ? 1 : 0,
+  });
+  const baseline = top + h / 2 + opts.size * 0.35;
+  if (tracking) spaced(page, text, x + padX, baseline, font, opts.size, opts.color, tracking);
+  else page.drawText(text, { x: x + padX, y: Y(baseline), size: opts.size, font, color: opts.color });
+  return w;
 }
 
 /** কমলা→গোলাপি gradient; pdf-lib-এ gradient নেই, তাই সরু ফালির সারি। */
@@ -220,8 +301,8 @@ function gradientBar(page: PDFPage, top: number, height: number) {
     const t = i / (steps - 1);
     page.drawRectangle({
       x: i * sw,
-      y: A4.h - top - height,
-      width: sw + 0.6, // সামান্য overlap — নইলে ফালির মাঝে সাদা সুতো দেখা যায়
+      y: Y(top) - height,
+      width: sw + 0.6, // সামান্য overlap — নইলে ফালির মাঝে সুতো দেখা যায়
       height,
       color: rgb(
         COLOR.orange.red + (COLOR.pink.red - COLOR.orange.red) * t,
@@ -242,13 +323,36 @@ function drawQr(page: PDFPage, text: string, x: number, top: number, size: numbe
       if (!qr.modules.get(r, c)) continue;
       page.drawRectangle({
         x: x + c * cell,
-        y: A4.h - top - (r + 1) * cell,
+        y: Y(top) - (r + 1) * cell,
         width: cell + 0.15,
         height: cell + 0.15,
-        color: COLOR.ink,
+        color: COLOR.bg,
       });
     }
   }
+}
+
+/** ছবি বৃত্তে কেটে বসানো ("cover": বৃত্ত ভরে, মাপ বিকৃত হয় না)। */
+function drawCirclePhoto(page: PDFPage, img: PDFImage, cx: number, cyTop: number, r: number) {
+  const x = cx;
+  const y = Y(cyTop);
+  const k = 0.5522847498 * r;
+  page.pushOperators(
+    pushGraphicsState(),
+    moveTo(x + r, y),
+    appendBezierCurve(x + r, y + k, x + k, y + r, x, y + r),
+    appendBezierCurve(x - k, y + r, x - r, y + k, x - r, y),
+    appendBezierCurve(x - r, y - k, x - k, y - r, x, y - r),
+    appendBezierCurve(x + k, y - r, x + r, y - k, x + r, y),
+    closePath(),
+    clip(),
+    endPath()
+  );
+  const scale = Math.max((r * 2) / img.width, (r * 2) / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  page.drawImage(img, { x: x - w / 2, y: y - h / 2, width: w, height: h });
+  page.pushOperators(popGraphicsState());
 }
 
 /* ── মূল কাজ ─────────────────────────────────────────────────────── */
@@ -282,79 +386,162 @@ export async function buildMenuPdf(data: MenuPdfData): Promise<Uint8Array> {
   const newPage = () => {
     page = pdf.addPage([A4.w, A4.h]);
     pages.push(page);
+    page.drawRectangle({ x: 0, y: 0, width: A4.w, height: A4.h, color: COLOR.bg });
     if (pages.length === 1) {
       y = drawCover(page, data, fonts, name);
     } else {
       gradientBar(page, 0, 4);
-      page.drawText(name, {
-        x: MARGIN,
-        y: A4.h - 38,
-        size: 15,
-        font: fonts.serif,
-        color: COLOR.ink,
-      });
-      const tag = "Menu";
-      page.drawText(tag, {
-        x: A4.w - MARGIN - fonts.sora.widthOfTextAtSize(tag, 9),
-        y: A4.h - 37,
-        size: 9,
-        font: fonts.sora,
-        color: COLOR.mute,
-      });
-      page.drawLine({
-        start: { x: MARGIN, y: A4.h - 52 },
-        end: { x: A4.w - MARGIN, y: A4.h - 52 },
-        thickness: 0.6,
-        color: COLOR.line,
-      });
-      y = 78;
+      page.drawCircle({ x: MARGIN + 6, y: Y(40), size: 6, color: COLOR.orange });
+      page.drawText(name, { x: MARGIN + 20, y: Y(46), size: 16, font: fonts.serif, color: COLOR.white });
+      const tag = "MENU";
+      spaced(
+        page,
+        tag,
+        A4.w - MARGIN - spacedWidth(tag, fonts.soraBold, 7.5, 2),
+        44,
+        fonts.soraBold,
+        7.5,
+        COLOR.mute,
+        2
+      );
+      y = 76;
     }
   };
 
   newPage();
 
-  const HEADING_H = 40;
-  const ROW_GAP = 16;
+  /** পাতার শুরুতে বা ভাঙার পরে আঁকা লেবেল-pill; y এগিয়ে দেয় না। */
+  const drawLabel = (text: string, small = false) =>
+    pill(page, text.toUpperCase(), MARGIN, y, fonts.soraBold, {
+      size: small ? 8.5 : 10,
+      h: small ? 20 : PILL_H,
+      tracking: 1.1,
+      fill: COLOR.orange,
+      color: COLOR.bg,
+    });
+
+  /**
+   * ছবিহীন (বা ছবির পরের বাকি) পদ: pill + পূর্ণ-চওড়া দুই-কলাম সারি।
+   * পাতায় না আঁটলে নতুন পাতায় "(CONT.)" pill নিয়ে চলে।
+   */
+  const flowPlain = (label: string, items: MenuPdfItem[], started: boolean) => {
+    const blocks = items.map((item) => layoutItem(item, data, fonts, COL_W));
+    const rows: (typeof blocks)[] = [];
+    for (let i = 0; i < blocks.length; i += 2) rows.push(blocks.slice(i, i + 2));
+    const rowH = (row: typeof blocks) => Math.max(...row.map((b) => b.height));
+
+    let labelText = label;
+    if (y + PILL_H + AFTER_PILL + rowH(rows[0]) > BOTTOM_LIMIT) {
+      newPage();
+      labelText = started ? `${label} (cont.)` : label;
+    }
+    drawLabel(labelText, started);
+    y += PILL_H + AFTER_PILL;
+
+    for (const row of rows) {
+      const h = rowH(row);
+      if (y + h > BOTTOM_LIMIT) {
+        newPage();
+        drawLabel(`${label} (cont.)`, true);
+        y += 20 + AFTER_PILL - 2;
+      }
+      row.forEach((block, col) => block.draw(page, MARGIN + col * (COL_W + COL_GAP), y));
+      y += h + ITEM_GAP + 2;
+    }
+    y += SECTION_GAP - ITEM_GAP;
+  };
+
+  let featureIndex = 0;
 
   for (const category of data.categories) {
     if (category.items.length === 0) continue;
+    const label = clean(category.name, fonts.soraBold) || "Menu";
 
-    // প্রতিটা সারির উচ্চতা আগেই মাপা — না মাপলে পাতার তলায় গিয়ে কাটা পড়ত।
-    const blocks = category.items.map((item) => layoutItem(item, data, fonts));
-    const rows: (typeof blocks)[] = [];
-    for (let i = 0; i < blocks.length; i += 2) rows.push(blocks.slice(i, i + 2));
-    const rowHeight = (row: typeof blocks) => Math.max(...row.map((b) => b.height));
-
-    // শিরোনামের পর অন্তত প্রথম সারিটা না আঁটলে নতুন পাতা — শিরোনাম একা তলায় পড়ে থাকবে না।
-    if (y + HEADING_H + rowHeight(rows[0]) > BOTTOM_LIMIT) newPage();
-
-    drawCategoryHeading(page, clean(category.name, fonts.serif) || "Menu", y, fonts);
-    y += HEADING_H;
-
-    for (const row of rows) {
-      const h = rowHeight(row);
-      if (y + h > BOTTOM_LIMIT) {
-        newPage();
-        // নতুন পাতায় শ্রেণির নাম আবার ছোট করে, যাতে পাতাটা একা পড়লে বোঝা যায় কীসের তালিকা।
-        page.drawText(`${clean(category.name, fonts.serif)} (cont.)`, {
-          x: MARGIN,
-          y: A4.h - y - 9,
-          size: 10,
-          font: fonts.soraBold,
-          color: COLOR.orange,
-        });
-        y += 24;
+    // ছবি বসানো — ভাঙা/অচেনা বাইট হলে ওই ছবিটা বাদ, PDF থামে না।
+    const photos: PDFImage[] = [];
+    for (const bytes of (category.photos ?? []).slice(0, 2)) {
+      try {
+        photos.push(await pdf.embedJpg(bytes));
+      } catch {
+        /* বাদ */
       }
-      row.forEach((block, col) => {
-        block.draw(page, MARGIN + col * (COL_W + COL_GAP), y);
-      });
-      y += h + ROW_GAP;
     }
-    y += 10; // শ্রেণির মধ্যে বাড়তি ফাঁক
+
+    if (photos.length === 0) {
+      flowPlain(label, category.items, false);
+      continue;
+    }
+
+    // ── ছবিসহ "feature" অংশ ──────────────────────────────────────
+    const side: "right" | "left" = featureIndex++ % 2 === 0 ? "right" : "left";
+    const blocks = category.items.map((item) => layoutItem(item, data, fonts, LIST_W));
+
+    // ছবির বৃত্ত + অন্তত প্রথম পদটা না আঁটলে নতুন পাতা।
+    const minNeeded = Math.max(FEATURE_MIN_H, PILL_H + AFTER_PILL + blocks[0].height);
+    if (y + minNeeded > BOTTOM_LIMIT) newPage();
+
+    const avail = BOTTOM_LIMIT - y;
+    let used = PILL_H + AFTER_PILL;
+    let count = 0;
+    while (count < blocks.length) {
+      const next = used + blocks[count].height + (count > 0 ? ITEM_GAP : 0);
+      if (next > avail && count > 0) break;
+      used = next;
+      count++;
+    }
+    // একলা পদ পরের পাতায় ঝুলে থাকবে না — শেষ আঁটা পদটাও সাথে নিয়ে গিয়ে অন্তত জোড়া বানানো।
+    if (category.items.length - count === 1 && count > 1) {
+      used -= blocks[count - 1].height + ITEM_GAP;
+      count--;
+    }
+    const listH = used;
+    const regionH = Math.max(listH, FEATURE_MIN_H);
+    const listTop = y + (regionH - listH) / 2; // তালিকা ছবির চেয়ে ছোট হলে মাঝখানে
+
+    // band + ring + ছবি (আগে আঁকতে হবে, লেখা উপরে বসবে)।
+    const cyTop = y + regionH / 2;
+    const cx = side === "right" ? A4.w - MARGIN - RING_R - 4 : MARGIN + RING_R + 4;
+    const bandH = RING_R * 1.62;
+    const bandX = side === "right" ? cx : 0;
+    const bandW = side === "right" ? A4.w - cx : cx;
+    page.drawRectangle({ x: bandX, y: Y(cyTop) - bandH / 2, width: bandW, height: bandH, color: COLOR.orange });
+    page.drawCircle({ x: cx, y: Y(cyTop), size: RING_R, color: COLOR.orange });
+    drawCirclePhoto(page, photos[0], cx, cyTop, PHOTO_R);
+
+    if (photos[1]) {
+      // ছোট দ্বিতীয় বৃত্ত: নিচের ভেতরের কোণে, পটভূমির রঙের ধার দিয়ে আলাদা করা।
+      const sr = 44;
+      const sx = side === "right" ? cx + RING_R * 0.5 : cx - RING_R * 0.5;
+      const sTop = cyTop + RING_R * 0.82;
+      page.drawCircle({ x: sx, y: Y(sTop), size: sr + 5, color: COLOR.bg });
+      page.drawCircle({ x: sx, y: Y(sTop), size: sr + 2, color: COLOR.pink });
+      drawCirclePhoto(page, photos[1], sx, sTop, sr);
+    }
+
+    // তালিকা: ছবির উল্টো পাশে।
+    const listX = side === "right" ? MARGIN : A4.w - MARGIN - LIST_W;
+    pill(page, label.toUpperCase(), listX, listTop, fonts.soraBold, {
+      size: 10,
+      tracking: 1.1,
+      fill: COLOR.orange,
+      color: COLOR.bg,
+    });
+    let iy = listTop + PILL_H + AFTER_PILL;
+    for (let i = 0; i < count; i++) {
+      blocks[i].draw(page, listX, iy);
+      iy += blocks[i].height + ITEM_GAP;
+    }
+
+    y += regionH + SECTION_GAP;
+
+    // বাকি পদ (খুব লম্বা শ্রেণি) — পরের পাতায় ছবিহীন সারিতে।
+    if (count < category.items.length) {
+      flowPlain(label, category.items.slice(count), true);
+    }
   }
 
-  // footer সবার শেষে — তখনই "Page n of N"-এর N জানা।
-  pages.forEach((p, i) => drawFooter(p, data, fonts, name, i + 1, pages.length));
+  // footer সবার শেষে — তখনই "n / N"-এর N জানা।
+  pages.forEach((p, i) => drawFooter(p, data, fonts, i + 1, pages.length));
 
   return pdf.save();
 }
@@ -363,138 +550,75 @@ export async function buildMenuPdf(data: MenuPdfData): Promise<Uint8Array> {
 
 /** আঁকা শেষে পরের কনটেন্ট কোন top-y থেকে শুরু হবে সেটা ফেরত দেয়। */
 function drawCover(page: PDFPage, data: MenuPdfData, f: Fonts, name: string): number {
-  const PANEL_H = 286;
-  page.drawRectangle({
-    x: 0,
-    y: A4.h - PANEL_H,
-    width: A4.w,
-    height: PANEL_H,
-    color: COLOR.cream,
-  });
+  // কোণার সাজ: পাতার বাইরে গড়ানো কমলা + গোলাপি বৃত্ত — QR কার্ডটা এর উপর বসে।
+  page.drawCircle({ x: A4.w + 8, y: Y(-6), size: 196, color: COLOR.orange });
+  page.drawCircle({ x: A4.w - 190, y: Y(-30), size: 64, color: COLOR.pink });
   gradientBar(page, 0, 6);
 
   // লোগো: গোল কমলা চিহ্ন + নাম।
-  page.drawCircle({ x: MARGIN + 14, y: A4.h - 52, size: 14, color: COLOR.orange });
+  page.drawCircle({ x: MARGIN + 15, y: Y(58), size: 15, color: COLOR.orange });
   const initial = (name[0] ?? "C").toUpperCase();
   page.drawText(initial, {
-    x: MARGIN + 14 - f.serif.widthOfTextAtSize(initial, 17) / 2,
-    y: A4.h - 58,
-    size: 17,
+    x: MARGIN + 15 - f.serif.widthOfTextAtSize(initial, 18) / 2,
+    y: Y(64),
+    size: 18,
     font: f.serif,
-    color: COLOR.white,
+    color: COLOR.bg,
   });
-  page.drawText(name, { x: MARGIN + 38, y: A4.h - 58, size: 22, font: f.serif, color: COLOR.ink });
+  page.drawText(name, { x: MARGIN + 40, y: Y(65), size: 24, font: f.serif, color: COLOR.white });
 
-  spaced(page, "THE MENU", MARGIN, 108, f.soraBold, 8, COLOR.orange, 2);
+  spaced(page, "FRESH + FAST + DELICIOUS", MARGIN, 118, f.soraBold, 8, COLOR.orange, 2.2);
 
-  page.drawText("Fresh, fast &", {
-    x: MARGIN,
-    y: A4.h - 142,
-    size: 40,
+  // "Our Menu" — Our সাদা, Menu কমলা।
+  const TITLE = 62;
+  page.drawText("Our ", { x: MARGIN, y: Y(178), size: TITLE, font: f.serif, color: COLOR.white });
+  page.drawText("Menu", {
+    x: MARGIN + f.serif.widthOfTextAtSize("Our ", TITLE),
+    y: Y(178),
+    size: TITLE,
     font: f.serif,
-    color: COLOR.ink,
-  });
-  page.drawText("full of flavor.", {
-    x: MARGIN,
-    y: A4.h - 184,
-    size: 40,
-    font: f.serif,
-    color: COLOR.ink,
+    color: COLOR.orange,
   });
 
-  const sub = wrap(
-    "Freshly prepared meals from our kitchen to your table, or right to your doorstep.",
-    f.sora,
-    10,
-    290
-  );
-  sub.forEach((line, i) =>
-    page.drawText(line, {
-      x: MARGIN,
-      y: A4.h - 208 - i * 15,
-      size: 10,
-      font: f.sora,
-      color: COLOR.grey,
-    })
+  wrap("Freshly prepared meals from our kitchen to your table, or right to your doorstep.", f.sora, 10, 300).forEach(
+    (line, i) =>
+      page.drawText(line, { x: MARGIN, y: Y(204 + i * 15), size: 10, font: f.sora, color: COLOR.soft })
   );
 
-  // QR কার্ড (ডানে)।
-  const CARD_W = 138;
-  const CARD_H = 172;
+  // QR কার্ড (ডানে, কমলা বৃত্তের উপর)।
+  const CARD_W = 124;
+  const CARD_H = 156;
   const cardX = A4.w - MARGIN - CARD_W;
-  const cardTop = 40;
-  roundedRect(page, cardX, cardTop, CARD_W, CARD_H, 16, {
-    fill: COLOR.white,
-    stroke: COLOR.line,
-    strokeWidth: 0.8,
-  });
-  const QR = 100;
+  const cardTop = 38;
+  roundedRect(page, cardX, cardTop, CARD_W, CARD_H, 16, { fill: COLOR.white });
+  const QR = 92;
   drawQr(page, data.qrUrl, cardX + (CARD_W - QR) / 2, cardTop + 16, QR);
   const cap = "Scan to order online";
   page.drawText(cap, {
-    x: cardX + (CARD_W - f.soraBold.widthOfTextAtSize(cap, 8.5)) / 2,
-    y: A4.h - (cardTop + 16 + QR + 20),
-    size: 8.5,
+    x: cardX + (CARD_W - f.soraBold.widthOfTextAtSize(cap, 8)) / 2,
+    y: Y(cardTop + 16 + QR + 18),
+    size: 8,
     font: f.soraBold,
-    color: COLOR.ink,
+    color: COLOR.bg,
   });
   const url = clean(data.displayUrl, f.sora);
-  const urlSize = Math.min(7.5, (CARD_W - 16) / Math.max(1, f.sora.widthOfTextAtSize(url, 1)));
+  const urlSize = Math.min(6.5, (CARD_W - 14) / Math.max(1, f.sora.widthOfTextAtSize(url, 1)));
   page.drawText(url, {
     x: cardX + (CARD_W - f.sora.widthOfTextAtSize(url, urlSize)) / 2,
-    y: A4.h - (cardTop + 16 + QR + 34),
+    y: Y(cardTop + 16 + QR + 30),
     size: urlSize,
     font: f.sora,
     color: COLOR.mute,
   });
 
-  // নিচের তথ্য-সারি: ঠিকানা · সময় · (ফোন)।
-  const infos: { label: string; value: string }[] = [
-    { label: "ADDRESS", value: clean(data.address, f.sora) },
-    { label: "KITCHEN HOURS", value: `Daily, ${clean(data.hoursLabel, f.sora)}` },
-  ];
-  if (data.phone?.trim()) infos.push({ label: "CALL US", value: clean(data.phone, f.sora) });
-
-  const infoW = (CONTENT_W - 24 * (infos.length - 1)) / infos.length;
-  infos.forEach((info, i) => {
-    const x = MARGIN + i * (infoW + 24);
-    spaced(page, info.label, x, 250, f.soraBold, 6.5, COLOR.orange, 1.4);
-    wrap(info.value, f.sora, 9, infoW)
-      .slice(0, 2)
-      .forEach((line, li) =>
-        page.drawText(line, {
-          x,
-          y: A4.h - 264 - li * 12,
-          size: 9,
-          font: f.sora,
-          color: COLOR.ink,
-        })
-      );
-  });
-
-  return PANEL_H + 34;
-}
-
-/* ── শ্রেণির শিরোনাম ─────────────────────────────────────────────── */
-
-function drawCategoryHeading(page: PDFPage, text: string, top: number, f: Fonts) {
-  const size = 21;
-  page.drawText(text, { x: MARGIN, y: A4.h - top - size + 3, size, font: f.serif, color: COLOR.ink });
-  const w = f.serif.widthOfTextAtSize(text, size);
-  page.drawCircle({ x: MARGIN + w + 9, y: A4.h - top - size + 8, size: 2.4, color: COLOR.orange });
-  page.drawLine({
-    start: { x: MARGIN + w + 20, y: A4.h - top - size + 8 },
-    end: { x: A4.w - MARGIN, y: A4.h - top - size + 8 },
-    thickness: 0.6,
-    color: COLOR.line,
-  });
+  return 242;
 }
 
 /* ── একটা পদ ─────────────────────────────────────────────────────── */
 
 type ItemBlock = { height: number; draw: (page: PDFPage, x: number, top: number) => void };
 
-function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts): ItemBlock {
+function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts, width: number): ItemBlock {
   const TITLE = 10.5;
   const DESC = 8;
   const META = 7;
@@ -511,21 +635,10 @@ function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts): ItemBlock {
 
   const title = clean(item.title, f.soraBold) || "Untitled";
   // শিরোনাম দাম পর্যন্ত গড়াতে পারে না — ১২pt ফাঁক রেখে ভাঙে, সর্বোচ্চ দুই লাইন।
-  const titleLines = clamp(
-    wrap(title, f.soraBold, TITLE, COL_W - rightBlockW - 12),
-    2,
-    f.soraBold,
-    TITLE,
-    COL_W - rightBlockW - 12
-  );
+  const titleMax = width - rightBlockW - 12;
+  const titleLines = clamp(wrap(title, f.soraBold, TITLE, titleMax), 2, f.soraBold, TITLE, titleMax);
 
-  const descLines = clamp(
-    wrap(clean(item.description, f.sora), f.sora, DESC, COL_W),
-    3,
-    f.sora,
-    DESC,
-    COL_W
-  );
+  const descLines = clamp(wrap(clean(item.description, f.sora), f.sora, DESC, width), 2, f.sora, DESC, width);
 
   const metaParts: string[] = [];
   if (item.foodStatus?.trim()) metaParts.push(clean(item.foodStatus, f.sora));
@@ -540,26 +653,25 @@ function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts): ItemBlock {
   return {
     height,
     draw(page, x, top) {
-      // শিরোনাম।
       titleLines.forEach((line, i) =>
         page.drawText(line, {
           x,
-          y: A4.h - top - TITLE - i * 14 + 2,
+          y: Y(top) - TITLE - i * 14 + 2,
           size: TITLE,
           font: f.soraBold,
-          color: COLOR.ink,
+          color: COLOR.white,
         })
       );
 
-      // দাম — ডানে লাগানো, প্রথম লাইনের সারিতে।
-      const baseY = A4.h - top - TITLE + 2;
-      const priceX = x + COL_W - priceW;
+      // দাম — ডানে লাগানো, প্রথম লাইনের সারিতে। offer থাকলে গোলাপি, নইলে কমলা।
+      const baseY = Y(top) - TITLE + 2;
+      const priceX = x + width - priceW;
       page.drawText(priceText, {
         x: priceX,
         y: baseY,
         size: TITLE,
         font: f.soraBold,
-        color: oldText ? COLOR.orange : COLOR.ink,
+        color: oldText ? COLOR.pink : COLOR.orange,
       });
       if (oldText) {
         const ox = priceX - oldW;
@@ -576,38 +688,36 @@ function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts): ItemBlock {
       // বিন্দু-বিন্দু leader — শুধু একলাইনের শিরোনামে, নইলে দুই লাইনের মাঝখানে অদ্ভুত দেখায়।
       if (titleLines.length === 1) {
         const lead0 = x + f.soraBold.widthOfTextAtSize(titleLines[0], TITLE) + 6;
-        const lead1 = x + COL_W - rightBlockW - 6;
+        const lead1 = x + width - rightBlockW - 6;
         if (lead1 - lead0 > 14) {
           page.drawLine({
             start: { x: lead0, y: baseY + 0.4 },
             end: { x: lead1, y: baseY + 0.4 },
             thickness: 1,
-            color: rgb(0.78, 0.76, 0.73),
+            color: COLOR.dots,
             dashArray: [0.1, 3.2],
             lineCap: LineCapStyle.Round,
           });
         }
       }
 
-      // বর্ণনা।
       const descTop = top + titleLines.length * 14;
       descLines.forEach((line, i) =>
         page.drawText(line, {
           x,
-          y: A4.h - descTop - DESC - i * 11.5 + 1,
+          y: Y(descTop) - DESC - i * 11.5 + 1,
           size: DESC,
           font: f.sora,
-          color: COLOR.grey,
+          color: COLOR.soft,
         })
       );
 
-      // meta: offer লেবেল (কমলা) + ধরন/ক্যালরি (ধূসর)।
       if (hasMeta) {
         const metaTop = descTop + (descLines.length ? descLines.length * 11.5 + 2 : 0);
-        const my = A4.h - metaTop - META - 2;
+        const my = Y(metaTop) - META - 2;
         let mx = x;
         if (badge) {
-          page.drawText(badge, { x: mx, y: my, size: META, font: f.soraBold, color: COLOR.orange });
+          page.drawText(badge, { x: mx, y: my, size: META, font: f.soraBold, color: COLOR.pink });
           mx += f.soraBold.widthOfTextAtSize(badge, META) + (meta ? 8 : 0);
         }
         if (meta) page.drawText(meta, { x: mx, y: my, size: META, font: f.sora, color: COLOR.mute });
@@ -618,48 +728,49 @@ function layoutItem(item: MenuPdfItem, data: MenuPdfData, f: Fonts): ItemBlock {
 
 /* ── footer ──────────────────────────────────────────────────────── */
 
-function drawFooter(
-  page: PDFPage,
-  data: MenuPdfData,
-  f: Fonts,
-  name: string,
-  n: number,
-  total: number
-) {
-  const lineY = A4.h - (A4.h - FOOTER_H + 4);
-  page.drawLine({
-    start: { x: MARGIN, y: lineY },
-    end: { x: A4.w - MARGIN, y: lineY },
-    thickness: 0.6,
-    color: COLOR.line,
-  });
+function drawFooter(page: PDFPage, data: MenuPdfData, f: Fonts, n: number, total: number) {
+  const top = FOOTER_TOP + 8;
+  const H = 22;
 
-  const pageLabel = `Page ${n} of ${total}`;
+  // বাঁ থেকে: ঠিকানা (কমলা ভরাট), সময় (কমলা ধার), ফোন (থাকলে)।
+  const pageLabel = `${n} / ${total}`;
+  const pageW = f.sora.widthOfTextAtSize(pageLabel, 8);
+  let x = MARGIN;
+  const maxRight = A4.w - MARGIN - pageW - 14;
+
+  const address = clamp(
+    wrap(clean(data.address, f.soraBold), f.soraBold, 8, 200),
+    1,
+    f.soraBold,
+    8,
+    200
+  )[0];
+  if (address) {
+    x += pill(page, address, x, top, f.soraBold, { size: 8, h: H, radius: 11, padX: 12, fill: COLOR.orange, color: COLOR.bg }) + 8;
+  }
+
+  const hours = `Daily ${clean(data.hoursLabel, f.sora)}`;
+  const hoursW = f.sora.widthOfTextAtSize(hours, 8) + 24;
+  if (x + hoursW <= maxRight) {
+    x += pill(page, hours, x, top, f.sora, { size: 8, h: H, radius: 11, padX: 12, stroke: COLOR.orange, color: COLOR.white }) + 8;
+  }
+
+  if (data.phone?.trim()) {
+    const phone = clean(data.phone, f.sora);
+    if (x + f.sora.widthOfTextAtSize(phone, 8) + 24 <= maxRight) {
+      pill(page, phone, x, top, f.sora, { size: 8, h: H, radius: 11, padX: 12, stroke: COLOR.orange, color: COLOR.white });
+    }
+  }
+
   page.drawText(pageLabel, {
-    x: A4.w - MARGIN - f.sora.widthOfTextAtSize(pageLabel, 7.5),
-    y: lineY - 14,
-    size: 7.5,
+    x: A4.w - MARGIN - pageW,
+    y: Y(top + H / 2 + 8 * 0.35),
+    size: 8,
     font: f.sora,
     color: COLOR.mute,
   });
-
-  const leftMax = CONTENT_W - f.sora.widthOfTextAtSize(pageLabel, 7.5) - 16;
-  const left = clamp(
-    wrap(`${name}  \u00B7  ${clean(data.address, f.sora)}`, f.sora, 7.5, leftMax),
-    1,
-    f.sora,
-    7.5,
-    leftMax
-  );
-  page.drawText(left[0] ?? name, { x: MARGIN, y: lineY - 14, size: 7.5, font: f.sora, color: COLOR.mute });
 
   const note = [`Prices as of ${data.generatedOn}`, data.taxNote].filter(Boolean).join("  \u00B7  ");
-  const noteLines = clamp(wrap(clean(note, f.sora), f.sora, 7, CONTENT_W), 1, f.sora, 7, CONTENT_W);
-  page.drawText(noteLines[0] ?? "", {
-    x: MARGIN,
-    y: lineY - 25,
-    size: 7,
-    font: f.sora,
-    color: COLOR.mute,
-  });
+  const noteLine = clamp(wrap(clean(note, f.sora), f.sora, 7, CONTENT_W), 1, f.sora, 7, CONTENT_W)[0] ?? "";
+  page.drawText(noteLine, { x: MARGIN, y: Y(top + H + 14), size: 7, font: f.sora, color: COLOR.mute });
 }

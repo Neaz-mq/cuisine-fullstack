@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 // PDF বানানো (ফন্ট parse + embed) CPU-ভারী: local-এ ~১s, ধীর CI runner-এ কয়েক গুণ। vitest-এর
 // ডিফল্ট ৫s সেখানে অকারণে ফেল করায় (GitHub Actions-এ একবার করেছেও) — তাই এই ফাইলে সীমা ২০s।
@@ -40,7 +41,7 @@ const call = (path = "/api/menu/pdf") =>
   GET(new Request(`http://localhost:3000${path}`, { headers: { "x-forwarded-for": `10.0.0.${++ip}` } }));
 
 const category = (items: unknown[]) => [{ id: "c1", name: "Signature", menuItems: items }];
-const menuItem = { id: "m1", title: "Chic Burger", description: "Tasty", price: dec(12.5), foodStatus: null, calories: null };
+const menuItem = { id: "m1", title: "Chic Burger", description: "Tasty", price: dec(12.5), foodStatus: null, calories: null, imageUrl: null };
 
 describe("GET /api/menu/pdf", () => {
   // ⚠️ braces জরুরি: `() => findMany.mockReset()` mock-টাকেই return করে, আর vitest
@@ -61,6 +62,39 @@ describe("GET /api/menu/pdf", () => {
     const bytes = Buffer.from(await res.arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
     expect(Number(res.headers.get("Content-Length"))).toBe(bytes.length);
+  });
+
+  describe("photos", () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const withPhoto = { ...menuItem, imageUrl: "https://res.cloudinary.com/dxohwanal/image/upload/v1/food/a.webp" };
+    const countImages = async (res: Response) =>
+      Buffer.from(await res.arrayBuffer()).toString("latin1").match(/\/Subtype\s*\/Image/g)?.length ?? 0;
+
+    it("puts a fetched item photo into the PDF", async () => {
+      const png = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#ff9540" } }).webp().toBuffer();
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(png as unknown as BodyInit, { status: 200 })));
+      findMany.mockResolvedValue(category([withPhoto]));
+      const res = await call();
+      expect(res.status).toBe(200);
+      expect(await countImages(res)).toBe(1);
+    });
+
+    it("still returns a PDF (without photos) when the image host fails", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));
+      findMany.mockResolvedValue(category([withPhoto]));
+      const res = await call();
+      expect(res.status).toBe(200);
+      expect(await countImages(res)).toBe(0);
+    });
+
+    it("never fetches an image from a host outside the allowlist", async () => {
+      const spy = vi.fn(async () => new Response("x"));
+      vi.stubGlobal("fetch", spy);
+      findMany.mockResolvedValue(category([{ ...menuItem, imageUrl: "https://evil.example.com/a.jpg" }]));
+      const res = await call();
+      expect(res.status).toBe(200);
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   it("opens inline with ?view=1", async () => {

@@ -5,6 +5,7 @@ import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RESTAURANT_ADDRESS } from "@/lib/landing-content";
 import { buildMenuPdf, type MenuPdfData } from "@/lib/menu-pdf";
+import { fetchMenuPhoto } from "@/lib/menu-pdf-photos";
 
 /**
  * GET /api/menu/pdf            -> PDF ডাউনলোড (Content-Disposition: attachment)
@@ -28,6 +29,8 @@ import { buildMenuPdf, type MenuPdfData } from "@/lib/menu-pdf";
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// ছবি আনা + PDF বানানো মিলিয়ে সময় লাগতে পারে (প্রতি ছবি সর্বোচ্চ ৫s, সব সমান্তরালে)।
+export const maxDuration = 30;
 
 const RESTAURANT_NAME = "Cuisine";
 
@@ -69,6 +72,7 @@ export async function GET(request: Request) {
               price: true,
               foodStatus: true,
               calories: true,
+              imageUrl: true,
             },
           },
         },
@@ -110,6 +114,19 @@ export async function GET(request: Request) {
           : `Prices exclude ${settings.taxName}${rateText}, added at checkout.`;
     }
 
+    // প্রতি শ্রেণির প্রথম ২টা ছবিওয়ালা পদের ছবি — সব শ্রেণির সবগুলো সমান্তরালে।
+    // কোনোটা না এলে (host অচেনা, timeout, ভাঙা ছবি) সেই শ্রেণি ছবিহীন নকশায় আঁকা হয়।
+    const photosByCategory = await Promise.all(
+      nonEmpty.map(async (c) => {
+        const urls = c.menuItems
+          .map((i) => i.imageUrl)
+          .filter((u): u is string => Boolean(u))
+          .slice(0, 2);
+        const found = await Promise.all(urls.map((u) => fetchMenuPhoto(u)));
+        return found.filter((p): p is Uint8Array => p !== null);
+      })
+    );
+
     const data: MenuPdfData = {
       restaurantName: RESTAURANT_NAME,
       address: RESTAURANT_ADDRESS,
@@ -120,8 +137,9 @@ export async function GET(request: Request) {
       currency: settings.currency,
       currencyMinorUnits: settings.currencyMinorUnits,
       taxNote,
-      categories: nonEmpty.map((c) => ({
+      categories: nonEmpty.map((c, ci) => ({
         name: c.name,
+        photos: photosByCategory[ci],
         items: c.menuItems.map((item) => {
           const shown = displayPrice(
             item.price,
