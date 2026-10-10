@@ -42,7 +42,7 @@ export const CHEFS: Chef[] = [
     name: "Antoine Rousseau",
     specialty: "French Cuisine",
     yearsExperience: 12,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752057824/chef1_aauap9.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623293/cd191f04c315b2b470f0aa5bcdfe7cfc39be70ad_p4yy36.jpg",
   },
   {
     id: "elena-marchetti",
@@ -50,7 +50,7 @@ export const CHEFS: Chef[] = [
     name: "Elena Marchetti",
     specialty: "Desserts",
     yearsExperience: 9,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752058500/chef2_ivfy0a.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623347/94d859def10f67b2383bf059e9f89538cb485866_bn5goa.jpg",
   },
   {
     id: "julien-moreau",
@@ -58,7 +58,7 @@ export const CHEFS: Chef[] = [
     name: "Julien Moreau",
     specialty: "BBQ & Grill",
     yearsExperience: 10,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752058752/chef3_xhva7c.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623410/882d577658c3acf517e86b47dc2425a5d815f0c3_uueiws.jpg",
   },
   {
     id: "olivier-laurent",
@@ -66,7 +66,7 @@ export const CHEFS: Chef[] = [
     name: "Olivier Laurent",
     specialty: "Rice & Biryani",
     yearsExperience: 7,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752059008/chef4_pgbdux.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623475/3b7824757fba25c298bd9eb87d0e930b628c5611_bhwxhe.jpg",
   },
   {
     id: "gabriel-dupont",
@@ -74,7 +74,7 @@ export const CHEFS: Chef[] = [
     name: "Gabriel Dupont",
     specialty: "Wood-Fired Pizza",
     yearsExperience: 8,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752061029/chef5_w0l3nb.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623527/998ed2cd2180fc94ae1ce53a0aeaf8974526d1d4_ud3vrs.jpg",
   },
   {
     id: "louis-bernard",
@@ -82,7 +82,7 @@ export const CHEFS: Chef[] = [
     name: "Louis Bernard",
     specialty: "Beverages",
     yearsExperience: 4,
-    image: "https://res.cloudinary.com/dxohwanal/image/upload/v1752061398/chef6_aqp9rp.webp",
+    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623588/7454d10ed7ac847087abd5ebe1f54445ab35b65d_mvj7xv.jpg",
   },
 ];
 
@@ -97,6 +97,20 @@ export const CHEFS_HERO = {
 
 // ── Our Journey ──────────────────────────────────────────────────────
 
+/**
+ * "Our Journey" ছবি — Figma-র আসল ছবি (রান্নাঘরে হাসিমুখ শেফরা)।
+ * শুধু /chefs পাতার OurJourney.tsx এটা ব্যবহার করে।
+ *
+ * Cloudinary cloud `dzi3u164c` — next.config.ts-এর remotePatterns আর
+ * CSP img-src-এ আগে থেকেই অনুমোদিত, তাই config বদলানোর দরকার নেই।
+ */
+export const OUR_JOURNEY_IMAGE =
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791622813/ad160a8c357437de5a52501fef782e88e56ea2d6_vblcx0.jpg";
+
+/**
+ * পুরনো আন্দাজে-বাছা ছবি। এখন শুধু track পাতার KitchenStatusCard
+ * ব্যবহার করে — ওটার ছবি আলাদা সিদ্ধান্ত, তাই ইচ্ছে করে ছোঁয়া হয়নি।
+ */
 export const JOURNEY_IMAGE =
   "https://res.cloudinary.com/dxohwanal/image/upload/v1752045017/banner1_p7xkxk.webp";
 
@@ -134,7 +148,7 @@ export const EXPERTS_HEADING = "Meet the Experts Behind Every Dish";
 // ── Why Guests Choose Us ─────────────────────────────────────────────
 
 export const WHY_US_IMAGE =
-  "https://res.cloudinary.com/dxohwanal/image/upload/v1752051031/buffet1_ek10ch.webp";
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791626012/fc84998f11ec30016ab4acf393060cd1e0beb305_qbf8kv.jpg";
 
 export type WhyUsCard = { title: string; description: string };
 

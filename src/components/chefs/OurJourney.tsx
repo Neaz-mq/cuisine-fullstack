@@ -4,7 +4,7 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   JOURNEY,
-  JOURNEY_IMAGE,
+  OUR_JOURNEY_IMAGE,
   JOURNEY_STATS,
   type JourneyStat,
 } from "@/lib/chefs-content";
@@ -51,7 +51,7 @@ export default function OurJourney({ stats = JOURNEY_STATS }: { stats?: JourneyS
             className="relative aspect-[626/440] w-full shrink-0 overflow-hidden rounded-[20px] bg-[#F9F6F3] lg:aspect-auto lg:min-h-[440px] lg:w-1/2 xl:min-h-[531px] xl:rounded-[30px]"
           >
             <Image
-              src={JOURNEY_IMAGE}
+              src={OUR_JOURNEY_IMAGE}
               alt="Our chefs at work in the kitchen"
               fill
               // ⚠️ `sizes` না দিলে next/image প্রতিটা পর্দার জন্য
