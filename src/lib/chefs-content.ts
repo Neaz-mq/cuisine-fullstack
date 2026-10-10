@@ -105,7 +105,7 @@ export const CHEFS_HERO = {
  * CSP img-src-এ আগে থেকেই অনুমোদিত, তাই config বদলানোর দরকার নেই।
  */
 export const OUR_JOURNEY_IMAGE =
-  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791622813/ad160a8c357437de5a52501fef782e88e56ea2d6_vblcx0.jpg";
+  "https://res.cloudinary.com/dzi3u164c/image/upload/v1791627441/186c8944-0067-4dc8-9b07-ff6bf5fe8ba3_kgcwge.webp";
 
 /**
  * পুরনো আন্দাজে-বাছা ছবি। এখন শুধু track পাতার KitchenStatusCard
