@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTableOrder } from "@/context/TableOrderContext";
 
@@ -33,7 +34,7 @@ export default function DineInClient() {
           return;
         }
         setTable(table.id, table.label);
-        router.replace("/order");
+        router.replace("/menu");
       } catch {
         if (!cancelled) setStatus("invalid");
       }
@@ -58,12 +59,12 @@ export default function DineInClient() {
             mistyped. Please ask a staff member for help, or browse the menu
             below.
           </p>
-          <a
-            href="/order"
+          <Link
+            href="/menu"
             className="inline-block bg-[#FF4C15] text-white font-semibold px-5 py-2 rounded-sm hover:bg-orange-600 transition-colors"
           >
             Browse the menu
-          </a>
+          </Link>
         </div>
       </div>
     );

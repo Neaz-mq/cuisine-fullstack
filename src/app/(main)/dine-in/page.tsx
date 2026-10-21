@@ -8,12 +8,13 @@ import DineInClient from "./DineInClient";
  * QR-scan landing route. A table's QR code (see admin/tables ->
  * QrDownloadButton) encodes `${origin}/dine-in?table=<tableId>`. This page
  * validates that table id, stores it in TableOrderContext (sessionStorage),
- * and redirects into the normal menu at /order — from there on it's the
+ * and redirects into the normal menu at /menu — from there on it's the
  * same browsing/cart flow as a regular delivery order, just with
  * dine-in-aware checkout (see Carts.tsx).
  *
- * Note: /order (menu browsing) and /table (reservations) were both already
- * taken by other pages, so /dine-in is the QR landing route.
+ * Note: /table (reservations) was already taken by another page, so
+ * /dine-in is the QR landing route. The customer-facing menu is /menu —
+ * NOT /order, which is an older, different page.
  *
  * useSearchParams() requires a Suspense boundary around the client
  * component that uses it, or Next.js errors at build time — hence this

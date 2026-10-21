@@ -247,12 +247,12 @@ export default function ActiveDeliveries({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6">
       {toolbar}
 
       {/* several orders at once → one pill each */}
       {matching.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" role="tablist" aria-label="Your deliveries">
+        <div className="flex min-w-0 flex-wrap gap-2" role="tablist" aria-label="Your deliveries">
           {matching.map((d) => {
             const selected = d.orderId === current?.orderId;
             return (
@@ -265,15 +265,17 @@ export default function ActiveDeliveries({
                   setSelectedId(d.orderId);
                   setChatOpen(false);
                 }}
-                className={`flex h-10 shrink-0 items-center gap-2 rounded-full px-4 font-sora text-[13px] leading-none transition-colors ${
+                className={`flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full px-4 font-sora text-[13px] leading-none transition-colors ${
                   selected ? "bg-black text-white" : "bg-white text-black hover:bg-black/[0.04]"
                 }`}
               >
                 <span
                   aria-hidden="true"
-                  className={`h-2 w-2 rounded-full ${d.status === "OUT_FOR_DELIVERY" ? "bg-[#FF7100]" : "bg-[#C77C00]"}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${d.status === "OUT_FOR_DELIVERY" ? "bg-[#FF7100]" : "bg-[#C77C00]"}`}
                 />
-                {formatOrderId(d.orderId)} · {d.customerName.split(" ")[0]}
+                <span className="min-w-0 truncate">
+                  {formatOrderId(d.orderId)} · {d.customerName.split(" ")[0]}
+                </span>
               </button>
             );
           })}
