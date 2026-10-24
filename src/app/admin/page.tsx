@@ -13,6 +13,8 @@ import {
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
+import KitchenDashboard from "@/components/admin/kitchen/KitchenDashboard";
+import { getKitchenDashboardData } from "@/lib/kitchen-dashboard-data";
 import BusinessSummaryCard from "@/components/admin/BusinessSummaryCard";
 import Pagination from "@/app/admin/orders/Pagination";
 import { formatOrderId } from "@/lib/format-order-id";
@@ -121,6 +123,21 @@ export default async function AdminDashboardPage({
   // login would just be a confusing dead end.
   const session = await requireAdmin();
   const role = (session.user as { role?: string }).role;
+
+  // KITCHEN has no "insights" scope (no revenue), so it never sees the
+  // admin dashboard below — it gets its own Figma "Welcome Back" screen.
+  if (role === "KITCHEN" && hasPermission(role, "kitchen")) {
+    const kitchenNow = new Date();
+    const kitchenData = await getKitchenDashboardData(kitchenNow);
+    return (
+      <KitchenDashboard
+        name={session.user.name ?? "there"}
+        now={kitchenNow}
+        data={kitchenData}
+      />
+    );
+  }
+
   if (!hasPermission(role, "insights")) {
     redirect(firstAllowedPath(role));
   }

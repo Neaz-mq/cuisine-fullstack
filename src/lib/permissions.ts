@@ -244,6 +244,10 @@ export function getScopesForRole(role?: string | null): Scope[] {
 export function firstAllowedPath(role?: string | null): string {
   if (role === "OWNER" || role === "MANAGER") return "/admin";
 
+  // KITCHEN lands on its own Dashboard — /admin renders it for this role
+  // (see app/admin/page.tsx), so this is not a redirect loop.
+  if (role === "KITCHEN") return "/admin";
+
   const scopes = getScopesForRole(role);
   const first = SCOPE_PRIORITY.find((scope) => scopes.includes(scope));
   if (first) return SCOPE_PATH[first];
@@ -279,7 +283,7 @@ const STAFF_MENU_LABEL: Record<StaffRole, string> = {
   WAITER: "Orders",
   CASHIER: "Orders",
   DELIVERY: "Rider Dashboard",
-  KITCHEN: "Kitchen Display",
+  KITCHEN: "Kitchen Dashboard",
   // No panel to link to — the storefront is where they land.
   CLEANER: "Home",
 };

@@ -144,8 +144,8 @@ describe("firstAllowedPath — where a staff member lands after login", () => {
     expect(firstAllowedPath("DELIVERY")).toBe("/admin/my-deliveries");
   });
 
-  it("sends KITCHEN to /admin/kitchen", () => {
-    expect(firstAllowedPath("KITCHEN")).toBe("/admin/kitchen");
+  it("sends KITCHEN to /admin, which renders the kitchen Dashboard for that role", () => {
+    expect(firstAllowedPath("KITCHEN")).toBe("/admin");
   });
 
   it("sends CLEANER to the storefront — the role has no admin scopes at all", () => {

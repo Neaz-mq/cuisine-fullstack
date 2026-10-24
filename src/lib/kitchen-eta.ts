@@ -35,7 +35,7 @@
 
 export const KITCHEN_QUEUE_STATUSES = ["PLACED", "PREPARING"] as const;
 
-const BASE_PREP_MINUTES = 15; // prep time for a single order with an empty queue
+export const BASE_PREP_MINUTES = 15; // prep time for a single order with an empty queue
 const PER_ORDER_QUEUE_MINUTES = 4; // added per order already ahead in the queue
 const MAX_PREP_MINUTES = 45; // cap so a slammed kitchen doesn't show an absurd number
 

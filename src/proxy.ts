@@ -50,8 +50,9 @@ export default auth((req) => {
     }
 
     // The staff panel lives under /admin for every role, but a Manager sees
-    // /manager and a Rider sees /rider (see lib/panel-url.ts):
-    //   /manager|/rider URL  → rewritten internally to /admin/... for the
+    // /manager, a Rider sees /rider and Kitchen staff see /kitchen (see
+    // lib/panel-url.ts):
+    //   /manager|/rider|/kitchen URL → rewritten internally to /admin/... for the
     //                          matching role, redirected to /admin for others
     //   /admin URL as Manager/Rider → redirected to their own prefix (GET only)
     const ownPrefix = publicPrefixForRole(role);

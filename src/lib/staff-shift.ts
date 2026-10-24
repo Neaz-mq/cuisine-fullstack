@@ -66,3 +66,26 @@ export const SHIFT_SHORT_LABELS: Record<StaffShift, string> = {
 export function isStaffShift(value: unknown): value is StaffShift {
   return typeof value === "string" && (SHIFTS as readonly string[]).includes(value);
 }
+
+/**
+ * Each shift's clock hours (24h, start inclusive, end exclusive) — the same
+ * windows SHIFT_LABELS prints. Night runs past midnight (22 → 06).
+ *
+ * ⚠️ Keep in step with SHIFT_LABELS above: it is the human text, this is
+ * the same fact as numbers, so the Kitchen dashboard's "Staff on Duty"
+ * can ask "is this person's shift running right now?".
+ */
+export const SHIFT_HOURS: Record<StaffShift, { start: number; end: number }> = {
+  MORNING: { start: 6, end: 14 },
+  AFTERNOON: { start: 10, end: 18 },
+  EVENING: { start: 14, end: 22 },
+  NIGHT: { start: 22, end: 6 },
+};
+
+/** Is `shift` running at `now` (server local time — see server-timezone.ts)? */
+export function isShiftOnDuty(shift: StaffShift | null | undefined, now: Date): boolean {
+  if (!shift) return false;
+  const { start, end } = SHIFT_HOURS[shift];
+  const hour = now.getHours() + now.getMinutes() / 60;
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+}

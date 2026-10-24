@@ -139,6 +139,32 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
   },
 ];
 
+/**
+ * Kitchen panel (KITCHEN role) — Figma kitchen sidebar. Only pages the
+ * role can actually open: its Dashboard, the Live Orders board, the Prep
+ * List and a read-only Inventory glance (all under /admin/kitchen, behind
+ * the "kitchen" scope). Suppliers / Staff / Notification sit in the Figma
+ * sidebar too, but KITCHEN holds only the "kitchen" scope
+ * (permissions.ts), so linking them would just bounce back to /admin.
+ *
+ * `exact` on Live Orders: /admin/kitchen is a prefix of the Prep List and
+ * Inventory paths, and two items must not light up at once.
+ */
+const KITCHEN_NAV_SECTIONS: SidebarSection[] = [
+  {
+    heading: "Overview",
+    items: [{ label: "Dashboard", href: "/admin", icon: "dashboard", exact: true }],
+  },
+  {
+    heading: "Operations",
+    items: [
+      { label: "Live Orders", href: "/admin/kitchen", icon: "kitchen", exact: true },
+      { label: "Prep List", href: "/admin/kitchen/prep", icon: "orders" },
+      { label: "Inventory", href: "/admin/kitchen/inventory", icon: "inventory" },
+    ],
+  },
+];
+
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
   { label: "Profile", href: "/admin/profile", icon: "profile" },
   { label: "Settings", href: `${RIDER_BASE}/settings`, icon: "settings" },
@@ -165,6 +191,7 @@ export default async function AdminLayout({
 
   const canSee = (scope: Scope | null) => scope === null || scopes.includes(scope);
   const isRider = role === "DELIVERY";
+  const isKitchen = role === "KITCHEN";
 
   const canSeeReviews = scopes.includes("reviews");
   const canSeeOrders = scopes.includes("orders");
@@ -217,10 +244,12 @@ export default async function AdminLayout({
           item.href === `${RIDER_BASE}/notifications` ? { ...item, badge: riderUnread } : item
         ),
       }))
-    : NAV_SECTIONS.map((section) => ({
-        heading: section.heading,
-        items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
-      })).filter((section) => section.items.length > 0);
+    : isKitchen
+      ? KITCHEN_NAV_SECTIONS
+      : NAV_SECTIONS.map((section) => ({
+          heading: section.heading,
+          items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
+        })).filter((section) => section.items.length > 0);
 
   const settingsItem = canSee(SETTINGS_NAV.scope) ? toSidebarItem(SETTINGS_NAV) : null;
   const systemItems: SidebarItem[] = isRider ? RIDER_SYSTEM_ITEMS : settingsItem ? [settingsItem] : [];
@@ -305,7 +334,7 @@ export default async function AdminLayout({
         sections={sections}
         systemItems={systemItems}
         notificationSlot={notificationBell}
-        showClock={isRider}
+        showClock={isRider || isKitchen}
       >
         {children}
       </AdminShell>
