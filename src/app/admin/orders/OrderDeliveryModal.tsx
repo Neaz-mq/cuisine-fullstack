@@ -110,6 +110,8 @@ function OrderDeliveryModalContent({
 }) {
   const router = useRouter();
   const [riders, setRiders] = useState<Rider[] | null>(null);
+  // The list could not be loaded (403 / network) — NOT the same as "no riders".
+  const [ridersFailed, setRidersFailed] = useState(false);
   const [selected, setSelected] = useState(order.riderId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -122,12 +124,21 @@ function OrderDeliveryModalContent({
   useEffect(() => {
     let cancelled = false;
     fetch("/api/admin/riders")
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        // ⚠️ A failed request used to become an empty list, so a 403 read as
+        // "No active riders — add one under Staff first" and sent people off
+        // to fix data that was fine. Now it is its own message.
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
       .then((data) => {
         if (!cancelled) setRiders(Array.isArray(data) ? data : []);
       })
       .catch(() => {
-        if (!cancelled) setRiders([]);
+        if (!cancelled) {
+          setRidersFailed(true);
+          setRiders([]);
+        }
       });
     // ⚠️ modal বন্ধ হয়ে গেলে উত্তরটা আর বসানো হয় না — নাহলে React
     // unmounted component-এ setState নিয়ে সতর্ক করত।
@@ -238,13 +249,17 @@ function OrderDeliveryModalContent({
       </div>
 
       {/* Delivery Rider — select + Assign, পাশাপাশি। */}
-      <div className="rounded-[20px] bg-[#F9F6F3] p-4">
-        <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-end">
+      {/* Figma Frame 2147236486: column, padding 16, radius 16, BG #F9F6F3.
+          Inside it a WHITE dropdown (radius 12, padding 12) and an "Assign"
+          button (radius 12, padding 12×20) side by side, gap 6 — on every
+          screen width, never stacked. */}
+      <div className="rounded-[16px] bg-[#F9F6F3] p-4">
+        <div className="flex items-end gap-1.5">
           <div className="min-w-0 flex-1">
             {riders === null ? (
               <>
                 <span className={LABEL}>Delivery Rider</span>
-                <p className="flex h-[43px] items-center font-sora text-[12px] text-black/50">
+                <p className="flex min-h-[43px] items-center rounded-[12px] bg-white px-3 py-2 font-sora text-[12px] leading-[1.6] text-black/70">
                   Loading riders…
                 </p>
               </>
@@ -254,14 +269,17 @@ function OrderDeliveryModalContent({
                 {/* ⚠️ খালি dropdown-এর বদলে স্পষ্ট কথা — কারণটা এখানে
                     অর্ডারের নয়, staff তালিকার: কোনো DELIVERY role-এর
                     সক্রিয় ব্যবহারকারী নেই। */}
-                <p className="flex h-[43px] items-center font-sora text-[12px] text-black/50">
-                  No active riders — add one under Staff first.
+                <p className="flex min-h-[43px] items-center rounded-[12px] bg-white px-3 py-2 font-sora text-[12px] leading-[1.6] text-black/70">
+                  {ridersFailed
+                    ? "Couldn’t load the riders. Close this and try again."
+                    : "No active riders — a manager needs to add one under Staff first."}
                 </p>
               </>
             ) : (
               <SelectField
                 id={`dispatch-rider-${orderId}`}
                 label="Delivery Rider"
+                surface="white"
                 value={selected}
                 onChange={setSelected}
                 options={[{ value: "", label: "Select a rider…" }, ...riderOptions]}
@@ -269,17 +287,14 @@ function OrderDeliveryModalContent({
             )}
           </div>
 
-          {/**
-           * ⚠️ `w-full` তারপর `min-[560px]:w-auto` — ৩২০px পর্দায়
-           * select আর বোতাম উপর-নিচে বসে, আর তখন `shrink-0` + px-6
-           * বোতামটাকে সরু পর্দায় modal-এর বাইরে ঠেলে দিত। orders
-           * তালিকার বোতামজোড়াতেও ঠিক এই ভুলটাই ছিল।
-           */}
+          {/* Figma "Fill": 43 high, padding 12×20, radius 12, gradient
+              93.36deg #FF9540 → #FF70C6 (pink stop at 145.78%, outside the
+              button), Sora 600 12px white. Faded while no rider is chosen. */}
           <button
             type="button"
             onClick={handleAssign}
             disabled={submitting || !selected}
-            className="flex h-[43px] w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[14px] font-semibold leading-none text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[560px]:w-auto min-[560px]:shrink-0"
+            className="flex h-[43px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[12px] bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 py-3 font-sora text-[12px] font-semibold leading-[1.6] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Assign

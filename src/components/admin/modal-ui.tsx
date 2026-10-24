@@ -411,6 +411,7 @@ export function SelectField({
   options,
   required = false,
   className = "",
+  surface = "cream",
 }: {
   id: string;
   label: string;
@@ -433,12 +434,24 @@ export function SelectField({
    * ওদের `col-span-2` পাঠাতে হয়। না দিলে আগের মতোই এক ঘর।
    */
   className?: string;
+  /**
+   * Colour of the trigger box. "cream" (default) is for fields sitting on
+   * a white card, so every existing use is unchanged. "white" is for a field
+   * sitting INSIDE a cream card — the Ready to Delivery modal's Delivery
+   * Rider block (Figma: white box, radius 12, 12px Sora Black/70
+   * placeholder), where a cream box would vanish into its background.
+   */
+  surface?: "cream" | "white";
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(MENU_MAX_HEIGHT);
 
   // অজানা মান এলে প্রথমটায় পড়ে থাকে, যাতে ঘরটা খালি না দেখায় —
   // FilterMenu-র একই আচরণ।
   const selected = options.find((option) => option.value === value) ?? options[0];
+  const white = surface === "white";
+  // Nothing chosen yet (empty-value option, e.g. "Select a rider…") reads as
+  // a placeholder: Black/70 on the white surface.
+  const dimmed = white && !selected.value;
 
   return (
     <div className={className}>
@@ -458,9 +471,11 @@ export function SelectField({
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-labelledby={`${id}-label`}
-          className={`${FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
+          className={`${white ? FIELD.replace("bg-[#F9F6F3]", "bg-white") : FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
         >
-          <span className="min-w-0 truncate">{selected.label}</span>
+          <span className={`min-w-0 truncate ${dimmed ? "text-black/70" : ""}`}>
+            {selected.label}
+          </span>
           <ChevronDown
             className={`h-3.5 w-3.5 shrink-0 text-black/70 transition-transform ${
               open ? "rotate-180" : ""

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiScope } from "@/lib/require-admin";
+import { requireApiScopeAny } from "@/lib/require-admin";
+import { hasPermission } from "@/lib/permissions";
 import { parseBody } from "@/lib/validations/parse";
 import { assignRiderSchema } from "@/lib/validations/delivery";
 import { geocodeAddressDetailed, type GeocodeFailure } from "@/lib/geocode";
@@ -43,8 +44,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireApiScope("orders");
+  // "kitchen" too — the kitchen board's "Ready to Delivery" button calls this.
+  // A kitchen-only viewer is limited below to orders still being made.
+  const authResult = await requireApiScopeAny(["orders", "kitchen"]);
   if (authResult instanceof NextResponse) return authResult;
+  const viewerRole = (authResult.user as { role?: string } | undefined)?.role;
+  const isDispatcher = hasPermission(viewerRole, "orders");
 
   const { id } = await params;
 
@@ -77,6 +82,16 @@ export async function POST(
     return NextResponse.json(
       { error: "Only delivery orders can be assigned a rider" },
       { status: 400 }
+    );
+  }
+
+  // Kitchen staff hand over food that is still on their board (PLACED /
+  // PREPARING). Re-assigning a rider on an order already out for delivery —
+  // or touching a finished one — is the manager's call.
+  if (!isDispatcher && order.status !== "PLACED" && order.status !== "PREPARING") {
+    return NextResponse.json(
+      { error: "Only a manager can change the rider on an order that has already left the kitchen." },
+      { status: 403 }
     );
   }
 

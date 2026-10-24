@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireApiScope } from "@/lib/require-admin";
+import { requireApiScopeAny } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { toCsv } from "@/lib/csv";
 import { Prisma } from "@/generated/prisma/client";
-import { ROLE_LABELS, isStaffRoleFilter } from "@/lib/staff-roles";
+import {
+  KITCHEN_STAFF_ROLES,
+  ROLE_LABELS,
+  isKitchenStaffRole,
+  isStaffRoleFilter,
+} from "@/lib/staff-roles";
+import { isSupplierStatusFilter } from "@/lib/supplier-status";
 import { SHIFT_LABELS, isStaffShift } from "@/lib/staff-shift";
-import type { StaffRole } from "@/lib/permissions";
+import { hasPermission, type StaffRole } from "@/lib/permissions";
 
 /**
  * GET /api/admin/staff/export?q=&role=
@@ -31,8 +37,15 @@ import type { StaffRole } from "@/lib/permissions";
  * route হওয়া উচিত — এই সাধারণ "কর্মীর তালিকা" বোতামের পাশ দিয়ে নয়।
  */
 export async function GET(request: Request) {
-  const authResult = await requireApiScope("staff");
+  // "kitchen" too: the kitchen Staff page (/admin/kitchen/staff) has the same
+  // Export Report button. A kitchen-only viewer gets a LIMITED file — see
+  // `fullAccess` below.
+  const authResult = await requireApiScopeAny(["staff", "kitchen"]);
   if (authResult instanceof NextResponse) return authResult;
+  const viewerRole = (authResult.user as { role?: string } | undefined)?.role;
+  // Full file only with the real "staff" scope. A cook (kitchen scope only)
+  // gets just chefs + cleaners, without employee ID or home address.
+  const fullAccess = hasPermission(viewerRole, "staff");
 
   // users-export-এর একই সীমা, একই কারণ: page limit ছাড়া পুরো তালিকা,
   // আর এটা ব্যক্তিগত তথ্য এক ফাইলে ঢালে।
@@ -52,7 +65,16 @@ export async function GET(request: Request) {
   const rawRole = searchParams.get("role");
   // অচেনা মান চুপচাপ "সব" হয়ে যায় — URL হাতে বদলে দিলে error নয়, শুধু
   // ছাঁকনিটা খুলে যায়। বাকি দুটো export route-এও একই আচরণ।
-  const roleFilter = isStaffRoleFilter(rawRole) ? rawRole : null;
+  const roleFilter: StaffRole | null = fullAccess
+    ? isStaffRoleFilter(rawRole)
+      ? rawRole
+      : null
+    : isKitchenStaffRole(rawRole)
+      ? rawRole
+      : null;
+  // Active / Inactive filter (the kitchen Staff page's "All Statuses").
+  const rawStatus = searchParams.get("status");
+  const status = isSupplierStatusFilter(rawStatus) ? rawStatus : "all";
 
   /**
    * ⚠️ এই শর্তটা admin/staff/page.tsx-এর শর্তের হুবহু প্রতিরূপ হতে হবে —
@@ -60,16 +82,26 @@ export async function GET(request: Request) {
    * page.tsx-এ বদলালে এখানেও বদলাতে হবে।
    */
   const where: Prisma.UserWhereInput = {
-    role: roleFilter ?? { not: "CUSTOMER" },
-    ...(q
-      ? {
-          OR: [
-            { name: { contains: q, mode: "insensitive" as const } },
-            { email: { contains: q, mode: "insensitive" as const } },
-            { staffProfile: { employeeId: { contains: q, mode: "insensitive" as const } } },
-          ],
-        }
-      : {}),
+    role: roleFilter ?? (fullAccess ? { not: "CUSTOMER" } : { in: [...KITCHEN_STAFF_ROLES] }),
+    AND: [
+      ...(q
+        ? [
+            {
+              OR: [
+                { name: { contains: q, mode: "insensitive" as const } },
+                { email: { contains: q, mode: "insensitive" as const } },
+                { staffProfile: { employeeId: { contains: q, mode: "insensitive" as const } } },
+              ],
+            },
+          ]
+        : []),
+      // No profile counts as Active (page: `isActive ?? true`).
+      ...(status === "active"
+        ? [{ OR: [{ staffProfile: { is: null } }, { staffProfile: { isActive: true } }] }]
+        : status === "inactive"
+          ? [{ staffProfile: { isActive: false } }]
+          : []),
+    ],
   };
 
   const staff = await prisma.user.findMany({
@@ -127,7 +159,11 @@ export async function GET(request: Request) {
   const stamp = new Date().toISOString().slice(0, 10);
   const suffix = roleFilter ? roleFilter.toLowerCase() : "all";
 
-  return new NextResponse(toCsv(header, rows), {
+  // Limited file for a kitchen-only viewer: drop "Employee ID" (column 0) and
+  // "Permanent Address" (column 5).
+  const keep = (_: unknown, index: number) => fullAccess || (index !== 0 && index !== 5);
+
+  return new NextResponse(toCsv(header.filter(keep), rows.map((row) => row.filter(keep))), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="cuisine-staff-${suffix}-${stamp}.csv"`,

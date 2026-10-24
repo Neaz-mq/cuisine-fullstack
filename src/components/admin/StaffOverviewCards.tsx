@@ -2,6 +2,7 @@ import { Bike, Briefcase, Brush, ChefHat, UserRound } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import OverviewPeriodFilter from "@/components/admin/OverviewPeriodFilter";
 import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period";
+import type { StaffRole } from "@/lib/permissions";
 
 /**
  * src/components/admin/StaffOverviewCards.tsx
@@ -50,8 +51,22 @@ const STAFF_GROUPS = [
   { label: "Cleaners", roles: ["CLEANER"] as const, hint: "Cleaning Staff", icon: Brush },
 ];
 
-export default async function StaffOverviewCards({ period }: { period: OverviewPeriod }) {
+export default async function StaffOverviewCards({
+  period,
+  only,
+}: {
+  period: OverviewPeriod;
+  /**
+   * Show (and count) just these roles. The kitchen Staff page passes
+   * ["KITCHEN", "CLEANER"] → two cards (Chefs · Cleaners), each half the
+   * row, and nobody else is even queried. Omitted: the admin's five cards.
+   */
+  only?: readonly StaffRole[];
+}) {
   const range = overviewPeriodRange(period);
+  const groups = only
+    ? STAFF_GROUPS.filter((group) => group.roles.some((role) => only.includes(role)))
+    : STAFF_GROUPS;
 
   /**
    * এক query-তে পাঁচটা কার্ডের সংখ্যা।
@@ -76,7 +91,7 @@ export default async function StaffOverviewCards({ period }: { period: OverviewP
     by: ["role"],
     _count: { _all: true },
     where: {
-      role: { not: "CUSTOMER" },
+      role: only ? { in: [...only] } : { not: "CUSTOMER" },
       ...(range
         ? { staffProfile: { hireDate: { gte: range.gte, lt: range.lt } } }
         : { OR: [{ staffProfile: { is: null } }, { staffProfile: { isActive: true } }] }),
@@ -151,8 +166,10 @@ export default async function StaffOverviewCards({ period }: { period: OverviewP
            + ১২ (gap) + ৪০ (icon বৃত্ত) = ১৭৯ — তাই শিরোনামটা
            icon-এর নিচ দিয়ে বেরিয়ে যেত আর দুটো একে অন্যের উপর
            বসত। ৪৮০ থেকে দুই কলাম দিলে কার্ড ~২০৬px, তখন আঁটে। */}
-      <div className="grid gap-5 min-[480px]:grid-cols-2 md:grid-cols-6 xl:grid-cols-5">
-        {STAFF_GROUPS.map((group, index) => (
+      <div
+        className={`grid gap-5 min-[480px]:grid-cols-2 ${only ? "" : "md:grid-cols-6 xl:grid-cols-5"}`}
+      >
+        {groups.map((group, index) => (
           /**
            * Figma Card: column, padding 16, gap 20, radius 16,
            * BG #F9F6F3, উচ্চতা 140।
@@ -169,8 +186,10 @@ export default async function StaffOverviewCards({ period }: { period: OverviewP
                ব্যাখ্যা দ্রষ্টব্য। ক্লাসগুলো আস্ত লেখা, `md:col-span-${n}`
                নয়: Tailwind source-এ আক্ষরিক নাম না পেলে class-টা
                তৈরিই করে না। */
-            className={`flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4 xl:col-span-1 ${
-              index < 3 ? "md:col-span-2" : "md:col-span-3"
+            className={`flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4 ${
+              only
+                ? ""
+                : `xl:col-span-1 ${index < 3 ? "md:col-span-2" : "md:col-span-3"}`
             }`}
           >
             {/* Frame 2147232365: row, space-between, উচ্চতা 40 —

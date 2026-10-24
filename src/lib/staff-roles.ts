@@ -62,3 +62,20 @@ export const PANEL_INVITE_ROLES: readonly StaffRole[] = ["OWNER", "MANAGER", "DE
 export function shouldSendPanelInvite(role: string): boolean {
   return (PANEL_INVITE_ROLES as readonly string[]).includes(role);
 }
+
+/**
+ * The kitchen panel's Staff page (/admin/kitchen/staff) shows only these two
+ * roles — Chefs (KITCHEN) and Cleaners — never managers, owners, riders,
+ * waiters or cashiers. Used by that page, its role filter and the staff CSV
+ * export, so the three can never disagree about who a cook may see.
+ */
+export const KITCHEN_STAFF_ROLES = ["KITCHEN", "CLEANER"] as const satisfies readonly StaffRole[];
+
+export function isKitchenStaffRole(value: unknown): value is (typeof KITCHEN_STAFF_ROLES)[number] {
+  return typeof value === "string" && (KITCHEN_STAFF_ROLES as readonly string[]).includes(value);
+}
+
+export const KITCHEN_ROLE_FILTER_OPTIONS: readonly FilterMenuOption<RoleFilterValue>[] = [
+  { value: ALL_ROLES, label: "All Roles", triggerLabel: "All" },
+  ...KITCHEN_STAFF_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] })),
+];
