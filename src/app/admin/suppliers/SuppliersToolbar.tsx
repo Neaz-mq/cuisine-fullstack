@@ -19,7 +19,15 @@ import SupplierFormModal from "./SupplierFormModal";
  *
  * StaffToolbar-এর হুবহু গড়ন — debounce, URL param, একই focus চিহ্ন।
  */
-export default function SuppliersToolbar({ status }: { status: SupplierStatusFilter }) {
+export default function SuppliersToolbar({
+  status,
+  readOnly = false,
+}: {
+  status: SupplierStatusFilter;
+  /** Kitchen view: search + status filter only — no "Add New" button or
+   *  form (a cook cannot create suppliers). */
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -157,6 +165,7 @@ export default function SuppliersToolbar({ status }: { status: SupplierStatusFil
          * ঠিক 90deg আর দ্বিতীয় রঙ 100%-এ, অর্থাৎ ডান কিনারাতেই পুরো
          * গোলাপি। Figma-তে গোলাপিটা 145.78%-এ — বোতামের **বাইরে**।
          */}
+        {!readOnly && (
         <button
           type="button"
           onClick={() => setModalOpen(true)}
@@ -165,9 +174,10 @@ export default function SuppliersToolbar({ status }: { status: SupplierStatusFil
           <Plus className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
           Add New
         </button>
+        )}
       </div>
 
-      <SupplierFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      {!readOnly && <SupplierFormModal open={modalOpen} onClose={() => setModalOpen(false)} />}
     </div>
   );
 }

@@ -13,6 +13,9 @@
  *             /kitchen/live-orders  ↔ /admin/kitchen    (Live Orders board)
  *             /kitchen/prep         ↔ /admin/kitchen/prep
  *             /kitchen/inventory    ↔ /admin/kitchen/inventory
+ *             /kitchen/suppliers    ↔ /admin/kitchen/suppliers
+ *             /kitchen/staff        ↔ /admin/kitchen/staff
+ *             /kitchen/notifications ↔ /admin/kitchen/notifications
  *             /kitchen/profile      ↔ /admin/profile
  *
  * Pure string helpers — safe for the edge proxy and for client components.
@@ -33,7 +36,7 @@ export function publicPrefixForRole(
 }
 
 /** Kitchen pages whose public name is the same as the part after /admin/kitchen. */
-const KITCHEN_SUBPAGES = ["/prep", "/inventory"] as const;
+const KITCHEN_SUBPAGES = ["/prep", "/inventory", "/suppliers", "/staff", "/notifications"] as const;
 
 /** /manager/x, /rider/x or /kitchen/x → the real /admin/... path. Other paths unchanged. */
 export function toInternalPath(path: string): string {

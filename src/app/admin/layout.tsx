@@ -140,15 +140,29 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
 ];
 
 /**
- * Kitchen panel (KITCHEN role) — Figma kitchen sidebar. Only pages the
- * role can actually open: its Dashboard, the Live Orders board, the Prep
- * List and a read-only Inventory glance (all under /admin/kitchen, behind
- * the "kitchen" scope). Suppliers / Staff / Notification sit in the Figma
- * sidebar too, but KITCHEN holds only the "kitchen" scope
- * (permissions.ts), so linking them would just bounce back to /admin.
+ * Kitchen panel (KITCHEN role) — Figma kitchen sidebar, same four groups as
+ * the mockup: Overview · Management · Operations · System.
  *
- * `exact` on Live Orders: /admin/kitchen is a prefix of the Prep List and
- * Inventory paths, and two items must not light up at once.
+ * ⚠️ KITCHEN holds only the "kitchen" scope (permissions.ts), so every link
+ * here points INSIDE /admin/kitchen (or at /admin/profile, which any staff
+ * role may open). Linking the real /admin/suppliers, /admin/staff or
+ * /admin/notifications would just bounce back to /admin — and widening the
+ * scope to make them open would hand a cook the staff list (salary, NID)
+ * and the restaurant-wide order feed.
+ *
+ *  • Suppliers / Staff / Notification → kitchen-only pages under
+ *    /admin/kitchen/…, behind the same "kitchen" scope. Today they are
+ *    "Coming soon" placeholders (components/admin/ComingSoon.tsx), so the
+ *    sidebar matches Figma without a 404 and without a privilege change.
+ *  • Settings → /admin/profile (own profile + change password), the only
+ *    "settings" a kitchen role may touch. The real /admin/settings (tax,
+ *    currency, delivery fee…) is OWNER-only.
+ *  • Notification has no badge: there is no kitchen notification source
+ *    yet, and a made-up number is worse than none (Figma's "12" is sample
+ *    data).
+ *
+ * `exact` on Dashboard and Live Orders: /admin/kitchen is a prefix of every
+ * other kitchen path, and two items must not light up at once.
  */
 const KITCHEN_NAV_SECTIONS: SidebarSection[] = [
   {
@@ -156,13 +170,28 @@ const KITCHEN_NAV_SECTIONS: SidebarSection[] = [
     items: [{ label: "Dashboard", href: "/admin", icon: "dashboard", exact: true }],
   },
   {
+    heading: "Management",
+    items: [
+      { label: "Suppliers", href: "/admin/kitchen/suppliers", icon: "suppliers" },
+      // Figma uses the two-people icon here (profile-2user).
+      { label: "Staff", href: "/admin/kitchen/staff", icon: "users" },
+    ],
+  },
+  {
     heading: "Operations",
     items: [
       { label: "Live Orders", href: "/admin/kitchen", icon: "kitchen", exact: true },
       { label: "Prep List", href: "/admin/kitchen/prep", icon: "orders" },
       { label: "Inventory", href: "/admin/kitchen/inventory", icon: "inventory" },
+      { label: "Notification", href: "/admin/kitchen/notifications", icon: "notification" },
     ],
   },
+];
+
+/** Kitchen System group — Figma: Settings, then Logout (drawn by
+ *  AdminSidebar itself). */
+const KITCHEN_SYSTEM_ITEMS: SidebarItem[] = [
+  { label: "Settings", href: "/admin/profile", icon: "settings" },
 ];
 
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [
@@ -252,7 +281,13 @@ export default async function AdminLayout({
         })).filter((section) => section.items.length > 0);
 
   const settingsItem = canSee(SETTINGS_NAV.scope) ? toSidebarItem(SETTINGS_NAV) : null;
-  const systemItems: SidebarItem[] = isRider ? RIDER_SYSTEM_ITEMS : settingsItem ? [settingsItem] : [];
+  const systemItems: SidebarItem[] = isRider
+    ? RIDER_SYSTEM_ITEMS
+    : isKitchen
+      ? KITCHEN_SYSTEM_ITEMS
+      : settingsItem
+        ? [settingsItem]
+        : [];
 
   /**
    * Topbar-এর search এই একই ছাঁকা তালিকা থেকেই খোঁজে (Settings সহ), তাই

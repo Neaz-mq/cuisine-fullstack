@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiScope } from "@/lib/require-admin";
+import { requireApiScopeAny } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { toCsv } from "@/lib/csv";
@@ -19,7 +19,9 @@ import { isSupplierStatusFilter } from "@/lib/supplier-status";
  * উচিত নয়।
  */
 export async function GET(request: Request) {
-  const authResult = await requireApiScope("suppliers");
+  // "kitchen" too: the kitchen Suppliers page (/admin/kitchen/suppliers) has
+  // the same Export Report button and shows the same rows on screen.
+  const authResult = await requireApiScopeAny(["suppliers", "kitchen"]);
   if (authResult instanceof NextResponse) return authResult;
 
   // Users/Staff export-এর একই সীমা, একই কারণ: page limit ছাড়া পুরো
