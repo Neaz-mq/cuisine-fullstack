@@ -22,6 +22,9 @@ export type NotificationKind =
   | "REVIEW"
   | "STOCK"
   | "DELIVERY"
+  // Admin panel only: a supplier accepted a restock order — it's on the way
+  // and staff need to confirm it when it arrives.
+  | "SUPPLY"
   // Rider panel only: a customer's chat message, and an order of theirs
   // that was cancelled.
   | "CHAT"

@@ -2,6 +2,7 @@ import { Box, CircleCheck, ClipboardList, Truck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import OverviewPeriodFilter from "@/components/admin/OverviewPeriodFilter";
 import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period";
+import { OPEN_PURCHASE_ORDER_STATUSES } from "@/lib/supplier-status";
 
 /**
  * src/components/admin/SuppliersOverviewCards.tsx
@@ -76,8 +77,11 @@ export default async function SuppliersOverviewCards({ period }: { period: Overv
       orderBy: { category: "asc" },
     }),
     // Figma-র "Pending / Awaiting Delivery" — অর্থাৎ সরবরাহকারীকে বলা
-    // হয়েছে কিন্তু মাল আসেনি। DRAFT নয়, সেটা এখনো পাঠানোই হয়নি।
-    prisma.purchaseOrder.count({ where: { status: "ORDERED", ...orderedIn } }),
+    // হয়েছে কিন্তু মাল আসেনি: সরবরাহকারী এখনো মানেননি (ORDERED) অথবা
+    // মেনেছেন, মাল রাস্তায় (ON_THE_WAY)। DRAFT নয়, সেটা এখনো পাঠানোই হয়নি।
+    prisma.purchaseOrder.count({
+      where: { status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] }, ...orderedIn },
+    }),
   ]);
 
   const hints = HINTS[period];

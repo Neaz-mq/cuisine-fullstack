@@ -64,10 +64,17 @@ export const SUPPLY_CATEGORIES = [
  * PurchaseOrder.status → Figma-র "Resent Deliveries" pill।
  *
  * ⚠️ নামগুলো schema-র enum নয়, আর সেটা ইচ্ছাকৃত। enum-টা ক্রয়ের
- * দৃষ্টিকোণ থেকে লেখা (DRAFT = অর্ডারটা এখনো বানানো হচ্ছে, ORDERED =
- * সরবরাহকারীকে বলা হয়েছে), কিন্তু এই কার্ডটা **ডেলিভারির** দৃষ্টিকোণ
- * থেকে পড়া হয়: মালটা কি এসে গেছে, না রাস্তায়, না এখনো পাঠানোই হয়নি।
- * তাই ORDERED = "On the Way", RECEIVED = "Delivered"।
+ * দৃষ্টিকোণ থেকে লেখা, কিন্তু এই কার্ডটা **ডেলিভারির** দৃষ্টিকোণ থেকে
+ * পড়া হয়। পুরো পথটা এখন:
+ *
+ *   ORDERED     "Pending"    — সরবরাহকারীকে email গেছে, তিনি এখনো মানেননি
+ *   ON_THE_WAY  "On the Way" — সরবরাহকারী email-এর link-এ accept করেছেন
+ *                              (admin-এর কাছে notification যায়)
+ *   RECEIVED    "Delivered"  — admin মাল গুনে confirm করেছেন; কেবল তখনই
+ *                              stock বাড়ে
+ *
+ * ⚠️ আগে ORDERED = "On the Way" ছিল, কারণ তখন "সরবরাহকারী মানলেন কি না"
+ * ধাপটাই ছিল না। এখন ওটা আলাদা ধাপ, তাই ORDERED হলো Pending।
  *
  * রঙগুলো Figma-র নিজের hex — সবুজ #E8FFEC/#0ECF00 (সারির Active
  * pill-এর একই জোড়া), হলুদ #FFF2DA/#FF9E00, বেগুনি #EBE0FF/#5A00FF।
@@ -76,10 +83,19 @@ export const SUPPLY_CATEGORIES = [
  */
 export const DELIVERY_STATUS_STYLE: Record<string, { label: string; className: string }> = {
   RECEIVED: { label: "Delivered", className: "bg-[#E8FFEC] text-[#0ECF00]" },
-  ORDERED: { label: "On the Way", className: "bg-[#EBE0FF] text-[#5A00FF]" },
-  DRAFT: { label: "Pending", className: "bg-[#FFF2DA] text-[#FF9E00]" },
+  ON_THE_WAY: { label: "On the Way", className: "bg-[#EBE0FF] text-[#5A00FF]" },
+  ORDERED: { label: "Pending", className: "bg-[#FFF2DA] text-[#FF9E00]" },
+  // ⚠️ DRAFT আর "Pending" নয় — ওটা এখনো সরবরাহকারীকে পাঠানোই হয়নি।
+  DRAFT: { label: "Draft", className: "bg-white text-black/70" },
   CANCELLED: { label: "Cancelled", className: "bg-[#FAE7EC] text-[#D72A37]" },
 };
+
+/**
+ * সরবরাহকারীকে বলা হয়েছে কিন্তু মাল এখনো আসেনি — অর্থাৎ Pending আর On the
+ * Way, দুটোই। "Awaiting Delivery" গোনা আর inventory-র "আগেই অর্ডার করা
+ * আছে" সতর্কতা দুটোই এই তালিকা ধরে।
+ */
+export const OPEN_PURCHASE_ORDER_STATUSES = ["ORDERED", "ON_THE_WAY"] as const;
 
 /**
  * ⚠️ `UNIT_LABELS` আর `formatQuantity` এখান থেকে সরে গেছে —

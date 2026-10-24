@@ -1,5 +1,5 @@
 import StockBar from "@/components/admin/StockBar";
-import { STOCK_STATE_STYLE, stockStateOf } from "@/lib/inventory-status";
+import { STOCK_STATE_STYLE, formatQuantity, stockStateOf } from "@/lib/inventory-status";
 import InventoryRowActions from "./InventoryRowActions";
 import type { IngredientDraft, SupplierOption } from "./IngredientFormModal";
 
@@ -55,6 +55,14 @@ export default function InventoryRow({
         <p className="truncate font-sora text-[12px] leading-[1.7] text-black/70">
           Used in {item.usedInRecipes} menu {item.usedInRecipes === 1 ? "item" : "items"}
         </p>
+        {/* Already ordered from a supplier and not delivered yet — so nobody
+            orders the same thing twice. */}
+        {item.openOrder && (
+          <p className="truncate font-sora text-[12px] leading-[1.7] text-[#5A00FF]">
+            {formatQuantity(item.openOrder.quantity, item.unit)} on order ·{" "}
+            {item.openOrder.status === "ON_THE_WAY" ? "On the Way" : "Pending"}
+          </p>
+        )}
       </div>
 
       {/**

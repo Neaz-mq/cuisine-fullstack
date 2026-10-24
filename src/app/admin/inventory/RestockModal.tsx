@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 import { Loader2 } from "lucide-react";
 import {
   FIELD,
@@ -19,31 +20,29 @@ import type { IngredientDraft, SupplierOption } from "./IngredientFormModal";
 /**
  * src/app/admin/inventory/RestockModal.tsx
  *
- * Figma-র "Items Restock" — মাল এলো, stock বাড়াও।
+ * Figma-র "Items Restock" — সরবরাহকারীর কাছে নতুন করে মাল চাওয়া।
  *
  *   Restocking (পড়া-মাত্র)
  *   Currently (পড়া-মাত্র)  |  Max Capacity (পড়া-মাত্র)
  *   Supplier
- *   Quantity Received      |  Unit (পড়া-মাত্র)
+ *   Quantity to Order      |  Unit (পড়া-মাত্র)
  *   Cost Per Unit          |  Total Cost (হিসাব করা)
- *   New stock level after restock (হিসাব করা)
+ *   Stock after delivery (হিসাব করা)
+ *
+ * ── এই modal এখন stock বাড়ায় না ───────────────────────────────────────
+ *
+ * ⚠️ আগে "Confirm Restock" সরাসরি stock বাড়াত (মাল এসে গেছে ধরে নিয়ে)।
+ * এখন এটা একটা **অর্ডার**: Pending purchase order তৈরি হয় আর
+ * সরবরাহকারীর কাছে email যায়। তিনি accept করলে "On the Way", আর মাল
+ * পৌঁছলে Suppliers → Recent Deliveries থেকে "Confirm delivery" চাপলে
+ * তবেই stock বাড়ে। না হলে মাল না আসতেই Inventory পাতা মিথ্যা বলত।
  *
  * ── কোনগুলো পড়া-মাত্র, আর কেন ───────────────────────────────────────
  *
- * Figma-তে ঘরগুলো দেখতে সবই সম্পাদনাযোগ্য, কিন্তু বাস্তবে অর্ধেকই
- * তথ্য, ইনপুট নয়।
- *
- * "Currently" আর "Max Capacity" — এগুলো উপকরণের বর্তমান অবস্থা।
- * এখানে বদলানোর সুযোগ দিলে এই modal-টা চুপিসারে একটা "উপকরণ
- * সম্পাদনা" form হয়ে যেত, অথচ নাম বলছে restock। max capacity
- * বদলাতে হলে Edit Ingredient।
- *
- * "Unit" — একটা উপকরণের একক বদলানো মানে তার সব পুরনো StockMovement-এর
- * অর্থ বদলে যাওয়া (৫০ "kg" হঠাৎ ৫০ "g" হয়ে গেলে ইতিহাসটাই মিথ্যা
- * হয়ে যায়)। সেটা একটা restock-এর পার্শ্বপ্রতিক্রিয়া হওয়া উচিত নয়।
- *
- * "Total Cost" আর "New stock level" — হিসাব করা। দুটোই হাতে লেখা গেলে
- * ওরা বাকি সংখ্যাগুলোর সাথে অমিল হতে পারত।
+ * "Currently" আর "Max Capacity" — উপকরণের বর্তমান অবস্থা; বদলাতে হলে
+ * Edit Ingredient। "Unit" — একক বদলালে পুরনো StockMovement-এর অর্থ বদলে
+ * যেত। "Total Cost" আর "Stock after delivery" — হিসাব করা, হাতে লেখা গেলে
+ * বাকি সংখ্যার সাথে অমিল হতে পারত।
  */
 export default function RestockModal({
   open,
@@ -57,14 +56,10 @@ export default function RestockModal({
   item: IngredientDraft;
   suppliers: SupplierOption[];
   /**
-   * ⚠️ মুদ্রার চিহ্নটা এখানে হার্ডকোড করা যায় না। RestaurantSettings-এ
-   * `currency` একটা সেটিং (ডিফল্ট USD), আর অ্যাপের বাকি সব জায়গা
-   * `formatAmount()` দিয়ে সেটাই মানে। এই দুটো modal-এ "৳" লেখা ছিল,
-   * তাই দোকান USD-তে চললেও এখানে টাকার চিহ্ন দেখাত — অথচ Figma-তে
-   * "$360.00"।
-   *
-   * client component বলে settings নিজে পড়া যায় না, তাই server থেকে
-   * `suppliers`-এর পাশ দিয়েই নেমে আসে।
+   * ⚠️ মুদ্রার চিহ্নটা এখানে হার্ডকোড করা যায় না — RestaurantSettings-এ
+   * `currency` একটা সেটিং, আর অ্যাপের বাকি সব জায়গা `formatAmount()`
+   * দিয়ে সেটাই মানে। client component বলে settings নিজে পড়া যায় না,
+   * তাই server থেকে নেমে আসে।
    */
   currency: string;
 }) {
@@ -79,38 +74,58 @@ export default function RestockModal({
   const [submitting, setSubmitting] = useState(false);
 
   const unitLabel = UNIT_LABELS[item.unit] ?? item.unit;
-  const received = Number(quantity) || 0;
-  const totalCost = received * (Number(costPerUnit) || 0);
-  const newLevel = item.currentStock + received;
+  const ordering = Number(quantity) || 0;
+  const totalCost = ordering * (Number(costPerUnit) || 0);
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId) ?? null;
+  const onOrder = item.openOrder?.quantity ?? 0;
+  // Stock once THIS order and anything already on order have arrived.
+  const newLevel = item.currentStock + onOrder + ordering;
 
   async function handleSubmit() {
     setError(null);
 
-    if (!quantity.trim() || Number.isNaN(received) || received <= 0) {
-      setError("Enter how much arrived.");
+    if (!supplierId || !selectedSupplier) {
+      setError("Pick a supplier — the order is emailed to them.");
+      return;
+    }
+    if (!selectedSupplier.email) {
+      setError(
+        `${selectedSupplier.name} has no email address, so the order can't be sent. Add one on the Suppliers page first.`
+      );
+      return;
+    }
+    if (!quantity.trim() || Number.isNaN(ordering) || ordering <= 0) {
+      setError("Enter how much to order.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/inventory/${item.id}/restock`, {
+      const res = await fetch(`/api/admin/inventory/${item.id}/order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          quantityReceived: received,
-          // ⚠️ ফাঁকা থাকলে ক্ষেত্রটাই পাঠানো হয় না — route তখন পুরনো
-          // দাম অক্ষত রাখে। `0` পাঠালে food cost-এর হিসাব শূন্য হয়ে
-          // যেত, আর সেটা নীরবে ভুল উত্তর দিত।
+          quantity: ordering,
+          supplierId,
+          // ⚠️ ফাঁকা থাকলে ক্ষেত্রটাই পাঠানো হয় না — server তখন
+          // উপকরণের চলতি দাম ধরে। `0` পাঠালে food cost শূন্য হয়ে যেত।
           ...(costPerUnit.trim() ? { costPerUnit: Number(costPerUnit) } : {}),
-          ...(supplierId ? { supplierId } : {}),
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Something went wrong. Please try again.");
         setSubmitting(false);
         return;
+      }
+
+      if (data.emailed) {
+        toast.success(`Order emailed to ${data.supplierName}. It stays Pending until they accept.`);
+      } else {
+        toast.warning(
+          "Order saved as Pending, but the email didn't go out. Use “Send email” on Suppliers → Recent Deliveries."
+        );
       }
 
       onClose();
@@ -147,12 +162,21 @@ export default function RestockModal({
             className={`${PRIMARY_BUTTON} flex-1`}
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {submitting ? "Saving…" : "Confirm Restock"}
+            {submitting ? "Sending…" : "Confirm Restock"}
           </button>
         </div>
       }
     >
       {error && <ModalError message={error} />}
+
+      {item.openOrder && (
+        <p className="rounded-[12px] bg-[#FFF2DA] px-4 py-3 font-sora text-[12px] leading-[1.6] text-[#B36B00]">
+          {formatQuantity(item.openOrder.quantity, item.unit)} of {item.name} is already on order
+          from {item.openOrder.supplierName} (
+          {item.openOrder.status === "ON_THE_WAY" ? "on the way" : "waiting for them to accept"}).
+          Order more only if you really need it.
+        </p>
+      )}
 
       <div>
         <span className={LABEL}>Restocking</span>
@@ -183,15 +207,22 @@ export default function RestockModal({
             value={supplierId}
             onChange={setSupplierId}
             options={[
-              { value: "", label: "— Not set —" },
+              { value: "", label: "— Select a supplier —" },
               ...suppliers.map((s) => ({ value: s.id, label: s.name })),
             ]}
           />
+          {selectedSupplier && (
+            <p className="mt-1.5 font-sora text-[11px] leading-[1.5] text-black/70">
+              {selectedSupplier.email
+                ? `The order is emailed to ${selectedSupplier.email}.`
+                : `${selectedSupplier.name} has no email address — add one on the Suppliers page first.`}
+            </p>
+          )}
         </div>
 
         <div>
           <label htmlFor="restock-quantity" className={LABEL}>
-            Quantity Received
+            Quantity to Order
           </label>
           <input
             id="restock-quantity"
@@ -243,15 +274,17 @@ export default function RestockModal({
         </div>
 
         <div className="md:col-span-2">
-          <span className={LABEL}>New stock level after restock</span>
-          {/* ⚠️ এটাই এই modal-এর সবচেয়ে দরকারি ঘর: Confirm চাপার আগে
-              ফলটা দেখা যায়। ধারণক্ষমতা ছাড়িয়ে গেলে সেটাও এখানেই
-              ধরা পড়ে — আটকানো হয় না (বাস্তবে বেশি এসে যেতেই পারে),
-              শুধু বলে দেওয়া হয়। */}
+          <span className={LABEL}>Stock after delivery</span>
+          {/* ⚠️ এই সংখ্যাটা এখনো "হবে", "হয়েছে" নয় — মাল আসা পর্যন্ত
+              stock বদলায় না। ধারণক্ষমতা ছাড়ালে বলে দেওয়া হয়, আটকানো
+              হয় না (বাস্তবে বেশি এসে যেতেই পারে)। */}
           <div className={readOnlyBox} aria-disabled="true">
             {formatQuantity(newLevel, item.unit)}
             {item.maxCapacity > 0 && ` / ${formatQuantity(item.maxCapacity, item.unit)}`}
           </div>
+          <p className="mt-1.5 font-sora text-[11px] leading-[1.5] text-black/70">
+            Stock only goes up once you confirm the delivery on Suppliers → Recent Deliveries.
+          </p>
           {item.maxCapacity > 0 && newLevel > item.maxCapacity && (
             <p className="mt-1.5 font-sora text-[11px] leading-none text-[#FF9E00]">
               This goes over the max capacity — that&apos;s allowed, just check it&apos;s right.

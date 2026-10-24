@@ -1,6 +1,7 @@
 import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
+import { hasPermission } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client";
 import Pagination from "@/app/admin/orders/Pagination";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
@@ -20,6 +21,7 @@ import {
 import { formatQuantity } from "@/lib/inventory-status";
 import SuppliersToolbar from "./SuppliersToolbar";
 import SupplierRowActions from "./SupplierRowActions";
+import DeliveryRowActions from "./DeliveryRowActions";
 import { SupplierProductsPill } from "./SupplierProductsPill";
 
 export const metadata = { title: "Suppliers" };
@@ -74,6 +76,12 @@ export default async function SuppliersPage({
   // layout-এও "suppliers" scope-এর গেট আছে; এখানে session লাগে শুধু
   // শিরোনামের নামটার জন্য।
   const session = await requireStaff("suppliers");
+  // Resend / Confirm delivery / Cancel go through the "inventory" API routes
+  // (a delivery changes stock), so only roles with that scope see the buttons.
+  const canManageDeliveries = hasPermission(
+    (session.user as { role?: string }).role,
+    "inventory"
+  );
 
   const params = await searchParams;
   const q = params.q?.trim();
@@ -174,7 +182,16 @@ export default async function SuppliersPage({
           },
         },
         purchaseOrder: {
-          select: { status: true, createdAt: true, orderedAt: true, receivedAt: true },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            orderedAt: true,
+            acceptedAt: true,
+            supplierEmailedAt: true,
+            receivedAt: true,
+            supplier: { select: { name: true } },
+          },
         },
       },
     }),
@@ -268,7 +285,7 @@ export default async function SuppliersPage({
               // ⚠️ তারিখটা "কতদূর এগিয়েছে" ধরে বাছা, সবসময় createdAt নয়।
               // মাল এসে গেলে receivedAt-ই ব্যবহারকারীর কাছে অর্থবহ
               // তারিখ, PO বানানোর দিনটা নয়।
-              const at = po.receivedAt ?? po.orderedAt ?? po.createdAt;
+              const at = po.receivedAt ?? po.acceptedAt ?? po.orderedAt ?? po.createdAt;
               const badge = DELIVERY_STATUS_STYLE[po.status] ?? {
                 label: po.status,
                 className: "bg-[#F9F6F3] text-black",
@@ -280,27 +297,32 @@ export default async function SuppliersPage({
                    উচ্চতা 80, radius 16, BG #F9F6F3। */
                 <div
                   key={line.id}
-                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-10"
+                  className="flex flex-col gap-4 rounded-[16px] bg-[#F9F6F3] p-4 xl:flex-row xl:items-center xl:gap-16"
                 >
                   <div className="flex min-w-0 flex-col gap-1 xl:w-[200px] xl:shrink-0">
                     <p className="truncate font-frank-ruhl text-[20px] font-medium leading-[1.2] text-black">
                       {line.inventoryItem.name}
                     </p>
                     <p className="truncate font-sora text-[12px] leading-[1.7] text-black/70">
-                      Used in {recipes} menu {recipes === 1 ? "item" : "items"}
+                      Used in {recipes} menu {recipes === 1 ? "item" : "items"} · {po.supplier.name}
                     </p>
                   </div>
 
                   {/* Frame 2147236446: row, gap 40 — Staff সারির একই
                       InfoField, তাই দুই কার্ডের ঘরগুলো এক দেখায়। */}
-                  <div className="grid grid-cols-2 gap-4 xl:flex xl:min-w-0 xl:flex-1 xl:items-center xl:gap-10">
+                  {/* ⚠️ Amount/Date-এর প্রস্থ স্থির (flex-grow নয়), আর এই ভাগটা
+                      xl:flex-none। আগে `flex-1` + grow ছিল, ফলে ডানের badge/বোতাম
+                      সারি ভেদে চওড়া-সরু হলে ওদের অবস্থানও সরে যেত
+                      (Pending-এ Resend+Cancel, Delivered-এ কিছুই নেই)। এখন
+                      বাঁয়ের তিনটে কলাম প্রতিটা সারিতে একই x-এ। */}
+                  <div className="grid grid-cols-2 gap-4 xl:flex xl:flex-none xl:items-center xl:gap-16">
                     <InfoField
-                      className="xl:flex-[80_1_auto]"
+                      className="xl:w-[100px] xl:flex-none"
                       label="Amount"
                       value={formatQuantity(line.quantityOrdered, line.inventoryItem.unit)}
                     />
                     <InfoField
-                      className="xl:flex-[180_1_auto]"
+                      className="xl:w-[205px] xl:flex-none"
                       label="Date & Time"
                       value={at.toLocaleString("en-US", {
                         month: "short",
@@ -312,6 +334,9 @@ export default async function SuppliersPage({
                     />
                   </div>
 
+                  {/* ডানের ভাগ: বাকি সব জায়গা নেয় আর ডানে ঠেলে রাখে,
+                      তাই বাঁয়ের কলামগুলো এর প্রস্থে প্রভাবিত হয় না। */}
+                  <div className="flex flex-wrap items-center gap-3 xl:min-w-0 xl:flex-1 xl:justify-end">
                   {/* Figma: 109×36, padding 11×12, radius 100, লেখা
                       Sora 400 14px। */}
                   <span
@@ -319,6 +344,15 @@ export default async function SuppliersPage({
                   >
                     {badge.label}
                   </span>
+
+                  {canManageDeliveries && (
+                    <DeliveryRowActions
+                      purchaseOrderId={po.id}
+                      status={po.status}
+                      emailPending={po.status === "ORDERED" && po.supplierEmailedAt === null}
+                    />
+                  )}
+                  </div>
                 </div>
               );
             })}

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   // ?status=ORDERED — the Purchase Orders tab's status filter. Matches
   // PurchaseOrder's @@index([status]) for the no-supplier-filter case.
   const statusParam = req.nextUrl.searchParams.get("status");
-  const validStatuses = ["DRAFT", "ORDERED", "RECEIVED", "CANCELLED"] as const;
+  const validStatuses = ["DRAFT", "ORDERED", "ON_THE_WAY", "RECEIVED", "CANCELLED"] as const;
   if (statusParam && !validStatuses.includes(statusParam as (typeof validStatuses)[number])) {
     return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
   }

@@ -19,6 +19,7 @@ import {
   UNIT_OPTIONS,
 } from "@/lib/inventory-status";
 import { formatAmount } from "@/lib/currency-format";
+import { toast } from "react-toastify";
 
 /**
  * src/app/admin/inventory/IngredientFormModal.tsx
@@ -71,9 +72,19 @@ export type IngredientDraft = {
   supplierId: string | null;
   image: string | null;
   usedInRecipes: number;
+  /**
+   * Already ordered from a supplier and not yet delivered (Pending or On the
+   * Way) — so Restock can warn before ordering the same thing twice. Only the
+   * inventory pages fill it in; absent = nothing on order.
+   */
+  openOrder?: { quantity: number; status: string; supplierName: string } | null;
 };
 
-export type SupplierOption = { id: string; name: string };
+/**
+ * `email` lets the modals say "this supplier has no email" BEFORE staff press
+ * Confirm — a restock is an email to the supplier, so no address = no order.
+ */
+export type SupplierOption = { id: string; name: string; email: string | null };
 
 type Props = {
   open: boolean;
@@ -124,12 +135,17 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
     item?.emergencyThreshold ? String(item.emergencyThreshold) : ""
   );
   const [image, setImage] = useState<string | null>(item?.image ?? null);
+  // "Order from the supplier now" (create only): a Pending order + email to
+  // the chosen supplier, placed right after the ingredient is saved.
+  const [orderNow, setOrderNow] = useState(false);
+  const [orderQuantity, setOrderQuantity] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const unitLabel = UNIT_LABELS[unit] ?? unit;
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId) ?? null;
   // পরিমাণ × একক-প্রতি দাম — উপরের ⚠️ ২ নম্বর মন্তব্য দ্রষ্টব্য।
   const quantityForTotal = isEdit ? (item?.currentStock ?? 0) : Number(startingQuantity) || 0;
   const totalCost = quantityForTotal * (Number(costPerUnit) || 0);
@@ -158,6 +174,25 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
     if (reorder > 0 && emergency > reorder) {
       setError("Emergency threshold must be at or below the low stock threshold.");
       return;
+    }
+
+    const orderQty = orderQuantity.trim() ? Number(orderQuantity) : 0;
+    const wantsOrder = !isEdit && orderNow;
+    if (wantsOrder) {
+      if (!supplierId) {
+        setError("Pick a supplier to order this ingredient from.");
+        return;
+      }
+      if (!Number.isFinite(orderQty) || orderQty <= 0) {
+        setError("Enter how much to order from the supplier.");
+        return;
+      }
+      if (!selectedSupplier?.email) {
+        setError(
+          `${selectedSupplier?.name ?? "This supplier"} has no email address, so the order can't be sent. Add one on the Suppliers page first.`
+        );
+        return;
+      }
     }
 
     const shared = {
@@ -190,7 +225,11 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
                   supplierId: supplierId || null,
                   image: image || null,
                 }
-              : { ...shared, currentStock: numberOrZero(startingQuantity) }
+              : {
+                  ...shared,
+                  currentStock: numberOrZero(startingQuantity),
+                  ...(wantsOrder ? { orderQuantity: orderQty } : {}),
+                }
           ),
         }
       );
@@ -200,6 +239,24 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
         setError(data.error ?? "Something went wrong. Please try again.");
         setSubmitting(false);
         return;
+      }
+
+      if (wantsOrder) {
+        const data = await res.json().catch(() => ({}));
+        const order = data.supplierOrder as
+          | { placed: boolean; supplierName?: string; emailed?: boolean; error?: string }
+          | undefined;
+        if (order?.placed && order.emailed) {
+          toast.success(`Ingredient added. Order emailed to ${order.supplierName}.`);
+        } else if (order?.placed) {
+          toast.warning(
+            "Ingredient added and the order is saved as Pending, but the email didn't go out. Use “Send email” on Suppliers → Recent Deliveries."
+          );
+        } else {
+          toast.warning(
+            `Ingredient added, but the order wasn't placed: ${order?.error ?? "unknown error"}`
+          );
+        }
       }
 
       onClose();
@@ -305,6 +362,43 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
             ]}
           />
         </div>
+
+        {!isEdit && supplierId && (
+          <div className="md:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2 font-sora text-[14px] text-black">
+              <input
+                type="checkbox"
+                checked={orderNow}
+                onChange={(event) => setOrderNow(event.target.checked)}
+                className="h-4 w-4 accent-[#FF9540]"
+              />
+              Also order this from {selectedSupplier?.name ?? "the supplier"} now
+            </label>
+
+            {orderNow && (
+              <div className="mt-3">
+                <label htmlFor="ingredient-order-quantity" className={LABEL}>
+                  Quantity to Order ({unitLabel})
+                </label>
+                <input
+                  id="ingredient-order-quantity"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={orderQuantity}
+                  onChange={(event) => setOrderQuantity(event.target.value)}
+                  placeholder="12"
+                  className={FIELD}
+                />
+                <p className="mt-1.5 font-sora text-[11px] leading-[1.5] text-black/70">
+                  {selectedSupplier?.email
+                    ? `A Pending order is emailed to ${selectedSupplier.email}. Stock only goes up once you confirm the delivery.`
+                    : `${selectedSupplier?.name ?? "This supplier"} has no email address — add one on the Suppliers page first.`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {!isEdit && (
           <div>

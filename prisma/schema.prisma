@@ -2235,12 +2235,18 @@ model Supplier {
 enum PurchaseOrderStatus {
   // Being assembled — line items can still be freely added/edited/removed.
   DRAFT
-  // Sent to the supplier, awaiting delivery. Line items are locked at
+  // Sent to the supplier (emailed), awaiting THEIR acceptance — shown as
+  // "Pending" on Suppliers → Recent Deliveries. Line items are locked at
   // this point (quantityOrdered/costPerUnit shouldn't silently change
   // after the supplier has already been told what was ordered).
   ORDERED
-  // Delivery has arrived and been receivedAt — this is the ONLY status
-  // transition that touches InventoryItem.currentStock (see the
+  // The supplier opened the link in the email and accepted the order —
+  // shown as "On the Way". Raises an admin notification. Stock is still
+  // NOT credited: that only happens when staff confirm the delivery has
+  // physically arrived (ON_THE_WAY -> RECEIVED).
+  ON_THE_WAY
+  // Delivery has arrived and been receivedAt — shown as "Delivered". This
+  // is the ONLY status transition that touches InventoryItem.currentStock (see the
   // receiving-logic note on PurchaseOrderItem below). Terminal state.
   RECEIVED
   // Called off before receiving — e.g. the supplier couldn't fulfill it.
@@ -2269,8 +2275,15 @@ model PurchaseOrder {
   // PO was cancelled, etc.
   note String?
 
-  orderedAt  DateTime? // set when DRAFT -> ORDERED
-  receivedAt DateTime? // set when ORDERED -> RECEIVED; drives the stock-crediting transaction
+  orderedAt  DateTime? // set when DRAFT -> ORDERED (or when created straight as ORDERED by a restock)
+  // Set when the supplier accepts the emailed order (ORDERED -> ON_THE_WAY).
+  // Also the timestamp of the admin "delivery on the way" notification.
+  acceptedAt DateTime?
+  // Last time the order email was successfully handed to the mail provider.
+  // Null on an ORDERED PO = the email hasn't gone out yet (failed, or
+  // supplier has no address) — the Recent Deliveries row offers "Resend".
+  supplierEmailedAt DateTime?
+  receivedAt DateTime? // set when ON_THE_WAY -> RECEIVED; drives the stock-crediting transaction
 
   // Staff member who created this PO. Nullable for the same reason as
   // StockMovement.createdBy — defensive against the user account being

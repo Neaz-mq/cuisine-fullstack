@@ -16,6 +16,8 @@ export async function POST(
   const parsed = await parseBody(req, receivePurchaseOrderSchema);
   if (parsed instanceof NextResponse) return parsed;
 
+  // `items` omitted = a full delivery, as ordered (the one-click "Confirm
+  // delivery" on Suppliers → Recent Deliveries).
   const result = await receivePurchaseOrder(id, parsed.items, authResult.user.id);
 
   if (!result.ok) {

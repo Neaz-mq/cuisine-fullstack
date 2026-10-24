@@ -4,6 +4,7 @@ import { requireApiScope } from "@/lib/require-admin";
 import { updatePurchaseOrderSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
 import { sum, toMoney } from "@/lib/money";
+import { checkSupplierCanReceiveOrders, emailSupplierAboutOrder } from "@/lib/supplier-order";
 
 export async function GET(
   req: NextRequest,
@@ -45,7 +46,7 @@ export async function PATCH(
 
   const existing = await prisma.purchaseOrder.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, supplierId: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
@@ -61,6 +62,16 @@ export async function PATCH(
       { error: "Only a DRAFT purchase order can be edited" },
       { status: 409 }
     );
+  }
+
+  // Sending a draft to the supplier means EMAILING them, so refuse up front
+  // (before anything is changed) if they can't receive it — otherwise the
+  // order would sit "Pending" with nobody ever told.
+  if (markOrdered) {
+    const supplierCheck = await checkSupplierCanReceiveOrders(supplierId ?? existing.supplierId);
+    if (!supplierCheck.ok) {
+      return NextResponse.json({ error: supplierCheck.error }, { status: supplierCheck.status });
+    }
   }
 
   const totalCost = items
@@ -92,6 +103,17 @@ export async function PATCH(
         include: { items: true },
       });
     });
+
+    // DRAFT -> ORDERED: tell the supplier. A failed email doesn't undo the
+    // order — it stays Pending and "Resend" is on the Recent Deliveries row.
+    if (markOrdered) {
+      const mail = await emailSupplierAboutOrder(id);
+      return NextResponse.json({
+        ...updated,
+        emailed: mail.ok,
+        ...(mail.ok ? {} : { emailError: mail.reason }),
+      });
+    }
 
     return NextResponse.json(updated);
   } catch {

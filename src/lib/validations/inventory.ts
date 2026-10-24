@@ -41,6 +41,10 @@ export const createInventoryItemSchema = z.object({
   emergencyThreshold: nonNegativeFloatSchema("Emergency threshold").default(0),
   supplierId: cuidSchema.optional().or(z.literal("")),
   image: z.url("Image must be a valid URL").optional().or(z.literal("")),
+  // "Add Ingredient → order from the supplier now". Not an InventoryItem
+  // column — the route pulls it out before the insert and, if present,
+  // places a Pending order with `supplierId` right after the item exists.
+  orderQuantity: positiveFloatSchema("Order quantity").optional(),
 });
 
 export const updateInventoryItemSchema = z
@@ -128,6 +132,24 @@ export const restockInventoryItemSchema = z.object({
   costPerUnit: nonNegativeFloatSchema("Cost per unit").optional(),
   // মাল কার কাছ থেকে এলো — দিলে উপকরণের ডিফল্ট সরবরাহকারীও এতে বদলায়।
   supplierId: cuidSchema.optional().or(z.literal("")),
+  note: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
+/**
+ * POST /api/admin/inventory/[id]/order — the Restock modal.
+ *
+ * ⚠️ This is "order more from a supplier", NOT "stock arrived" (that's the
+ * schema above). Nothing is added to the stock here: a Pending purchase order
+ * is created and the supplier is emailed. Stock goes up only when staff
+ * confirm the delivery (receive-purchase-order.ts).
+ *
+ * `supplierId` is required — the email has to go to someone.
+ */
+export const orderRestockSchema = z.object({
+  quantity: positiveFloatSchema("Quantity"),
+  supplierId: cuidSchema,
+  // Optional — falls back to the ingredient's current cost.
+  costPerUnit: nonNegativeFloatSchema("Cost per unit").optional(),
   note: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
@@ -219,6 +241,8 @@ export const updatePurchaseOrderSchema = z
  * schema has no way to know — that cross-check happens in
  * receive-purchase-order.ts itself. */
 export const receivePurchaseOrderSchema = z.object({
+  // Omitted = "everything arrived as ordered" — the one-click "Confirm
+  // delivery" button on Suppliers → Recent Deliveries sends an empty body.
   items: z
     .array(
       z.object({
@@ -226,5 +250,6 @@ export const receivePurchaseOrderSchema = z.object({
         quantityReceived: nonNegativeFloatSchema("Quantity received"),
       })
     )
-    .min(1, "Nothing to receive"),
+    .min(1, "Nothing to receive")
+    .optional(),
 });

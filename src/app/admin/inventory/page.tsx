@@ -3,6 +3,7 @@ import { Calendar, Siren } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { getRestaurantSettings } from "@/lib/get-settings";
+import { getOpenOrderQuantities } from "@/lib/supplier-order";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import InventoryOverviewCards from "@/components/admin/InventoryOverviewCards";
 import {
@@ -107,7 +108,7 @@ export default async function InventoryPage({
    * তিনটে query পরপর চলত (rows → suppliers → settings) আর পাতাটা
    * অকারণে ধীর হতো। তিনটেই স্বাধীন, তাই একসাথেই যায়।
    */
-  const [rows, suppliers, settings] = await Promise.all([
+  const [rows, suppliers, settings, openOrders] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -134,11 +135,14 @@ export default async function InventoryPage({
     prisma.supplier.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true },
     }),
     // দোকানের চলতি মুদ্রা — Restock আর Add/Edit modal-এর "Total Cost"
     // ঘরটা এটা দিয়েই সাজে। row না থাকলে নিজেই ডিফল্ট দিয়ে তৈরি করে।
     getRestaurantSettings(),
+    // Pending / On-the-Way orders per ingredient — Restock warns before
+    // ordering the same thing twice, and the row shows "on order".
+    getOpenOrderQuantities(),
   ]);
 
   const items: InventoryRowItem[] = rows.map((row) => ({
@@ -159,6 +163,7 @@ export default async function InventoryPage({
     image: row.image,
     usedInRecipes: row._count.usedInRecipes,
     supplierName: row.supplier?.name ?? null,
+    openOrder: openOrders.get(row.id) ?? null,
   }));
 
   const visible = items.filter((item) => {

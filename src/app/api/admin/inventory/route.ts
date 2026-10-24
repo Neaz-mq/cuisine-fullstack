@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
 import { createInventoryItemSchema } from "@/lib/validations/inventory";
+import { checkSupplierCanReceiveOrders, placeSupplierOrder } from "@/lib/supplier-order";
 
 export async function GET(req: NextRequest) {
   const authResult = await requireApiScope("inventory");
@@ -45,10 +46,29 @@ export async function POST(req: NextRequest) {
   // ⚠️ ফাঁকা string → null। schema-গুলো `.or(z.literal(""))` গ্রহণ করে
   // (form ফাঁকা ঘর পাঠায়), কিন্তু DB-তে "কিছু দেওয়া হয়নি" মানে null —
   // ফাঁকা string বসালে পরে `category IS NULL` ছাঁকনি ওগুলো মিস করত।
-  const { category, supplierId, image, ...rest } = parsed;
+  // `orderQuantity` isn't a column — it's "also order this from the supplier
+  // now", handled after the item exists. Pulled out so it never reaches
+  // `prisma.inventoryItem.create` (which would reject the unknown field).
+  const { category, supplierId, image, orderQuantity, ...rest } = parsed;
 
+  // Check the supplier BEFORE creating anything, so a supplier with no email
+  // doesn't leave a half-done result (item created, order refused).
+  if (orderQuantity !== undefined) {
+    if (!supplierId) {
+      return NextResponse.json(
+        { error: "Pick a supplier to order this ingredient from." },
+        { status: 400 }
+      );
+    }
+    const supplierCheck = await checkSupplierCanReceiveOrders(supplierId);
+    if (!supplierCheck.ok) {
+      return NextResponse.json({ error: supplierCheck.error }, { status: supplierCheck.status });
+    }
+  }
+
+  let item;
   try {
-    const item = await prisma.inventoryItem.create({
+    item = await prisma.inventoryItem.create({
       data: {
         ...rest,
         category: category || null,
@@ -56,11 +76,34 @@ export async function POST(req: NextRequest) {
         image: image || null,
       },
     });
-    return NextResponse.json(item, { status: 201 });
   } catch {
     return NextResponse.json(
       { error: "An inventory item with this name already exists." },
       { status: 409 }
     );
   }
+
+  // "Order from the supplier now" — a Pending order + email, same as Restock.
+  // The item is already saved, so a problem here is reported in the response
+  // instead of failing the whole request.
+  if (orderQuantity !== undefined && supplierId) {
+    const placed = await placeSupplierOrder({
+      inventoryItemId: item.id,
+      supplierId,
+      quantity: orderQuantity,
+      costPerUnit: rest.costPerUnit,
+      createdById: authResult.user.id,
+    });
+    const supplierOrder = placed.ok
+      ? {
+          placed: true as const,
+          supplierName: placed.supplierName,
+          emailed: placed.emailed,
+          ...(placed.emailError ? { emailError: placed.emailError } : {}),
+        }
+      : { placed: false as const, error: placed.error };
+    return NextResponse.json({ ...item, supplierOrder }, { status: 201 });
+  }
+
+  return NextResponse.json(item, { status: 201 });
 }

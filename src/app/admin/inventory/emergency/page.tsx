@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { stockStateOf } from "@/lib/inventory-status";
 import { getRestaurantSettings } from "@/lib/get-settings";
+import { getOpenOrderQuantities } from "@/lib/supplier-order";
 import InventoryRow, { type InventoryRowItem } from "../InventoryRow";
 
 export const metadata = { title: "Emergency stock" };
@@ -41,7 +42,7 @@ export default async function EmergencyInventoryPage() {
    * পাঠাতে হয় — এই পাতাটা তালিকার পাতা নয় বলে প্রথমবার চোখ এড়িয়ে
    * গিয়েছিল, আর build ধরিয়ে দিয়েছে।
    */
-  const [rows, suppliers, settings] = await Promise.all([
+  const [rows, suppliers, settings, openOrders] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { currentStock: "asc" },
@@ -64,9 +65,12 @@ export default async function EmergencyInventoryPage() {
     prisma.supplier.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true },
     }),
     getRestaurantSettings(),
+    // Pending / On-the-Way orders per ingredient — Restock warns before
+    // ordering the same thing twice, and the row shows "on order".
+    getOpenOrderQuantities(),
   ]);
 
   const items: InventoryRowItem[] = rows.map((row) => ({
@@ -84,6 +88,7 @@ export default async function EmergencyInventoryPage() {
     image: row.image,
     usedInRecipes: row._count.usedInRecipes,
     supplierName: row.supplier?.name ?? null,
+    openOrder: openOrders.get(row.id) ?? null,
   }));
 
   // ⚠️ ছাঁকাটা memory-তে, DB-তে নয় — "currentStock <= emergencyThreshold"

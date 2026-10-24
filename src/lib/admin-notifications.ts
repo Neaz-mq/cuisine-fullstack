@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
+import { formatQuantity } from "@/lib/inventory-status";
 import type { AdminNotification } from "@/lib/notification-filters";
 
 // ⚠️ type আর ছাঁকার নিয়মগুলো notification-filters.ts-এ, কারণ সেগুলো
@@ -50,7 +51,7 @@ export async function getAdminNotifications(
   /** The viewer — lets notifications they opened one by one count as read. */
   userId?: string
 ): Promise<AdminNotification[]> {
-  const [settings, orders, deliveries, reservations, reviews, lowStock, opened] = await Promise.all([
+  const [settings, orders, deliveries, reservations, reviews, lowStock, supplyOrders, opened] = await Promise.all([
     // Settings → Notifications — the two stock-alert switches.
     prisma.restaurantSettings.findUnique({
       where: { id: "singleton" },
@@ -118,6 +119,32 @@ export async function getAdminNotifications(
         reorderThreshold: true,
         emergencyThreshold: true,
         updatedAt: true,
+      },
+    }),
+    /**
+     * Restock orders a supplier has accepted and that are still on the way —
+     * i.e. waiting for staff to confirm they arrived.
+     *
+     * ⚠️ Only ON_THE_WAY, not RECEIVED: this is a to-do ("confirm it when it
+     * comes"), so it leaves the feed once staff do. Time is `acceptedAt` — when
+     * the supplier pressed Accept — which doesn't move afterwards, so reading
+     * it once keeps it read.
+     */
+    prisma.purchaseOrder.findMany({
+      where: { status: "ON_THE_WAY", acceptedAt: { not: null } },
+      orderBy: { acceptedAt: "desc" },
+      take: SOURCE_LIMIT,
+      select: {
+        id: true,
+        acceptedAt: true,
+        supplier: { select: { name: true } },
+        items: {
+          orderBy: { id: "asc" },
+          select: {
+            quantityOrdered: true,
+            inventoryItem: { select: { name: true, unit: true } },
+          },
+        },
       },
     }),
     // Notifications this person opened one by one (see NotificationRead).
@@ -190,6 +217,25 @@ export async function getAdminNotifications(
       read: isRead(review.createdAt),
       href: "/admin/reviews",
     })),
+
+    // Supplier accepted → "on the way", staff to confirm on arrival.
+    ...supplyOrders.flatMap((po) =>
+      po.acceptedAt
+        ? [
+            {
+              id: `supply-${po.id}`,
+              kind: "SUPPLY" as const,
+              title: "Delivery on the way",
+              description: `${po.supplier.name} accepted your order for ${po.items
+                .map((line) => `${formatQuantity(line.quantityOrdered, line.inventoryItem.unit)} ${line.inventoryItem.name}`)
+                .join(", ")} — confirm it when it arrives`,
+              createdAt: po.acceptedAt.toISOString(),
+              read: isRead(po.acceptedAt),
+              href: "/admin/suppliers",
+            },
+          ]
+        : []
+    ),
 
     // ⚠️ কেবল সেই পদগুলো যেগুলো সত্যিই threshold-এর নিচে — তালিকাটা
     // উপরে ৪০টা টানা হয়, ছাঁকা হয় এখানে।
