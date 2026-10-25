@@ -145,8 +145,7 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
  * the mockup: Overview · Management · Operations · System.
  *
  * ⚠️ KITCHEN holds only the "kitchen" scope (permissions.ts), so every link
- * here points INSIDE /admin/kitchen (or at /admin/profile, which any staff
- * role may open). Linking the real /admin/suppliers, /admin/staff or
+ * here points INSIDE /admin/kitchen. Linking the real /admin/suppliers, /admin/staff or
  * /admin/notifications would just bounce back to /admin — and widening the
  * scope to make them open would hand a cook the staff list (salary, NID)
  * and the restaurant-wide order feed.
@@ -155,9 +154,12 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
  *    /admin/kitchen/…, behind the same "kitchen" scope. Today they are
  *    "Coming soon" placeholders (components/admin/ComingSoon.tsx), so the
  *    sidebar matches Figma without a 404 and without a privilege change.
- *  • Settings → /admin/profile (own profile + change password), the only
- *    "settings" a kitchen role may touch. The real /admin/settings (tax,
- *    currency, delivery fee…) is OWNER-only.
+ *  • Settings → /admin/kitchen/settings (Figma: restaurant time zone, kitchen
+ *    hours and the two stock-alert switches). It saves through its own
+ *    kitchen-scoped API that accepts only those five values; the real
+ *    /admin/settings (tax, currency, delivery fee…) stays OWNER-only.
+ *    Own profile + change password remain one click away in the top bar's
+ *    avatar menu → Profile (/admin/profile).
  *  • Notification carries this person's real unread count
  *    (lib/kitchen-notifications.ts) — the same number the page and the
  *    header bell show, never Figma's sample "12".
@@ -192,7 +194,7 @@ const KITCHEN_NAV_SECTIONS: SidebarSection[] = [
 /** Kitchen System group — Figma: Settings, then Logout (drawn by
  *  AdminSidebar itself). */
 const KITCHEN_SYSTEM_ITEMS: SidebarItem[] = [
-  { label: "Settings", href: "/admin/profile", icon: "settings" },
+  { label: "Settings", href: "/admin/kitchen/settings", icon: "settings" },
 ];
 
 const RIDER_SYSTEM_ITEMS: SidebarItem[] = [

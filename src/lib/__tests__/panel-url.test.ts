@@ -12,6 +12,8 @@ describe("KITCHEN panel URLs", () => {
     expect(toInternalPath("/kitchen/prep")).toBe("/admin/kitchen/prep");
     expect(toInternalPath("/kitchen/inventory")).toBe("/admin/kitchen/inventory");
     expect(toInternalPath("/kitchen/profile")).toBe("/admin/profile");
+    // Settings is the kitchen's own page — not the owner-only /admin/settings.
+    expect(toInternalPath("/kitchen/settings")).toBe("/admin/kitchen/settings");
   });
 
   it("maps internal → public", () => {
@@ -20,10 +22,11 @@ describe("KITCHEN panel URLs", () => {
     expect(toPublicPath("KITCHEN", "/admin/kitchen/prep")).toBe("/kitchen/prep");
     expect(toPublicPath("KITCHEN", "/admin/kitchen/inventory")).toBe("/kitchen/inventory");
     expect(toPublicPath("KITCHEN", "/admin/profile")).toBe("/kitchen/profile");
+    expect(toPublicPath("KITCHEN", "/admin/kitchen/settings")).toBe("/kitchen/settings");
   });
 
   it("round-trips every kitchen page", () => {
-    for (const internal of ["/admin", "/admin/kitchen", "/admin/kitchen/prep", "/admin/kitchen/inventory", "/admin/profile"]) {
+    for (const internal of ["/admin", "/admin/kitchen", "/admin/kitchen/prep", "/admin/kitchen/inventory", "/admin/kitchen/settings", "/admin/profile"]) {
       expect(toInternalPath(toPublicPath("KITCHEN", internal))).toBe(internal);
     }
   });
