@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Star, UtensilsCrossed } from "lucide-react";
+import { toast } from "react-toastify";
+import { useCart } from "@/context/CartContext";
 
 const FOCUS_RING =
   "focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]";
@@ -60,6 +62,26 @@ export type MenuCardItem = {
 
 /** Figma "Food Card 2" — column, padding 12/12/20, gap 16, radius 30। */
 export default function FoodCard({ item }: { item: MenuCardItem }) {
+  const { addToCart } = useCart();
+
+  /**
+   * "Add to Cart" straight from the card — one tap, quantity 1, same cart
+   * entry the detail page's "Add to Cart" makes (so adding here and there
+   * merges into one line). "Order Now" is still the way to open the dish's
+   * own page first.
+   */
+  const handleAddToCart = () => {
+    addToCart({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      quantity: 1,
+      imageUrl: item.imageUrl ?? undefined,
+      description: item.description,
+    });
+    toast.success(`${item.title} added to cart!`);
+  };
+
   const facts = [
     item.prepTimeMinutes !== null ? `${item.prepTimeMinutes} min` : null,
     item.calories !== null ? `${item.calories} kcal` : null,
@@ -183,9 +205,12 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
           </p>
         </div>
 
-        {/* Frame 2147236028: row, space-between — দাম আর বোতাম। */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="flex items-baseline gap-2">
+        {/* Frame 2147236028: দাম আর বোতাম। বোতাম দুটো ("Add to Cart" আগে,
+            তারপর "Order Now") একসাথে একটা গুচ্ছ: দামের পাশে জায়গা থাকলে
+            এক সারিতে (ডানে, ছোট বোতাম, নিজের মাপে), না থাকলে (দীর্ঘ দাম, সরু
+            পর্দা) গুচ্ছটা পরের সারিতে নেমে ডানে বসে — কখনো কাটে না। */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <span className="flex shrink-0 items-baseline gap-2">
             {item.oldPriceLabel && (
               <s className="font-frank-ruhl text-[14px] font-normal leading-none text-black/50 xl:text-[16px]">
                 <span className="sr-only">Was </span>
@@ -198,23 +223,36 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
             </span>
           </span>
 
-          {/**
-           * ⚠️ বোতাম নয়, `<Link>` — "Order Now" এখন সরাসরি cart-এ যোগ
-           * করে না, পদটার নিজের পাতায় নিয়ে যায় (Figma-র detail পাতা)।
-           * ওখানে ছবির slider, উপকরণ, পুষ্টি, সংখ্যা বাছাই আর তারপর
-           * "Add to Cart" / "Buy Now"।
-           *
-           * এক ক্লিকে cart-এ ফেলাটা দ্রুত, কিন্তু খদ্দের তখন জানেন না
-           * কী কিনছেন — ছবি আর দুই লাইনের বিবরণই সব। খাবারের ক্ষেত্রে
-           * উপকরণ দেখে নেওয়াটা প্রায়ই জরুরি (অ্যালার্জি, নিরামিষ)।
-           */}
-          <Link
-            href={`/menu/${item.id}`}
-            aria-label={`See ${item.title}`}
-            className={`flex h-[46px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-6 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
-          >
-            Order Now
-          </Link>
+          <div className="ml-auto flex min-w-0 max-w-full gap-2">
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!item.isAvailable}
+              aria-label={`Add ${item.title} to cart`}
+              className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full border border-black px-4 font-sora text-[13px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-black ${FOCUS_RING}`}
+            >
+              Add to Cart
+            </button>
+
+            {/**
+             * ⚠️ বোতাম নয়, `<Link>` — "Order Now" এখন সরাসরি cart-এ যোগ
+             * করে না, পদটার নিজের পাতায় নিয়ে যায় (Figma-র detail পাতা)।
+             * ওখানে ছবির slider, উপকরণ, পুষ্টি, সংখ্যা বাছাই আর তারপর
+             * "Add to Cart" / "Buy Now"।
+             *
+             * এক ক্লিকে cart-এ ফেলাটা দ্রুত, কিন্তু খদ্দের তখন জানেন না
+             * কী কিনছেন — ছবি আর দুই লাইনের বিবরণই সব। তাই যিনি দেখে
+             * কিনতে চান তাঁর জন্য "Order Now", যিনি জানেন কী চান তাঁর
+             * জন্য পাশের "Add to Cart"।
+             */}
+            <Link
+              href={`/menu/${item.id}`}
+              aria-label={`See ${item.title}`}
+              className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+            >
+              Order Now
+            </Link>
+          </div>
         </div>
       </div>
     </article>
