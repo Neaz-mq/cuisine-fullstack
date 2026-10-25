@@ -308,28 +308,40 @@ export default function OrderTrackingTimeline({
             </p>
           </div>
 
-          <span
-            className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.3] md:h-[46px] md:px-5 md:text-[16px] ${
-              isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : STATUS_PILL[order.status]
-            }`}
-          >
-            {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
-          </span>
-
-          {/* The pop-up after delivery only shows once per order, so this
-              is how a customer reviews later (or changes their review). */}
-          {order.status === "DELIVERED" && (
-            <button
-              type="button"
-              onClick={() => {
-                setCelebrationStart("review");
-                setCelebrating(true);
-              }}
-              className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[46px] md:px-5 md:text-[16px]"
+          {/**
+            * ⚠️ status badge আর "Write a Review" একটা গ্রুপে — আগে তিনটে আলাদা
+            * item (শিরোনাম · badge · বোতাম) এক `justify-between` সারিতে ছিল,
+            * ফলে badge মাঝখানে পড়ে বোতাম থেকে অনেক দূরে সরে যেত। এখন দুটো
+            * একসাথে ডান কিনারায়, মাঝে শুধু ছোট gap; বাঁয়ে থাকে শিরোনাম।
+            *
+            * বোতামটা DELIVERED ছাড়া থাকে না, তাই বাকি সব status-এ গ্রুপে
+            * শুধু badge — আগের মতোই ডানে। সংকীর্ণ পর্দায় জায়গা না হলে
+            * `flex-wrap`-এ বোতামটা নিচে নামে, কিছু উপচে পড়ে না।
+            */}
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <span
+              className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.3] md:h-[46px] md:px-5 md:text-[16px] ${
+                isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : STATUS_PILL[order.status]
+              }`}
             >
-              Write a Review
-            </button>
-          )}
+              {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
+            </span>
+
+            {/* The pop-up after delivery only shows once per order, so this
+                is how a customer reviews later (or changes their review). */}
+            {order.status === "DELIVERED" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCelebrationStart("review");
+                  setCelebrating(true);
+                }}
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] md:h-[46px] md:px-5 md:text-[16px]"
+              >
+                Write a Review
+              </button>
+            )}
+          </div>
         </div>
 
         {isCancelled ? (

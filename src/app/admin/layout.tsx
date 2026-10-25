@@ -60,8 +60,8 @@ const NAV_SECTIONS: { heading: string; items: NavDef[] }[] = [
   {
     heading: "Management",
     items: [
-      { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen", icon: "kitchen" },
       { label: "Orders", href: "/admin/orders", scope: "orders", icon: "orders" },
+      { label: "Kitchen", href: "/admin/kitchen", scope: "kitchen", icon: "kitchen" },
       // (My Deliveries moved out: riders get their own menu — RIDER_NAV_SECTIONS.)
       { label: "Payment", href: "/admin/payment", scope: "refunds", icon: "payment" },
       // Riders' cash-out requests — the restaurant's money, so "finance" (owner).

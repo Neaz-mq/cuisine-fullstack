@@ -1516,37 +1516,29 @@ const Carts = ({
       className="fixed inset-0 z-50 flex overflow-y-auto bg-black/40 p-4"
     >
       <div className="mx-auto my-auto flex w-full max-w-[555px] flex-col items-center gap-6 rounded-[30px] bg-white p-6 text-center md:gap-8 md:p-[30px]">
-        <span
+        {/**
+          * Figma "Frame 2147225766" — 314.81 × 268.5। confetti, হালকা
+          * বৃত্ত আর rosette-ব্যাজ সবই এই একটা ছবির ভেতরে, তাই আগের
+          * হাতে-আঁকা বৃত্ত + SVG-টা বাদ।
+          *
+          * ⚠️ `unoptimized` — ছবিটা Cloudinary-র, আর next.config-এর
+          * images.remotePatterns-এ এই host না থাকলে next/image error
+          * দিত। ছবিটা আগে থেকেই ছোট PNG, তাই Next-এর optimizer
+          * না চললে কিছু হারায় না।
+          *
+          * মাপ: mobile-এ ২৩০px চওড়া (Figma-র অনুপাত ধরে রেখে), md থেকে
+          * Figma-র ৩১৫px। height সবসময় auto, তাই অনুপাত বিগড়ায় না।
+          */}
+        <Image
+          src="https://res.cloudinary.com/dzi3u164c/image/upload/v1792919966/Frame_2147225766_abup9m.png"
+          alt=""
           aria-hidden="true"
-          className="flex h-[140px] w-[140px] items-center justify-center rounded-full bg-[#FEF0E3] md:h-[194px] md:w-[194px]"
-        >
-          {/**
-            * Figma "Polygon 17" — ৯ কোণার rosette, কোণাগুলো গভীরভাবে
-            * গোল করা (153.87px বাক্সে border-radius 37.68, অর্থাৎ
-            * ব্যাসার্ধের প্রায় অর্ধেক)।
-            *
-            * ⚠️ আগের path-টা ছিল ১৬ কোণার করাতের দাঁতের মতো একটা তারা —
-            * Figma-র নরম আকারটার সাথে মেলেনি। এই path-টা হাতে আঁকা নয়,
-            * নিয়মিত নবভুজের প্রতিটা কোণে r=38.2 ব্যাসার্ধের চাপ বসিয়ে
-            * হিসাব করে বের করা, তাই প্রতিটা বাহু আর কোণ হুবহু সমান।
-            *
-            * ⚠️ strokeWidth 12.2 — Figma-র 9.42px, কিন্তু সেটা 153.87px
-            * বাক্সের মাপে; এই viewBox 200, তাই একই অনুপাত রাখতে
-            * 9.42 × (200/153.87) ≈ 12.2।
-            */}
-          <svg
-            className="h-[70px] w-[70px] md:h-[96px] md:w-[96px]"
-            viewBox="0 0 200 200"
-            fill="none"
-            stroke="#FA7F12"
-            strokeWidth="12.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M173.8 109.6 A38.2 38.2 0 0 1 165.9 134.5 L150.4 154.8 A38.2 38.2 0 0 1 128.3 168.8 L103.4 174.3 A38.2 38.2 0 0 1 77.5 170.9 L54.8 159.1 A38.2 38.2 0 0 1 37.2 139.8 L27.4 116.2 A38.2 38.2 0 0 1 26.3 90.1 L33.9 65.8 A38.2 38.2 0 0 1 49.8 45.0 L71.4 31.3 A38.2 38.2 0 0 1 96.9 25.7 L122.2 29.0 A38.2 38.2 0 0 1 145.4 41.1 L162.7 59.9 A38.2 38.2 0 0 1 172.7 84.0 Z" fill="#FFFFFF" />
-            <path d="M74 101l18 19 34-38" />
-          </svg>
-        </span>
+          width={315}
+          height={269}
+          unoptimized
+          priority
+          className="h-auto w-[230px] shrink-0 md:w-[314.81px]"
+        />
 
         <div className="flex flex-col items-center gap-4 md:gap-5">
           <h2
