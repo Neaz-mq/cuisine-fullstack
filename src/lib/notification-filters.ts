@@ -32,11 +32,18 @@ export type NotificationKind =
   // Rider panel only: the owner paid or rejected a cash-out request.
   | "PAYOUT"
   // Rider panel only: the restaurant verified or rejected a document.
-  | "DOCUMENT";
+  | "DOCUMENT"
+  // Kitchen panel only: a PLACED order that has waited too long, and a prep
+  // task another cook added.
+  | "DELAYED"
+  | "PREP";
 
-/** "System Alerts" — low stock (admin) and a cancelled delivery (rider). */
+/**
+ * "System Alerts" — low stock (admin, kitchen), a cancelled delivery (rider)
+ * or cancelled order (kitchen) and an order waiting too long (kitchen).
+ */
 export function isAlertKind(kind: NotificationKind): boolean {
-  return kind === "STOCK" || kind === "CANCELLED";
+  return kind === "STOCK" || kind === "CANCELLED" || kind === "DELAYED";
 }
 
 export type AdminNotification = {

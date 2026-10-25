@@ -4,8 +4,10 @@ import { useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlarmClock,
   CalendarCheck,
   CircleX,
+  ClipboardList,
   FileCheck,
   HandCoins,
   MessageCircle,
@@ -28,6 +30,9 @@ const ICONS = {
   CANCELLED: CircleX,
   PAYOUT: HandCoins,
   DOCUMENT: FileCheck,
+  // Kitchen panel: an order waiting too long, a prep task added.
+  DELAYED: AlarmClock,
+  PREP: ClipboardList,
 } as const;
 
 /**

@@ -11,6 +11,7 @@ import {
 import AdminShell from "@/components/admin/AdminShell";
 import { countUnreadRiderNotifications } from "@/lib/rider-notifications";
 import { countUnreadAdminNotifications } from "@/lib/admin-notifications";
+import { countUnreadKitchenNotifications } from "@/lib/kitchen-notifications-data";
 
 type NavDef = {
   label: string;
@@ -157,9 +158,9 @@ const RIDER_NAV_SECTIONS: SidebarSection[] = [
  *  • Settings → /admin/profile (own profile + change password), the only
  *    "settings" a kitchen role may touch. The real /admin/settings (tax,
  *    currency, delivery fee…) is OWNER-only.
- *  • Notification has no badge: there is no kitchen notification source
- *    yet, and a made-up number is worse than none (Figma's "12" is sample
- *    data).
+ *  • Notification carries this person's real unread count
+ *    (lib/kitchen-notifications.ts) — the same number the page and the
+ *    header bell show, never Figma's sample "12".
  *
  * `exact` on Dashboard and Live Orders: /admin/kitchen is a prefix of every
  * other kitchen path, and two items must not light up at once.
@@ -232,7 +233,7 @@ export default async function AdminLayout({
    * একটারই সময় নেয়।
    */
   const canSeeFinance = !isRider && scopes.includes("finance");
-  const [pendingReviewCount, riderUnread, pendingPayouts, pendingCash, adminUnread] = await Promise.all([
+  const [pendingReviewCount, riderUnread, pendingPayouts, pendingCash, adminUnread, kitchenUnread] = await Promise.all([
     canSeeReviews ? prisma.review.count({ where: { status: "PENDING" } }) : 0,
     isRider ? countUnreadRiderNotifications(session.user.id!) : 0,
     canSeeFinance ? prisma.riderPayout.count({ where: { status: "PENDING" } }) : 0,
@@ -240,6 +241,8 @@ export default async function AdminLayout({
     canSeeFinance ? prisma.cashRemittance.count({ where: { status: "PENDING" } }) : 0,
     // Same people who can open /admin/notifications (the "orders" scope).
     !isRider && canSeeOrders ? countUnreadAdminNotifications(session.user.id!) : 0,
+    // The KITCHEN role's own feed (new orders, delays, stock, deliveries, prep).
+    isKitchen ? countUnreadKitchenNotifications(session.user.id!) : 0,
   ]);
 
   const badgeFor = (href: string): number | undefined => {
@@ -274,7 +277,14 @@ export default async function AdminLayout({
         ),
       }))
     : isKitchen
-      ? KITCHEN_NAV_SECTIONS
+      ? KITCHEN_NAV_SECTIONS.map((section) => ({
+          ...section,
+          items: section.items.map((item) =>
+            item.href === "/admin/kitchen/notifications"
+              ? { ...item, badge: kitchenUnread }
+              : item
+          ),
+        }))
       : NAV_SECTIONS.map((section) => ({
           heading: section.heading,
           items: section.items.filter((item) => canSee(item.scope)).map(toSidebarItem),
@@ -305,8 +315,11 @@ export default async function AdminLayout({
      new-orders one — they can't open /admin/orders at all, see
      that section's own scope guard). Order-taking roles
      (OWNER/MANAGER/WAITER/CASHIER, i.e. anyone with "orders")
-     get the original new-orders bell. KITCHEN gets neither —
-     no notification-worthy event of their own yet.
+     get the original new-orders bell. KITCHEN gets its own: it counts
+     the kitchen feed's unread items (new orders, orders waiting too
+     long, cancellations, low stock, deliveries on the way, prep tasks —
+     lib/kitchen-notifications.ts), never the restaurant-wide
+     new-orders count.
 
      সিদ্ধান্তটা এখানেই থাকে, topbar-এ নয়: AdminTopbar একটা presentational
      client component, ওকে permission নিয়ে ভাবতে দেওয়ার মানে scope logic
@@ -319,6 +332,14 @@ export default async function AdminLayout({
         latestKey="latestAssignedAt"
         navigateTo="/admin/my-deliveries/active"
         ariaLabel="New delivery assignment notifications"
+      />
+    ) : isKitchen ? (
+      <NotificationBell
+        fetchUrl="/api/admin/kitchen/notifications"
+        countKey="newCount"
+        latestKey="latestAt"
+        navigateTo="/admin/kitchen/notifications"
+        ariaLabel="Kitchen notifications"
       />
     ) : canSeeOrders ? (
       <NotificationBell
