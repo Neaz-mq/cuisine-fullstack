@@ -19,6 +19,17 @@
  *             /kitchen/settings     ↔ /admin/kitchen/settings
  *             /kitchen/profile      ↔ /admin/profile
  *
+ * OWNER (the restaurant's owner) may open the Kitchen and Manager panels
+ * too, exactly as those staff see them:
+ *
+ *   OWNER     /kitchen/...          ↔ /admin/...   (as the Kitchen panel)
+ *             /manager/...          ↔ /admin/...   (as the Manager panel)
+ *
+ * Same URL mapping as the real roles; the proxy additionally tells the
+ * server which panel the owner is "viewing as" (PANEL_VIEW_HEADER) so the
+ * layout and dashboard render that panel. Nothing here widens or narrows
+ * anyone's permissions — pages and APIs still check the owner's real role.
+ *
  * Pure string helpers — safe for the edge proxy and for client components.
  */
 export const PANEL_PREFIXES = ["/manager", "/rider", "/kitchen"] as const;
@@ -79,4 +90,44 @@ export function toPublicPath(role: string | undefined, path: string): string {
     if (hasPrefix(path, "/admin/profile")) return `/kitchen${path.slice("/admin".length)}`;
   }
   return path;
+}
+
+/**
+ * Request header the proxy sets (and always clears first, so a client can't
+ * send it themselves) when an OWNER is browsing under /kitchen or /manager.
+ * Read it on the server with getPanelView() (lib/panel-view.ts).
+ */
+export const PANEL_VIEW_HEADER = "x-panel-view";
+
+export type PanelView = "KITCHEN" | "MANAGER";
+
+/** Which panel a /kitchen/... or /manager/... address bar path belongs to. */
+export function panelViewForPath(path: string): PanelView | null {
+  if (hasPrefix(path, "/kitchen")) return "KITCHEN";
+  if (hasPrefix(path, "/manager")) return "MANAGER";
+  return null;
+}
+
+/**
+ * The panel a same-site Referer URL was in, or null.
+ *
+ * Used for an OWNER only: pages inside the Kitchen/Manager panels contain
+ * plain /admin/... links (sidebar, dashboard cards, filters). A real KITCHEN
+ * or MANAGER user is bounced to their own prefix by their role; the owner has
+ * no such role, so the page they were just on (the Referer) says which panel
+ * they are in. `host` is the host the request came in on — a Referer from
+ * another site is ignored.
+ */
+export function panelViewFromReferer(
+  referer: string | null | undefined,
+  host: string | null | undefined
+): PanelView | null {
+  if (!referer || !host) return null;
+  try {
+    const url = new URL(referer);
+    if (url.host !== host) return null;
+    return panelViewForPath(url.pathname);
+  } catch {
+    return null;
+  }
 }

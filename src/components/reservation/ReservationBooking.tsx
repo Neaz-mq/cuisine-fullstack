@@ -704,6 +704,7 @@ export default function ReservationBooking({
                 id="res-date"
                 label="Date"
                 required
+                surface="form"
                 value={date}
                 onChange={setDate}
                 /**
@@ -726,6 +727,7 @@ export default function ReservationBooking({
                 id="res-time"
                 label="Time"
                 required
+                surface="form"
                 value={time}
                 onChange={setTime}
                 options={[{ value: "", label: "Select a time" }, ...timeOptions]}
@@ -748,6 +750,7 @@ export default function ReservationBooking({
                 id="res-table"
                 label="Table Number"
                 required
+                surface="form"
                 value={tableId}
                 onChange={setTableId}
                 options={[
@@ -771,6 +774,7 @@ export default function ReservationBooking({
               <SelectField
                 id="res-guests"
                 label="Ext. Guests"
+                surface="form"
                 value={extraGuests}
                 onChange={setExtraGuests}
                 options={guestOptions}

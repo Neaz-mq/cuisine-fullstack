@@ -1,19 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, Search, X } from "lucide-react";
 import { useScreenTier } from "@/components/admin/useScreenTier";
 import LiveClock from "@/components/admin/LiveClock";
+import { toInternalPath } from "@/lib/panel-url";
 
 export interface PanelLink {
   label: string;
   href: string;
   /** কোন icon আঁকা হবে — নিচের PANEL_ICONS map দ্রষ্টব্য। */
-  icon: "kitchen" | "manager";
+  icon: "kitchen" | "manager" | "admin";
+  /**
+   * true → ordinary <a> (full page load, no Referer) instead of next/link.
+   * For switching between panels (OWNER): the /admin layout is shared, so a
+   * client-side transition would leave the old panel's sidebar showing, and
+   * a Referer from inside a panel would pull the click back into it.
+   */
+  hardNav?: boolean;
+  /** The panel the person is in right now — drawn with the cream highlight. */
+  current?: boolean;
 }
 
 /**
@@ -54,6 +64,14 @@ interface AdminTopbarProps {
   showClock?: boolean;
   /** xl-এর নিচে nav drawer খোলে — AdminShell থেকে। */
   onMenuClick?: () => void;
+  /**
+   * Where the first dropdown item ("Profile") goes. Default: the staff
+   * member's own profile page. OWNER: their admin panel (/admin) — for the
+   * owner "Profile" IS the admin panel, so there is no separate item for it.
+   */
+  profileHref?: string;
+  /** Full page load for profileHref — see PanelLink.hardNav. */
+  profileHardNav?: boolean;
 }
 
 /**
@@ -83,6 +101,14 @@ const ICONS = {
       <rect x="6" y="9" width="11" height="9" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
       <path d="M17 11h1.5a2 2 0 010 4H17" stroke="currentColor" strokeWidth="1.6" />
       <path d="M9 6v1.5M12 6v1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
+  admin: (
+    <>
+      <rect x="4.5" y="4.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="4.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="4.5" y="13.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="13.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
     </>
   ),
   manager: (
@@ -123,8 +149,11 @@ export default function AdminTopbar({
   notificationSlot,
   showClock = false,
   onMenuClick,
+  profileHref = "/admin/profile",
+  profileHardNav = false,
 }: AdminTopbarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -132,6 +161,19 @@ export default function AdminTopbar({
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Which dropdown row wears the cream highlight. On the Profile page it is
+   * Profile; otherwise the panel the person is in (/manager → Manager Panel,
+   * /kitchen → Kitchen Panel). Profile keeps the highlight only when no panel
+   * is marked current (every other role), so their menu looks as before.
+   */
+  const onProfilePage = toInternalPath(pathname ?? "").startsWith("/admin/profile");
+  const hasCurrentPanel = panels.some((panel) => panel.current);
+  // Owner: "Profile" is the admin panel itself, so it is the highlighted row
+  // whenever no other panel is current, and /admin/profile doesn't steal it.
+  const profileIsHome = profileHref !== "/admin/profile";
+  const profileActive = profileIsHome ? !hasCurrentPanel : onProfilePage || !hasCurrentPanel;
 
   /**
    * ৩৭৫px-এ hamburger, logo, search, bell আর avatar একসাথে রাখলে
@@ -688,31 +730,75 @@ export default function AdminTopbar({
               {/* Profile — Figma-র প্রথম item, cream pill দিয়ে হাইলাইট করা।
                   Staff-এর নিজের profile পাতা (/admin/profile): নাম, role,
                   password। আগে এটা customer-দের /account/orders-এ যেত। */}
-              <Link
-                href="/admin/profile"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 px-3.5 py-3 rounded-[16px] bg-[#F9F6F3] font-sora text-[15px] text-black hover:bg-black/[0.06] transition-colors"
-              >
-                <MenuIcon name="profile" />
-                Profile
-              </Link>
+              {(() => {
+                const profileClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
+                  profileActive ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : "hover:bg-black/[0.04]"
+                }`;
+                return profileHardNav ? (
+                  // Plain <a> on purpose — see PanelLink.hardNav.
+                  // eslint-disable-next-line @next/next/no-html-link-for-pages
+                  <a
+                    href={profileHref}
+                    role="menuitem"
+                    referrerPolicy="no-referrer"
+                    onClick={() => setMenuOpen(false)}
+                    aria-current={profileActive ? "page" : undefined}
+                    className={profileClass}
+                  >
+                    <MenuIcon name="profile" />
+                    Profile
+                  </a>
+                ) : (
+                  <Link
+                    href={profileHref}
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    aria-current={profileActive ? "page" : undefined}
+                    className={profileClass}
+                  >
+                    <MenuIcon name="profile" />
+                    Profile
+                  </Link>
+                );
+              })()}
 
               {/* Panel shortcut — কোনগুলো দেখাবে তা layout scope থেকে ঠিক
                   করে পাঠায়। একটাও না থাকলে (যেমন শুধু WAITER) পুরো
                   অংশটাই render হয় না, ফাঁকা জায়গা পড়ে থাকে না। */}
-              {panels.map((panel) => (
-                <Link
-                  key={panel.href}
-                  href={panel.href}
-                  role="menuitem"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black hover:bg-black/[0.04] transition-colors"
-                >
-                  <MenuIcon name={panel.icon} />
-                  {panel.label}
-                </Link>
-              ))}
+              {panels.map((panel) => {
+                const panelActive = !!panel.current && (profileIsHome || !onProfilePage);
+                const panelClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
+                  panelActive ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : "hover:bg-black/[0.04]"
+                }`;
+                return panel.hardNav ? (
+                  // Plain <a> on purpose — see PanelLink.hardNav.
+                  // eslint-disable-next-line @next/next/no-html-link-for-pages
+                  <a
+                    key={panel.href}
+                    href={panel.href}
+                    role="menuitem"
+                    referrerPolicy="no-referrer"
+                    aria-current={panelActive ? "page" : undefined}
+                    onClick={() => setMenuOpen(false)}
+                    className={panelClass}
+                  >
+                    <MenuIcon name={panel.icon} />
+                    {panel.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={panel.href}
+                    href={panel.href}
+                    role="menuitem"
+                    aria-current={panelActive ? "page" : undefined}
+                    onClick={() => setMenuOpen(false)}
+                    className={panelClass}
+                  >
+                    <MenuIcon name={panel.icon} />
+                    {panel.label}
+                  </Link>
+                );
+              })}
 
               {/* role badge — Figma-তে নেই, কিন্তু এই app-এ একজনের একাধিক
                   panel-এ access থাকতে পারে, তাই "আমি এখন কোন ভূমিকায়" —

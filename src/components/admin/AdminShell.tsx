@@ -50,6 +50,8 @@ export default function AdminShell({
   systemItems = [],
   notificationSlot,
   showClock = false,
+  profileHref,
+  profileHardNav = false,
   children,
 }: {
   name: string;
@@ -63,6 +65,9 @@ export default function AdminShell({
   notificationSlot?: ReactNode;
   /** Rider panel (Figma): the current time in a pill next to the bell. */
   showClock?: boolean;
+  /** Where the top bar's "Profile" item goes (OWNER: the admin panel). */
+  profileHref?: string;
+  profileHardNav?: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -137,6 +142,8 @@ export default function AdminShell({
         navItems={navItems}
         notificationSlot={notificationSlot}
         showClock={showClock}
+        profileHref={profileHref}
+        profileHardNav={profileHardNav}
         onMenuClick={openDrawer}
       />
 

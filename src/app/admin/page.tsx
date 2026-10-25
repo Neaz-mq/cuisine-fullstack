@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
+import { getPanelView } from "@/lib/panel-view";
 import { hasPermission, firstAllowedPath } from "@/lib/permissions";
 import KitchenDashboard from "@/components/admin/kitchen/KitchenDashboard";
 import { getKitchenDashboardData } from "@/lib/kitchen-dashboard-data";
@@ -122,7 +123,11 @@ export default async function AdminDashboardPage({
   // they DO have — showing them an empty/forbidden dashboard on every
   // login would just be a confusing dead end.
   const session = await requireAdmin();
-  const role = (session.user as { role?: string }).role;
+  const realRole = (session.user as { role?: string }).role;
+  // OWNER opened /kitchen or /manager → render that panel's dashboard, the
+  // way its own staff see it (Kitchen's Welcome Back screen; the Manager's
+  // dashboard without Total Revenue). Everyone else: their own role.
+  const role = (await getPanelView(realRole)) ?? realRole;
 
   // KITCHEN has no "insights" scope (no revenue), so it never sees the
   // admin dashboard below — it gets its own Figma "Welcome Back" screen.

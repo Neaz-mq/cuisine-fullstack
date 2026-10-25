@@ -46,6 +46,16 @@ export const FIELD =
   "h-[43px] w-full text-ellipsis rounded-[12px] border-0 bg-[#F9F6F3] px-3 font-sora text-[12px] font-normal leading-[1.6] text-black placeholder:text-black/70 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
 
 /**
+ * The public site's form box (reservation page): white, 1px border, height
+ * 46, Sora 14 — exactly the plain <input> look there (ReservationBooking's
+ * INPUT), so a dropdown or date box sitting among text inputs matches them.
+ * Used through `surface="form"` on SelectField / DateField; every other use
+ * keeps its own look.
+ */
+const FORM_FIELD =
+  "h-[46px] w-full rounded-[12px] border border-black/10 bg-white px-3.5 font-sora text-[14px] font-normal leading-none text-black focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]";
+
+/**
  * FIELD-এর বহু-লাইন রূপ — একই BG, একই radius, একই লেখা, শুধু উচ্চতা
  * স্থির নয়।
  *
@@ -441,7 +451,7 @@ export function SelectField({
    * Rider block (Figma: white box, radius 12, 12px Sora Black/70
    * placeholder), where a cream box would vanish into its background.
    */
-  surface?: "cream" | "white";
+  surface?: "cream" | "white" | "form";
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(MENU_MAX_HEIGHT);
 
@@ -449,9 +459,12 @@ export function SelectField({
   // FilterMenu-র একই আচরণ।
   const selected = options.find((option) => option.value === value) ?? options[0];
   const white = surface === "white";
+  // "form": the public site's input look (see FORM_FIELD).
+  const form = surface === "form";
   // Nothing chosen yet (empty-value option, e.g. "Select a rider…") reads as
-  // a placeholder: Black/70 on the white surface.
-  const dimmed = white && !selected.value;
+  // a placeholder: Black/70 on the white surface, the inputs' own light grey
+  // on the "form" surface.
+  const dimmed = (white || form) && !selected.value;
 
   return (
     <div className={className}>
@@ -471,9 +484,11 @@ export function SelectField({
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-labelledby={`${id}-label`}
-          className={`${white ? FIELD.replace("bg-[#F9F6F3]", "bg-white") : FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
+          className={`${
+            form ? FORM_FIELD : white ? FIELD.replace("bg-[#F9F6F3]", "bg-white") : FIELD
+          } flex cursor-pointer items-center justify-between gap-2 text-left`}
         >
-          <span className={`min-w-0 truncate ${dimmed ? "text-black/70" : ""}`}>
+          <span className={`min-w-0 truncate ${dimmed ? (form ? "text-black/35" : "text-black/70") : ""}`}>
             {selected.label}
           </span>
           <ChevronDown
@@ -599,6 +614,7 @@ export function DateField({
   clearable = false,
   placeholder = "MM/DD/YYYY",
   compact = false,
+  surface = "cream",
 }: {
   id: string;
   label: string;
@@ -638,8 +654,14 @@ export function DateField({
    * the days apart, so `compact` keeps it at 320px under the box's left edge.
    */
   compact?: boolean;
+  /**
+   * "cream" (default) keeps the admin look. "form" = the public site's input
+   * box (white, border, height 46) — SelectField's `surface="form"`.
+   */
+  surface?: "cream" | "form";
 }) {
   const { open, setOpen, toggle, placement, wrapperRef } = useMenuPlacement(CALENDAR_HEIGHT);
+  const form = surface === "form";
   const shell = compact ? MENU_SHELL.replace("left-0 right-0", "left-0 w-[320px] max-w-full") : MENU_SHELL;
 
   const selected = parseISODate(value);
@@ -732,9 +754,9 @@ export function DateField({
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-labelledby={`${id}-label`}
-          className={`${FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
+          className={`${form ? FORM_FIELD : FIELD} flex cursor-pointer items-center justify-between gap-2 text-left`}
         >
-          <span className={`min-w-0 truncate ${selected ? "" : "text-black/70"}`}>
+          <span className={`min-w-0 truncate ${selected ? "" : form ? "text-black/35" : "text-black/70"}`}>
             {selected ? formatDisplayDate(selected) : placeholder}
           </span>
           <CalendarIcon

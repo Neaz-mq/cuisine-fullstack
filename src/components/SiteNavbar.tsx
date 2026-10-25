@@ -9,7 +9,9 @@ import { FaShoppingCart } from "react-icons/fa";
 import {
   CalendarDays,
   ChevronDown,
+  CircleUserRound,
   ClipboardList,
+  Coffee,
   Gift,
   LayoutDashboard,
   LogOut,
@@ -162,6 +164,9 @@ export default function Navbar() {
 
   const role = (session?.user as { role?: string } | undefined)?.role;
   const showAdminLink = isStaffRole(role);
+  // The restaurant's owner gets the same menu as in the admin top bar:
+  // Profile (their admin panel) · Kitchen Panel · Manager Panel · Logout.
+  const isOwner = role === "OWNER";
   const displayName =
     session?.user?.name || session?.user?.email?.split("@")[0] || "Account";
 
@@ -259,9 +264,50 @@ export default function Navbar() {
                     role="menu"
                     className="absolute right-0 top-full z-50 mt-2 w-[240px] max-w-full rounded-[20px] border border-black/5 bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
                   >
-                    <div className="truncate px-3.5 pb-2 pt-1 font-sora text-[13px] text-black/50">
-                      {session.user?.email}
-                    </div>
+                    {!isOwner && (
+                      <div className="truncate px-3.5 pb-2 pt-1 font-sora text-[13px] text-black/50">
+                        {session.user?.email}
+                      </div>
+                    )}
+
+                    {/* OWNER: identical to the admin top bar's menu. "Profile"
+                        is the admin panel (/admin) and is the highlighted
+                        row; the other two open the Kitchen and Manager
+                        panels directly (the owner has access to all). */}
+                    {isOwner && (
+                      <>
+                        <Link
+                          href="/admin"
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-[16px] bg-[#F9F6F3] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.06]"
+                        >
+                          <UserRound className="h-5 w-5 shrink-0 fill-current" aria-hidden="true" />
+                          Profile
+                        </Link>
+                        <Link
+                          href="/kitchen"
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
+                        >
+                          <Coffee className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          Kitchen Panel
+                        </Link>
+                        <Link
+                          href="/manager"
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
+                        >
+                          <CircleUserRound className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          Manager Panel
+                        </Link>
+                        <p className="px-3.5 pb-1 pt-2 font-sora text-[11px] font-semibold uppercase tracking-wide text-[#2C6252]">
+                          Owner
+                        </p>
+                      </>
+                    )}
 
                     {/* ⚠️ Staff accounts are for work: only their dashboard
                         and Logout. The customer pages (orders, rewards,
@@ -283,7 +329,7 @@ export default function Navbar() {
 
                     {!showAdminLink && <span className="mx-3.5 my-1 block h-px bg-black/5" aria-hidden="true" />}
 
-                    {showAdminLink && (
+                    {showAdminLink && !isOwner && (
                       <Link
                         href={firstAllowedPath(role)}
                         role="menuitem"
@@ -302,9 +348,11 @@ export default function Navbar() {
                         setMenuOpen(false);
                         signOut({ callbackUrl: "/" });
                       }}
-                      className="flex w-full items-center gap-3 rounded-[14px] px-3.5 py-3 text-left font-sora text-[15px] text-black transition-colors hover:bg-red-50 hover:text-red-600"
+                      className={`flex w-full items-center gap-3 px-3.5 py-3 text-left font-sora text-[15px] text-black transition-colors hover:bg-red-50 hover:text-red-600 ${
+                        isOwner ? "rounded-[16px]" : "rounded-[14px]"
+                      }`}
                     >
-                      <LogOut className="h-4 w-4 shrink-0" />
+                      <LogOut className={isOwner ? "h-5 w-5 shrink-0" : "h-4 w-4 shrink-0"} />
                       Logout
                     </button>
                   </div>

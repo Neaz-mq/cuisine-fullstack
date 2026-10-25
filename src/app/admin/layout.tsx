@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { getScopesForRole, panelLabel, type Scope } from "@/lib/permissions";
+import { getPanelView } from "@/lib/panel-view";
 import NotificationBell from "./NotificationBell";
 import { type PanelLink } from "@/components/admin/AdminTopbar";
 import {
@@ -219,11 +220,20 @@ export default async function AdminLayout({
 }) {
   const session = await requireAdmin();
   const role = (session.user as { role?: string }).role;
-  const scopes = getScopesForRole(role);
+
+  /**
+   * OWNER opened /kitchen or /manager: show that panel exactly as its own
+   * staff see it (their sidebar, their dashboard, their bell). `viewRole` is
+   * the role whose panel is drawn; it is the real role for everyone else.
+   * Only the picture changes — page and API guards still use the real role.
+   */
+  const panelView = await getPanelView(role);
+  const viewRole = panelView ?? role;
+  const scopes = getScopesForRole(viewRole);
 
   const canSee = (scope: Scope | null) => scope === null || scopes.includes(scope);
   const isRider = role === "DELIVERY";
-  const isKitchen = role === "KITCHEN";
+  const isKitchen = viewRole === "KITCHEN";
 
   const canSeeReviews = scopes.includes("reviews");
   const canSeeOrders = scopes.includes("orders");
@@ -327,7 +337,7 @@ export default async function AdminLayout({
      client component, ওকে permission নিয়ে ভাবতে দেওয়ার মানে scope logic
      দুই জায়গায় ছড়িয়ে পড়া। */
   const notificationBell =
-    role === "DELIVERY" ? (
+    isRider ? (
       <NotificationBell
         fetchUrl="/api/rider/notifications"
         countKey="newAssignmentsCount"
@@ -360,14 +370,43 @@ export default async function AdminLayout({
    * লিখলে নতুন role যোগ হলে এই তালিকা নীরবে ভুল হয়ে যেত।
    *
    */
-  const panels: PanelLink[] = [
-    ...(scopes.includes("kitchen")
-      ? [{ label: "Kitchen Panel", href: "/admin/kitchen", icon: "kitchen" as const }]
-      : []),
-    // ⚠️ "Manager Panel" শর্টকাট ইচ্ছাকৃতভাবে বাদ। Dropdown-এ এখন কেবল
-    // Profile, (scope থাকলে) Kitchen Panel আর Logout। Dashboard-এ যেতে
-    // sidebar-এর "Dashboard" লিঙ্ক আছে, তাই আলাদা শর্টকাট অপ্রয়োজনীয়।
-  ];
+  const panels: PanelLink[] =
+    role === "OWNER"
+      ? /**
+         * OWNER — the restaurant's owner reaches every panel directly:
+         * Kitchen Panel → /kitchen, Manager Panel → /manager. Both always
+         * stay in the list (Figma); the one the owner is in is marked
+         * `current` and drawn highlighted. There is no separate "Admin
+         * Panel" item: for the owner the first item, "Profile", goes to
+         * /admin (see profileHref below) and is highlighted in that panel.
+         *
+         * hardNav: switching panels reloads the page. The /admin layout
+         * (sidebar, bell) is shared between all of them, and a client-side
+         * transition would keep the previous panel's sidebar on screen.
+         */
+        [
+          {
+            label: "Kitchen Panel",
+            href: "/kitchen",
+            icon: "kitchen" as const,
+            hardNav: true,
+            current: panelView === "KITCHEN",
+          },
+          {
+            label: "Manager Panel",
+            href: "/manager",
+            icon: "manager" as const,
+            hardNav: true,
+            current: panelView === "MANAGER",
+          },
+        ]
+      : [
+          ...(scopes.includes("kitchen")
+            ? [{ label: "Kitchen Panel", href: "/admin/kitchen", icon: "kitchen" as const }]
+            : []),
+          // ⚠️ "Manager Panel" শর্টকাট অন্য role-দের জন্য ইচ্ছাকৃতভাবে বাদ —
+          // Dashboard-এ যেতে sidebar-এর "Dashboard" লিঙ্ক আছে।
+        ];
 
   const displayName = session.user.name || panelLabel(role);
 
@@ -385,7 +424,7 @@ export default async function AdminLayout({
       <AdminShell
         name={displayName}
         email={session.user.email ?? ""}
-        role={role ?? ""}
+        role={panelView ? `${role} · ${panelView.toLowerCase()} view` : (role ?? "")}
         image={session.user.image}
         panels={panels}
         navItems={searchableNavItems}
@@ -393,6 +432,9 @@ export default async function AdminLayout({
         systemItems={systemItems}
         notificationSlot={notificationBell}
         showClock={isRider || isKitchen}
+        // OWNER: "Profile" is the admin panel (/admin), not /admin/profile.
+        profileHref={role === "OWNER" ? "/admin" : undefined}
+        profileHardNav={role === "OWNER"}
       >
         {children}
       </AdminShell>

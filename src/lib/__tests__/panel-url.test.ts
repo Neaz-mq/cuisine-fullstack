@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { publicPrefixForRole, toInternalPath, toPublicPath } from "@/lib/panel-url";
+import {
+  panelViewForPath,
+  panelViewFromReferer,
+  publicPrefixForRole,
+  toInternalPath,
+  toPublicPath,
+} from "@/lib/panel-url";
 
 describe("KITCHEN panel URLs", () => {
   it("browses under /kitchen", () => {
@@ -42,5 +48,41 @@ describe("KITCHEN panel URLs", () => {
     expect(toPublicPath("DELIVERY", "/admin")).toBe("/rider");
     expect(toInternalPath("/manager/staff")).toBe("/admin/staff");
     expect(toInternalPath("/rider/available")).toBe("/admin/my-deliveries/available");
+  });
+});
+
+describe("OWNER viewing the Kitchen / Manager panel", () => {
+  it("knows which panel a public path belongs to", () => {
+    expect(panelViewForPath("/kitchen")).toBe("KITCHEN");
+    expect(panelViewForPath("/kitchen/prep")).toBe("KITCHEN");
+    expect(panelViewForPath("/manager")).toBe("MANAGER");
+    expect(panelViewForPath("/manager/orders")).toBe("MANAGER");
+    expect(panelViewForPath("/admin/kitchen")).toBeNull();
+    expect(panelViewForPath("/kitchenette")).toBeNull();
+    expect(panelViewForPath("/rider")).toBeNull();
+  });
+
+  it("owner keeps plain /admin addresses", () => {
+    expect(publicPrefixForRole("OWNER")).toBeNull();
+    expect(toPublicPath("OWNER", "/admin/kitchen")).toBe("/admin/kitchen");
+  });
+
+  it("reads the panel from a same-site Referer only", () => {
+    expect(panelViewFromReferer("http://localhost:3000/kitchen/prep", "localhost:3000")).toBe("KITCHEN");
+    expect(panelViewFromReferer("http://localhost:3000/manager/orders?x=1", "localhost:3000")).toBe("MANAGER");
+    expect(panelViewFromReferer("http://localhost:3000/admin/orders", "localhost:3000")).toBeNull();
+    expect(panelViewFromReferer("https://evil.example/kitchen", "localhost:3000")).toBeNull();
+    expect(panelViewFromReferer(null, "localhost:3000")).toBeNull();
+    expect(panelViewFromReferer("not a url", "localhost:3000")).toBeNull();
+  });
+
+  it("maps an /admin link clicked inside a panel back into that panel", () => {
+    expect(toPublicPath("KITCHEN", "/admin")).toBe("/kitchen");
+    expect(toPublicPath("KITCHEN", "/admin/kitchen")).toBe("/kitchen/live-orders");
+    expect(toPublicPath("KITCHEN", "/admin/kitchen/prep")).toBe("/kitchen/prep");
+    expect(toPublicPath("KITCHEN", "/admin/profile")).toBe("/kitchen/profile");
+    expect(toPublicPath("MANAGER", "/admin")).toBe("/manager");
+    expect(toPublicPath("MANAGER", "/admin/orders")).toBe("/manager/orders");
+    expect(toPublicPath("MANAGER", "/admin/staff")).toBe("/manager/staff");
   });
 });
