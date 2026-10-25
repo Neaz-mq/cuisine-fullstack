@@ -103,6 +103,12 @@ type Props = {
   currency: string;
   /** না দিলে "Add Ingredient"; দিলে সেই উপকরণের সম্পাদনা। */
   item?: IngredientDraft;
+  /**
+   * Where the form posts. Default is the Owner's /api/admin/inventory; the
+   * Kitchen panel passes /api/admin/kitchen/inventory (same handler, "kitchen"
+   * scope) so a KITCHEN role never needs the "inventory" scope.
+   */
+  apiBase?: string;
 };
 
 export default function IngredientFormModal(props: Props) {
@@ -113,7 +119,14 @@ export default function IngredientFormModal(props: Props) {
   return <IngredientFormModalContent {...props} />;
 }
 
-function IngredientFormModalContent({ open, onClose, suppliers, currency, item }: Props) {
+function IngredientFormModalContent({
+  open,
+  onClose,
+  suppliers,
+  currency,
+  item,
+  apiBase = "/api/admin/inventory",
+}: Props) {
   const router = useRouter();
   const isEdit = Boolean(item);
 
@@ -210,7 +223,7 @@ function IngredientFormModalContent({ open, onClose, suppliers, currency, item }
     setSubmitting(true);
     try {
       const res = await fetch(
-        isEdit ? `/api/admin/inventory/${item!.id}` : "/api/admin/inventory",
+        isEdit ? `${apiBase}/${item!.id}` : apiBase,
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },

@@ -25,11 +25,14 @@ export default function InventoryToolbar({
   status,
   suppliers,
   currency,
+  apiBase,
 }: {
   status: InventoryStatusFilter;
   suppliers: SupplierOption[];
   /** IngredientFormModal-এর "Total Cost" ঘরটার জন্য — নিচে চলে যায়। */
   currency: string;
+  /** "Add Ingredient" endpoint root; Kitchen panel passes its own. */
+  apiBase?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -175,6 +178,7 @@ export default function InventoryToolbar({
         onClose={() => setModalOpen(false)}
         suppliers={suppliers}
         currency={currency}
+        apiBase={apiBase}
       />
     </div>
   );

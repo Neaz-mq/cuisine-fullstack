@@ -50,6 +50,7 @@ export default function RestockModal({
   item,
   suppliers,
   currency,
+  apiBase = "/api/admin/inventory",
 }: {
   open: boolean;
   onClose: () => void;
@@ -62,6 +63,8 @@ export default function RestockModal({
    * তাই server থেকে নেমে আসে।
    */
   currency: string;
+  /** Order endpoint root. Kitchen panel: /api/admin/kitchen/inventory. */
+  apiBase?: string;
 }) {
   const router = useRouter();
 
@@ -101,7 +104,7 @@ export default function RestockModal({
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/inventory/${item.id}/order`, {
+      const res = await fetch(`${apiBase}/${item.id}/order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

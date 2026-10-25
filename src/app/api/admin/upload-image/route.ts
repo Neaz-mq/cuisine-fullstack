@@ -21,9 +21,9 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   // Only the screens that actually have an image field: menu items, staff
-  // photos, tables and inventory. Before this, any staff login — including
+  // photos, tables, inventory and the Kitchen panel's Add Ingredient. Before this, any staff login — including
   // CLEANER, which has no scopes at all — could upload.
-  const authResult = await requireApiScopeAny(["menu", "staff", "tables", "inventory", "suppliers"]);
+  const authResult = await requireApiScopeAny(["menu", "staff", "tables", "inventory", "suppliers", "kitchen"]);
   if (authResult instanceof NextResponse) return authResult;
 
   const formData = await req.formData();

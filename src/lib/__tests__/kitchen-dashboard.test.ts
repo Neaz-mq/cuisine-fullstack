@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   averagePrepMinutes,
   buildPrepSnapshot,
+  filterPrepRows,
+  mergePrepRows,
   joinNames,
   percentChange,
   plural,
+  prepTaskToRow,
   summarizeInventory,
+  summarizePrep,
   type PrepOrder,
 } from "@/lib/kitchen-dashboard";
 import { isShiftOnDuty } from "@/lib/staff-shift";
@@ -177,5 +181,47 @@ describe("wording helpers", () => {
     expect(joinNames(["A"])).toBe("A");
     expect(joinNames(["A", "B"])).toBe("A and B");
     expect(joinNames(["A", "B", "C", "D"])).toBe("A, B and 2 more");
+  });
+});
+
+describe("prep tasks", () => {
+  const task = (id: string, name: string, done: boolean) =>
+    prepTaskToRow({ id, name, quantity: 3, unit: "KILOGRAM", done });
+  const derived = { id: "ing1", label: "Prepare Rice", quantityLabel: "1 Kg", done: false };
+
+  it("turns a stored task into a ticking row", () => {
+    expect(task("a1", "Chop onions", false)).toEqual({
+      id: "task-a1",
+      taskId: "a1",
+      label: "Chop onions",
+      quantityLabel: "3 Kg",
+      done: false,
+    });
+  });
+
+  it("merges open rows first (own tasks above derived), done rows last", () => {
+    const merged = mergePrepRows(
+      [{ ...derived, done: true, id: "d-done" }, derived],
+      [task("1", "Done task", true), task("2", "Open task", false)]
+    );
+    expect(merged.map((row) => row.id)).toEqual(["task-2", "ing1", "task-1", "d-done"]);
+  });
+
+  it("filters by name and by pending / completed", () => {
+    const rows = [task("1", "Chop Onions", false), task("2", "Marinate chicken", true)];
+    expect(filterPrepRows(rows, { q: "onion", status: "all" })).toHaveLength(1);
+    expect(filterPrepRows(rows, { status: "pending" }).map((r) => r.taskId)).toEqual(["1"]);
+    expect(filterPrepRows(rows, { status: "completed" }).map((r) => r.taskId)).toEqual(["2"]);
+    expect(filterPrepRows(rows, { q: "  ", status: "all" })).toHaveLength(2);
+  });
+
+  it("summarizes totals and percent done", () => {
+    expect(summarizePrep([])).toEqual({ total: 0, completed: 0, remaining: 0, percentDone: 0 });
+    expect(summarizePrep([{ done: true }, { done: false }, { done: false }])).toEqual({
+      total: 3,
+      completed: 1,
+      remaining: 2,
+      percentDone: 33,
+    });
   });
 });

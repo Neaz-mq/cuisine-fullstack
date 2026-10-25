@@ -122,10 +122,15 @@ const MANAGER_SCOPES: Scope[] = ALL_SCOPES.filter(
  * "inventory" (stock levels, recipes, purchase/wastage/adjustment
  * entries, cost-per-unit) is the same OWNER/MANAGER-only shape — a
  * KITCHEN staffer preps food using their existing "kitchen" scope, but
- * doesn't get to record purchases or edit costPerUnit. If KITCHEN ever
- * needs a read-only low-stock glance, that's a narrower addition to make
- * later (e.g. surfacing it inside the kitchen board itself), not full
- * "inventory" scope access.
+ * doesn't get to record purchases or edit costPerUnit.
+ *
+ * KITCHEN does get its own Inventory page (/admin/kitchen/inventory, Figma
+ * Kitchen > Inventory) — still under "kitchen", NOT "inventory". It can add
+ * an ingredient and send a supplier order (Restock: a Pending order + email,
+ * stock unchanged) through /api/admin/kitchen/inventory/..., which share their
+ * handlers with the admin routes (lib/inventory-api.ts) but check the
+ * "kitchen" scope. Editing an ingredient, confirming a delivery and seeing
+ * costs in exports stay out of reach.
  */
 /**
  * OWNER — everything except "myDeliveries". That scope is the rider panel

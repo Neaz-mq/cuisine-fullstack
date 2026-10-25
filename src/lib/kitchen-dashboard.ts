@@ -97,6 +97,12 @@ export type PrepRow = {
   /** "12 Kg" */
   quantityLabel: string;
   done: boolean;
+  /**
+   * Set only on a hand-added task (PrepTask.id). Rows derived from orders
+   * have none — their "done" follows the orders and cannot be ticked by
+   * hand, while a task row can be ticked, unticked and deleted.
+   */
+  taskId?: string;
 };
 
 /**
@@ -154,6 +160,70 @@ export function buildPrepSnapshot(orders: PrepOrder[]): PrepRow[] {
   });
 
   return rows.map((entry) => entry.row);
+}
+
+/** A hand-added task as stored (PrepTask) — only the columns the list needs. */
+export type PrepTaskRecord = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  done: boolean;
+};
+
+export function prepTaskToRow(task: PrepTaskRecord): PrepRow {
+  return {
+    id: `task-${task.id}`,
+    taskId: task.id,
+    label: task.name,
+    quantityLabel: formatQuantity(task.quantity, task.unit),
+    done: task.done,
+  };
+}
+
+/**
+ * Hand-added tasks + order-derived rows as ONE list: everything still open
+ * first (the cook's own tasks above the computed ones — they typed them
+ * for a reason), everything done after. Order inside each group is kept.
+ */
+export function mergePrepRows(orderRows: PrepRow[], taskRows: PrepRow[]): PrepRow[] {
+  const all = [...taskRows, ...orderRows];
+  return [...all.filter((row) => !row.done), ...all.filter((row) => row.done)];
+}
+
+export const PREP_STATUSES = ["all", "pending", "completed"] as const;
+export type PrepStatusFilter = (typeof PREP_STATUSES)[number];
+export const DEFAULT_PREP_STATUS: PrepStatusFilter = "all";
+
+export function isPrepStatusFilter(value: unknown): value is PrepStatusFilter {
+  return typeof value === "string" && (PREP_STATUSES as readonly string[]).includes(value);
+}
+
+/** Search by item name (case-insensitive) + Pending / Completed filter. */
+export function filterPrepRows(
+  rows: PrepRow[],
+  { q, status }: { q?: string; status: PrepStatusFilter }
+): PrepRow[] {
+  const needle = q?.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (status === "pending" && row.done) return false;
+    if (status === "completed" && !row.done) return false;
+    return !needle || row.label.toLowerCase().includes(needle);
+  });
+}
+
+/** Total / completed / remaining + whole-percent done, from two counts. */
+export function summarizePrepCounts(total: number, completed: number) {
+  return {
+    total,
+    completed,
+    remaining: total - completed,
+    percentDone: total === 0 ? 0 : Math.round((completed / total) * 100),
+  };
+}
+
+export function summarizePrep(rows: { done: boolean }[]) {
+  return summarizePrepCounts(rows.length, rows.filter((row) => row.done).length);
 }
 
 /* ── Wording ──────────────────────────────────────────────────────── */

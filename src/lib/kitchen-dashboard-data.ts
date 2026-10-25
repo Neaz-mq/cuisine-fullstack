@@ -22,7 +22,9 @@ import {
   WAITING_ATTENTION_MINUTES,
   averagePrepMinutes,
   buildPrepSnapshot,
+  mergePrepRows,
   percentChange,
+  prepTaskToRow,
   summarizeInventory,
   type InventoryGlance,
   type PrepRow,
@@ -88,9 +90,22 @@ function loadPrepOrders(now: Date) {
   });
 }
 
-/** The full Prep List page. */
+/**
+ * Tasks a cook added by hand today (the Prep List's "Add Task"). Today
+ * only — yesterday's list is yesterday's shift. Newest first.
+ */
+function loadPrepTasks(now: Date) {
+  return prisma.prepTask.findMany({
+    where: { createdAt: { gte: startOfDay(now) } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, quantity: true, unit: true, done: true },
+  });
+}
+
+/** The full Prep List: hand-added tasks + rows derived from live orders. */
 export async function getPrepList(now: Date): Promise<PrepRow[]> {
-  return buildPrepSnapshot(await loadPrepOrders(now));
+  const [orders, tasks] = await Promise.all([loadPrepOrders(now), loadPrepTasks(now)]);
+  return mergePrepRows(buildPrepSnapshot(orders), tasks.map(prepTaskToRow));
 }
 
 export async function getKitchenDashboardData(now: Date): Promise<KitchenDashboardData> {
@@ -114,6 +129,7 @@ export async function getKitchenDashboardData(now: Date): Promise<KitchenDashboa
     inventoryRows,
     kitchenStaff,
     prepOrders,
+    prepTasks,
     newest,
   ] = await Promise.all([
     prisma.order.count({ where: { ...notCancelled, createdAt: { gte: weekStart } } }),
@@ -152,6 +168,7 @@ export async function getKitchenDashboardData(now: Date): Promise<KitchenDashboa
       select: { staffProfile: { select: { shift: true } } },
     }),
     loadPrepOrders(now),
+    loadPrepTasks(now),
     prisma.order.findFirst({
       where: { status: "PLACED" },
       orderBy: { createdAt: "desc" },
@@ -177,7 +194,7 @@ export async function getKitchenDashboardData(now: Date): Promise<KitchenDashboa
           },
         });
 
-  const prep = buildPrepSnapshot(prepOrders);
+  const prep = mergePrepRows(buildPrepSnapshot(prepOrders), prepTasks.map(prepTaskToRow));
 
   return {
     totalOrdersWeek: thisWeek,

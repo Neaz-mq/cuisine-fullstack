@@ -23,11 +23,20 @@ export default function InventoryRowActions({
   item,
   suppliers,
   currency,
+  apiBase,
+  canEdit = true,
 }: {
   item: IngredientDraft;
   suppliers: SupplierOption[];
   /** দুটো modal-ই "Total Cost" দেখায়, তাই দুজায়গাতেই পাঠাতে হয়। */
   currency: string;
+  /** API root for the modals; omit for the Owner's /api/admin/inventory. */
+  apiBase?: string;
+  /**
+   * false hides "Edit" (Kitchen panel): editing changes costs, thresholds and
+   * suppliers, which a KITCHEN role is not meant to do. Restock stays.
+   */
+  canEdit?: boolean;
 }) {
   const [mode, setMode] = useState<null | "restock" | "edit">(null);
 
@@ -87,6 +96,7 @@ export default function InventoryRowActions({
          * ইচ্ছাকৃতভাবে চওড়া করেছেন, আর দুটো বোতাম পাশাপাশি থাকলে
          * সমান-উচ্চতার জোড়াটা এতে দেখতেও ভালো লাগে।
          */}
+        {canEdit && (
         <button
           type="button"
           onClick={() => setMode("edit")}
@@ -95,6 +105,7 @@ export default function InventoryRowActions({
         >
           Edit
         </button>
+        )}
 
         {/**
          * Figma: 98×50, radius 100, লেখা Sora 400 16px সাদা,
@@ -124,15 +135,17 @@ export default function InventoryRowActions({
           item={item}
           suppliers={suppliers}
           currency={currency}
+          apiBase={apiBase}
         />
       )}
-      {mode === "edit" && (
+      {mode === "edit" && canEdit && (
         <IngredientFormModal
           open
           onClose={() => setMode(null)}
           item={item}
           suppliers={suppliers}
           currency={currency}
+          apiBase={apiBase}
         />
       )}
     </>

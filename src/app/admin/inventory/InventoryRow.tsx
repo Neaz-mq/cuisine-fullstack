@@ -20,11 +20,16 @@ export default function InventoryRow({
   item,
   suppliers,
   currency,
+  apiBase,
+  canEdit,
 }: {
   item: InventoryRowItem;
   suppliers: SupplierOption[];
   /** Restock/Edit modal-এর "Total Cost" ঘরটার জন্য — নিচে চলে যায়। */
   currency: string;
+  /** Passed straight to the row's modals — see InventoryRowActions. */
+  apiBase?: string;
+  canEdit?: boolean;
 }) {
   const state = stockStateOf(item);
   const badge = STOCK_STATE_STYLE[state];
@@ -114,7 +119,13 @@ export default function InventoryRow({
         </span>
       </div>
 
-      <InventoryRowActions item={item} suppliers={suppliers} currency={currency} />
+      <InventoryRowActions
+        item={item}
+        suppliers={suppliers}
+        currency={currency}
+        apiBase={apiBase}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

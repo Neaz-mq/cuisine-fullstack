@@ -2668,3 +2668,33 @@ model ComboItem {
   @@unique([comboId, menuItemId])
   @@index([menuItemId])
 }
+
+
+// ---------------------------------------------------------------------------
+// Kitchen Prep List — hand-added tasks ("Add Task" on /kitchen/prep).
+//
+// The order-derived rows (one per ingredient the open orders need) are still
+// computed on the fly and are NOT stored here; this table only holds the
+// tasks a cook typed in themselves ("Chop onions & peppers — 3 Kg") and
+// whether each one is done.
+//
+// createdById is a plain string, not a relation: a prep task must not stop a
+// staff account from being deleted, and nothing reads it back except audit.
+// ---------------------------------------------------------------------------
+
+model PrepTask {
+  id   String @id @default(cuid())
+  name String
+
+  quantity Float
+  unit     InventoryUnit @default(KILOGRAM)
+
+  done   Boolean   @default(false)
+  doneAt DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}

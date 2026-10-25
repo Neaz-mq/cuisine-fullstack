@@ -242,7 +242,7 @@ function AlertBanner({ data }: { data: KitchenDashboardData }) {
       (data.ordersNeedingUrgentStock > 0
         ? ` — ${data.ordersNeedingUrgentStock} pending ${plural(data.ordersNeedingUrgentStock, "order needs it", "orders need them")}.`
         : ".");
-    cta = { href: "/admin/kitchen/inventory", label: "View Emergency Items" };
+    cta = { href: "/admin/kitchen/inventory/emergency", label: "View Emergency Items" };
   } else if (data.newestOrder) {
     title = "New order placed";
     text = `${data.newestOrder.customer || "A customer"} placed order ${formatOrderId(data.newestOrder.id)}.`;

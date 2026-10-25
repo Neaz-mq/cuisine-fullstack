@@ -66,7 +66,7 @@ export default function PrepSnapshot({
                 </span>
                 <span
                   className={`truncate font-sora text-[14px] leading-[1.3] ${
-                    row.done ? "text-black/70 line-through" : "text-black"
+                    row.done ? "text-black/60 line-through" : "text-black"
                   }`}
                 >
                   {row.label}
