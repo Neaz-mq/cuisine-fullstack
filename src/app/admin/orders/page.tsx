@@ -19,7 +19,8 @@ import ExportReportButton from "@/components/admin/dashboard/ExportReportButton"
 import OrdersOverviewCards from "@/components/admin/OrdersOverviewCards";
 import Pagination from "./Pagination";
 import OrdersToolbar from "./OrdersToolbar";
-import OrderStatusSelect from "./OrderStatusSelect";
+import OrderStatusBadge from "./OrderStatusBadge";
+import OrdersAutoRefresh from "./OrdersAutoRefresh";
 import OrderRowActions from "./OrderRowActions";
 import { channelLabel, orderMoney, toOrderViewData } from "@/lib/order-view-data";
 
@@ -139,6 +140,9 @@ export default async function AdminOrdersPage({
 
       <OrdersToolbar status={status} />
 
+      {/* rider/রান্নাঘরের বদল admin-এর পাতায় নিজে থেকে আসে — refresh লাগে না */}
+      <OrdersAutoRefresh />
+
       <OrdersOverviewCards period={period} />
 
       {/* --- Orders Lists --- */}
@@ -217,11 +221,7 @@ export default async function AdminOrdersPage({
                   </Field>
 
                   <Field label="Status">
-                    <OrderStatusSelect
-                      orderId={order.id}
-                      currentStatus={order.status}
-                      orderType={order.orderType}
-                    />
+                    <OrderStatusBadge status={order.status} orderType={order.orderType} />
                   </Field>
                 </div>
 

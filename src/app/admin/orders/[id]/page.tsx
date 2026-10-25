@@ -150,7 +150,9 @@ export default async function AdminOrderDetailPage({
         </div>
       </div>
 
-      {!isDineIn && (
+      {/* rider বসানো যায় কেবল রান্নাঘর "Ready" করার পরে (বা rider বদলের সময়
+          পথে থাকা অর্ডারে) — assign-rider route-ও একই নিয়মে আটকায়। */}
+      {!isDineIn && (order.status === "READY" || order.status === "OUT_FOR_DELIVERY") && (
         <div className="mb-6">
           <AssignRiderPanel orderId={order.id} currentRiderId={order.deliveryTracking?.riderId ?? null} />
         </div>

@@ -871,9 +871,13 @@ enum OrderType {
 // supported, because loyalty points, stock deduction, and gift card
 // debits have already happened by then and don't un-happen just because
 // a status is changed back.
+// PLACED -> PREPARING (admin "Move to Kitchen") -> READY (kitchen "Ready")
+//        -> OUT_FOR_DELIVERY (rider assigned / rider picked up) -> DELIVERED
+//           (rider marks it delivered). Dine-in: READY -> DELIVERED ("Served").
 enum OrderStatus {
   PLACED
   PREPARING
+  READY
   OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED

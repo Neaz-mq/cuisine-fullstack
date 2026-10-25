@@ -23,7 +23,7 @@ export default function LiveOrderCard({
   };
 }) {
   const steps = orderSteps(order.orderType);
-  const current = orderStepIndex(order.status);
+  const current = orderStepIndex(order.status, order.orderType);
 
   return (
     <article className="flex min-w-0 flex-col gap-4 rounded-[20px] bg-[#F9F6F3] p-4 md:p-5">

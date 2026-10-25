@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiScopeAny } from "@/lib/require-admin";
-import { hasPermission } from "@/lib/permissions";
+import { requireApiScope } from "@/lib/require-admin";
 import { parseBody } from "@/lib/validations/parse";
 import { assignRiderSchema } from "@/lib/validations/delivery";
 import { geocodeAddressDetailed, type GeocodeFailure } from "@/lib/geocode";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
-import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
-import { canTransition, needsPreparingFirst } from "@/lib/order-state-machine";
+import { canAssignRider } from "@/lib/order-state-machine";
 import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
+import { isRecordNotFound } from "@/lib/prisma-errors";
 
 /**
  * POST /api/admin/orders/[id]/assign-rider
@@ -26,14 +25,12 @@ import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
  *
  * দুটো জিনিস এখানে যোগ হয়েছে, দুটোই আসল bug ছিল:
  *
- * ১. PREPARING বাধ্যতামূলক — আগে PLACED থেকে সরাসরি OUT_FOR_DELIVERY
- *    লেখা হতো, অর্থাৎ PREPARING কখনো হতো না। আর inventory deduction
- *    ঘটে ঠিক সেই transition-এ। ফলে এভাবে পাঠানো প্রতিটা order-এর
- *    ingredient বাস্তবে খরচ হতো কিন্তু StockMovement-এ কিছুই লেখা হতো
- *    না — currentStock নীরবে বাস্তবতা থেকে সরে যেতো, low-stock alert
- *    বন্ধ হয়ে যেতো, আর Phase 2-এর purchase suggestion ভুল data-র উপর
- *    দাঁড়াতো। ব্যস্ত manager-এর জন্য orders list থেকে সরাসরি rider
- *    assign করাই সবচেয়ে স্বাভাবিক পথ, তাই এটা বিরল edge case ছিল না।
+ * ১. READY বাধ্যতামূলক — rider বসানো যায় কেবল রান্নাঘর অর্ডারটা "Ready"
+ *    করার পরে (বা rider বদলের সময় OUT_FOR_DELIVERY-তে)। আগে PLACED থেকে
+ *    সরাসরি OUT_FOR_DELIVERY লেখা হতো, ফলে inventory deduction (PREPARING-এর
+ *    transition) এড়িয়ে যেত, আর রান্না শেষ হওয়ার আগেই গ্রাহকের পাতায় খাবার
+ *    "পথে" দেখাত। এখন stock কাটে "Move to Kitchen"-এ, আর এই route শুধু READY
+ *    অর্ডারকে rider-সহ OUT_FOR_DELIVERY-তে নেয়।
  *
  * ২. Payment যাচাই — একটা ONLINE order যার paymentStatus এখনো PENDING
  *    (customer Stripe পেজ খুলে টাকা দেয়নি), সেটাও assign করা যেত।
@@ -44,12 +41,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // "kitchen" too — the kitchen board's "Ready to Delivery" button calls this.
-  // A kitchen-only viewer is limited below to orders still being made.
-  const authResult = await requireApiScopeAny(["orders", "kitchen"]);
+  // কেবল "orders" scope — rider বসানো হয় শুধু Orders list-এর "Ready to
+  // Delivery" modal থেকে। Kitchen board এখন কেবল অর্ডারকে READY করে, rider
+  // বসায় না।
+  const authResult = await requireApiScope("orders");
   if (authResult instanceof NextResponse) return authResult;
-  const viewerRole = (authResult.user as { role?: string } | undefined)?.role;
-  const isDispatcher = hasPermission(viewerRole, "orders");
 
   const { id } = await params;
 
@@ -85,22 +81,25 @@ export async function POST(
     );
   }
 
-  // Kitchen staff hand over food that is still on their board (PLACED /
-  // PREPARING). Re-assigning a rider on an order already out for delivery —
-  // or touching a finished one — is the manager's call.
-  if (!isDispatcher && order.status !== "PLACED" && order.status !== "PREPARING") {
-    return NextResponse.json(
-      { error: "Only a manager can change the rider on an order that has already left the kitchen." },
-      { status: 403 }
-    );
-  }
-
-  // State machine-ই এখন একমাত্র জায়গা যেখানে লেখা আছে কোথা থেকে
-  // OUT_FOR_DELIVERY-তে যাওয়া যায়। আগে এখানে হাতে লেখা
-  // `status === "DELIVERED" || status === "CANCELLED"` চেক ছিল — সেটা
-  // terminal state আটকাতো ঠিকই, কিন্তু PLACED-এর লাফটা ধরতে পারতো না,
-  // কারণ সেটা "অবৈধ" বলে চিহ্নিতই ছিল না কোথাও।
-  if (!canTransition(order.status, "OUT_FOR_DELIVERY")) {
+  /**
+   * ⚠️ রান্নাঘর "Ready" না করা পর্যন্ত rider বসানো যায় না।
+   *
+   * আগে PLACED/PREPARING অর্ডারেও rider বসানো যেত — PLACED হলে route নিজেই
+   * অর্ডারটাকে আগে PREPARING-এ নিয়ে stock কাটত, আর তারপর সরাসরি "পথে"
+   * পাঠিয়ে দিত; অর্থাৎ রান্না শেষ হওয়ার আগেই গ্রাহক দেখত খাবার রওনা দিয়েছে।
+   * এখন বৈধ পথ একটাই: PLACED → PREPARING → READY → (rider) OUT_FOR_DELIVERY।
+   * OUT_FOR_DELIVERY-তে আবার ডাকা মানে rider বদল (reassign), সেটা অনুমোদিত।
+   */
+  if (!canAssignRider(order.status)) {
+    if (order.status === "PLACED" || order.status === "PREPARING") {
+      return NextResponse.json(
+        {
+          error:
+            "The kitchen hasn't marked this order Ready yet. You can assign a rider once it is Ready.",
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       {
         error: `Cannot assign a rider — order is already ${order.status
@@ -171,57 +170,56 @@ export async function POST(
     }
   }
 
-  // PLACED হলে আগে PREPARING-এ নিয়ে যাওয়া, যাতে inventory deduct হয়।
-  // এটা নিজের transaction-এ চলে (advanceOrderToPreparing-এর ভেতরে),
-  // নিচের assignment transaction-এর আগে — deduction ব্যর্থ হলে rider
-  // assign-ই হবে না, বরং অর্ধেক-সম্পন্ন অবস্থা তৈরি হবে না।
-  //
-  // geocode-এর পরে রাখা হয়েছে ইচ্ছাকৃতভাবে: ঠিকানা geocode না হলে
-  // assignment এমনিতেই ব্যর্থ, তাই তার আগে stock deduct করে ফেলার কোনো
-  // মানে নেই।
-  if (needsPreparingFirst(order.status)) {
-    const prepared = await advanceOrderToPreparing(id);
-    if (!prepared.ok) {
-      return NextResponse.json({ error: prepared.error }, { status: 409 });
+  // ⚠️ `status: order.status` update-এর where-এ — উপরের যাচাইয়ের পর অর্ডারটা
+  // এই মুহূর্তে cancel/deliver হয়ে গেলে সেটাকে আবার "পথে" তুলে আনা চলবে না।
+  // $transaction একসাথে ফেরে, তাই এই ক্ষেত্রে DeliveryTracking-ও লেখা হয় না।
+  let updatedOrder;
+  try {
+    [, updatedOrder] = await prisma.$transaction([
+      prisma.deliveryTracking.upsert({
+        where: { orderId: id },
+        create: {
+          orderId: id,
+          riderId,
+          riderLat: RESTAURANT_LOCATION.lat,
+          riderLng: RESTAURANT_LOCATION.lng,
+          destLat: geocoded?.lat ?? null,
+          destLng: geocoded?.lng ?? null,
+        },
+        update: {
+          riderId,
+          // Reassignment-এ rider position আবার restaurant-এ reset — নতুন
+          // rider এখনো কোনো real position পাঠায়নি, আর আগের rider-এর শেষ
+          // অবস্থান (বা customer-এর নিজের ঠিকানা) রেখে দিলে সেটা
+          // বিভ্রান্তিকর হতো। Delivery সবসময় restaurant থেকেই শুরু হয়,
+          // destination থেকে নয়।
+          riderLat: RESTAURANT_LOCATION.lat,
+          riderLng: RESTAURANT_LOCATION.lng,
+          riderLocationUpdatedAt: new Date(),
+          destLat: geocoded?.lat ?? null,
+          destLng: geocoded?.lng ?? null,
+          deliveredAt: null,
+        },
+      }),
+      prisma.order.update({
+        where: { id, status: order.status },
+        data: {
+          status: "OUT_FOR_DELIVERY",
+          shippingMethod: "OWN_DELIVERY",
+          // tracking পাতার timeline-এ "Out for Delivery · 12:00"।
+          dispatchedAt: new Date(),
+        },
+      }),
+    ]);
+  } catch (error) {
+    if (isRecordNotFound(error)) {
+      return NextResponse.json(
+        { error: "This order was just changed by someone else. Please refresh and try again." },
+        { status: 409 }
+      );
     }
+    throw error;
   }
-
-  const [, updatedOrder] = await prisma.$transaction([
-    prisma.deliveryTracking.upsert({
-      where: { orderId: id },
-      create: {
-        orderId: id,
-        riderId,
-        riderLat: RESTAURANT_LOCATION.lat,
-        riderLng: RESTAURANT_LOCATION.lng,
-        destLat: geocoded?.lat ?? null,
-        destLng: geocoded?.lng ?? null,
-      },
-      update: {
-        riderId,
-        // Reassignment-এ rider position আবার restaurant-এ reset — নতুন
-        // rider এখনো কোনো real position পাঠায়নি, আর আগের rider-এর শেষ
-        // অবস্থান (বা customer-এর নিজের ঠিকানা) রেখে দিলে সেটা
-        // বিভ্রান্তিকর হতো। Delivery সবসময় restaurant থেকেই শুরু হয়,
-        // destination থেকে নয়।
-        riderLat: RESTAURANT_LOCATION.lat,
-        riderLng: RESTAURANT_LOCATION.lng,
-        riderLocationUpdatedAt: new Date(),
-        destLat: geocoded?.lat ?? null,
-        destLng: geocoded?.lng ?? null,
-        deliveredAt: null,
-      },
-    }),
-    prisma.order.update({
-      where: { id },
-      data: {
-        status: "OUT_FOR_DELIVERY",
-        shippingMethod: "OWN_DELIVERY",
-        // tracking পাতার timeline-এ "Out for Delivery · 12:00"।
-        dispatchedAt: new Date(),
-      },
-    }),
-  ]);
 
   // "Your order is on its way" — after the response (Order Updates switch).
   after(() => sendOrderStatusEmail(id, "OUT_FOR_DELIVERY"));

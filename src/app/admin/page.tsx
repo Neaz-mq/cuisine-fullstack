@@ -71,6 +71,7 @@ function formatDateTime(date: Date) {
 const STATUS_STYLES: Record<string, string> = {
   PLACED: "bg-[#E5EDFF] text-[#0090FF]",
   PREPARING: "bg-[#FFF2DA] text-[#FF9E00]",
+  READY: "bg-[#E5EDFF] text-[#1D6FD8]",
   OUT_FOR_DELIVERY: "bg-[#FFEDE0] text-[#FF7100]",
   DELIVERED: "bg-[#E8FFEC] text-[#0ECF00]",
   CANCELLED: "bg-[#FFE9EC] text-[#FF3F5C]",
@@ -80,6 +81,7 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   PLACED: "Order Place",
   PREPARING: "Preparing",
+  READY: "Ready",
   OUT_FOR_DELIVERY: "On the way",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
@@ -218,7 +220,7 @@ export default async function AdminDashboardPage({
   ] = await Promise.all([
     prisma.order.count(),
     prisma.order.count({
-      where: { status: { in: ["PLACED", "PREPARING", "OUT_FOR_DELIVERY"] } },
+      where: { status: { in: ["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } },
     }),
     prisma.order.count({ where: { status: "DELIVERED" } }),
     prisma.order.aggregate({
@@ -292,7 +294,7 @@ export default async function AdminDashboardPage({
       where: {
         order: {
           createdAt: { gte: todayStart },
-          status: { in: ["PLACED", "PREPARING", "OUT_FOR_DELIVERY"] },
+          status: { in: ["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] },
         },
       },
       select: { menuItemId: true },
@@ -340,7 +342,7 @@ export default async function AdminDashboardPage({
     statuses: string[]
   ) => rows.filter((r) => statuses.includes(r.status)).reduce((sum, r) => sum + r._count._all, 0);
 
-  const IN_PROGRESS = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY"];
+  const IN_PROGRESS = ["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
 
   const stats = [
     {

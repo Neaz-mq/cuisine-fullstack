@@ -29,36 +29,49 @@ const BUTTON_BASE =
 /**
  * সারির দ্বিতীয় বোতামটা কী করবে — অর্ডারের অবস্থা আর ধরন দেখে।
  *
- * ⚠️ বোতামটা **সবসময় থাকে**, শুধু লেখা আর কাজ বদলায়। আগে সেটা কেবল
- * PLACED অর্ডারে দেখাত, ফলে সারিগুলোর ডান প্রান্ত এক সারিতে থাকত না,
- * আর সবচেয়ে বড় কথা — রান্না শেষ হওয়ার পরের ধাপগুলোয় (rider পাঠানো,
- * delivered চিহ্নিত করা) তালিকা থেকে পৌঁছনোরই কোনো পথ ছিল না।
+ * ⚠️ বোতামটা **সবসময় থাকে**, শুধু লেখা আর কাজ বদলায়। শেষ ধাপের আগে যে ধাপে
+ * admin-এর কিছু করার নেই (রান্নাঘর বা rider-এর অপেক্ষা), সেখানে বোতামটা
+ * থাকে কিন্তু বন্ধ ("locked") — সরিয়ে দিলে সারিগুলোর ডান প্রান্ত এক সারিতে
+ * থাকত না, আর পরের ধাপটা কী সেটাও চোখে পড়ত না।
  *
- * ── ধাপগুলো ─────────────────────────────────────────────────────────
+ * ── ধাপগুলো (DELIVERY অর্ডার) ───────────────────────────────────────
  *
- *   PLACED            → "Move to Kitchen"   → PREPARING
- *   PREPARING (দোকান) → "Mark Ready"        → OUT_FOR_DELIVERY
- *   PREPARING (বাড়ি)  → "Ready to Delivery" → modal → rider assign
- *   OUT_FOR_DELIVERY  → "Mark Delivered" / "Mark Served" → DELIVERED
+ *   PLACED            → "Move to Kitchen"    → PREPARING  (status নিজে বদলায়)
+ *   PREPARING         → "Ready to Delivery"  বন্ধ — রান্নাঘরের "Ready"-র অপেক্ষা
+ *   READY             → "Ready to Delivery"  → modal → rider assign → OUT_FOR_DELIVERY
+ *   OUT_FOR_DELIVERY  → "Mark Delivered"     বন্ধ — rider নিজের panel থেকে করবেন
  *   DELIVERED         → নিষ্ক্রিয় "Delivered"
  *   CANCELLED         → নিষ্ক্রিয় "Cancelled"
  *
- * ধাপগুলো `lib/order-state-machine.ts`-এর ALLOWED_TRANSITIONS-এর হুবহু
- * অনুসরণ — এখানে নতুন কোনো নিয়ম বানানো হয়নি, কেবল প্রতিটা অবস্থার
- * **সবচেয়ে স্বাভাবিক পরের ধাপটা** বোতামে তোলা হয়েছে। অন্য ধাপগুলো
- * (যেমন বাতিল করা) পাশের status dropdown-এ আগের মতোই আছে।
+ * ── dine-in অর্ডার (rider নেই) ───────────────────────────────────────
  *
- * ⚠️ dine-in অর্ডারে `OUT_FOR_DELIVERY` মানে "পরিবেশনের জন্য তৈরি" —
- * enum-এ আলাদা কোনো অবস্থা নেই, আর সেই সিদ্ধান্তটা পুরনো। তাই লেখাটা
- * বদলায়, মানটা নয়।
+ *   PLACED    → "Move to Kitchen" → PREPARING
+ *   PREPARING → "Mark Served" বন্ধ — রান্নাঘরের "Ready"-র অপেক্ষা
+ *   READY     → "Mark Served"  → DELIVERED
+ *
+ * ⚠️ status এখানে হাতে বদলানোর dropdown নেই। status চলে ধাপে ধাপে, ঠিক যার
+ * যার কাজের জায়গা থেকে: admin (Move to Kitchen) → রান্নাঘর (Ready) → admin
+ * (rider assign) → rider (Delivered)। ধাপগুলো `lib/order-state-machine.ts`-এর
+ * ALLOWED_TRANSITIONS-এর হুবহু অনুসরণ।
+ *
+ * ⚠️ পুরনো ডেটার জন্য: migration-এর আগের dine-in অর্ডার OUT_FOR_DELIVERY-তে
+ * থাকতে পারে (তখন ওটাই "পরিবেশনের জন্য তৈরি" ছিল) — সেটাকেও "Mark Served"
+ * দিয়ে শেষ করা যায়।
  */
 type NextStep =
   | { kind: "patch"; label: string; status: string; toast: string }
   | { kind: "dispatch"; label: string }
+  | { kind: "locked"; label: string; reason: string }
   | { kind: "done"; label: string };
 
 function nextStep(status: string, orderType: "DELIVERY" | "DINE_IN"): NextStep {
   const dineIn = orderType === "DINE_IN";
+  const serve: NextStep = {
+    kind: "patch",
+    label: "Mark Served",
+    status: "DELIVERED",
+    toast: "Marked as served.",
+  };
 
   switch (status) {
     case "PLACED":
@@ -70,6 +83,13 @@ function nextStep(status: string, orderType: "DELIVERY" | "DINE_IN"): NextStep {
       };
 
     case "PREPARING":
+      return {
+        kind: "locked",
+        label: dineIn ? "Mark Served" : "Ready to Delivery",
+        reason: "Waiting for the kitchen to mark this order Ready.",
+      };
+
+    case "READY":
       /**
        * ⚠️ delivery অর্ডারে সরাসরি PATCH করা হয় না — modal খোলে, আর
        * সেখানে rider বাছতে হয়। কারণটা কারিগরি: `assign-rider` route
@@ -77,22 +97,16 @@ function nextStep(status: string, orderType: "DELIVERY" | "DINE_IN"): NextStep {
        * geocode করে আর payment যাচাই করে। শুধু status বদলে দিলে
        * অর্ডারটা "পথে" দেখাত অথচ কোনো rider-ই জানত না।
        */
-      return dineIn
-        ? {
-            kind: "patch",
-            label: "Mark Ready",
-            status: "OUT_FOR_DELIVERY",
-            toast: "Ready to serve.",
-          }
-        : { kind: "dispatch", label: "Ready to Delivery" };
+      return dineIn ? serve : { kind: "dispatch", label: "Ready to Delivery" };
 
     case "OUT_FOR_DELIVERY":
-      return {
-        kind: "patch",
-        label: dineIn ? "Mark Served" : "Mark Delivered",
-        status: "DELIVERED",
-        toast: dineIn ? "Marked as served." : "Marked as delivered.",
-      };
+      return dineIn
+        ? serve
+        : {
+            kind: "locked",
+            label: "Mark Delivered",
+            reason: "The rider marks this order delivered from the rider panel.",
+          };
 
     case "CANCELLED":
       return { kind: "done", label: "Cancelled" };
@@ -205,9 +219,10 @@ export default function OrderRowActions({
           if (step.kind === "dispatch") setDispatching(true);
           else if (step.kind === "patch") advance(step.status, step.toast);
         }}
-        disabled={isPending || step.kind === "done"}
+        disabled={isPending || step.kind === "done" || step.kind === "locked"}
+        title={step.kind === "locked" ? step.reason : undefined}
         className={`${BUTTON_BASE} transition-opacity disabled:cursor-not-allowed xl:w-[150px] ${
-          step.kind === "done"
+          step.kind === "done" || step.kind === "locked"
             ? "bg-black/[0.06] text-black/40"
             : "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] text-white hover:opacity-90 disabled:opacity-50"
         } ${FOCUS_RING}`}

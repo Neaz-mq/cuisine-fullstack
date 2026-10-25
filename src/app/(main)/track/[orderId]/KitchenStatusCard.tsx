@@ -61,6 +61,13 @@ const COPY = {
     body: "Our chefs just started cooking your order fresh — it'll be ready to head out shortly.",
     timerLabel: "Left to preparing",
   },
+  READY: {
+    heading: "Ready",
+    subheading: "Your order is cooked and packed — we're getting a rider for it.",
+    title: "Your Food Is Ready",
+    body: "Your order is ready and waiting for a rider to pick it up. We'll update this page the moment it's on its way.",
+    timerLabel: "Left to preparing",
+  },
 } as const;
 
 export default function KitchenStatusCard({
@@ -69,7 +76,7 @@ export default function KitchenStatusCard({
   itemCount,
   prepMinutesLeft,
 }: {
-  status: "PLACED" | "PREPARING";
+  status: "PLACED" | "PREPARING" | "READY";
   items: TrackedOrder["items"];
   itemCount: number;
   prepMinutesLeft: number | null;

@@ -36,7 +36,13 @@ const MENU_ITEM_SELECT = {
 
 // Orders in these statuses represent real, completed activity — CANCELLED
 // orders shouldn't influence "you might also like" or popularity ranking.
-const COUNTED_ORDER_STATUSES = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"] as const;
+const COUNTED_ORDER_STATUSES = [
+  "PLACED",
+  "PREPARING",
+  "READY",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+] as const;
 
 // Sorts a MenuItem[] to match the ranking implied by an ordered id list —
 // Prisma's `findMany({ where: { id: { in: [...] } } })` does NOT preserve

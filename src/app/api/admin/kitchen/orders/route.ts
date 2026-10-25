@@ -3,24 +3,16 @@ import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
 import { ORDER_VIEW_SELECT, toOrderViewData } from "@/lib/order-view-data";
 
-// Orders that moved to OUT_FOR_DELIVERY within this window still show in the
-// "Ready" column, so kitchen staff can see recent hand-offs before they
-// scroll off. After this window they're assumed dispatched and drop off.
-const READY_COLUMN_WINDOW_MS = 15 * 60 * 1000;
+// The board shows PLACED / PREPARING / READY. A READY order stays in the
+// "Ready" column until a rider is assigned (it then becomes OUT_FOR_DELIVERY)
+// or, for dine-in, until it is served — so no time window is needed.
 
 export async function GET() {
   const authResult = await requireApiScope("kitchen");
   if (authResult instanceof NextResponse) return authResult;
 
-  const readySince = new Date(Date.now() - READY_COLUMN_WINDOW_MS);
-
   const orders = await prisma.order.findMany({
-    where: {
-      OR: [
-        { status: { in: ["PLACED", "PREPARING"] } },
-        { status: "OUT_FOR_DELIVERY", updatedAt: { gte: readySince } },
-      ],
-    },
+    where: { status: { in: ["PLACED", "PREPARING", "READY"] } },
     select: {
       // ⚠️ ORDER_VIEW_SELECT-এ `orderType` আগে থেকেই আছে, তাই এখানে
       // আবার লিখলে TS2783 ("একাধিকবার দেওয়া হয়েছে") — বোর্ডের নিজের
@@ -31,9 +23,9 @@ export async function GET() {
       createdAt: true,
 
       /**
-       * ⚠️ modal-এর জন্য পুরো ORDER_VIEW_SELECT-ও আনা হয় — বোর্ডের
-       * "Ready to Delivery" আর "View Order" এখন orders টেবিলের একই দুটো
-       * modal খোলে, আর সেগুলো ঠিকানা, ফি-ধাপ, দূরত্ব আর চালান চায়।
+       * modal-এর জন্য পুরো ORDER_VIEW_SELECT-ও আনা হয় — বোর্ডের
+       * "View Order" orders টেবিলের একই modal খোলে, আর সেটা ঠিকানা,
+       * ফি-ধাপ, দূরত্ব আর চালান চায়।
        *
        * আগে বোর্ড থেকে `/admin/orders/<id>` পাতায় পাঠানো হতো, অর্থাৎ
        * রান্নাঘরের স্ক্রিনটা ছেড়ে বেরিয়ে যেতে হতো — ব্যস্ত সময়ে সেটা

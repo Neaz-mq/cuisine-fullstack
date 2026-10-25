@@ -3,7 +3,6 @@ import { requireApiScope } from "@/lib/require-admin";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { toCsv } from "@/lib/csv";
-import { minutesAgo } from "@/lib/time";
 import { formatOrderId, orderIdSearchToken } from "@/lib/format-order-id";
 import {
   DEFAULT_KITCHEN_STATUS,
@@ -11,12 +10,10 @@ import {
   isKitchenStatus,
 } from "@/lib/kitchen-status";
 
-const READY_COLUMN_WINDOW_MINUTES = 15;
-
 const STATUS_LABELS: Record<string, string> = {
   PLACED: "Placed",
   PREPARING: "Preparing",
-  OUT_FOR_DELIVERY: "Ready",
+  READY: "Ready",
 };
 
 /**
@@ -55,15 +52,8 @@ export async function GET(request: Request) {
   // export নীরবে পুরনো নিয়মে চলত।
   const status = isKitchenStatus(rawStatus) ? rawStatus : DEFAULT_KITCHEN_STATUS;
 
-  const readySince = minutesAgo(READY_COLUMN_WINDOW_MINUTES);
-
   const rows = await prisma.order.findMany({
-    where: {
-      OR: [
-        { status: { in: ["PLACED", "PREPARING"] } },
-        { status: "OUT_FOR_DELIVERY", updatedAt: { gte: readySince } },
-      ],
-    },
+    where: { status: { in: ["PLACED", "PREPARING", "READY"] } },
     include: {
       items: { include: { menuItem: { select: { title: true } } } },
       table: { select: { label: true } },

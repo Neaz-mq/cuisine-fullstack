@@ -11,5 +11,5 @@ import { z } from "zod";
  * enums aren't zod schemas on their own.
  */
 export const orderStatusUpdateSchema = z.object({
-  status: z.enum(["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"]),
+  status: z.enum(["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"]),
 });

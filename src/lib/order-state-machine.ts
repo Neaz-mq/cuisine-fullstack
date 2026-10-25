@@ -19,8 +19,21 @@ import type { OrderStatus } from "@/generated/prisma/client";
 /**
  * কোন status থেকে কোথায় যাওয়া যাবে।
  *
- * PREPARING -> DELIVERED সরাসরি অনুমোদিত, কারণ DINE_IN order-এর কোনো
- * delivery leg নেই — waiter টেবিলে খাবার দিয়ে সরাসরি DELIVERED করে।
+ * পুরো পথটা (DELIVERY অর্ডার):
+ *
+ *   PLACED ──(admin: Move to Kitchen)──▶ PREPARING
+ *   PREPARING ──(kitchen: Ready)──▶ READY
+ *   READY ──(admin: rider assign / rider: Picked Up)──▶ OUT_FOR_DELIVERY
+ *   OUT_FOR_DELIVERY ──(rider: Mark Delivered)──▶ DELIVERED
+ *
+ * DINE_IN অর্ডারে delivery leg নেই: READY ──(admin: Mark Served)──▶ DELIVERED।
+ * READY থেকে সরাসরি DELIVERED তাই এখানে বৈধ; DELIVERY অর্ডারকে READY থেকে
+ * DELIVERED-এ লাফ দেওয়া আটকানো হয় mark-order-delivered.ts-এ, কারণ ওই
+ * নিয়মটা অর্ডারের ধরনের উপর নির্ভর করে — যেটা এই map জানে না।
+ *
+ * ⚠️ PREPARING থেকে এখন READY ছাড়া কোথাও যাওয়া যায় না (cancel বাদে)। আগে
+ * PREPARING থেকে সরাসরি OUT_FOR_DELIVERY/DELIVERED যাওয়া যেত, ফলে রান্নাঘর
+ * "Ready" না করেই অর্ডার বেরিয়ে যেত।
  *
  * DELIVERED আর CANCELLED terminal — সেখান থেকে ফেরার পথ নেই। ভুল হলে
  * নতুন order তৈরি করতে হবে, status উল্টে দেওয়া যাবে না; কারণ loyalty
@@ -29,7 +42,8 @@ import type { OrderStatus } from "@/generated/prisma/client";
  */
 const ALLOWED_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   PLACED: ["PREPARING", "CANCELLED"],
-  PREPARING: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
+  PREPARING: ["READY", "CANCELLED"],
+  READY: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
   OUT_FOR_DELIVERY: ["DELIVERED", "CANCELLED"],
   DELIVERED: [],
   CANCELLED: [],
@@ -79,14 +93,14 @@ export function transitionError(from: OrderStatus, to: OrderStatus): string | nu
 }
 
 /**
- * DELIVERY order-এ rider assign করার সময়: OUT_FOR_DELIVERY-তে যাওয়ার
- * আগে কি আগে PREPARING হয়ে নিতে হবে?
+ * কোন অবস্থায় DELIVERY অর্ডারে rider বসানো যায় (বা বদলানো যায়)।
  *
- * PLACED থেকে সরাসরি লাফ দিলে stock deduction হারিয়ে যায়, তাই
- * assign-rider এটা দেখে আগে advanceOrderToPreparing() চালায়। অর্থাৎ
- * "rider assign করা" মানেই "রান্না শুরু হয়েছে" ধরে নেওয়া হচ্ছে — যা
- * বাস্তবেও সত্যি, কেউ রান্না না করে খাবার পাঠায় না।
+ * READY — রান্নাঘর "Ready" করার পরেই rider বসানো যায়, তার আগে নয়। আর
+ * OUT_FOR_DELIVERY — rider ইতিমধ্যে আছে, অন্য rider বসানো (reassign)।
+ *
+ * PLACED/PREPARING থেকে সরাসরি rider বসানো আটকানো হয়, নাহলে রান্না শেষ
+ * হওয়ার আগেই অর্ডার "পথে" দেখাত।
  */
-export function needsPreparingFirst(current: OrderStatus): boolean {
-  return current === "PLACED";
+export function canAssignRider(current: OrderStatus): boolean {
+  return current === "READY" || current === "OUT_FOR_DELIVERY";
 }

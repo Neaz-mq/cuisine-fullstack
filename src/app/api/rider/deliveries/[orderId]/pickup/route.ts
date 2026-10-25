@@ -38,7 +38,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ or
   if (tracking.order.status === "OUT_FOR_DELIVERY") {
     return NextResponse.json({ ok: true, status: "OUT_FOR_DELIVERY" });
   }
-  if (!canTransition(tracking.order.status, "OUT_FOR_DELIVERY") || tracking.order.status !== "PREPARING") {
+  // Only a READY order can go out — the kitchen must have finished it first.
+  if (!canTransition(tracking.order.status, "OUT_FOR_DELIVERY") || tracking.order.status !== "READY") {
     return NextResponse.json(
       { error: `This order is ${tracking.order.status.toLowerCase().replace(/_/g, " ")} — it can't go out.` },
       { status: 409 }
@@ -54,7 +55,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ or
   // `status: "PREPARING"` in the where — if the order was cancelled a
   // moment ago, nothing is updated and the rider is told.
   const { count } = await prisma.order.updateMany({
-    where: { id: orderId, status: "PREPARING" },
+    where: { id: orderId, status: "READY" },
     data: { status: "OUT_FOR_DELIVERY", shippingMethod: "OWN_DELIVERY", dispatchedAt: new Date() },
   });
   if (count === 0) {

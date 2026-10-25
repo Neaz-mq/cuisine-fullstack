@@ -151,11 +151,32 @@ export default function ChatPanel({
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
 
+    // ⚠️ প্রতিটা effect-run আর প্রতিটা reconnect-এর নিজস্ব channel নাম।
+    //
+    // supabase.channel(name) একই নামে আগের channel থাকলে সেটাই ফেরত দেয়। dev-এ
+    // React Strict Mode effect দুবার চালায়, আর `removeChannel` async — তাই
+    // দ্বিতীয়বার আগের (ইতিমধ্যে subscribed) channel-টাই ফেরত আসত, আর তাতে
+    // `.on("postgres_changes")` ডাকলে "cannot add postgres_changes callbacks
+    // after subscribe()" error হতো। নাম আলাদা হলে প্রতিবার নতুন channel।
+    // (postgres_changes-এর ফিল্টার নামের উপর নির্ভর করে না, তাই live push আগের
+    // মতোই কাজ করে।)
+    const instance = Math.random().toString(36).slice(2, 10);
+    let connection = 0;
+
     function connect() {
       if (cancelled) return;
+      connection += 1;
+      // এই connect-এর নিজের "হ্যান্ডেল" — retry শুধু একবারই schedule হবে।
+      //
+      // ⚠️ `supabase.removeChannel(ch)` নিজেই channel-টাকে বন্ধ করে, আর তাতে একই
+      // subscribe callback-এ আবার `CLOSED` আসে। আগে সেই `CLOSED`-ও "ব্যর্থতা"
+      // ধরা হতো → আবার removeChannel → আবার CLOSED → প্রতিবার নতুন retry
+      // schedule — অসীম লুপ, আর console-এ অবিরাম "CLOSED — reconnecting"।
+      // এখন প্রথম ব্যর্থতাই হিসাব হয়; আমাদের নিজের বন্ধ করা `CLOSED` উপেক্ষিত।
+      let handled = false;
       try {
-        channel = supabase
-          .channel(`chat:${orderId}`)
+        const ch = supabase
+          .channel(`chat:${orderId}:${instance}:${connection}`)
           .on(
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "ChatMessage", filter: `orderId=eq.${orderId}` },
@@ -164,21 +185,24 @@ export default function ChatPanel({
             }
           )
           .subscribe((status, err) => {
-            if (cancelled) return;
+            if (cancelled || handled) return;
             if (status === "SUBSCRIBED") {
               attempt = 0; // connection is healthy again — reset backoff
               return;
             }
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-              console.error(`Chat realtime channel for order ${orderId}: ${status} — reconnecting`, err);
-              if (channel) supabase.removeChannel(channel);
+              handled = true;
+              console.warn(`Chat realtime channel for order ${orderId}: ${status} — reconnecting`, err);
+              supabase.removeChannel(ch);
               const delay = Math.min(1000 * 2 ** attempt, 10000);
               attempt += 1;
               retryTimer = setTimeout(connect, delay);
             }
           });
+        channel = ch;
       } catch (err) {
         console.error("Chat realtime subscription failed — retrying:", err);
+        if (channel) supabase.removeChannel(channel);
         const delay = Math.min(1000 * 2 ** attempt, 10000);
         attempt += 1;
         retryTimer = setTimeout(connect, delay);

@@ -32,14 +32,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       { status: 409 }
     );
   }
-  if (tracking.deliveredAt || tracking.order.status !== "PREPARING") {
+  if (tracking.deliveredAt || tracking.order.status !== "READY") {
     return NextResponse.json({ error: "You've already picked this order up." }, { status: 409 });
   }
 
   // Only while still not picked up (status in the where), in case the
   // kitchen dispatched it this very moment.
   const { count } = await prisma.deliveryTracking.deleteMany({
-    where: { orderId, riderId, deliveredAt: null, order: { status: "PREPARING" } },
+    where: { orderId, riderId, deliveredAt: null, order: { status: "READY" } },
   });
   if (count === 0) {
     return NextResponse.json({ error: "This order just changed — please refresh." }, { status: 409 });

@@ -6,7 +6,6 @@ import { toast } from "react-toastify";
 import { formatOrderId } from "@/lib/format-order-id";
 import type { KitchenSort } from "@/lib/kitchen-status";
 import OrderViewModal, { type OrderViewData } from "@/app/admin/orders/OrderViewModal";
-import OrderDeliveryModal from "@/app/admin/orders/OrderDeliveryModal";
 
 const POLL_INTERVAL_MS = 15000; // NotificationBell-এর সাথে একই ছন্দ
 const URGENT_AFTER_MS = 15 * 60 * 1000; // ১৫ মিনিটের পুরনো অর্ডার লাল
@@ -19,7 +18,7 @@ type OrderItem = {
 
 type KitchenOrder = {
   id: string;
-  status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY";
+  status: "PLACED" | "PREPARING" | "READY";
   orderType: "DELIVERY" | "DINE_IN";
   firstName: string;
   lastName: string;
@@ -27,7 +26,7 @@ type KitchenOrder = {
   items: OrderItem[];
   table: { label: string } | null;
   /**
-   * "View Order" আর "Ready to Delivery" modal-এর জন্য পুরো order —
+   * "View Order" modal-এর জন্য পুরো order —
    * ঠিকানা, চালান, ফি-ধাপ, বসানো rider। server-এ সাজানো (lib/
    * order-view-data.ts), orders টেবিল যেটা ব্যবহার করে ঠিক সেটাই।
    */
@@ -160,7 +159,7 @@ function OrderCard({
   onView: () => void;
 }) {
   const isUrgent =
-    order.status !== "OUT_FOR_DELIVERY" &&
+    order.status !== "READY" &&
     nowMs - new Date(order.createdAt).getTime() > URGENT_AFTER_MS;
   const isDineIn = order.orderType === "DINE_IN";
 
@@ -219,22 +218,15 @@ function OrderCard({
         </button>
       ) : (
         /**
-         * ⚠️ "Ready" কলামে Figma-তে "Out for Delivery" লেখা একটা বোতাম
-         * আঁকা, কিন্তু সেটা বসানো হয়নি — এবং কারণটা বলে রাখা দরকার।
+         * ⚠️ "Ready" কলামে কোনো কাজের বোতাম নেই — শুধু অর্ডার খোলার বোতাম।
          *
-         * আমাদের status-এ `OUT_FOR_DELIVERY`-ই "Ready" কলাম, অর্থাৎ
-         * ওই বোতামটা চাপলে যেতে হতো `DELIVERED`-এ। কিন্তু "পৌঁছেছে"
-         * চিহ্ন দেওয়ার কাজ রাইডারের, রান্নাঘরের নয় — রান্নাঘরের পর্দা
-         * থেকে সেটা করলে অর্ডার ভুলভাবে শেষ হয়ে যেত আর রাইডারের
-         * তালিকা থেকে হারিয়ে যেত।
+         * READY-র পরের ধাপ (rider বসানো → "পথে") Orders list-এর "Ready to
+         * Delivery" modal থেকে হয়, আর "পৌঁছেছে" চিহ্ন দেওয়ার কাজ রাইডারের।
+         * রান্নাঘরের পর্দা থেকে কোনোটাই করা যায় না — করলে অর্ডার rider ছাড়া
+         * "পথে" বা ভুলভাবে শেষ হয়ে যেত।
          *
-         * তাই এখানে অর্ডারটা খোলার বোতাম।
-         *
-         * ⚠️ আগে এটা `/admin/orders/<id>` পাতার একটা <Link> ছিল। সেই
-         * পাতাটা ছিল সাদামাটা, আর তার চেয়ে বড় কথা — বোতামটা রান্নাঘরের
-         * পর্দা থেকে staff-কে বের করে নিয়ে যেত। ব্যস্ত সময়ে ফিরে এসে
-         * আবার sort/filter বসানো মানে হারানো সেকেন্ড। এখন orders
-         * টেবিলের হুবহু একই modal, জায়গা ছেড়ে না গিয়েই।
+         * বোতামটা orders টেবিলের হুবহু একই modal খোলে, রান্নাঘরের পর্দা
+         * ছেড়ে না গিয়েই।
          */
         <button
           type="button"
@@ -334,17 +326,15 @@ export default function KitchenBoard({
   }, []);
 
   /**
-   * কোন অর্ডারটা কোন modal-এ খোলা — id, পুরো object নয়।
+   * কোন অর্ডারটা modal-এ খোলা — id, পুরো object নয়।
    *
    * ⚠️ কারণটা poll-এ: প্রতি ১৫ সেকেন্ডে পুরো তালিকা নতুন করে আসে। object
-   * ধরে রাখলে modal-টা একটা জমে যাওয়া কপি দেখাত — rider বসানোর পরেও
-   * dropdown ফাঁকা, ফি পুরনো। id ধরে রেখে প্রতি render-এ টাটকা তালিকা
-   * থেকে খুঁজে নিলে modal নিজে থেকেই হালনাগাদ থাকে।
+   * ধরে রাখলে modal-টা একটা জমে যাওয়া কপি দেখাত। id ধরে রেখে প্রতি
+   * render-এ টাটকা তালিকা থেকে খুঁজে নিলে modal নিজে থেকেই হালনাগাদ থাকে।
    */
   const [viewingId, setViewingId] = useState<string | null>(null);
-  const [dispatchingId, setDispatchingId] = useState<string | null>(null);
 
-  function advanceStatus(orderId: string, nextStatus: "PREPARING" | "OUT_FOR_DELIVERY") {
+  function advanceStatus(orderId: string, nextStatus: "PREPARING" | "READY") {
     const prevOrders = orders;
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
 
@@ -385,47 +375,36 @@ export default function KitchenBoard({
       title: "Preparing",
       orders: sorted.filter((o) => o.status === "PREPARING"),
       /**
-       * ⚠️ ডেলিভারির অর্ডারে এটা সরাসরি status বদলায় না, modal খোলে।
+       * ⚠️ বোতামের লেখা শুধু "Ready" — "Ready to Delivery" নয়, আর কোনো
+       * modal-ও খোলে না। চাপলে অর্ডার সরাসরি READY হয়ে যায়।
        *
-       * আগে এটা সোজা `OUT_FOR_DELIVERY`-তে PATCH করত, অর্থাৎ কোনো rider
-       * বসানো ছাড়াই অর্ডারটা "পথে" হয়ে যেত: DeliveryTracking তৈরি হতো
-       * না, তাই গ্রাহকের /track পাতায় কোনো map বা rider থাকত না, আর
-       * chat-ও খুলত না। দূরত্ব-ভিত্তিক delivery ফি-ও বসত না।
+       * rider বসানো আর "Ready to Delivery" modal এখন কেবল Orders list-এ,
+       * অর্ডার READY হওয়ার পরে। রান্নাঘর শুধু জানায় "খাবার তৈরি"; কাকে
+       * দিয়ে পাঠানো হবে সেটা admin ঠিক করে।
        *
-       * এখন orders টেবিলের হুবহু একই modal — যেটা rider বসানো, ফি হিসাব
-       * আর status বদল তিনটেই এক request-এ করে (assign-rider route)।
-       *
-       * ⚠️ dine-in ব্যতিক্রম: ওখানে কোনো rider নেই, "Ready" মানে শুধু
-       * পরিবেশনের জন্য তৈরি। তাই ওটা আগের মতোই সরাসরি PATCH।
+       * dine-in-এও একই: "Ready" মানে পরিবেশনের জন্য তৈরি।
        */
-      action: (order: KitchenOrder) =>
-        order.orderType === "DINE_IN"
-          ? {
-              label: "Mark Ready",
-              onClick: () => advanceStatus(order.id, "OUT_FOR_DELIVERY"),
-            }
-          : {
-              label: "Ready to Delivery",
-              onClick: () => setDispatchingId(order.id),
-            },
+      action: (order: KitchenOrder) => ({
+        label: "Ready",
+        onClick: () => advanceStatus(order.id, "READY"),
+      }),
     },
     {
       key: "ready",
       title: "Ready",
-      orders: sorted.filter((o) => o.status === "OUT_FOR_DELIVERY"),
+      orders: sorted.filter((o) => o.status === "READY"),
       action: null,
     },
   ];
 
   /**
    * ⚠️ প্রতি render-এ টাটকা তালিকা থেকে খুঁজে নেওয়া হয়, state-এ জমিয়ে
-   * রাখা হয় না — উপরে `viewingId`/`dispatchingId`-এর মন্তব্য দ্রষ্টব্য।
-   * খোলা অর্ডারটা যদি poll-এর পর তালিকা থেকে চলে যায় (যেমন "Ready"
-   * কলামের ১৫ মিনিটের জানালা পেরিয়ে গেল), modal নিজে থেকেই বন্ধ হয়ে
-   * যায় — একটা বাসি কপি খোলা রেখে দেওয়ার চেয়ে সেটাই ঠিক।
+   * রাখা হয় না — উপরে `viewingId`-এর মন্তব্য দ্রষ্টব্য। খোলা অর্ডারটা যদি
+   * poll-এর পর তালিকা থেকে চলে যায় (যেমন rider বসে "Ready" কলাম থেকে নেমে
+   * গেল), modal নিজে থেকেই বন্ধ হয়ে যায় — একটা বাসি কপি খোলা রেখে
+   * দেওয়ার চেয়ে সেটাই ঠিক।
    */
   const viewing = orders.find((order) => order.id === viewingId) ?? null;
-  const dispatching = orders.find((order) => order.id === dispatchingId) ?? null;
 
   return (
     <>
@@ -473,40 +452,15 @@ export default function KitchenBoard({
     </div>
 
       {/**
-        * ⚠️ modal দুটো orders টেবিলের হুবহু একই component — নতুন করে লেখা
-        * হয়নি। "Ready to Delivery" চাপলে যা হয় তার পুরোটাই
-        * OrderDeliveryModal-এর ভেতরে: rider বাছা → POST /api/admin/orders/
-        * <id>/assign-rider → সেই একটা route-ই দূরত্ব মাপে, ফি বসায়,
-        * DeliveryTracking তৈরি করে আর অর্ডারকে OUT_FOR_DELIVERY-তে নেয়।
-        *
-        * ⚠️ সফল হলে `onDone` — board-এর নিজের তালিকা সাথে সাথে হালনাগাদ
-        * করা হয়, পরের poll-এর ১৫ সেকেন্ড অপেক্ষা না করে। নাহলে staff
-        * বোতাম চেপে কার্ডটাকে "Preparing" কলামেই বসে থাকতে দেখতেন আর
-        * দ্বিতীয়বার চাপতেন।
+        * ⚠️ modal-টা orders টেবিলের হুবহু একই component — নতুন করে লেখা
+        * হয়নি। (rider বসানোর "Ready to Delivery" modal এখানে নেই; সেটা
+        * কেবল Orders list-এ।)
         */}
       <OrderViewModal
         open={viewing !== null}
         onClose={() => setViewingId(null)}
         order={viewing?.view ?? EMPTY_VIEW}
       />
-      {dispatching && (
-        <OrderDeliveryModal
-          open
-          onClose={() => setDispatchingId(null)}
-          orderId={dispatching.id}
-          order={dispatching.view}
-          onDone={() => {
-            setDispatchingId(null);
-            setOrders((prev) =>
-              prev.map((order) =>
-                order.id === dispatching.id
-                  ? { ...order, status: "OUT_FOR_DELIVERY" as const }
-                  : order
-              )
-            );
-          }}
-        />
-      )}
       </>
   );
 }

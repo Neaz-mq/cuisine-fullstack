@@ -33,7 +33,11 @@ export async function POST(
   }
   // An order the rider took from Available Orders is still in the kitchen
   // until they press "Picked Up" — it can't be delivered before that.
-  if (tracking.order.status === "PREPARING" || tracking.order.status === "PLACED") {
+  if (
+    tracking.order.status === "PLACED" ||
+    tracking.order.status === "PREPARING" ||
+    tracking.order.status === "READY"
+  ) {
     return NextResponse.json(
       { error: "Press “Picked Up” first — this order is still at the restaurant." },
       { status: 409 }

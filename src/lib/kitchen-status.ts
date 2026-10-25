@@ -45,17 +45,18 @@ export const KITCHEN_STATUS_OPTIONS: FilterMenuOption<KitchenStatusFilter>[] = [
 /**
  * বোর্ডের কলাম কোন OrderStatus-এ পড়ে।
  *
- * ⚠️ "ready" = `OUT_FOR_DELIVERY`, আর সেটা আমাদের মডেলে "রান্না শেষ,
- * তুলে নেওয়ার অপেক্ষায়" — রাইডার রওনা দিয়েছে এমন নয়। নামটা
- * বিভ্রান্তিকর, কিন্তু enum-টা পুরনো আর অনেক জায়গায় ব্যবহৃত।
+ * ⚠️ "ready" = `READY` — রান্না শেষ, রাইডারের (বা পরিবেশনের) অপেক্ষায়।
+ * রাইডার বসলেই অর্ডার `OUT_FOR_DELIVERY`-তে চলে যায় আর বোর্ড থেকে নেমে
+ * যায়; আগে `OUT_FOR_DELIVERY`-ই "ready" ধরা হতো, তাই একটা ১৫ মিনিটের
+ * জানালা লাগত — এখন আর লাগে না।
  */
 export const KITCHEN_STATUS_TO_ORDER_STATUS: Record<
   Exclude<KitchenStatusFilter, "all">,
-  "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY"
+  "PLACED" | "PREPARING" | "READY"
 > = {
   placed: "PLACED",
   preparing: "PREPARING",
-  ready: "OUT_FOR_DELIVERY",
+  ready: "READY",
 };
 
 /* ── Overview-র ছাঁকনি: অর্ডারের ধরন ──────────────────────────────── */

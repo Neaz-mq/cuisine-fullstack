@@ -41,6 +41,7 @@ type LatLng = { lat: number; lng: number };
 const STATUS_PILL: Record<TrackedOrder["status"], string> = {
   PLACED: "bg-[#E6EDFE] text-[#3A8DFA]",
   PREPARING: "bg-[#FDF3DC] text-[#F3A42F]",
+  READY: "bg-[#FDF3DC] text-[#F3A42F]",
   OUT_FOR_DELIVERY: "bg-[#E9E0FD] text-[#530EF8]",
   DELIVERED: "bg-[#ECFEED] text-[#58CB2F]",
   CANCELLED: "bg-[#D72A37]/10 text-[#D72A37]",
@@ -246,7 +247,24 @@ export default function OrderTrackingTimeline({
   const isDineIn = order.orderType === "DINE_IN";
   const isCancelled = order.status === "CANCELLED";
   const STEPS = stepsFor(order.orderType);
-  const currentStepIndex = STEPS.findIndex((s) => s.key === order.status);
+
+  /**
+   * ⚠️ READY (রান্না শেষ) চার ধাপের timeline-এ আলাদা ধাপ নয়, তাই কোন ধাপে
+   * দেখানো হবে সেটা অর্ডারের ধরন ঠিক করে:
+   *
+   *   delivery → "Preparing" ধাপেই থাকে — খাবার তৈরি, কিন্তু rider এখনো বসেনি,
+   *              তাই "Out for Delivery" সবুজ হওয়া ভুল হতো।
+   *   dine-in  → "Ready to Serve" ধাপ (তৃতীয়) — খাবার টেবিলে যাওয়ার অপেক্ষায়।
+   */
+  const stepKey =
+    order.status === "READY" ? (isDineIn ? "OUT_FOR_DELIVERY" : "PREPARING") : order.status;
+  const currentStepIndex = STEPS.findIndex((s) => s.key === stepKey);
+  // delivery অর্ডারে READY হলে badge-এ "Ready" — "Preparing" লিখলে রান্না শেষের
+  // খবরটা গ্রাহক পেতেন না।
+  const pillLabel =
+    order.status === "READY" && !isDineIn
+      ? "Ready"
+      : (STEPS[currentStepIndex]?.label ?? "Order Placed");
 
   const money = (value: string) => formatAmount(value, order.currency);
   const when = (iso: string | null, fmt: (iso: string) => string) =>
@@ -264,7 +282,12 @@ export default function OrderTrackingTimeline({
    * ডেলিভারি চলছে। Figma ওই অবস্থায় map-এর জায়গায় রান্নাঘরের কার্ড
    * দেখায় — সেটাই সত্যিকারের খবর।
    */
-  const inKitchen = order.status === "PLACED" || order.status === "PREPARING";
+  // READY (delivery) = রান্না শেষ, rider-এর অপেক্ষা — এখনো কোনো map/rider নেই,
+  // তাই রান্নাঘরের কার্ডেই থাকে। dine-in READY-তে Order Information দেখায়।
+  const inKitchen =
+    order.status === "PLACED" ||
+    order.status === "PREPARING" ||
+    (order.status === "READY" && !isDineIn);
   const showMap = order.orderType === "DELIVERY" && order.status === "OUT_FOR_DELIVERY";
 
   /**
@@ -321,10 +344,10 @@ export default function OrderTrackingTimeline({
           <div className="flex shrink-0 flex-wrap items-center gap-3">
             <span
               className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 font-sora text-[13px] font-semibold leading-[1.3] md:h-[46px] md:px-5 md:text-[16px] ${
-                isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : STATUS_PILL[order.status]
+                isCancelled ? "bg-[#D72A37]/10 text-[#D72A37]" : STATUS_PILL[stepKey]
               }`}
             >
-              {isCancelled ? "Cancelled" : (STEPS[currentStepIndex]?.label ?? "Order Placed")}
+              {isCancelled ? "Cancelled" : pillLabel}
             </span>
 
             {/* The pop-up after delivery only shows once per order, so this
@@ -458,7 +481,9 @@ export default function OrderTrackingTimeline({
             */}
           {inKitchen ? (
             <KitchenStatusCard
-              status={order.status === "PLACED" ? "PLACED" : "PREPARING"}
+              status={
+                order.status === "PLACED" ? "PLACED" : order.status === "READY" ? "READY" : "PREPARING"
+              }
               items={order.items}
               itemCount={order.itemCount}
               prepMinutesLeft={order.prepMinutesLeft}

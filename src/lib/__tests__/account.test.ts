@@ -15,6 +15,7 @@ import { buildCheckoutProfile } from "@/lib/checkout-profile";
 describe("customer panel helpers", () => {
   it("knows which orders are still live", () => {
     expect(isActiveOrder("PLACED")).toBe(true);
+    expect(isActiveOrder("READY")).toBe(true);
     expect(isActiveOrder("OUT_FOR_DELIVERY")).toBe(true);
     expect(isActiveOrder("DELIVERED")).toBe(false);
     expect(isActiveOrder("CANCELLED")).toBe(false);
@@ -24,6 +25,9 @@ describe("customer panel helpers", () => {
     expect(orderSteps("DELIVERY")[2]).toBe("On the way");
     expect(orderSteps("DINE_IN")[2]).toBe("Ready to serve");
     expect(orderStepIndex("PREPARING")).toBe(1);
+    // READY: a delivery order still waits for a rider; a dine-in one is ready to serve.
+    expect(orderStepIndex("READY", "DELIVERY")).toBe(1);
+    expect(orderStepIndex("READY", "DINE_IN")).toBe(2);
     expect(orderStepIndex("CANCELLED")).toBe(-1);
   });
 

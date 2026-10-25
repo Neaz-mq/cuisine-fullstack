@@ -29,13 +29,14 @@ type DeliverResult =
         | "Order not found"
         | "Cannot deliver a cancelled order"
         | "This order cannot be marked delivered from its current status"
+        | "This order hasn't left the restaurant yet"
         | "This order hasn't been paid yet";
     };
 
 export async function markOrderDelivered(orderId: string): Promise<DeliverResult> {
   const existingOrder = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { status: true, paymentMethod: true, paymentStatus: true },
+    select: { status: true, orderType: true, paymentMethod: true, paymentStatus: true },
   });
 
   if (!existingOrder) return { ok: false, error: "Order not found" };
@@ -79,6 +80,15 @@ export async function markOrderDelivered(orderId: string): Promise<DeliverResult
    */
   // Same rule as advanceOrderToPreparing(): an unpaid ONLINE order must not
   // be handed over, and must not earn loyalty points.
+  /**
+   * ⚠️ DELIVERY অর্ডার READY থেকে সরাসরি DELIVERED হতে পারে না — আগে rider
+   * বসিয়ে OUT_FOR_DELIVERY-তে নিতে হয়। (state machine READY → DELIVERED বৈধ
+   * ধরে কারণ dine-in-এ সেটাই "Served"; ধরন দেখে আটকানোটা এখানে।)
+   */
+  if (existingOrder.orderType === "DELIVERY" && existingOrder.status !== "OUT_FOR_DELIVERY") {
+    return { ok: false, error: "This order hasn't left the restaurant yet" };
+  }
+
   if (
     existingOrder.paymentMethod === "ONLINE" &&
     (existingOrder.paymentStatus === "PENDING" || existingOrder.paymentStatus === "FAILED")

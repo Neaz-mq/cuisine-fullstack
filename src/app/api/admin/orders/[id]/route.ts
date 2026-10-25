@@ -1,0 +1,234 @@
+import { NextRequest, NextResponse, after } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireApiScopeAny } from "@/lib/require-admin";
+import { orderStatusUpdateSchema } from "@/lib/validations/order";
+import { parseBody } from "@/lib/validations/parse";
+import { markOrderDelivered } from "@/lib/mark-order-delivered";
+import { advanceOrderToPreparing } from "@/lib/advance-order-to-preparing";
+import { cancelOrder } from "@/lib/cancel-order";
+import { transitionError } from "@/lib/order-state-machine";
+import { resolveOrderAccess } from "@/lib/order-access";
+import { findOrderForTracking, serializeTrackedOrder } from "@/lib/track-order";
+import { hasPermission } from "@/lib/permissions";
+import { isRecordNotFound } from "@/lib/prisma-errors";
+import { sendOrderStatusEmail } from "@/lib/send-order-status-email";
+
+/**
+ * GET /api/orders/[id] — /track/[orderId] পাতার poll endpoint.
+ *
+ * ⚠️ এখানে আগে কোনো auth ছিলই না। PATCH-এ requireApiScopeAny বসানো
+ * ছিল, GET-এ কিছুই না — অর্থাৎ id জানলেই যে কেউ গ্রাহকের নাম, শহর,
+ * পুরো চালান আর rider-এর live GPS পড়তে পারতো।
+ *
+ * এখন প্রতিটা request lib/order-access.ts-এর মধ্য দিয়ে যায়। নিয়মগুলো
+ * ওই file-এ বিস্তারিত; সংক্ষেপে: guest order-এ id-ই টিকিট, কিন্তু
+ * order-এর একজন মালিক থাকলে তাকে (বা staff-কে) log in করতে হবে।
+ *
+ * Field নির্বাচন সংকীর্ণ — phone আর email কখনোই যায় না। deliveryTracking-এ
+ * rider-এর id/নাম/ফোনও কখনো select হয় না, শুধু map-এর স্থানাঙ্ক আর timestamp।
+ *
+ * ⚠️ ঠিকানা (`address`) এখন যায়। /track পাতা সেটা আগে থেকেই server-render
+ * করে একই দর্শককে দেখাত (Figma-র "Address" ঘর), শুধু এই endpoint পাঠাত
+ * না — ফলে প্রথম poll-এর পর ঘরটা বদলে যেত। একই access নিয়মে একই দর্শক,
+ * তাই দুই পথে দুই রকম উত্তর দেওয়ার কোনো নিরাপত্তা-লাভ ছিল না।
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  // ⚠️ select আর serialize দুটোই lib/track-order.ts থেকে — /track পাতাও
+  // হুবহু একই দুটো ব্যবহার করে। আগে এখানে আলাদা হাতে-লেখা map ছিল, যেটা
+  // পাতার থেকে সরে গিয়েছিল (preparingAt/dispatchedAt/deliveredAt/address
+  // পাঠাত না), ফলে প্রথম poll-এর পরেই timeline-এর সময়গুলো মুছে যেত।
+  const order = await findOrderForTracking(id);
+
+  if (!order) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  const access = await resolveOrderAccess(order);
+  if (!access) {
+    // ইচ্ছাকৃতভাবে 404, 403 নয়। 403 নিশ্চিত করে দিত যে এই id-তে একটা
+    // order আছে — সেটাই enumeration oracle।
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(await serializeTrackedOrder(order));
+}
+
+/**
+ * PATCH — admin/kitchen status বদল।
+ *
+ * কে কোন ধাপটা চালায়:
+ *
+ *   PREPARING         admin  — Orders list-এর "Move to Kitchen"
+ *   READY             kitchen — Kitchen board-এর "Ready"
+ *   OUT_FOR_DELIVERY  এই route দিয়ে নয় — rider বসালে (assign-rider) বা rider
+ *                     "Picked Up" চাপলে (rider/deliveries/.../pickup)
+ *   DELIVERED         rider নিজের panel থেকে (delivery); admin "Mark Served"
+ *                     (dine-in)
+ *
+ * প্রতিটা status-এর নিজস্ব helper আছে, কারণ status বদলানো মানে শুধু একটা
+ * column লেখা নয় — সাথে stock, loyalty point, gift card balance-এর
+ * হিসাবও বদলায়, আর সেগুলো একই transaction-এ হতে হবে:
+ *
+ *   PREPARING  -> advanceOrderToPreparing  (recipe ingredient deduct)
+ *   DELIVERED  -> markOrderDelivered       (loyalty point + tracking বন্ধ)
+ *   CANCELLED  -> cancelOrder              (stock/coupon/gift card ফেরত)
+ *
+ * আগে CANCELLED-এর কোনো helper ছিল না — নিচের সাধারণ update-এ গিয়ে
+ * স্রেফ status লেখা হতো। ফলে admin dropdown থেকে cancel করলে deduct হওয়া
+ * ingredient ফেরত আসতো না, coupon-এর slot নষ্ট হতো, আর সবচেয়ে গুরুতর,
+ * customer-এর gift card balance চিরতরে হারিয়ে যেতো।
+ *
+ * READY-র কোনো stock/ledger side effect নেই (stock কাটা হয় PREPARING-এ), তাই
+ * সেটাই শুধু নিচের সাধারণ update path ব্যবহার করে — এবং তার আগেও state
+ * machine দিয়ে transition বৈধতা যাচাই হয়।
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authResult = await requireApiScopeAny(["orders", "kitchen"]);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+
+  const parsed = await parseBody(req, orderStatusUpdateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { status } = parsed;
+
+  // DELIVERED goes through the shared helper (loyalty points + closing
+  // out DeliveryTracking) — same code path a rider's own "Mark Delivered"
+  // button uses, see POST /api/rider/deliveries/[orderId]/deliver.
+  if (status === "DELIVERED") {
+    const result = await markOrderDelivered(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
+    }
+    // "Order Updates" email — after the response, never blocks staff.
+    after(() => sendOrderStatusEmail(id, "DELIVERED"));
+    return NextResponse.json(result.order);
+  }
+
+  // PREPARING goes through its own shared helper — deducts recipe
+  // ingredients (MenuItemIngredient) from InventoryItem.currentStock in
+  // the same transaction as the status change. Orders with no
+  // recipe-configured menu items just advance with nothing to deduct.
+  if (status === "PREPARING") {
+    const result = await advanceOrderToPreparing(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
+    }
+    return NextResponse.json(result.order);
+  }
+
+  // CANCELLED reverses everything the order had already claimed. Note this
+  // is deliberately NOT a plain status write — see the doc comment above.
+  if (status === "CANCELLED") {
+    // ⚠️ Cancelling a PAID card order also refunds the card (cancelOrder →
+    // refundOrder). Refunds are deliberately their own "refunds" scope —
+    // /api/admin/orders/[id]/refund checks it — so a kitchen, waiter or
+    // cashier account must not be able to reach the same refund through
+    // this door. They can still cancel unpaid and cash orders.
+    const payment = await prisma.order.findUnique({
+      where: { id },
+      select: { paymentMethod: true, paymentStatus: true },
+    });
+    const refundsCard =
+      payment?.paymentMethod === "ONLINE" &&
+      (payment.paymentStatus === "PAID" || payment.paymentStatus === "PARTIALLY_REFUNDED");
+    const actingRole = (authResult.user as { role?: string }).role;
+    if (refundsCard && !hasPermission(actingRole, "refunds")) {
+      return NextResponse.json(
+        { error: "This order was paid by card. Cancelling it refunds the customer, so only staff with refund access can do it." },
+        { status: 403 }
+      );
+    }
+
+    const result = await cancelOrder(id, "Cancelled by staff");
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: errorStatus(result.error) });
+    }
+    after(() => sendOrderStatusEmail(id, "CANCELLED"));
+    return NextResponse.json(result.order);
+  }
+
+  /**
+   * ⚠️ OUT_FOR_DELIVERY এই route দিয়ে বসানো যায় না।
+   *
+   * আগে kitchen board আর admin dropdown এখান দিয়েই অর্ডারকে "পথে" পাঠাত —
+   * কোনো rider বসানো ছাড়াই। ফলে DeliveryTracking তৈরি হতো না, গ্রাহকের
+   * /track পাতায় map বা rider থাকত না, chat খুলত না। এখন "পথে" যাওয়ার একটাই
+   * বৈধ পথ: rider বসানো (assign-rider) বা rider-এর নিজের "Picked Up"।
+   */
+  if (status === "OUT_FOR_DELIVERY") {
+    return NextResponse.json(
+      { error: "An order goes out for delivery when a rider is assigned to it." },
+      { status: 409 }
+    );
+  }
+
+  // যা বাকি থাকে তা কেবল READY (আর PLACED-এ একই-অবস্থার no-op) — কোনো ledger
+  // বা balance এতে বদলায় না, তাই সাধারণ update-ই যথেষ্ট। তবু transition বৈধ
+  // কিনা দেখা হয়, নাহলে একটা DELIVERED order আবার READY-তে ফিরিয়ে আনা যেত।
+  const existingOrder = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true, status: true, orderType: true, dispatchedAt: true },
+  });
+  if (!existingOrder) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  const invalid = transitionError(existingOrder.status, status);
+  if (invalid) {
+    return NextResponse.json({ error: invalid }, { status: 409 });
+  }
+
+  /**
+   * ⚠️ dine-in অর্ডারে READY-ই শেষ রান্নাঘর-ধাপ — আলাদা কোনো "বেরোনো" নেই।
+   * /track পাতার তৃতীয় ধাপ ("Ready to Serve") তার সময় পড়ে `dispatchedAt` থেকে,
+   * তাই dine-in READY-তে সেটা বসে (শুধু আগে থেকে না থাকলে)। delivery অর্ডারে
+   * `dispatchedAt` বসে কেবল rider বেরোলে (assign-rider / pickup)।
+   */
+  // status in WHERE = atomic claim — if the order was cancelled or delivered
+  // a moment ago, don't drag it back to READY.
+  const updated = await prisma.order
+    .update({
+      where: { id, status: existingOrder.status },
+      data: {
+        status,
+        ...(status === "READY" &&
+        existingOrder.orderType === "DINE_IN" &&
+        existingOrder.dispatchedAt === null
+          ? { dispatchedAt: new Date() }
+          : {}),
+      },
+    })
+    .catch((error: unknown) => {
+      if (isRecordNotFound(error)) return null;
+      throw error;
+    });
+
+  if (!updated) {
+    return NextResponse.json(
+      { error: "This order was just changed by someone else. Please refresh and try again." },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json(updated);
+}
+
+/**
+ * Helper-দের error string থেকে HTTP status. "Order not found" ছাড়া বাকি
+ * সবগুলোই এখন transition-সংক্রান্ত — অর্থাৎ request নিজে ঠিক আছে, কিন্তু
+ * order-এর বর্তমান অবস্থার সাথে সংঘাত। সেটা 400 (malformed request) নয়,
+ * 409 Conflict — client যাতে "আমি ভুল পাঠিয়েছি" আর "এটা এখন করা যাবে না"
+ * আলাদা করতে পারে।
+ */
+function errorStatus(error: string): number {
+  return error === "Order not found" ? 404 : 409;
+}

@@ -56,6 +56,7 @@ export const FIELD_ERROR = "mt-1.5 font-sora text-[12px] text-[#D72A37]";
 export const STATUS_PILL: Record<string, string> = {
   PLACED: "bg-[#FFF1E5] text-[#FF7100]",
   PREPARING: "bg-[#FFF8E1] text-[#B98900]",
+  READY: "bg-[#E8F3FF] text-[#1D6FD8]",
   OUT_FOR_DELIVERY: "bg-[#EBE0FF] text-[#5A00FF]",
   DELIVERED: "bg-[#E8FFEC] text-[#0ECF00]",
   CANCELLED: "bg-[#FAE7EC] text-[#D72A37]",

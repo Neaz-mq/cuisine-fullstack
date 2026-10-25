@@ -227,7 +227,7 @@ export type TrackedOrder = {
   } | null;
 };
 
-const ACTIVE_STATUSES = new Set(["PLACED", "PREPARING", "OUT_FOR_DELIVERY"]);
+const ACTIVE_STATUSES = new Set(["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY"]);
 const IN_KITCHEN_STATUSES = new Set(["PLACED", "PREPARING"]);
 
 export function findOrderForTracking(id: string) {
@@ -354,6 +354,7 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
  *
  *   PLACED / PREPARING → রান্নাঘরের সারি অনুযায়ী রান্নার বাকি সময়,
  *                        আর (delivery হলে) তার সাথে পথের সময়
+ *   READY              → রান্না শেষ (টাইমার নেই); delivery হলে শুধু পথের সময়
  *   OUT_FOR_DELIVERY   → পথের সময় − বের হওয়ার পর যতটা পেরিয়েছে
  *
  * ⚠️ পেরোনো সময় বাদ দেওয়া হয় দুই জায়গাতেই। নাহলে rider ২৫ মিনিট ধরে
@@ -379,6 +380,16 @@ async function estimateTimings(order: TrackOrderRecord): Promise<{
       : 0;
     return {
       eta: { min: Math.max(0, transit.min - elapsed), max: Math.max(0, transit.max - elapsed) },
+      prepMinutesLeft: null,
+    };
+  }
+
+  // রান্না শেষ, rider-এর (বা পরিবেশনের) অপেক্ষা — রান্নাঘরের সারির হিসাব আর
+  // লাগে না, তাই DB-তেও যাওয়া হয় না।
+  if (order.status === "READY") {
+    return {
+      eta: isDelivery && transit ? { min: transit.min, max: transit.max } : null,
+      // null — রান্নার টাইমার আর দেখানোর কিছু নেই (কার্ড "Your Food Is Ready" বলে)।
       prepMinutesLeft: null,
     };
   }

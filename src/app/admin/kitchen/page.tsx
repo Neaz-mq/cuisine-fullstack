@@ -1,7 +1,6 @@
 import { Calendar } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
-import { minutesAgo } from "@/lib/time";
 import { orderIdSearchToken } from "@/lib/format-order-id";
 import { ORDER_VIEW_SELECT, toOrderViewData } from "@/lib/order-view-data";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
@@ -34,8 +33,6 @@ export const metadata = { title: "Kitchen Display" };
  * AdminShell-এর ভেতরে cream/orange ব্যবস্থায় চলে। তাই এটা "একটু
  * সাজানো" নয়, পুরো খোলসটাই বদলাতে হয়েছে।
  */
-const READY_COLUMN_WINDOW_MINUTES = 15;
-
 export default async function KitchenDisplayPage({
   searchParams,
 }: {
@@ -50,7 +47,6 @@ export default async function KitchenDisplayPage({
   const status = isKitchenStatus(params.status) ? params.status : DEFAULT_KITCHEN_STATUS;
   const type = isKitchenType(params.type) ? params.type : DEFAULT_KITCHEN_TYPE;
   const sort = isKitchenSort(params.sort) ? params.sort : DEFAULT_KITCHEN_SORT;
-  const readySince = minutesAgo(READY_COLUMN_WINDOW_MINUTES);
   const now = new Date();
 
   /**
@@ -65,9 +61,10 @@ export default async function KitchenDisplayPage({
   const [rows, totalToday] = await Promise.all([
     prisma.order.findMany({
       /**
-       * বোর্ডে যা যা থাকে: এখনো ধরা হয়নি, চুলায় আছে, আর সদ্য
-       * তৈরি হয়েছে (শেষ ১৫ মিনিটে) — পুরনো "ready" গুলো নিজে থেকেই
-       * ঝরে যায়, নাহলে ডান কলামটা সারাদিনের জঞ্জাল জমিয়ে রাখত।
+       * বোর্ডে যা যা থাকে: এখনো ধরা হয়নি (PLACED), চুলায় আছে (PREPARING),
+       * আর রান্না শেষ হয়ে অপেক্ষায় আছে (READY)। READY অর্ডার rider বসলে
+       * (OUT_FOR_DELIVERY) বা পরিবেশিত হলে (DELIVERED) নিজে থেকেই বোর্ড
+       * থেকে নেমে যায় — তাই আগের মতো ১৫ মিনিটের জানালা লাগে না।
        *
        * ⚠️ শর্তটা আগে একটা আলাদা `const boardStatuses`-এ ছিল, আর
        * তাতে TypeScript ভাঙত:
@@ -84,10 +81,7 @@ export default async function KitchenDisplayPage({
        * একটা বাড়তি import — এটাই সরল।)
        */
       where: {
-        OR: [
-          { status: { in: ["PLACED", "PREPARING"] } },
-          { status: "OUT_FOR_DELIVERY", updatedAt: { gte: readySince } },
-        ],
+        status: { in: ["PLACED", "PREPARING", "READY"] },
       },
       select: {
         // ⚠️ বোর্ডের কার্ডে যা দেখায় + modal-এর যা লাগে, একসাথে।
@@ -118,8 +112,8 @@ export default async function KitchenDisplayPage({
    * (`formatOrderId`), আর `endsWith`-এ index কাজে লাগে না। বোর্ডে
    * সচল অর্ডার সবসময়ই অল্প (কয়েক ডজন), তাই এটা সস্তা।
    *
-   * status: "ready" মানে `OUT_FOR_DELIVERY` **এবং** শেষ ১৫ মিনিটে
-   * বদলানো — উপরের query-তে ওটা আগেই ধরা, তাই এখানে শুধু ভাগ করা।
+   * status: "ready" মানে `READY` — উপরের query-তে ওটা আগেই ধরা, তাই
+   * এখানে শুধু ভাগ করা।
    */
   const token = orderIdSearchToken(q);
   const visible = rows.filter((row) => {
@@ -145,7 +139,7 @@ export default async function KitchenDisplayPage({
 
   const pending = summaryRows.filter((row) => row.status === "PLACED").length;
   const preparing = summaryRows.filter((row) => row.status === "PREPARING").length;
-  const readyToServe = summaryRows.filter((row) => row.status === "OUT_FOR_DELIVERY").length;
+  const readyToServe = summaryRows.filter((row) => row.status === "READY").length;
 
   return (
     <div className="space-y-4">
@@ -215,7 +209,7 @@ export default async function KitchenDisplayPage({
         <KitchenBoard
           initialOrders={visible.map((order) => ({
             id: order.id,
-            status: order.status as "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY",
+            status: order.status as "PLACED" | "PREPARING" | "READY",
             orderType: order.orderType,
             firstName: order.firstName,
             lastName: order.lastName,

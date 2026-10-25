@@ -27,14 +27,14 @@ export const MAX_ACTIVE_DELIVERIES = 3;
 
 /**
  * Orders a rider may take from Available Orders:
- *   • delivery orders, being prepared (the kitchen has accepted them),
+ *   • delivery orders the kitchen has finished (status READY),
  *   • with no rider yet,
  *   • not handed to Uber Eats / Foodpanda,
  *   • and, if paid online, actually paid.
  */
 export const AVAILABLE_ORDER_WHERE = {
   orderType: "DELIVERY",
-  status: "PREPARING",
+  status: "READY",
   deliveryTracking: { is: null },
   OR: [{ shippingMethod: null }, { shippingMethod: "OWN_DELIVERY" }],
   NOT: { paymentMethod: "ONLINE", paymentStatus: { in: ["PENDING", "FAILED"] } },
@@ -186,7 +186,7 @@ export type RiderDeliveryRecord = Prisma.DeliveryTrackingGetPayload<{
 /** A rider's delivery flattened for pages and CSV. Numbers, not Decimals. */
 export type RiderDelivery = {
   orderId: string;
-  status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
+  status: "PLACED" | "PREPARING" | "READY" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
   customerName: string;
   phone: string;
   area: string;
@@ -254,7 +254,7 @@ export const ACTIVE_DELIVERY_WHERE = (riderId: string) =>
   ({
     riderId,
     deliveredAt: null,
-    order: { status: { in: ["PLACED", "PREPARING", "OUT_FOR_DELIVERY"] } },
+    order: { status: { in: ["PLACED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } },
   }) satisfies Prisma.DeliveryTrackingWhereInput;
 
 export function findActiveDeliveries(riderId: string) {
@@ -303,8 +303,8 @@ export function finishedWhere(riderId: string, from: Date | null) {
 /** What Active Delivery (and its 15-second poll) sends to the browser. */
 export type ActiveDelivery = {
   orderId: string;
-  /** PREPARING = taken, not picked up yet. */
-  status: "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY";
+  /** READY = taken, not picked up yet. */
+  status: "PLACED" | "PREPARING" | "READY" | "OUT_FOR_DELIVERY";
   customerName: string;
   phone: string;
   /** Country picked beside the phone at checkout — gives the dial code for Call. */

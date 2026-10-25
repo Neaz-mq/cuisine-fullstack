@@ -20,8 +20,8 @@ import { overviewPeriodRange, type OverviewPeriod } from "@/lib/overview-period"
  * প্রশ্নটা উল্টো — "**ওই মাসে** কতগুলো অর্ডার এল" — তাই এখানে
  * সময়সীমার দুই প্রান্তই ব্যবহার হয় (`gte` + `lt`)।
  *
- * ⚠️ "Processing" মানে PREPARING, আর "On the Way" মানে
- * OUT_FOR_DELIVERY। PLACED কোনো কার্ডে আলাদা করে গোনা হয় না — সেটা
+ * ⚠️ "Processing" মানে PREPARING আর READY (রান্নাঘরে বা রান্না শেষে rider-এর
+ * অপেক্ষায়), আর "On the Way" মানে OUT_FOR_DELIVERY। PLACED কোনো কার্ডে আলাদা করে গোনা হয় না — সেটা
  * ইচ্ছাকৃত: চারটে ঘরের নকশায় পাঁচটা অবস্থা ধরানো যায় না, আর নতুন
  * অর্ডারের সংখ্যা এমনিতেই "Total − বাকি সব"। তালিকায় status ছাঁকনি
  * দিয়ে ওটা দেখা যায়।
@@ -55,7 +55,7 @@ export default async function OrdersOverviewCards({ period }: { period: Overview
   const [total, delivered, preparing, onTheWay] = await Promise.all([
     prisma.order.count({ where: placedIn }),
     prisma.order.count({ where: { ...placedIn, status: "DELIVERED" } }),
-    prisma.order.count({ where: { ...placedIn, status: "PREPARING" } }),
+    prisma.order.count({ where: { ...placedIn, status: { in: ["PREPARING", "READY"] } } }),
     prisma.order.count({ where: { ...placedIn, status: "OUT_FOR_DELIVERY" } }),
   ]);
 

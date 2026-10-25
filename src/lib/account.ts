@@ -6,11 +6,22 @@
  * rules are unit-tested (lib/__tests__/account.test.ts).
  */
 
-export type OrderStatusValue = "PLACED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
+export type OrderStatusValue =
+  | "PLACED"
+  | "PREPARING"
+  | "READY"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "CANCELLED";
 export type OrderTypeValue = "DELIVERY" | "DINE_IN";
 
 /** Orders the customer is still waiting for — shown as "live" cards. */
-export const ACTIVE_ORDER_STATUSES: OrderStatusValue[] = ["PLACED", "PREPARING", "OUT_FOR_DELIVERY"];
+export const ACTIVE_ORDER_STATUSES: OrderStatusValue[] = [
+  "PLACED",
+  "PREPARING",
+  "READY",
+  "OUT_FOR_DELIVERY",
+];
 
 export function isActiveOrder(status: string): boolean {
   return (ACTIVE_ORDER_STATUSES as string[]).includes(status);
@@ -26,13 +37,21 @@ export function orderSteps(orderType: OrderTypeValue): string[] {
     : ["Placed", "Preparing", "On the way", "Delivered"];
 }
 
-/** 0-based index of the step the order is on; -1 for a cancelled order. */
-export function orderStepIndex(status: string): number {
+/**
+ * 0-based index of the step the order is on; -1 for a cancelled order.
+ *
+ * READY: the food is cooked. A delivery order is still waiting for a rider, so
+ * the customer's card stays on "Preparing"; a dine-in order is ready to be
+ * brought to the table ("Ready to serve").
+ */
+export function orderStepIndex(status: string, orderType?: OrderTypeValue): number {
   switch (status) {
     case "PLACED":
       return 0;
     case "PREPARING":
       return 1;
+    case "READY":
+      return orderType === "DINE_IN" ? 2 : 1;
     case "OUT_FOR_DELIVERY":
       return 2;
     case "DELIVERED":

@@ -69,7 +69,7 @@ describe("unpaid ONLINE orders", () => {
   });
 
   it("can't be marked DELIVERED", async () => {
-    db.orderFindUnique.mockResolvedValue(orderRow({ status: "PREPARING" }));
+    db.orderFindUnique.mockResolvedValue(orderRow({ status: "OUT_FOR_DELIVERY" }));
     const result = await markOrderDelivered("o1");
     expect(result).toEqual({ ok: false, error: "This order hasn't been paid yet" });
     expect(db.transaction).not.toHaveBeenCalled();
@@ -104,7 +104,9 @@ describe("losing a status race", () => {
   });
 
   it("DELIVERED: returns a clean error instead of throwing", async () => {
-    db.orderFindUnique.mockResolvedValue(orderRow({ status: "PREPARING", paymentMethod: "COD" }));
+    db.orderFindUnique.mockResolvedValue(
+      orderRow({ status: "OUT_FOR_DELIVERY", paymentMethod: "COD" })
+    );
     db.transaction.mockRejectedValue(p2025);
     const result = await markOrderDelivered("o1");
     expect(result).toEqual({
@@ -117,6 +119,29 @@ describe("losing a status race", () => {
     db.orderFindUnique.mockResolvedValue(orderRow({ paymentMethod: "COD" }));
     db.transaction.mockRejectedValue(new Error("connection lost"));
     await expect(advanceOrderToPreparing("o1")).rejects.toThrow("connection lost");
+  });
+});
+
+describe("a delivery order can't skip the rider", () => {
+  it("a READY delivery order can't be marked DELIVERED", async () => {
+    db.orderFindUnique.mockResolvedValue(
+      orderRow({ status: "READY", orderType: "DELIVERY", paymentMethod: "COD" })
+    );
+    const result = await markOrderDelivered("o1");
+    expect(result).toEqual({ ok: false, error: "This order hasn't left the restaurant yet" });
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("a PREPARING order can't be marked DELIVERED at all", async () => {
+    db.orderFindUnique.mockResolvedValue(
+      orderRow({ status: "PREPARING", orderType: "DINE_IN", paymentMethod: "COD" })
+    );
+    const result = await markOrderDelivered("o1");
+    expect(result).toEqual({
+      ok: false,
+      error: "This order cannot be marked delivered from its current status",
+    });
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 });
 

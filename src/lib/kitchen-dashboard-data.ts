@@ -18,7 +18,6 @@ import { isShiftOnDuty, isStaffShift } from "@/lib/staff-shift";
 import { stockStateOf, type StockState } from "@/lib/inventory-status";
 import {
   PREP_TIME_WINDOW_DAYS,
-  READY_WINDOW_MINUTES,
   WAITING_ATTENTION_MINUTES,
   averagePrepMinutes,
   buildPrepSnapshot,
@@ -54,9 +53,10 @@ function startOfDay(now: Date): Date {
 }
 
 /**
- * Orders the Prep List is built from: everything still on the board
- * (PLACED / PREPARING) plus today's finished ones, so a row can show as
- * "done" instead of vanishing the moment the last order is started.
+ * Orders the Prep List is built from: everything still being cooked
+ * (PLACED / PREPARING) plus today's finished ones (READY and beyond), so a
+ * row can show as "done" instead of vanishing the moment the last order is
+ * started.
  */
 function loadPrepOrders(now: Date) {
   const today = startOfDay(now);
@@ -64,7 +64,10 @@ function loadPrepOrders(now: Date) {
     where: {
       OR: [
         { status: { in: ["PLACED", "PREPARING"] } },
-        { status: { in: ["OUT_FOR_DELIVERY", "DELIVERED"] }, createdAt: { gte: today } },
+        {
+          status: { in: ["READY", "OUT_FOR_DELIVERY", "DELIVERED"] },
+          createdAt: { gte: today },
+        },
       ],
     },
     orderBy: { createdAt: "desc" },
@@ -146,12 +149,7 @@ export async function getKitchenDashboardData(now: Date): Promise<KitchenDashboa
     }),
     // Same set the Live Orders board shows (admin/kitchen/page.tsx).
     prisma.order.count({
-      where: {
-        OR: [
-          { status: { in: ["PLACED", "PREPARING"] } },
-          { status: "OUT_FOR_DELIVERY", updatedAt: { gte: minutesAgo(READY_WINDOW_MINUTES) } },
-        ],
-      },
+      where: { status: { in: ["PLACED", "PREPARING", "READY"] } },
     }),
     prisma.inventoryItem.findMany({
       where: { isActive: true },
