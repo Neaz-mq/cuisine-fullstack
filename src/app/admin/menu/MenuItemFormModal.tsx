@@ -206,8 +206,9 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
 
   useEffect(() => {
     let cancelled = false;
-    setRecipeStatus("loading");
 
+    // `recipeStatus` already starts as "loading", and the "Try again" button
+    // sets it back to "loading" itself — so nothing is set synchronously here.
     (async () => {
       try {
         const [optionsRes, recipeRes] = await Promise.all([
@@ -670,7 +671,10 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
               Couldn&apos;t load ingredients, so saving is paused to protect the saved recipe.{" "}
               <button
                 type="button"
-                onClick={() => setReloadKey((k) => k + 1)}
+                onClick={() => {
+                  setRecipeStatus("loading");
+                  setReloadKey((k) => k + 1);
+                }}
                 className="underline"
               >
                 Try again
