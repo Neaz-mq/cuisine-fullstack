@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "react-toastify";
@@ -15,6 +15,16 @@ import {
   SelectField,
   TEXTAREA,
 } from "@/components/admin/modal-ui";
+import { UNIT_LABELS } from "@/lib/inventory-status";
+import { calculateFoodCost, getFoodCostHealth } from "@/lib/menu-profitability";
+import { calcDishStock } from "@/lib/stock-availability";
+import {
+  compatibleUnits,
+  convertQuantity,
+  isRecipeUnit,
+  toDisplayQuantity,
+  type RecipeUnit,
+} from "@/lib/recipe-units";
 
 /**
  * src/app/admin/menu/MenuItemFormModal.tsx
@@ -52,15 +62,21 @@ import {
  * পূর্ণ-প্রস্থ সারি** যোগ করা হয়েছে — Name/Description-এর মতোই দেখতে,
  * তাই চোখে বাড়তি লাগে না।
  *
- * ── RECIPE এখানে নেই ────────────────────────────────────────────────
+ * ── RECIPE এখন এখানেই ───────────────────────────────────────────────
  *
- * ⚠️ "Ingredients" chip-গুলো recipe **নয়**। ওগুলো `ingredientTags` —
- * খদ্দেরকে দেখানোর মতো সাধারণ লেখা। recipe (কোন InventoryItem কতটা
- * লাগে, যা দিয়ে stock কাটা আর food cost হয়) আলাদা জিনিস, আর সেটা
- * নিজেই একটা তালিকা-form নিজের save বোতাম সহ — একই কার্ডে দুটো save
- * বসলে কোনটা কী সংরক্ষণ করছে বোঝা যেত না। Recipe আগের মতোই
- * `/admin/menu/<id>/edit`-এ, আর তালিকার Ingredients pill থেকে
- * সেখানে একটা লিঙ্ক আছে।
+ * "Ingredients" ঘরটা এখন **recipe** (restaurant system-এর স্বাভাবিক
+ * নিয়ম): প্রতিটা সারি = একটা InventoryItem + এক serving-এ কতটা লাগে।
+ * Save-এ পদ আর recipe একই transaction-এ যায়, আর order PREPARING হলে
+ * এই recipe দিয়েই stock কাটে (lib/advance-order-to-preparing.ts)।
+ *
+ * পরিমাণ g/ml/Kg/L যেকোনো সঙ্গত এককে লেখা যায়; save-এর আগে item-এর
+ * নিজের এককে রূপান্তর হয় (lib/recipe-units.ts) — stock সবসময় ওই
+ * এককেই কাটে।
+ *
+ * নিচের "Other ingredients" chip-গুলো আগের `ingredientTags` — stock-এ
+ * ধরা হয় না এমন জিনিস (লবণ, পানি) গ্রাহককে দেখানোর জন্য। recipe-র
+ * নামগুলো save-এর সময় আপনা থেকে tag-তালিকায় যোগ হয়, তাই কাউকে
+ * একই নাম দুবার লিখতে হয় না।
  */
 
 export type MenuItemDraft = {
@@ -96,6 +112,28 @@ type Props = {
 
 /** Figma-র Nutrition সারির ছোট label — Frank Ruhl 500 **12px**, ১৪ নয়। */
 const SUB_LABEL = "mb-1.5 block font-frank-ruhl text-[12px] font-medium leading-[1.6] text-black";
+
+type InventoryOption = {
+  id: string;
+  name: string;
+  unit: RecipeUnit;
+  /** Only sent to staff who may see inventory costs (owner/manager). */
+  costPerUnit?: number;
+  currentStock?: number;
+};
+
+type RecipeRow = {
+  key: string;
+  inventoryItemId: string;
+  /** string, number নয় — অর্ধেক লেখা "0." ধরে রাখতে। */
+  quantity: string;
+  /** যে এককে লেখা হচ্ছে; save-এ item-এর নিজের এককে রূপান্তর হয়। */
+  unit: RecipeUnit;
+};
+
+function newRow(): RecipeRow {
+  return { key: crypto.randomUUID(), inventoryItemId: "", quantity: "", unit: "GRAM" };
+}
 
 /**
  * সংখ্যার ঘর → সংখ্যা, খালি হলে null, আর অবৈধ লেখা হলে NaN।
@@ -151,12 +189,117 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
   const [tags, setTags] = useState<string[]>(item?.ingredientTags ?? []);
   const [tagDraft, setTagDraft] = useState("");
 
+  // Recipe (inventory-linked ingredients). `recipeStatus` gates Save: saving
+  // while the recipe is still loading (or failed to load) would either lose
+  // it or — worse — send an empty one and wipe the saved recipe.
+  const [options, setOptions] = useState<InventoryOption[]>([]);
+  const [rows, setRows] = useState<RecipeRow[]>([]);
+  const [recipeStatus, setRecipeStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadKey, setReloadKey] = useState(0);
+
   const [foodStatus, setFoodStatus] = useState(item?.foodStatus ?? "");
   const [prepTime, setPrepTime] = useState(toFieldValue(item?.prepTimeMinutes));
 
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRecipeStatus("loading");
+
+    (async () => {
+      try {
+        const [optionsRes, recipeRes] = await Promise.all([
+          fetch("/api/admin/menu-items/recipe-options"),
+          isEdit ? fetch(`/api/admin/menu-items/${item!.id}/ingredients`) : Promise.resolve(null),
+        ]);
+        if (!optionsRes.ok || (recipeRes && !recipeRes.ok)) throw new Error("load failed");
+
+        const loadedOptions = (
+          (await optionsRes.json()) as {
+            id: string;
+            name: string;
+            unit: string;
+            costPerUnit?: number;
+            currentStock?: number;
+          }[]
+        )
+          .filter((o) => isRecipeUnit(o.unit))
+          .map((o) => ({
+            id: o.id,
+            name: o.name,
+            unit: o.unit as RecipeUnit,
+            costPerUnit: o.costPerUnit,
+            currentStock: o.currentStock,
+          }));
+
+        const saved = recipeRes
+          ? ((await recipeRes.json()) as {
+              quantityRequired: number;
+              inventoryItem: { id: string; name: string; unit: string };
+            }[])
+          : [];
+
+        if (cancelled) return;
+
+        // An ingredient made Inactive after the recipe was saved isn't in the
+        // picker list, but must still show (and keep saving) — never drop it silently.
+        const known = new Map<string, InventoryOption>(loadedOptions.map((o) => [o.id, o]));
+        for (const line of saved) {
+          if (!known.has(line.inventoryItem.id) && isRecipeUnit(line.inventoryItem.unit)) {
+            known.set(line.inventoryItem.id, {
+              id: line.inventoryItem.id,
+              name: `${line.inventoryItem.name} (inactive)`,
+              unit: line.inventoryItem.unit,
+            });
+          }
+        }
+
+        const loadedRows: RecipeRow[] = saved
+          .filter((line) => known.has(line.inventoryItem.id))
+          .map((line) => {
+            const stockUnit = known.get(line.inventoryItem.id)!.unit;
+            const display = toDisplayQuantity(line.quantityRequired, stockUnit);
+            return {
+              key: crypto.randomUUID(),
+              inventoryItemId: line.inventoryItem.id,
+              quantity: String(display.value),
+              unit: display.unit,
+            };
+          });
+
+        // Names now covered by the recipe leave the free-text chips (they're
+        // re-added from the recipe on save) — no duplicates in the form.
+        const recipeNames = new Set(
+          loadedRows.map((r) => known.get(r.inventoryItemId)!.name.replace(/ \(inactive\)$/, "").toLowerCase())
+        );
+
+        setOptions([...known.values()].sort((a, b) => a.name.localeCompare(b.name)));
+        setRows(loadedRows);
+        setTags((prev) => prev.filter((tag) => !recipeNames.has(tag.toLowerCase())));
+        setRecipeStatus("ready");
+      } catch {
+        if (!cancelled) setRecipeStatus("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // `item` is stable for the life of this mount (the modal remounts per open).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
+
+  function updateRow(key: string, patch: Partial<RecipeRow>) {
+    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  function pickIngredient(key: string, inventoryItemId: string) {
+    const stockUnit = options.find((o) => o.id === inventoryItemId)?.unit;
+    // New ingredient → its own unit by default; the cook can switch to a smaller one.
+    updateRow(key, { inventoryItemId, ...(stockUnit ? { unit: stockUnit } : {}) });
+  }
 
   function addTag() {
     const value = tagDraft.trim();
@@ -199,6 +342,40 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
       return setError("Nutrition and time values can't be negative.");
     }
 
+    // ── Recipe: validate, then convert each line into its item's own unit ──
+    const recipe: { inventoryItemId: string; quantityRequired: number }[] = [];
+    const recipeNames: string[] = [];
+    for (const row of rows) {
+      const blank = !row.inventoryItemId && row.quantity.trim() === "";
+      if (blank) continue; // an untouched "Add ingredient" row is just ignored
+
+      const option = options.find((o) => o.id === row.inventoryItemId);
+      if (!option) return setError("Choose an inventory item for every ingredient row.");
+
+      const typed = Number(row.quantity);
+      if (!Number.isFinite(typed) || typed <= 0) {
+        return setError(`Enter how much ${option.name} one serving uses (more than 0).`);
+      }
+      const quantityRequired = convertQuantity(typed, row.unit, option.unit);
+      if (!Number.isFinite(quantityRequired) || quantityRequired <= 0) {
+        return setError(`"${option.name}" quantity is too small or in an incompatible unit.`);
+      }
+      if (recipe.some((line) => line.inventoryItemId === option.id)) {
+        return setError(`${option.name} is listed twice — combine it into one row.`);
+      }
+      recipe.push({ inventoryItemId: option.id, quantityRequired });
+      recipeNames.push(option.name.replace(/ \(inactive\)$/, ""));
+    }
+
+    // Customer-facing list = recipe names + the free-text extras (no duplicates).
+    const allTags = [...recipeNames];
+    for (const tag of tags) {
+      if (!allTags.some((name) => name.toLowerCase() === tag.toLowerCase())) allTags.push(tag);
+    }
+    if (allTags.length > 20) {
+      return setError("A dish can show at most 20 ingredients. Remove a few.");
+    }
+
     setError(null);
     setSubmitting(true);
     try {
@@ -234,7 +411,8 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
             fatGrams: numeric.fatGrams,
             proteinGrams: numeric.proteinGrams,
             carbGrams: numeric.carbGrams,
-            ingredientTags: tags,
+            ingredientTags: allTags,
+            recipe,
             foodStatus: foodStatus.trim(),
             prepTimeMinutes: numeric.prepTimeMinutes,
           }),
@@ -255,6 +433,46 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
       setSubmitting(false);
     }
   }
+
+  // ── Live food cost (owner/manager only: costs come with the options) ────
+  const canSeeCosts = options.some((o) => o.costPerUnit !== undefined);
+
+  function lineBase(row: RecipeRow): { option: InventoryOption; qty: number } | null {
+    const option = options.find((o) => o.id === row.inventoryItemId);
+    const typed = Number(row.quantity);
+    if (!option || !Number.isFinite(typed) || typed <= 0) return null;
+    const qty = convertQuantity(typed, row.unit, option.unit);
+    return Number.isFinite(qty) && qty > 0 ? { option, qty } : null;
+  }
+
+  function money(value: number): string {
+    return `${currency ? `${currency} ` : ""}${value.toFixed(2)}`;
+  }
+
+  const costLines = rows
+    .map(lineBase)
+    .filter((line): line is { option: InventoryOption; qty: number } => line !== null);
+
+  const sellingPrice = Number(price);
+  const foodCost = calculateFoodCost(
+    costLines.map((line) => ({
+      quantityRequired: line.qty,
+      costPerUnit: line.option.costPerUnit ?? 0,
+    })),
+    Number.isFinite(sellingPrice) ? sellingPrice : 0
+  );
+  const costHealth = getFoodCostHealth(foodCost.foodCostPercent);
+
+  // "How many can we still make?" — from stock on hand (the customer-side
+  // check additionally subtracts food already promised to open orders).
+  const stockCover = calcDishStock(
+    costLines.map((line) => ({
+      inventoryItemId: line.option.id,
+      name: line.option.name,
+      quantityRequired: line.qty,
+    })),
+    new Map(options.map((o) => [o.id, o.currentStock ?? 0]))
+  );
 
   return (
     <ModalShell
@@ -279,7 +497,7 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
             // ⚠️ upload চলাকালীনও বন্ধ — নাহলে ছবি ওঠার আগেই save হয়ে
             // যেত আর পুরনো URL-টাই সংরক্ষিত থাকত, অথচ পর্দায় নতুন ছবির
             // preview দেখা যেত।
-            disabled={submitting || uploading}
+            disabled={submitting || uploading || recipeStatus !== "ready"}
             className={`${PRIMARY_BUTTON} flex-1`}
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -435,6 +653,181 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
          */}
         <div className="md:col-span-2">
           <span className={LABEL}>Ingredients</span>
+          <p className="mb-3 font-sora text-[11px] leading-[1.6] text-black/50">
+            Pick items from Inventory and how much ONE serving uses. When an order moves to
+            Preparing, this amount is deducted from stock automatically.
+          </p>
+
+          {recipeStatus === "loading" && (
+            <p className="mb-3 flex items-center gap-2 font-sora text-[12px] text-black/60">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Loading ingredients…
+            </p>
+          )}
+
+          {recipeStatus === "error" && (
+            <p className="mb-3 font-sora text-[12px] text-[#D72A37]">
+              Couldn&apos;t load ingredients, so saving is paused to protect the saved recipe.{" "}
+              <button
+                type="button"
+                onClick={() => setReloadKey((k) => k + 1)}
+                className="underline"
+              >
+                Try again
+              </button>
+            </p>
+          )}
+
+          {recipeStatus === "ready" && (
+            <div className="mb-5 space-y-2">
+              {options.length === 0 && (
+                <p className="font-sora text-[12px] text-black/60">
+                  No inventory items yet. Add them on the Inventory page first, then come back
+                  to build this recipe.
+                </p>
+              )}
+
+              {rows.map((row) => {
+                const option = options.find((o) => o.id === row.inventoryItemId);
+                const units = option ? compatibleUnits(option.unit) : [];
+                return (
+                  <div key={row.key} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <SelectField
+                      id={`recipe-item-${row.key}`}
+                      label="Inventory item"
+                      hideLabel
+                      className="w-full min-w-0 sm:w-auto sm:flex-1"
+                      value={row.inventoryItemId}
+                      onChange={(value) => pickIngredient(row.key, value)}
+                      options={[
+                        { value: "", label: "Choose item…" },
+                        // an item already used in another row can't be picked twice
+                        ...options
+                          .filter(
+                            (o) =>
+                              o.id === row.inventoryItemId ||
+                              !rows.some((r) => r.inventoryItemId === o.id)
+                          )
+                          .map((o) => ({ value: o.id, label: o.name })),
+                      ]}
+                    />
+                    <div className="w-24 shrink-0">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        aria-label="Quantity per serving"
+                        value={row.quantity}
+                        onChange={(event) => updateRow(row.key, { quantity: event.target.value })}
+                        placeholder="Qty"
+                        className={FIELD}
+                      />
+                    </div>
+                    <SelectField
+                      id={`recipe-unit-${row.key}`}
+                      label="Unit"
+                      hideLabel
+                      className="w-24 shrink-0"
+                      value={row.unit}
+                      onChange={(value) => updateRow(row.key, { unit: value as RecipeUnit })}
+                      options={(option ? units : [row.unit]).map((unit) => ({
+                        value: unit,
+                        label: UNIT_LABELS[unit],
+                      }))}
+                    />
+                    {canSeeCosts && (
+                      <span className="hidden w-[72px] shrink-0 text-right font-sora text-[11px] text-black/50 sm:block">
+                        {(() => {
+                          const line = lineBase(row);
+                          return line ? money(line.qty * (line.option.costPerUnit ?? 0)) : "—";
+                        })()}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                      aria-label="Remove ingredient"
+                      className="flex h-[43px] w-8 shrink-0 items-center justify-center text-black/40 transition-colors hover:text-[#D72A37] focus:outline-none focus-visible:[outline:2px_solid_#FF9540]"
+                    >
+                      <X className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {options.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRows((prev) => [...prev, newRow()])}
+                  className="flex h-[43px] items-center gap-1.5 rounded-[12px] bg-[#F9F6F3] px-3 font-sora text-[12px] leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]"
+                >
+                  Add ingredient
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.2} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {recipeStatus === "ready" && canSeeCosts && costLines.length > 0 && (
+            <div className="mb-5 rounded-[12px] bg-[#F9F6F3] p-3 font-sora text-[12px] leading-[1.6] text-black/80">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-black/50">
+                Cost &amp; stock · per serving
+              </p>
+              <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                <p>
+                  Food cost: <strong>{money(foodCost.foodCost)}</strong>
+                </p>
+                <p>
+                  Selling price: <strong>{Number.isFinite(sellingPrice) && sellingPrice > 0 ? money(sellingPrice) : "not set"}</strong>
+                </p>
+                <p>
+                  Profit per dish:{" "}
+                  <strong>{foodCost.foodCostPercent === null ? "—" : money(foodCost.grossMargin)}</strong>
+                </p>
+                <p>
+                  Food cost %:{" "}
+                  <strong
+                    className={
+                      costHealth === "critical"
+                        ? "text-[#D72A37]"
+                        : costHealth === "watch"
+                          ? "text-[#C47A00]"
+                          : costHealth === "healthy"
+                            ? "text-[#2E8B3D]"
+                            : ""
+                    }
+                  >
+                    {foodCost.foodCostPercent === null
+                      ? "enter a price"
+                      : `${foodCost.foodCostPercent.toFixed(1)}% · ${
+                          costHealth === "critical"
+                            ? "too high"
+                            : costHealth === "watch"
+                              ? "watch"
+                              : "healthy"
+                        }`}
+                  </strong>
+                </p>
+              </div>
+              <p className="mt-2 text-[11px] text-black/50">
+                Food cost % = ingredient cost ÷ selling price. Most restaurants aim for under 35%;
+                above 45% the dish earns very little.
+              </p>
+              <p className="mt-1 text-[11px] text-black/60">
+                {stockCover.servingsLeft === null
+                  ? null
+                  : stockCover.servingsLeft <= 0
+                    ? `Stock check: not enough ${stockCover.limitingIngredient} for even one serving. Customers see this dish as Sold Out.`
+                    : `Stock check: enough for about ${stockCover.servingsLeft} serving${stockCover.servingsLeft === 1 ? "" : "s"} (limited by ${stockCover.limitingIngredient}).`}
+              </p>
+            </div>
+          )}
+
+          <span className={LABEL}>Other ingredients</span>
+          <p className="mb-3 font-sora text-[11px] leading-[1.6] text-black/50">
+            Shown to customers only, not tracked in stock (e.g. salt, water).
+          </p>
 
           {tags.length > 0 && (
             /* Frame 2147236449: row, gap 16 — chip cream, h 43, radius 12,

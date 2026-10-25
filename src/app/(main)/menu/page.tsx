@@ -10,6 +10,7 @@ import MenuBrowser, { type MenuBrowserCategory } from "@/components/menu/MenuBro
 import MenuHighlights from "@/components/menu/MenuHighlights";
 import { buildMenuHighlights } from "@/lib/menu-highlights";
 import MenuComboCta from "@/components/menu/MenuComboCta";
+import { dishStockOf, getDishStockMap } from "@/lib/stock-availability-db";
 
 export const metadata: Metadata = {
   title: "Menu",
@@ -238,6 +239,10 @@ export default async function MenuPage() {
    * মুদ্রার minor unit জানে, আর সেটা RestaurantSettings-এ, অর্থাৎ
    * server-এ।
    */
+  // Auto "Sold out": dishes whose ingredients ran out can't be ordered. Derived
+  // from stock on every request, so a restock brings the dish back by itself.
+  const stockMap = await getDishStockMap();
+
   const categories: MenuBrowserCategory[] = categoryRows
     .filter((row) => row.menuItems.length > 0)
     .map((row) => ({
@@ -253,6 +258,8 @@ export default async function MenuPage() {
         );
         const price = shown.price;
         const average = ratingByItem.get(item.id);
+        const stock = dishStockOf(stockMap, item.id);
+        const soldOut = stock.servingsLeft === 0;
 
         return {
           id: item.id,
@@ -262,7 +269,9 @@ export default async function MenuPage() {
           priceLabel: shown.priceLabel,
           oldPriceLabel: shown.oldPriceLabel,
           imageUrl: item.imageUrl,
-          isAvailable: item.isAvailable,
+          isAvailable: item.isAvailable && !soldOut,
+          soldOut,
+          servingsLeft: stock.servingsLeft,
           calories: item.calories,
           fatGrams: item.fatGrams,
           proteinGrams: item.proteinGrams,

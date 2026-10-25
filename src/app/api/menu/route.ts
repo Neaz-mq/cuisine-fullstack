@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { displayPrice, findLiveOffers } from "@/lib/product-offers";
+import { dishStockOf, getDishStockMap } from "@/lib/stock-availability-db";
 
 /**
  * src/app/api/menu/route.ts
@@ -44,7 +45,15 @@ export async function GET() {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
-    const nonEmptyCategories = categories.filter((c) => c.menuItems.length > 0);
+    // Auto sold-out: a dish whose ingredients ran out is left out of the menu
+    // (it returns by itself after a restock — nothing is switched in the DB).
+    const stockMap = await getDishStockMap();
+    const nonEmptyCategories = categories
+      .map((c) => ({
+        ...c,
+        menuItems: c.menuItems.filter((item) => dishStockOf(stockMap, item.id).servingsLeft !== 0),
+      }))
+      .filter((c) => c.menuItems.length > 0);
 
     // ⚠️ price-কে number-এ নামানো হচ্ছে, Decimal ছেড়ে দেওয়া হচ্ছে না।
     //

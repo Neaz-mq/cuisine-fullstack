@@ -93,6 +93,10 @@ export type MenuSectionItem = {
   /** খদ্দেরকে দেখানোর মতো উপকরণের নাম — recipe নয়। */
   ingredientTags: string[];
   foodStatus: string | null;
+  /** Servings still makeable from stock (null/undefined = no recipe, not tracked). */
+  servingsLeft?: number | null;
+  /** The ingredient that runs out first. */
+  limitingIngredient?: string | null;
 };
 
 /**
@@ -313,6 +317,21 @@ export default function MenuCategorySection({
                     <p className="line-clamp-2 font-sora text-[12px] font-normal leading-[1.7] text-black/70">
                       {item.description}
                     </p>
+                    {/* Automatic stock status — separate from the manual Available switch
+                        on the right: the owner's switch is never changed by the system. */}
+                    {item.servingsLeft != null && item.servingsLeft <= 5 && (
+                      <span
+                        className={`mt-1 inline-flex w-fit rounded-full px-2 py-0.5 font-sora text-[11px] leading-[1.5] ${
+                          item.servingsLeft === 0
+                            ? "bg-[#FDECEC] text-[#D72A37]"
+                            : "bg-[#FFF4E0] text-[#C47A00]"
+                        }`}
+                      >
+                        {item.servingsLeft === 0
+                          ? `Sold out · ${item.limitingIngredient} finished`
+                          : `Only ${item.servingsLeft} left · ${item.limitingIngredient} running low`}
+                      </span>
+                    )}
                   </div>
                 </div>
 

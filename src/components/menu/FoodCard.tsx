@@ -45,7 +45,12 @@ export type MenuCardItem = {
    */
   oldPriceLabel?: string | null;
   imageUrl: string | null;
+  /** False when the owner switched it off OR it is sold out (see soldOut). */
   isAvailable: boolean;
+  /** Out of ingredients right now — comes back by itself after a restock. */
+  soldOut?: boolean;
+  /** Servings still makeable from stock; null/undefined = not stock-tracked. */
+  servingsLeft?: number | null;
   calories: number | null;
   fatGrams: number | null;
   proteinGrams: number | null;
@@ -153,7 +158,13 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
         )}
 
         <span className="absolute right-3 top-3 rounded-full bg-white px-3 py-2 font-sora text-[12px] leading-[1.2] text-black">
-          {item.isAvailable ? "Food Available" : "Unavailable"}
+          {item.soldOut
+            ? "Sold Out"
+            : !item.isAvailable
+              ? "Unavailable"
+              : item.servingsLeft != null && item.servingsLeft <= 5
+                ? `Only ${item.servingsLeft} left`
+                : "Food Available"}
         </span>
       </div>
 
@@ -245,13 +256,25 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
              * কিনতে চান তাঁর জন্য "Order Now", যিনি জানেন কী চান তাঁর
              * জন্য পাশের "Add to Cart"।
              */}
-            <Link
-              href={`/menu/${item.id}`}
-              aria-label={`See ${item.title}`}
-              className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
-            >
-              Order Now
-            </Link>
+            {item.soldOut ? (
+              /* Out of ingredients: there is nothing to order, so the button
+                 is switched off (same faded look as the disabled Add to Cart).
+                 A <Link> can't be `disabled`, so it becomes a plain span. */
+              <span
+                aria-disabled="true"
+                className="flex h-10 min-w-0 shrink cursor-not-allowed items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white opacity-40"
+              >
+                Order Now
+              </span>
+            ) : (
+              <Link
+                href={`/menu/${item.id}`}
+                aria-label={`See ${item.title}`}
+                className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+              >
+                Order Now
+              </Link>
+            )}
           </div>
         </div>
       </div>

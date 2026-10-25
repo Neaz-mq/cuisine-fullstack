@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { findStockShortages } from "@/lib/stock-availability-db";
 import type { Prisma } from "@/generated/prisma/client";
 import { type Money, toMoney, ZERO, sum, minMoney, applyRate } from "@/lib/money";
 import { effectivePrice, findLiveOffers } from "@/lib/product-offers";
@@ -183,6 +184,28 @@ export async function resolveOrderItems(
     return {
       ok: false,
       error: `These items are no longer available, please remove them from your cart: ${notFoundTitles.join(", ")}`,
+    };
+  }
+
+  // Stock check — refuse what the kitchen can't actually cook. Checked on the
+  // WHOLE cart together (two dishes sharing chicken), against stock minus food
+  // already promised to open orders. Dishes without a recipe are never blocked.
+  // Every checkout path goes through here, so the cart quote, COD/dine-in
+  // orders and the Stripe session all enforce it identically.
+  const shortages = await findStockShortages(
+    resolved.map((line) => ({ menuItemId: line.menuItemId, quantity: line.quantity }))
+  );
+  if (shortages.length > 0) {
+    const titleOf = new Map(resolved.map((line) => [line.menuItemId, line.title]));
+    const parts = shortages.map((shortage) => {
+      const title = titleOf.get(shortage.menuItemId) ?? "An item";
+      return shortage.servingsLeft <= 0
+        ? `${title} is sold out right now`
+        : `only ${shortage.servingsLeft} ${title} left`;
+    });
+    return {
+      ok: false,
+      error: `Sorry, we can't make everything in your cart: ${parts.join("; ")}. Please update your cart.`,
     };
   }
 

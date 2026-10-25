@@ -15,6 +15,7 @@ import {
 } from "@/lib/menu-status-filter";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import MenuOverviewCards from "@/components/admin/MenuOverviewCards";
+import { dishStockOf, getDishStockMap } from "@/lib/stock-availability-db";
 import MenuToolbar from "./MenuToolbar";
 import MenuCategorySection, { type MenuSectionItem } from "./MenuCategorySection";
 
@@ -114,6 +115,9 @@ export default async function AdminMenuPage({
 
   const categoryOptions = rows.map((row) => ({ value: row.id, label: row.name }));
 
+  // Automatic stock status per dish (sold out / running low) for the badges.
+  const stockMap = await getDishStockMap();
+
   const needle = q.toLowerCase();
 
   /**
@@ -159,6 +163,8 @@ export default async function AdminMenuPage({
           prepTimeMinutes: item.prepTimeMinutes,
           ingredientTags: item.ingredientTags,
           foodStatus: item.foodStatus,
+          servingsLeft: dishStockOf(stockMap, item.id).servingsLeft,
+          limitingIngredient: dishStockOf(stockMap, item.id).limitingIngredient,
         };
       });
 

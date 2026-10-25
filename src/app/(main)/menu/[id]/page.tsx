@@ -5,6 +5,7 @@ import { getRestaurantSettings } from "@/lib/get-settings";
 import { auth } from "@/auth";
 import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 import ProductDetail, { type ProductDetailItem } from "@/components/menu/ProductDetail";
+import { dishStockOf, getDishStockMap } from "@/lib/stock-availability-db";
 import CustomerFeedback, { type FeedbackCard } from "@/components/menu/CustomerFeedback";
 import { MoreOptions, FullMenuCta } from "@/components/menu/MoreOptions";
 import { type MenuCardItem } from "@/components/menu/FoodCard";
@@ -218,6 +219,11 @@ export default async function MenuItemPage({
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
       : null;
 
+  // Auto "Sold out" — derived from stock, so a restock brings the dish back.
+  const stockMap = await getDishStockMap();
+  const itemStock = dishStockOf(stockMap, item.id);
+  const itemSoldOut = itemStock.servingsLeft === 0;
+
   const detail: ProductDetailItem = {
     id: item.id,
     title: item.title,
@@ -237,7 +243,9 @@ export default async function MenuItemPage({
      * কোনোদিন `images String[]` যোগ হলে কেবল এই লাইনটাই বদলাবে।
      */
     images: item.imageUrl ? [item.imageUrl] : [],
-    isAvailable: item.isAvailable,
+    isAvailable: item.isAvailable && !itemSoldOut,
+    soldOut: itemSoldOut,
+    servingsLeft: itemStock.servingsLeft,
     ingredients: item.ingredientTags,
     benefits,
     // ⚠️ PLACEHOLDER — সত্যিকারের review এলে ডান দিকটা নিজে থেকেই
@@ -255,6 +263,8 @@ export default async function MenuItemPage({
       units
     );
     const siblingPrice = siblingShown.price;
+    const siblingStock = dishStockOf(stockMap, sibling.id);
+    const siblingSoldOut = siblingStock.servingsLeft === 0;
     return {
       id: sibling.id,
       title: sibling.title,
@@ -263,7 +273,9 @@ export default async function MenuItemPage({
       priceLabel: siblingShown.priceLabel,
       oldPriceLabel: siblingShown.oldPriceLabel,
       imageUrl: sibling.imageUrl,
-      isAvailable: sibling.isAvailable,
+      isAvailable: sibling.isAvailable && !siblingSoldOut,
+      soldOut: siblingSoldOut,
+      servingsLeft: siblingStock.servingsLeft,
       calories: sibling.calories,
       fatGrams: sibling.fatGrams,
       proteinGrams: sibling.proteinGrams,

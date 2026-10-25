@@ -422,12 +422,18 @@ export function SelectField({
   required = false,
   className = "",
   surface = "cream",
+  hideLabel = false,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: readonly { value: string; label: string }[];
+  /**
+   * Compact table-style rows (e.g. the recipe lines in the menu popup) have
+   * their own column headings, so the label is kept for screen readers only.
+   */
+  hideLabel?: boolean;
   /**
    * label-এর পাশে লাল তারা। ঐচ্ছিক আর ডিফল্ট false, তাই বিদ্যমান
    * ৩০+ ব্যবহার অপরিবর্তিত থাকে।
@@ -471,7 +477,7 @@ export function SelectField({
       {/* label-টা <label> নয়, <span> — কারণ trigger একটা <button>, আর
           <label htmlFor> দিয়ে button-এ click পাঠানো ব্রাউজারভেদে
           অসামঞ্জস্যপূর্ণ। সম্পর্কটা বরং aria-labelledby দিয়ে বাঁধা। */}
-      <span id={`${id}-label`} className={LABEL}>
+      <span id={`${id}-label`} className={hideLabel ? "sr-only" : LABEL}>
         {label}
         {required && <RequiredMark />}
       </span>

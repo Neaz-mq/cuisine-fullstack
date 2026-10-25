@@ -48,6 +48,16 @@ const optionalTrimmedString = (max: number) =>
     .nullable()
     .optional();
 
+/**
+ * One recipe line: how much of one InventoryItem a single serving uses,
+ * ALREADY in that inventory item's own unit (the form converts g → Kg etc.
+ * before sending, see lib/recipe-units.ts).
+ */
+const recipeLineSchema = z.object({
+  inventoryItemId: cuidSchema,
+  quantityRequired: z.number().finite().positive().max(1_000_000),
+});
+
 export const createMenuItemSchema = z.object({
   title: nonEmptyString("Title"),
   description: nonEmptyString("Description"),
@@ -73,6 +83,24 @@ export const createMenuItemSchema = z.object({
 
   foodStatus: optionalTrimmedString(40),
   prepTimeMinutes: optionalNonNegativeInt,
+
+  /**
+   * The recipe (Bill of Materials) saved together with the dish, in one
+   * transaction — the way restaurant POS/back-office systems do it: the
+   * ingredient list IS the recipe, there's no separate "set up stock
+   * tracking" step.
+   *
+   * ⚠️ Omitted = leave the existing recipe alone (PATCH), `[]` = remove it
+   * (the dish stops deducting stock). Never send `[]` just because the
+   * recipe failed to load.
+   */
+  recipe: z
+    .array(recipeLineSchema)
+    .max(50)
+    .refine((lines) => new Set(lines.map((l) => l.inventoryItemId)).size === lines.length, {
+      message: "Each ingredient can only appear once in a recipe",
+    })
+    .optional(),
 });
 
 /** All fields optional for PATCH — but at least one field must be present,

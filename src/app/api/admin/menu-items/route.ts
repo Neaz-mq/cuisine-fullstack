@@ -31,9 +31,14 @@ export async function POST(req: NextRequest) {
     ingredientTags,
     foodStatus,
     prepTimeMinutes,
+    recipe,
   } = parsed;
 
-  const item = await prisma.menuItem.create({
+  // Dish + recipe in ONE transaction: a dish must never exist half-saved
+  // (created, but its stock-deducting recipe missing).
+  try {
+    const item = await prisma.$transaction(async (tx) => {
+    const created = await tx.menuItem.create({
     data: {
       title,
       description,
@@ -55,5 +60,23 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(item, { status: 201 });
+    if (recipe && recipe.length > 0) {
+      await tx.menuItemIngredient.createMany({
+        data: recipe.map((line) => ({
+          menuItemId: created.id,
+          inventoryItemId: line.inventoryItemId,
+          quantityRequired: line.quantityRequired,
+        })),
+      });
+    }
+    return created;
+    });
+
+    return NextResponse.json(item, { status: 201 });
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn't save the item — check that every ingredient still exists." },
+      { status: 400 }
+    );
+  }
 }

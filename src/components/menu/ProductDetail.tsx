@@ -39,6 +39,10 @@ export type ProductDetailItem = {
   currencyMinorUnits: number;
   images: string[];
   isAvailable: boolean;
+  /** Out of ingredients right now — comes back by itself after a restock. */
+  soldOut?: boolean;
+  /** Servings still makeable from stock; null/undefined = not stock-tracked. */
+  servingsLeft?: number | null;
   ingredients: string[];
   /** Benefits ঘরের চারটে ঘর — যেগুলোর মান আছে কেবল সেগুলোই। */
   benefits: { label: string; value: string }[];
@@ -185,7 +189,13 @@ export default function ProductDetail({ item }: { item: ProductDetailItem }) {
 
           {/* Frame 2147235205 — সাদা pill, উপরে ডানে। */}
           <span className="absolute right-4 top-4 rounded-full bg-white px-3 py-2 font-sora text-[12px] leading-[1.2] text-black">
-            {item.isAvailable ? "Food Available" : "Unavailable"}
+            {item.soldOut
+            ? "Sold Out"
+            : !item.isAvailable
+              ? "Unavailable"
+              : item.servingsLeft != null && item.servingsLeft <= 5
+                ? `Only ${item.servingsLeft} left`
+                : "Food Available"}
           </span>
 
           {hasGallery && (
