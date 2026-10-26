@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatOrderId } from "@/lib/format-order-id";
@@ -120,11 +121,15 @@ export default async function AdminOrderDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-[1070px] px-4 py-8">
+      {/* Same outline button as "Cancel" across the admin modals (OUTLINE_BUTTON).
+          Class string is inlined: modal-ui.tsx is a client module, so its
+          constants can't be read from this server component. */}
       <Link
         href="/admin/orders"
-        className="mb-4 inline-block font-sora text-[14px] text-black/70 hover:text-black"
+        className="mb-5 inline-flex h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-[90px] border border-black px-5 font-sora text-[14px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
       >
-        ← Back to all orders
+        <ArrowLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        Back to all orders
       </Link>
 
       <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 shadow-[0_4px_30px_rgba(0,0,0,0.06)] sm:p-[30px]">
