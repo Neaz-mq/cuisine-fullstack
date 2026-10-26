@@ -4,6 +4,7 @@ import { requireApiScope } from "@/lib/require-admin";
 import { cuidSchema } from "@/lib/validations/common";
 import { updateInventoryItemSchema } from "@/lib/validations/inventory";
 import { parseBody } from "@/lib/validations/parse";
+import { syncIngredientTagsOnRename } from "@/lib/sync-ingredient-tags";
 
 export async function GET(
   req: NextRequest,
@@ -58,7 +59,22 @@ export async function PATCH(
   }
 
   try {
-    const updated = await prisma.inventoryItem.update({ where: { id }, data });
+    // A rename must reach the dishes that use this ingredient: their
+    // customer-facing ingredient list holds a copy of the NAME. Rename and
+    // copy-update happen in ONE transaction so they can't disagree.
+    const updated = await prisma.$transaction(async (tx) => {
+      const before =
+        typeof parsed.name === "string"
+          ? await tx.inventoryItem.findUnique({ where: { id }, select: { name: true } })
+          : null;
+
+      const item = await tx.inventoryItem.update({ where: { id }, data });
+
+      if (before && before.name !== item.name) {
+        await syncIngredientTagsOnRename(tx, id, before.name, item.name);
+      }
+      return item;
+    });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json(
