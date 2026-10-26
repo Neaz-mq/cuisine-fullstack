@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, type CSSProperties } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import { DELIVERY_BRANDS, type DeliveryBrand } from "@/lib/landing-content";
 
 /**
@@ -31,6 +31,21 @@ import { DELIVERY_BRANDS, type DeliveryBrand } from "@/lib/landing-content";
  * (`object-contain` — টেনে-চ্যাপ্টা হয় না); যেটার নেই সেটার নাম
  * নিজের ব্র্যান্ড-রঙে লেখা থাকে। ছবি লোড না হলেও (যেমন URL ভুল)
  * লেখাটাই ফিরে আসে, তাই সারিতে ভাঙা আইকন দেখা যায় না।
+ *
+ * ── MARQUEE ─────────────────────────────────────────────────────────
+ *
+ * Logo-গুলো এখন বাম থেকে ডানে অনবরত চলে (CSS animation, transform-only —
+ * JS চলে না, তাই মসৃণ)। ছাঁদ:
+ *
+ *   • একই তালিকার ৪টা কপি পাশাপাশি; animation -50% থেকে শুরু হয়ে ডানে ঠিক ২ কপি
+ *     সরে 0-তে পৌঁছয়, তারপর আবার -50%-এ ফেরে — কপিগুলো হুবহু এক, তাই লাফ বোঝা
+ *     যায় না (seamless loop)। ৪টা কপি, কারণ বড় পর্দায় ১২৮০px-এর
+ *     ঘরটা যেন কখনো ফাঁকা না দেখায়।
+ *   • দুই পাশে ফিকে হয়ে মিলিয়ে যায় (mask-image) — reference video-র মতো।
+ *   • mouse রাখলে থামে (hover pause)।
+ *   • prefers-reduced-motion চালু থাকলে কিছু চলে না, আগের মতো স্থির
+ *     সারি দেখায়।
+ *   • প্রথম কপি বাদে বাকিগুলো aria-hidden — screen reader একবারই পড়ে।
  */
 export default function BrandStrip({
   brands = DELIVERY_BRANDS,
@@ -49,6 +64,57 @@ export default function BrandStrip({
       return next;
     });
 
+  /** দুই ধরনের সারি: স্থির (reduced-motion) আর চলন্ত (marquee) — item একই। */
+  const renderItem = (brand: DeliveryBrand, keyPrefix: string) => {
+    const showLogo = Boolean(brand.logo) && !failed.has(brand.name);
+
+    /** logo থাকলে Figma-র মাপ; না থাকলে রঙিন লেখা */
+    const style = showLogo
+      ? ({
+          "--bw": `${brand.width}px`,
+          "--bh": `${brand.height}px`,
+        } as CSSProperties)
+      : { color: brand.color };
+
+    return (
+      <li
+        key={`${keyPrefix}-${brand.name}`}
+        className={
+          showLogo
+            ? "relative h-[calc(var(--bh)*0.6)] w-[calc(var(--bw)*0.6)] shrink-0 transition-transform duration-300 hover:-translate-y-[3px] md:h-[calc(var(--bh)*0.8)] md:w-[calc(var(--bw)*0.8)] xl:h-[var(--bh)] xl:w-[var(--bw)]"
+            : `shrink-0 whitespace-nowrap font-sora text-[18px] font-bold leading-none md:text-[22px] xl:text-[26px] ${
+                brand.italic ? "italic" : ""
+              }`
+        }
+        style={style}
+      >
+        {showLogo ? (
+          <Image
+            src={brand.logo!}
+            alt={brand.name}
+            fill
+            sizes={`${brand.width}px`}
+            // marquee-র ভেতরের কপিগুলো পর্দার বাইরে থাকে; lazy হলে চলতে চলতে
+            // খালি জায়গা দেখা দিত। logo ছোট, তাই eager-ই ঠিক।
+            loading="eager"
+            className="object-contain"
+            onError={() => markFailed(brand.name)}
+          />
+        ) : (
+          brand.name
+        )}
+      </li>
+    );
+  };
+
+  /**
+   * প্রতিটা কপির ডানে gap-এর সমান padding (`pr-*`) — নাহলে কপির শেষ logo
+   * আর পরের কপির প্রথম logo-র মাঝে gap থাকত না, আর -50% লুপে ঠিক
+   * ততটুকু লাফ দেখা যেত।
+   */
+  const GROUP =
+    "flex shrink-0 items-center gap-x-8 pr-8 md:gap-x-14 md:pr-14 xl:gap-x-20 xl:pr-20";
+
   return (
     <section className="bg-[#F9F6F3] px-4 pb-10 md:px-10 xl:px-20 xl:pb-[60px]">
       <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-6 xl:gap-10">
@@ -56,71 +122,49 @@ export default function BrandStrip({
           Trusted Equipment From Industry Leaders
         </h2>
 
-        {/**
-         * ⚠️ `flex-wrap` + `justify-center`, একটামাত্র সারি নয়। Figma-তে
-         * ছটা logo এক সারিতে (মোট ~১১৬৮px), কিন্তু ৩২০px-এ ছটা
-         * পাশাপাশি রাখা যায় না। ভাঁজ হয়ে দুই-তিন সারিতে নামলে চেহারাটা
-         * বজায় থাকে, শুধু উচ্চতা বাড়ে। xl-এ gap ঠিক Figma-র ৮০px।
-         */}
-        <ul className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 md:gap-x-14 xl:min-h-[40px] xl:gap-x-20">
-          {brands.map((brand, index) => {
-            const showLogo = Boolean(brand.logo) && !failed.has(brand.name);
-
-            /** logo থাকলে Figma-র বাক্স; না থাকলে লেখার স্বাভাবিক মাপ। */
-            const style = showLogo
-              ? ({
-                  "--bw": `${brand.width}px`,
-                  "--bh": `${brand.height}px`,
-                } as CSSProperties)
-              : { color: brand.color };
-
-            return (
-              <motion.li
-                key={brand.name}
-                /**
-                 * ⚠️ `whileInView`, `animate` নয় — এই সারিটা Hero-র নিচে,
-                 * অর্থাৎ প্রথম পর্দায় প্রায়ই দেখাই যায় না। `animate`
-                 * দিলে animation-টা কেউ না দেখতেই শেষ হয়ে যেত, আর
-                 * ব্যবহারকারী scroll করে এসে একটা স্থির সারি পেতেন।
-                 *
-                 * `once: true` — একবারই। বারবার scroll করলে প্রতিবার
-                 * নতুন করে ভেসে ওঠা বিরক্তিকর।
-                 */
-                initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.6 }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: index * 0.07 }}
-                whileHover={reduceMotion ? undefined : { y: -3 }}
-                /**
-                 * ⚠️ ধূসর-করে-রাখা (grayscale) নয়, ব্র্যান্ডের নিজের রঙেই —
-                 * Figma-তে ওগুলো রঙিন।
-                 */
-                className={
-                  showLogo
-                    ? "relative h-[calc(var(--bh)*0.6)] w-[calc(var(--bw)*0.6)] md:h-[calc(var(--bh)*0.8)] md:w-[calc(var(--bw)*0.8)] xl:h-[var(--bh)] xl:w-[var(--bw)]"
-                    : `font-sora text-[18px] font-bold leading-none md:text-[22px] xl:text-[26px] ${
-                        brand.italic ? "italic" : ""
-                      }`
-                }
-                style={style}
-              >
-                {showLogo ? (
-                  <Image
-                    src={brand.logo!}
-                    alt={brand.name}
-                    fill
-                    sizes={`${brand.width}px`}
-                    className="object-contain"
-                    onError={() => markFailed(brand.name)}
-                  />
-                ) : (
-                  brand.name
-                )}
-              </motion.li>
-            );
-          })}
-        </ul>
+        {reduceMotion ? (
+          <ul className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 md:gap-x-14 xl:min-h-[40px] xl:gap-x-20">
+            {brands.map((brand) => renderItem(brand, "static"))}
+          </ul>
+        ) : (
+          <div
+            className="brand-marquee w-full overflow-hidden py-2"
+            // দুই পাশে ফিকে হয়ে মিলিয়ে যাওয়া
+            style={{
+              WebkitMaskImage:
+                "linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%)",
+              maskImage:
+                "linear-gradient(to right, transparent 0, #000 10%, #000 90%, transparent 100%)",
+            }}
+          >
+            <div className="brand-marquee-track flex w-max items-center">
+              {[0, 1, 2, 3].map((copy) => (
+                <ul key={copy} className={GROUP} aria-hidden={copy === 0 ? undefined : true}>
+                  {brands.map((brand) => renderItem(brand, `c${copy}`))}
+                </ul>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* keyframes এই ফাইলেই — globals.css ছুঁতে হয় না */}
+      <style>{`
+        @keyframes brand-marquee {
+          from { transform: translate3d(-50%, 0, 0); }
+          to   { transform: translate3d(0, 0, 0); }
+        }
+        .brand-marquee-track {
+          animation: brand-marquee 30s linear infinite;
+          will-change: transform;
+        }
+        @media (min-width: 768px)  { .brand-marquee-track { animation-duration: 40s; } }
+        @media (min-width: 1280px) { .brand-marquee-track { animation-duration: 50s; } }
+        .brand-marquee:hover .brand-marquee-track { animation-play-state: paused; }
+        @media (prefers-reduced-motion: reduce) {
+          .brand-marquee-track { animation: none; }
+        }
+      `}</style>
     </section>
   );
 }
