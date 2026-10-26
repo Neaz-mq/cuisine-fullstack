@@ -65,6 +65,42 @@ export type MenuCardItem = {
   discountLabel: string | null;
 };
 
+/**
+ * Figma "vuesax/bold/shopping-cart": 18x18, solid white. (The exported SVG's
+ * mask/stroke layers add nothing visible — only these four filled shapes do:
+ * two wheels, the handle and the basket.)
+ */
+function CartIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="h-[18px] w-[18px] shrink-0"
+    >
+      <path
+        d="M12.1875 16.875C12.9124 16.875 13.5 16.2874 13.5 15.5625C13.5 14.8376 12.9124 14.25 12.1875 14.25C11.4626 14.25 10.875 14.8376 10.875 15.5625C10.875 16.2874 11.4626 16.875 12.1875 16.875Z"
+        fill="white"
+      />
+      <path
+        d="M6.1875 16.875C6.91237 16.875 7.5 16.2874 7.5 15.5625C7.5 14.8376 6.91237 14.25 6.1875 14.25C5.46263 14.25 4.875 14.8376 4.875 15.5625C4.875 16.2874 5.46263 16.875 6.1875 16.875Z"
+        fill="white"
+      />
+      <path
+        d="M3.63 2.955L3.48 4.7925C3.45 5.145 3.7275 5.4375 4.08 5.4375H15.5625C15.8775 5.4375 16.14 5.1975 16.1625 4.8825C16.26 3.555 15.2475 2.475 13.92 2.475H4.7025C4.6275 2.145 4.4775 1.83 4.245 1.5675C3.87 1.17 3.345 0.9375 2.805 0.9375H1.5C1.1925 0.9375 0.9375 1.1925 0.9375 1.5C0.9375 1.8075 1.1925 2.0625 1.5 2.0625H2.805C3.0375 2.0625 3.255 2.16 3.4125 2.325C3.57 2.4975 3.645 2.7225 3.63 2.955Z"
+        fill="white"
+      />
+      <path
+        d="M15.3825 6.5625H3.87754C3.56254 6.5625 3.30754 6.8025 3.27754 7.11L3.00754 10.3725C2.90254 11.655 3.90754 12.75 5.19004 12.75H13.53C14.655 12.75 15.645 11.8275 15.7275 10.7025L15.975 7.2C16.005 6.855 15.735 6.5625 15.3825 6.5625Z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
 /** Figma "Food Card 2" — column, padding 12/12/20, gap 16, radius 30। */
 export default function FoodCard({ item }: { item: MenuCardItem }) {
   const { addToCart } = useCart();
@@ -234,35 +270,19 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
             </span>
           </span>
 
-          <div className="ml-auto flex min-w-0 max-w-full gap-2">
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              disabled={!item.isAvailable}
-              aria-label={`Add ${item.title} to cart`}
-              className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full border border-black px-4 font-sora text-[13px] font-semibold leading-[1.3] text-black transition-colors hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-black ${FOCUS_RING}`}
-            >
-              Add to Cart
-            </button>
-
-            {/**
-             * ⚠️ বোতাম নয়, `<Link>` — "Order Now" এখন সরাসরি cart-এ যোগ
-             * করে না, পদটার নিজের পাতায় নিয়ে যায় (Figma-র detail পাতা)।
-             * ওখানে ছবির slider, উপকরণ, পুষ্টি, সংখ্যা বাছাই আর তারপর
-             * "Add to Cart" / "Buy Now"।
-             *
-             * এক ক্লিকে cart-এ ফেলাটা দ্রুত, কিন্তু খদ্দের তখন জানেন না
-             * কী কিনছেন — ছবি আর দুই লাইনের বিবরণই সব। তাই যিনি দেখে
-             * কিনতে চান তাঁর জন্য "Order Now", যিনি জানেন কী চান তাঁর
-             * জন্য পাশের "Add to Cart"।
-             */}
+          {/* Figma: "Order Now" (gradient pill, 46px tall) then a round black
+              46x46 cart button. Order Now opens the dish's detail page (size,
+              extras, quantity); the cart button adds ONE of it straight to
+              the cart — the same cart entry the detail page's "Add to Cart"
+              makes, so adding here and there merges into one line. */}
+          <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
             {item.soldOut ? (
               /* Out of ingredients: there is nothing to order, so the button
-                 is switched off (same faded look as the disabled Add to Cart).
+                 is switched off (same faded look as the disabled cart button).
                  A <Link> can't be `disabled`, so it becomes a plain span. */
               <span
                 aria-disabled="true"
-                className="flex h-10 min-w-0 shrink cursor-not-allowed items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white opacity-40"
+                className="flex h-[46px] min-w-0 shrink cursor-not-allowed items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white opacity-40"
               >
                 Order Now
               </span>
@@ -270,11 +290,21 @@ export default function FoodCard({ item }: { item: MenuCardItem }) {
               <Link
                 href={`/menu/${item.id}`}
                 aria-label={`See ${item.title}`}
-                className={`flex h-10 min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[13px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+                className={`flex h-[46px] min-w-0 shrink items-center justify-center whitespace-nowrap rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 ${FOCUS_RING}`}
               >
                 Order Now
               </Link>
             )}
+
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!item.isAvailable}
+              aria-label={`Add ${item.title} to cart`}
+              className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center gap-3 rounded-[90px] bg-black p-[14px] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:opacity-40 ${FOCUS_RING}`}
+            >
+              <CartIcon />
+            </button>
           </div>
         </div>
       </div>

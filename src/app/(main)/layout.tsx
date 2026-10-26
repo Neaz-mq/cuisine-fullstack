@@ -1,4 +1,5 @@
 import SiteTopBar from "@/components/SiteTopBar";
+import StickySiteHeader from "@/components/StickySiteHeader";
 import SiteNavbar from "@/components/SiteNavbar";
 import Footer from "@/components/Footer";
 import AiAssistant from "@/components/ai/AiAssistant";
@@ -30,8 +31,9 @@ import AiAssistant from "@/components/ai/AiAssistant";
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <SiteTopBar />
-      <SiteNavbar />
+      {/* Info bar + navbar stay pinned to the top while scrolling.
+          (pinTopBar={false} makes only the navbar stay pinned.) */}
+      <StickySiteHeader topBar={<SiteTopBar />} navbar={<SiteNavbar />} />
       {/* Footer-টা এই মোড়কের বাইরে নয় — এখন আর `ml-20` নেই, তাই
           full-bleed পটভূমির জন্য আলাদা করে রাখার দরকারও নেই। */}
       {/* overflow-x-clip: a section's slide-in animation (or one element a

@@ -65,6 +65,14 @@
   font-family: var(--font-sora), sans-serif;
 }
 
+/* The sticky site header (components/StickySiteHeader.tsx) publishes the
+   height it covers while pinned as --site-header-h. With this, in-page
+   anchors and scrollIntoView() stop BELOW the header instead of behind it.
+   Pages without that header leave the variable unset, so this is 0px. */
+html {
+  scroll-padding-top: var(--site-header-h, 0px);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

@@ -126,7 +126,7 @@ export default function AccountNav({ summary }: { summary: AccountSummary }) {
       </div>
 
       {/* ── Desktop: Figma sidebar card ──────────────────────────────── */}
-      <aside className="hidden self-start lg:sticky lg:top-6 lg:block">
+      <aside className="hidden self-start lg:sticky lg:top-[calc(var(--site-header-h,0px)_+_1.5rem)] lg:block">
         <div className="flex flex-col gap-6 rounded-[30px] bg-white p-6 xl:p-[30px]">
           <div className="flex min-w-0 items-center gap-4">
             <Avatar summary={summary} className="h-16 w-16 text-[26px] xl:h-20 xl:w-20 xl:text-[30px]" />
