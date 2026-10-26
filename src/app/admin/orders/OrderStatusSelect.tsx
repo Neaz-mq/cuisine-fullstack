@@ -27,10 +27,13 @@ export default function OrderStatusSelect({
   orderId,
   currentStatus,
   orderType,
+  size = "sm",
 }: {
   orderId: string;
   currentStatus: string;
   orderType?: "DELIVERY" | "DINE_IN";
+  /** "lg" = Figma order-detail badge (h 46, px 20, Sora 16 semibold). */
+  size?: "sm" | "lg";
 }) {
   const [status, setStatus] = useState(currentStatus);
   const [isPending, startTransition] = useTransition();
@@ -45,12 +48,15 @@ export default function OrderStatusSelect({
   }
 
   const badgeClass = ORDER_STATUS_BADGE[status]?.className ?? "bg-black/5 text-black";
+  const isLarge = size === "lg";
   const canCancel = nextStatuses(status as OrderStatus).includes("CANCELLED");
 
   if (!canCancel) {
     return (
       <span
-        className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] font-medium leading-none ${badgeClass}`}
+        className={`inline-flex items-center justify-center whitespace-nowrap rounded-full font-sora leading-none ${
+          isLarge ? "h-[46px] px-5 text-[16px] font-semibold" : "h-8 px-3 text-[12px] font-medium"
+        } ${badgeClass}`}
       >
         {orderStatusLabel(status, orderType)}
       </span>
@@ -97,7 +103,9 @@ export default function OrderStatusSelect({
       // self-start: flex parent-এর ভেতরে টেনে লম্বা না হয় — নাহলে
       // popup-টা ব্যাজের নিচে না খুলে সারির একদম তলায় খুলত।
       className={`self-start ${isPending ? "pointer-events-none opacity-50" : ""}`}
-      triggerClassName={`h-8 px-3 text-[12px] font-medium ${badgeClass}`}
+      triggerClassName={`${
+        isLarge ? "h-[46px] px-5 text-[16px] font-semibold" : "h-8 px-3 text-[12px] font-medium"
+      } ${badgeClass}`}
     />
   );
 }

@@ -73,10 +73,10 @@ import {
  * নিজের এককে রূপান্তর হয় (lib/recipe-units.ts) — stock সবসময় ওই
  * এককেই কাটে।
  *
- * নিচের "Other ingredients" chip-গুলো আগের `ingredientTags` — stock-এ
- * ধরা হয় না এমন জিনিস (লবণ, পানি) গ্রাহককে দেখানোর জন্য। recipe-র
- * নামগুলো save-এর সময় আপনা থেকে tag-তালিকায় যোগ হয়, তাই কাউকে
- * একই নাম দুবার লিখতে হয় না।
+ * আগে এখানে একটা আলাদা "Other ingredients" (হাতে লেখা) ঘর ছিল — সরানো
+ * হয়েছে। এখন শুধু Inventory থেকে dropdown-এ বাছা ingredient-ই থাকে।
+ * গ্রাহককে দেখানো `ingredientTags` save-এর সময় recipe-র নাম থেকেই
+ * বানানো হয়।
  */
 
 export type MenuItemDraft = {
@@ -186,9 +186,6 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
   const [protein, setProtein] = useState(toFieldValue(item?.proteinGrams));
   const [carbs, setCarbs] = useState(toFieldValue(item?.carbGrams));
 
-  const [tags, setTags] = useState<string[]>(item?.ingredientTags ?? []);
-  const [tagDraft, setTagDraft] = useState("");
-
   // Recipe (inventory-linked ingredients). `recipeStatus` gates Save: saving
   // while the recipe is still loading (or failed to load) would either lose
   // it or — worse — send an empty one and wipe the saved recipe.
@@ -270,15 +267,8 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
             };
           });
 
-        // Names now covered by the recipe leave the free-text chips (they're
-        // re-added from the recipe on save) — no duplicates in the form.
-        const recipeNames = new Set(
-          loadedRows.map((r) => known.get(r.inventoryItemId)!.name.replace(/ \(inactive\)$/, "").toLowerCase())
-        );
-
         setOptions([...known.values()].sort((a, b) => a.name.localeCompare(b.name)));
         setRows(loadedRows);
-        setTags((prev) => prev.filter((tag) => !recipeNames.has(tag.toLowerCase())));
         setRecipeStatus("ready");
       } catch {
         if (!cancelled) setRecipeStatus("error");
@@ -300,19 +290,6 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
     const stockUnit = options.find((o) => o.id === inventoryItemId)?.unit;
     // New ingredient → its own unit by default; the cook can switch to a smaller one.
     updateRow(key, { inventoryItemId, ...(stockUnit ? { unit: stockUnit } : {}) });
-  }
-
-  function addTag() {
-    const value = tagDraft.trim();
-    if (!value) return;
-    // ⚠️ একই নাম দুবার নয় — case-insensitive মিল, কারণ "Cheese" আর
-    // "cheese" ব্যবহারকারীর কাছে এক জিনিস। মিলে গেলে চুপচাপ উপেক্ষা,
-    // কোনো ভুল-বার্তা নয়: এটা ভুল নয়, ইতিমধ্যেই হয়ে যাওয়া কাজ।
-    // SupplierFormModal-এর "Product Supplied" ঘরে হুবহু একই নিয়ম।
-    if (!tags.some((tag) => tag.toLowerCase() === value.toLowerCase())) {
-      setTags((prev) => [...prev, value]);
-    }
-    setTagDraft("");
   }
 
   async function handleSubmit() {
@@ -368,11 +345,8 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
       recipeNames.push(option.name.replace(/ \(inactive\)$/, ""));
     }
 
-    // Customer-facing list = recipe names + the free-text extras (no duplicates).
+    // Customer-facing list = recipe (inventory) ingredient names only.
     const allTags = [...recipeNames];
-    for (const tag of tags) {
-      if (!allTags.some((name) => name.toLowerCase() === tag.toLowerCase())) allTags.push(tag);
-    }
     if (allTags.length > 20) {
       return setError("A dish can show at most 20 ingredients. Remove a few.");
     }
@@ -764,10 +738,10 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
                 <button
                   type="button"
                   onClick={() => setRows((prev) => [...prev, newRow()])}
-                  className="flex h-[43px] items-center gap-1.5 rounded-[12px] bg-[#F9F6F3] px-3 font-sora text-[12px] leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]"
+                  className="flex h-[43px] items-center gap-1.5 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-5 font-sora text-[12px] font-semibold leading-none text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
                 >
                   Add ingredient
-                  <Plus className="h-3.5 w-3.5" strokeWidth={1.2} aria-hidden="true" />
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -827,67 +801,6 @@ function MenuItemFormModalContent({ open, onClose, item, categories, currency }:
               </p>
             </div>
           )}
-
-          <span className={LABEL}>Other ingredients</span>
-          <p className="mb-3 font-sora text-[11px] leading-[1.6] text-black/50">
-            Shown to customers only, not tracked in stock (e.g. salt, water).
-          </p>
-
-          {tags.length > 0 && (
-            /* Frame 2147236449: row, gap 16 — chip cream, h 43, radius 12,
-               padding 12, লেখা Sora 12 Black/70। `flex-wrap`, কারণ
-               Figma-তে চারটে chip, বাস্তবে বিশটাও হতে পারে। */
-            <div className="mb-3 flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="flex h-[43px] items-center gap-2 rounded-[12px] bg-[#F9F6F3] px-3 font-sora text-[12px] leading-[1.6] text-black/70"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => setTags((prev) => prev.filter((entry) => entry !== tag))}
-                    aria-label={`Remove ${tag}`}
-                    className="text-black/40 transition-colors hover:text-[#D72A37] focus:outline-none focus-visible:[outline:2px_solid_#FF9540]"
-                  >
-                    <X className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Frame 2147236448: row, gap 16 — ঘরটা flex-grow (585px),
-              "Add" বোতামটা hug (74px, cream, h 43, radius 12, icon 14)। */}
-          <div className="flex gap-2">
-            <input
-              id="menu-item-ingredient"
-              type="text"
-              maxLength={60}
-              value={tagDraft}
-              onChange={(event) => setTagDraft(event.target.value)}
-              // ⚠️ Enter চাপলে chip যোগ হয়, কিন্তু `preventDefault`
-              // জরুরি — নাহলে Enter মানে হত "পুরো form save", আর
-              // অসম্পূর্ণ অবস্থায় সংরক্ষিত হয়ে যেত।
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addTag();
-                }
-              }}
-              placeholder="Type.."
-              aria-label="Add an ingredient"
-              className={FIELD}
-            />
-            <button
-              type="button"
-              onClick={addTag}
-              className="flex h-[43px] shrink-0 items-center gap-1.5 rounded-[12px] bg-[#F9F6F3] px-3 font-sora text-[12px] leading-none text-black transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:-2px]"
-            >
-              Add
-              <Plus className="h-3.5 w-3.5" strokeWidth={1.2} aria-hidden="true" />
-            </button>
-          </div>
         </div>
 
         {/**

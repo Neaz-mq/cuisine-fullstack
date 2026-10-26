@@ -6,6 +6,7 @@ import OrderStatusSelect from "../OrderStatusSelect";
 import PaymentStatusBadge from "../PaymentStatusBadge";
 import AssignRiderPanel from "./AssignRiderPanel";
 import RefundPanel from "./RefundPanel";
+import OrderPhoneField from "./OrderPhoneField";
 import { requireAdmin } from "@/lib/require-admin";
 import { hasPermission } from "@/lib/permissions";
 import { formatAmount } from "@/lib/currency-format";
@@ -76,284 +77,377 @@ export default async function AdminOrderDetailPage({
             ? "Fully refunded."
             : null;
 
+  // ── Figma "Order details" (Frame 2147236277) ─────────────────────────
+  //
+  //   white card  padding 30, gap 24, radius 20, shadow 0 4 30 rgba(0,0,0,.06)
+  //     header    "Order ID: #…" (Frank Ruhl 30) + "Placed on …" │ status badge
+  //     Information  cream box: Email │ Phone (flag + dial) , Address
+  //     Items        cream box: ✓ lines │ divider │ subtotal / delivery / VAT
+  //     footer    ● channel - payment                       Total: $…
+  //
+  // Staff-only extras (rider assign, refund, refund history) are kept —
+  // the card is the Figma frame, the panels sit right under it.
+  const placedDate = order.createdAt.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const placedTime = order.createdAt.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const fullAddress = [
+    order.address,
+    order.apartment,
+    [order.city, [order.state, order.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    order.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const channelLabel = isDineIn
+    ? `Table ${order.table?.label ?? "—"}`
+    : order.shippingMethod === "UBER_EATS"
+      ? "Uber Eats"
+      : order.shippingMethod === "FOOD_PANDA"
+        ? "Food Panda"
+        : order.shippingMethod === "OWN_DELIVERY"
+          ? "Our Own Delivery"
+          : "—";
+  const paymentLabel =
+    order.paymentMethod === "COD" ? (isDineIn ? "Pay at Table" : "Cash on Delivery") : "Online Payment";
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="mx-auto w-full max-w-[1070px] px-4 py-8">
       <Link
         href="/admin/orders"
-        className="text-sm text-gray-500 hover:text-gray-800 mb-4 inline-block"
+        className="mb-4 inline-block font-sora text-[14px] text-black/70 hover:text-black"
       >
         ← Back to all orders
       </Link>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-800">
-            {formatOrderId(order.id)}
-          </h1>
-          <p className="text-sm text-gray-400">
-            Placed{" "}
-            {order.createdAt.toLocaleString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </p>
-        </div>
-        <OrderStatusSelect
-          orderId={order.id}
-          currentStatus={order.status}
-          orderType={order.orderType}
-        />
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4 mb-6">
-        {/* Customer & Contact */}
-        <div className="border border-gray-200 rounded-md p-4 bg-white">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Customer
-          </h2>
-          <p className="text-sm text-gray-800 font-medium">
-            {order.firstName} {order.lastName}
-          </p>
-          {order.user ? (
-            <p className="text-xs text-gray-400 mt-1">Registered account</p>
-          ) : (
-            <p className="text-xs text-gray-400 mt-1">Guest checkout</p>
-          )}
-          {order.email && <p className="text-sm text-gray-600 mt-2">{order.email}</p>}
-          <p className="text-sm text-gray-600">{order.phone}</p>
-        </div>
-
-        {/* Delivery Address (DELIVERY) / Table (DINE_IN) */}
-        <div className="border border-gray-200 rounded-md p-4 bg-white">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            {isDineIn ? "Table" : "Delivery Address"}
-          </h2>
-          {isDineIn ? (
-            <p className="text-sm text-gray-700">
-              Table <span className="font-semibold">{order.table?.label ?? "—"}</span>
+      <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 shadow-[0_4px_30px_rgba(0,0,0,0.06)] sm:p-[30px]">
+        {/* Frame 2147236158 — title block │ status badge */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-col justify-center gap-3">
+            <h1 className="font-frank-ruhl text-[24px] font-medium leading-[1.3] text-black/70 sm:text-[30px]">
+              Order ID: <span className="text-black">{formatOrderId(order.id)}</span>
+            </h1>
+            <p className="font-sora text-[14px] leading-[1.3] text-black/70 sm:text-[16px]">
+              Placed on {placedDate} at {placedTime}
             </p>
-          ) : (
-            <>
-              <p className="text-sm text-gray-700">{order.address}</p>
-              {order.apartment && (
-                <p className="text-sm text-gray-700">{order.apartment}</p>
-              )}
-              <p className="text-sm text-gray-700">
-                {order.city}, {order.state} {order.zip}
-              </p>
-              <p className="text-sm text-gray-700">{order.country}</p>
-            </>
+          </div>
+          <OrderStatusSelect
+            orderId={order.id}
+            currentStatus={order.status}
+            orderType={order.orderType}
+            size="lg"
+          />
+        </div>
+
+        <div className="flex flex-col gap-5">
+          {/* Information */}
+          <section className="flex flex-col gap-4">
+            <h2 className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black">
+              Information
+            </h2>
+            <div className="grid grid-cols-1 gap-4 rounded-[16px] bg-[#F9F6F3] p-4 md:grid-cols-2">
+              <InfoField label="Customer Name" className="md:col-span-2">
+                {order.firstName} {order.lastName}
+                <span className="text-black/50">
+                  {" · "}
+                  {order.user ? "Registered account" : "Guest checkout"}
+                </span>
+              </InfoField>
+
+              <InfoField label="Email Address">{order.email ?? "Not provided"}</InfoField>
+
+              <InfoField label="Phone Number">
+                <OrderPhoneField phone={order.phone} country={order.country} />
+              </InfoField>
+
+              <InfoField label={isDineIn ? "Table" : "Address"} className="md:col-span-2">
+                {isDineIn ? `Table ${order.table?.label ?? "—"}` : fullAddress || "—"}
+              </InfoField>
+            </div>
+          </section>
+
+          {/* rider assign: only while the order is "Ready" (or already out).
+              Kept from the old page — the assign-rider route is the gate. */}
+          {!isDineIn && (order.status === "READY" || order.status === "OUT_FOR_DELIVERY") && (
+            <AssignRiderPanel
+              orderId={order.id}
+              currentRiderId={order.deliveryTracking?.riderId ?? null}
+            />
           )}
-        </div>
-      </div>
 
-      {/* rider বসানো যায় কেবল রান্নাঘর "Ready" করার পরে (বা rider বদলের সময়
-          পথে থাকা অর্ডারে) — assign-rider route-ও একই নিয়মে আটকায়। */}
-      {!isDineIn && (order.status === "READY" || order.status === "OUT_FOR_DELIVERY") && (
-        <div className="mb-6">
-          <AssignRiderPanel orderId={order.id} currentRiderId={order.deliveryTracking?.riderId ?? null} />
-        </div>
-      )}
+          {/* Only shown to roles holding the "refunds" scope. Hiding it is not
+              the security boundary — the API route checks the same scope —
+              but there is no reason to show a control someone can't use. */}
+          {canRefund && isOnline && (
+            <RefundPanel
+              orderId={order.id}
+              currency={order.currency}
+              remaining={refundable.toNumber()}
+              chargedLabel={money(order.totalAmount)}
+              refundedLabel={positive(order.refundedAmount) ? money(order.refundedAmount) : null}
+              remainingLabel={money(refundable)}
+              canRefund={refundBlockedReason === null}
+              blockedReason={refundBlockedReason}
+            />
+          )}
 
-      {/* Only shown to roles holding the "refunds" scope. Hiding it is not
-          the security boundary — the API route checks the same scope — but
-          there is no reason to show a control someone can't use. */}
-      {canRefund && isOnline && (
-        <RefundPanel
-          orderId={order.id}
-          currency={order.currency}
-          remaining={refundable.toNumber()}
-          chargedLabel={money(order.totalAmount)}
-          refundedLabel={positive(order.refundedAmount) ? money(order.refundedAmount) : null}
-          remainingLabel={money(refundable)}
-          canRefund={refundBlockedReason === null}
-          blockedReason={refundBlockedReason}
-        />
-      )}
-
-      {order.refunds.length > 0 && (
-        <div className="border border-gray-200 rounded-md p-4 bg-white mb-6">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Refund history
-          </h2>
-          <div className="space-y-2">
-            {order.refunds.map((refund) => (
-              <div
-                key={refund.id}
-                className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
-              >
-                <span className="text-gray-700">
-                  {money(refund.amount)}
-                  <span className="text-gray-400">
-                    {" · "}
-                    {refund.createdAt.toLocaleString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                    {" · "}
-                    {/* No issuer means it came from the Stripe dashboard
-                        rather than this app — worth being able to tell
-                        apart when reconciling. */}
-                    {refund.issuedBy?.name ?? refund.issuedBy?.email ?? "Stripe dashboard"}
-                  </span>
-                  {refund.reason && (
-                    <span className="text-gray-400"> · {refund.reason}</span>
-                  )}
-                </span>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    refund.status === "SUCCEEDED"
-                      ? "bg-sky-100 text-sky-700"
-                      : refund.status === "PENDING"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-red-100 text-red-700"
-                  }`}
-                  title={refund.failureReason ?? undefined}
-                >
-                  {refund.status === "SUCCEEDED"
-                    ? "Sent"
-                    : refund.status === "PENDING"
-                      ? "Pending — check Stripe"
-                      : "Failed"}
-                </span>
+          {/* Items */}
+          <section className="flex flex-col gap-4">
+            <h2 className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black">
+              Items
+            </h2>
+            <div className="flex flex-col gap-5 rounded-[16px] bg-[#F9F6F3] p-4">
+              {/* Frame 2147236141 — ordered lines with the orange tick */}
+              <div className="flex flex-col gap-4">
+                {order.items.map((item) => (
+                  <BillRow
+                    key={item.id}
+                    ticked
+                    label={`${item.quantity}p. ${item.menuItem.title}`}
+                    amount={money(item.price.times(item.quantity))}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+
+              {/* Rectangle 34628983 — 1px white divider */}
+              <div className="h-px w-full bg-white" aria-hidden="true" />
+
+              {/* Frame 2147236142 — The bill. Staff need this as much as the
+                  customer does: a refund, a dispute or a cash reconciliation
+                  all turn on how much of the total was tax (the
+                  government's) and how much was tip (the staff's) — neither
+                  is the restaurant's revenue. */}
+              <div className="flex flex-col gap-4">
+                <BillRow label="Subtotal" amount={money(order.subtotal)} />
+
+                {positive(order.discountAmount) && (
+                  <BillRow
+                    label={`Discount${order.couponCode ? ` (${order.couponCode})` : ""}`}
+                    amount={`-${money(order.discountAmount)}`}
+                    amountClassName="text-[#2C6252]"
+                  />
+                )}
+
+                {positive(order.tierDiscountAmount) && (
+                  <BillRow
+                    label="Tier discount"
+                    amount={`-${money(order.tierDiscountAmount)}`}
+                    amountClassName="text-[#2C6252]"
+                  />
+                )}
+
+                {positive(order.serviceCharge) && (
+                  <BillRow label="Service charge" amount={money(order.serviceCharge)} />
+                )}
+
+                {!isDineIn && (
+                  <BillRow
+                    label="Delivery"
+                    amount={positive(order.deliveryFee) ? money(order.deliveryFee) : "Free"}
+                  />
+                )}
+
+                {positive(order.taxAmount) && (
+                  <BillRow
+                    label={
+                      <>
+                        {order.taxName}
+                        {/* The rate is shown because it is snapshotted per order —
+                            an old invoice charged at 5% must still read 5% after
+                            the restaurant moves to 10%. */}
+                        <span className="text-black/50">
+                          {" @ "}
+                          {Number(order.taxRate) * 100}%
+                          {order.taxMode === "INCLUSIVE" ? ", included" : ""}
+                        </span>
+                      </>
+                    }
+                    amount={money(order.taxAmount)}
+                  />
+                )}
+
+                {positive(order.giftCardAmount) && (
+                  <BillRow
+                    label={`Gift card${order.giftCardCode ? ` (${order.giftCardCode})` : ""}`}
+                    amount={`-${money(order.giftCardAmount)}`}
+                    amountClassName="text-[#2C6252]"
+                  />
+                )}
+
+                {positive(order.pointsRedeemedAmount) && (
+                  <BillRow
+                    label={`Points redeemed (${order.pointsRedeemed} pts)`}
+                    amount={`-${money(order.pointsRedeemedAmount)}`}
+                    amountClassName="text-[#2C6252]"
+                  />
+                )}
+
+                {positive(order.refundedAmount) && (
+                  <BillRow
+                    label="Refunded"
+                    amount={`-${money(order.refundedAmount)}`}
+                    amountClassName="text-sky-700"
+                  />
+                )}
+
+                {positive(order.tipAmount) && (
+                  <BillRow
+                    label={
+                      <>
+                        Tip <span className="text-black/50">(staff, not revenue)</span>
+                      </>
+                    }
+                    amount={money(order.tipAmount)}
+                  />
+                )}
+              </div>
+            </div>
+          </section>
+
+          {order.refunds.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <h2 className="font-frank-ruhl text-[20px] font-medium leading-[1.3] text-black">
+                Refund history
+              </h2>
+              <div className="flex flex-col gap-3 rounded-[16px] bg-[#F9F6F3] p-4">
+                {order.refunds.map((refund) => (
+                  <div
+                    key={refund.id}
+                    className="flex flex-wrap items-baseline justify-between gap-2 font-sora text-[14px] text-black/70"
+                  >
+                    <span>
+                      {money(refund.amount)}
+                      <span className="text-black/50">
+                        {" · "}
+                        {refund.createdAt.toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        {" · "}
+                        {/* No issuer means it came from the Stripe dashboard
+                            rather than this app — worth being able to tell
+                            apart when reconciling. */}
+                        {refund.issuedBy?.name ?? refund.issuedBy?.email ?? "Stripe dashboard"}
+                      </span>
+                      {refund.reason && <span className="text-black/50"> — {refund.reason}</span>}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        refund.status === "SUCCEEDED"
+                          ? "bg-sky-100 text-sky-700"
+                          : refund.status === "PENDING"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-700"
+                      }`}
+                      title={refund.failureReason ?? undefined}
+                    >
+                      {refund.status === "SUCCEEDED"
+                        ? "Sent"
+                        : refund.status === "PENDING"
+                          ? "Pending — check Stripe"
+                          : "Failed"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
-      )}
 
-      {/* Order Items */}
-      <div className="border border-gray-200 rounded-md p-4 bg-white mb-6">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Items
-        </h2>
-        <div className="space-y-2">
-          {order.items.map((item) => (
-            <div key={item.id} className="flex justify-between text-sm text-gray-700">
-              <span>
-                {item.menuItem.title}{" "}
-                <span className="text-gray-400">x{item.quantity}</span>
-              </span>
-              <span>{money(item.price.times(item.quantity))}</span>
-            </div>
-          ))}
-        </div>
-        {/* ── The bill ────────────────────────────────────────────────
-            Staff need this as much as the customer does: a refund, a
-            dispute or a cash reconciliation all turn on knowing how much of
-            the total was tax (the government's) and how much was tip (the
-            staff's) — neither of which is the restaurant's revenue. */}
-        <div className="space-y-1.5 pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Subtotal</span>
-            <span>{money(order.subtotal)}</span>
-          </div>
-
-          {positive(order.discountAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
-              <span className="text-[#2C6252]">-{money(order.discountAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.tierDiscountAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Tier discount</span>
-              <span className="text-[#2C6252]">-{money(order.tierDiscountAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.serviceCharge) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Service charge</span>
-              <span>{money(order.serviceCharge)}</span>
-            </div>
-          )}
-
-          {positive(order.deliveryFee) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Delivery</span>
-              <span>{money(order.deliveryFee)}</span>
-            </div>
-          )}
-
-          {positive(order.taxAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>
-                {order.taxName}
-                {/* The rate is shown because it is snapshotted per order —
-                    an old invoice charged at 5% must still read 5% after
-                    the restaurant moves to 10%. */}
-                <span className="text-gray-400">
-                  {" @ "}
-                  {Number(order.taxRate) * 100}%
-                  {order.taxMode === "INCLUSIVE" ? ", included" : ""}
-                </span>
-              </span>
-              <span>{money(order.taxAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.giftCardAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ""}</span>
-              <span className="text-[#2C6252]">-{money(order.giftCardAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.pointsRedeemedAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Points redeemed ({order.pointsRedeemed} pts)</span>
-              <span className="text-[#2C6252]">-{money(order.pointsRedeemedAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.refundedAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>Refunded</span>
-              <span className="text-sky-700">-{money(order.refundedAmount)}</span>
-            </div>
-          )}
-
-          {positive(order.tipAmount) && (
-            <div className="flex justify-between text-gray-600">
-              <span>
-                Tip <span className="text-gray-400">(staff, not revenue)</span>
-              </span>
-              <span>{money(order.tipAmount)}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-between items-center pt-3 mt-3 border-t border-dashed border-gray-200 text-sm">
-          <span className="text-gray-500 flex items-center gap-2">
-            {isDineIn
-              ? `Table ${order.table?.label ?? "—"}`
-              : order.shippingMethod === "UBER_EATS"
-              ? "Uber Eats"
-              : order.shippingMethod === "FOOD_PANDA"
-              ? "Food Panda"
-              : order.shippingMethod === "OWN_DELIVERY"
-              ? "Our Own Delivery"
-              : "—"}{" "}
-            ·{" "}
-            {order.paymentMethod === "COD"
-              ? isDineIn
-                ? "Pay at Table"
-                : "Cash on Delivery"
-              : "Online Payment"}
-            {order.paymentMethod === "ONLINE" && (
-              <PaymentStatusBadge status={order.paymentStatus} />
-            )}
+        {/* Frame 2147236278 — ● channel - payment │ Total */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="flex min-w-0 flex-wrap items-center gap-3 font-sora text-[14px] leading-none text-black/70 sm:text-[16px]">
+            <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#FF9540]" aria-hidden="true" />
+            <span>
+              {channelLabel} - <span className="text-black">{paymentLabel}</span>
+            </span>
+            {order.paymentMethod === "ONLINE" && <PaymentStatusBadge status={order.paymentStatus} />}
           </span>
-          <span className="font-bold text-[#2C6252]">{money(order.totalAmount)}</span>
+          <span className="font-frank-ruhl text-[16px] font-medium leading-none text-black/70">
+            Total:{" "}
+            <span className="text-[22px] font-semibold text-black sm:text-[24px]">
+              {money(order.totalAmount)}
+            </span>
+          </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Figma field: label (Frank Ruhl 14) over a white 43px pill (Sora 12, black/70). */
+function InfoField({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-1.5 ${className}`}>
+      <span className="font-frank-ruhl text-[14px] font-medium leading-[1.6] text-black">
+        {label}
+      </span>
+      <div className="flex min-h-[43px] items-center rounded-[12px] bg-white p-3 font-sora text-[12px] leading-[1.6] text-black/70">
+        <div className="min-w-0 break-words">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Figma line: [✓] Sora 16 label ………… Frank Ruhl 20 amount (both black/70). */
+function BillRow({
+  label,
+  amount,
+  ticked = false,
+  amountClassName = "",
+}: {
+  label: React.ReactNode;
+  amount: string;
+  ticked?: boolean;
+  amountClassName?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6">
+      <span className="flex min-w-0 items-center gap-[11px] font-sora text-[14px] leading-[1.6] text-black/70 sm:text-[16px]">
+        {ticked && (
+          // vuesax/bold/tick-circle — Primary/100 (#FF9540)
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className="shrink-0"
+          >
+            <circle cx="12" cy="12" r="10" fill="#FF9540" />
+            <path
+              d="M7.75 12.2l2.9 2.9 5.6-5.7"
+              stroke="#fff"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+        <span className="min-w-0 break-words">{label}</span>
+      </span>
+      <span
+        className={`shrink-0 whitespace-nowrap text-right font-frank-ruhl text-[18px] font-medium leading-none text-black/70 sm:text-[20px] ${amountClassName}`}
+      >
+        {amount}
+      </span>
     </div>
   );
 }
