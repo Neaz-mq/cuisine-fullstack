@@ -2,8 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireApiScope } from "@/lib/require-admin";
 import { ORDER_VIEW_SELECT, toOrderViewData } from "@/lib/order-view-data";
+import { kitchenStageOf } from "@/lib/kitchen-stage";
 
-// The board shows PLACED / PREPARING / READY. A READY order stays in the
+// The board shows only orders the admin has moved to the kitchen (PREPARING)
+// plus READY ones; PLACED orders are still waiting for admin approval and are
+// never sent here. A READY order stays in the
 // "Ready" column until a rider is assigned (it then becomes OUT_FOR_DELIVERY)
 // or, for dine-in, until it is served — so no time window is needed.
 
@@ -12,12 +15,13 @@ export async function GET() {
   if (authResult instanceof NextResponse) return authResult;
 
   const orders = await prisma.order.findMany({
-    where: { status: { in: ["PLACED", "PREPARING", "READY"] } },
+    where: { status: { in: ["PREPARING", "READY"] } },
     select: {
       // ⚠️ ORDER_VIEW_SELECT-এ `orderType` আগে থেকেই আছে, তাই এখানে
       // আবার লিখলে TS2783 ("একাধিকবার দেওয়া হয়েছে") — বোর্ডের নিজের
       // দরকারি বাকি কলামগুলোই কেবল যোগ হয়।
       status: true,
+      kitchenStartedAt: true,
       firstName: true,
       lastName: true,
       createdAt: true,
@@ -49,7 +53,7 @@ export async function GET() {
   return NextResponse.json({
     orders: orders.map((order) => ({
       id: order.id,
-      status: order.status,
+      stage: kitchenStageOf(order) ?? "QUEUED",
       orderType: order.orderType,
       firstName: order.firstName,
       lastName: order.lastName,

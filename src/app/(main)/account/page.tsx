@@ -19,6 +19,7 @@ import { getLoyaltyTiers } from "@/lib/loyalty-config";
 import { formatAmount } from "@/lib/currency-format";
 import { formatOrderId } from "@/lib/format-order-id";
 import { orderStatusLabel } from "@/lib/order-status-filter";
+import { customerFacingStatus } from "@/lib/kitchen-stage";
 import { displayPrice, findLiveOffers } from "@/lib/product-offers";
 import { ACTIVE_ORDER_STATUSES, pageList, targetProgress, topDishes } from "@/lib/account";
 import LiveOrderCard from "@/components/account/LiveOrderCard";
@@ -108,6 +109,7 @@ export default async function MyOrdersPage({
         select: {
           id: true,
           status: true,
+          kitchenStartedAt: true,
           orderType: true,
           createdAt: true,
           totalAmount: true,
@@ -124,6 +126,7 @@ export default async function MyOrdersPage({
         select: {
           id: true,
           status: true,
+          kitchenStartedAt: true,
           orderType: true,
           createdAt: true,
           totalAmount: true,
@@ -234,7 +237,7 @@ export default async function MyOrdersPage({
                 order={{
                   id: order.id,
                   reference: formatOrderId(order.id),
-                  status: order.status,
+                  status: customerFacingStatus(order.status, order.kitchenStartedAt),
                   orderType: order.orderType,
                   placedLabel: dateTimeFmt.format(order.createdAt),
                   itemsLabel: order.items.map((line) => `${line.quantity}× ${line.menuItem.title}`).join(", "),
@@ -372,10 +375,10 @@ export default async function MyOrdersPage({
                     </span>
                     <span
                       className={`inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[90px] px-4 font-sora text-[14px] font-semibold leading-none md:h-[46px] md:px-5 md:text-[16px] ${
-                        STATUS_PILL[order.status] ?? "bg-white text-black"
+                        STATUS_PILL[customerFacingStatus(order.status, order.kitchenStartedAt)] ?? "bg-white text-black"
                       }`}
                     >
-                      {orderStatusLabel(order.status, order.orderType)}
+                      {orderStatusLabel(customerFacingStatus(order.status, order.kitchenStartedAt), order.orderType)}
                     </span>
                   </div>
                 </li>

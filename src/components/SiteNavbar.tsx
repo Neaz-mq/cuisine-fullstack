@@ -270,17 +270,19 @@ export default function Navbar() {
                       </div>
                     )}
 
-                    {/* OWNER: identical to the admin top bar's menu. "Profile"
-                        is the admin panel (/admin) and is the highlighted
-                        row; the other two open the Kitchen and Manager
-                        panels directly (the owner has access to all). */}
+                    {/* OWNER: same rows as the admin top bar's menu. "Profile"
+                        is the admin panel (/admin). On the public site NO row
+                        is pre-highlighted — the cream "current" highlight
+                        belongs only to the admin top bar (AdminTopbar.tsx),
+                        where Profile really is the page you are on. Here all
+                        three rows just get the hover tint. */}
                     {isOwner && (
                       <>
                         <Link
                           href="/admin"
                           role="menuitem"
                           onClick={() => setMenuOpen(false)}
-                          className="flex items-center gap-3 rounded-[16px] bg-[#F9F6F3] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.06]"
+                          className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
                         >
                           <UserRound className="h-5 w-5 shrink-0 fill-current" aria-hidden="true" />
                           Profile

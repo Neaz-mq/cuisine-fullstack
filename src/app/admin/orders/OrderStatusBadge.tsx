@@ -22,17 +22,28 @@ import { ORDER_STATUS_BADGE, orderStatusLabel } from "@/lib/order-status-filter"
 export default function OrderStatusBadge({
   status,
   orderType,
+  kitchenStartedAt,
 }: {
   status: string;
   orderType?: "DELIVERY" | "DINE_IN";
+  /**
+   * When the kitchen pressed "Start Preparing" (null = not yet). An order the
+   * admin has moved to the kitchen is PREPARING in the database right away, but
+   * it only shows "Preparing" here once the kitchen has really started it.
+   * Until then it reads "In Kitchen".
+   */
+  kitchenStartedAt?: Date | string | null;
 }) {
-  const badgeClass = ORDER_STATUS_BADGE[status]?.className ?? "bg-black/5 text-black";
+  const waitingForKitchen = status === "PREPARING" && !kitchenStartedAt;
+  const badgeClass = waitingForKitchen
+    ? "bg-[#F3EAFE] text-[#7A3FD1]"
+    : (ORDER_STATUS_BADGE[status]?.className ?? "bg-black/5 text-black");
 
   return (
     <span
       className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 font-sora text-[12px] font-medium leading-none ${badgeClass}`}
     >
-      {orderStatusLabel(status, orderType)}
+      {waitingForKitchen ? "In Kitchen" : orderStatusLabel(status, orderType)}
     </span>
   );
 }

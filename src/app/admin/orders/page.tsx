@@ -221,7 +221,11 @@ export default async function AdminOrdersPage({
                   </Field>
 
                   <Field label="Status">
-                    <OrderStatusBadge status={order.status} orderType={order.orderType} />
+                    <OrderStatusBadge
+                      status={order.status}
+                      orderType={order.orderType}
+                      kitchenStartedAt={order.kitchenStartedAt}
+                    />
                   </Field>
                 </div>
 

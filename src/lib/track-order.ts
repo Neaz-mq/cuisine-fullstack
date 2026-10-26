@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { canSeeRiderLocation } from "@/lib/order-access";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
 import { haversineKm } from "@/lib/delivery-zones";
+import { customerFacingStatus } from "@/lib/kitchen-stage";
 
 /**
  * Same limit as the rider location route. A saved rider position further
@@ -40,6 +41,8 @@ export const TRACK_ORDER_SELECT = {
   createdAt: true,
   updatedAt: true,
   preparingAt: true,
+  // When the kitchen pressed "Start Preparing" (null = admin sent it, not started).
+  kitchenStartedAt: true,
   dispatchedAt: true,
   deliveredAt: true,
 
@@ -244,6 +247,8 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
   const money = (value: { toFixed(dp: number): string }) => value.toFixed(units);
 
   const live = canSeeRiderLocation(order);
+  // PREPARING only counts for the customer once the kitchen has started it.
+  const shownStatus = customerFacingStatus(order.status, order.kitchenStartedAt);
   const isActiveDelivery = order.orderType === "DELIVERY" && ACTIVE_STATUSES.has(order.status);
 
   const hasDiscount = order.discountAmount.plus(order.tierDiscountAmount).greaterThan(0);
@@ -265,10 +270,15 @@ export async function serializeTrackedOrder(order: TrackOrderRecord): Promise<Tr
 
   return {
     id: order.id,
-    status: order.status,
+    status: shownStatus,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
-    preparingAt: order.preparingAt?.toISOString() ?? null,
+    // The time shown next to "Preparing" is when the kitchen started, and nothing
+    // while the order is still waiting for the kitchen.
+    preparingAt:
+      shownStatus === "PLACED"
+        ? null
+        : ((order.kitchenStartedAt ?? order.preparingAt)?.toISOString() ?? null),
     dispatchedAt: order.dispatchedAt?.toISOString() ?? null,
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
 
@@ -405,8 +415,8 @@ async function estimateTimings(order: TrackOrderRecord): Promise<{
 
   // PLACED-এ রান্না এখনো শুরুই হয়নি, তাই পুরো অনুমানটাই বাকি।
   const elapsed =
-    order.status === "PREPARING" && order.preparingAt
-      ? Math.floor((Date.now() - order.preparingAt.getTime()) / 60_000)
+    order.status === "PREPARING" && order.kitchenStartedAt
+      ? Math.floor((Date.now() - order.kitchenStartedAt.getTime()) / 60_000)
       : 0;
   const prepMinutesLeft = Math.max(0, prep - elapsed);
 

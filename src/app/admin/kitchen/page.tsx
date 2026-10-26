@@ -10,12 +10,12 @@ import {
   DEFAULT_KITCHEN_SORT,
   DEFAULT_KITCHEN_STATUS,
   DEFAULT_KITCHEN_TYPE,
-  KITCHEN_STATUS_TO_ORDER_STATUS,
   KITCHEN_TYPE_TO_ORDER_TYPE,
   isKitchenSort,
   isKitchenStatus,
   isKitchenType,
 } from "@/lib/kitchen-status";
+import { KITCHEN_FILTER_TO_STAGE, kitchenStageOf } from "@/lib/kitchen-stage";
 import KitchenToolbar from "./KitchenToolbar";
 import KitchenBoard from "./KitchenBoard";
 
@@ -81,7 +81,10 @@ export default async function KitchenDisplayPage({
        * একটা বাড়তি import — এটাই সরল।)
        */
       where: {
-        status: { in: ["PLACED", "PREPARING", "READY"] },
+        // Only orders the admin has already moved to the kitchen (PREPARING) and
+        // the ones the kitchen has finished (READY). PLACED orders are still
+        // waiting for admin approval and must NOT show up here.
+        status: { in: ["PREPARING", "READY"] },
       },
       select: {
         // ⚠️ বোর্ডের কার্ডে যা দেখায় + modal-এর যা লাগে, একসাথে।
@@ -90,6 +93,7 @@ export default async function KitchenDisplayPage({
         firstName: true,
         lastName: true,
         createdAt: true,
+        kitchenStartedAt: true,
         ...ORDER_VIEW_SELECT,
       },
       orderBy: { createdAt: "asc" },
@@ -97,6 +101,8 @@ export default async function KitchenDisplayPage({
     prisma.order.count({
       where: {
         createdAt: { gte: startOfToday },
+        // Orders still waiting for admin approval (PLACED) are not kitchen orders yet.
+        status: { in: ["PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"] },
         // ⚠️ ধরনের ছাঁকনিটা এখানে DB-তেই, memory-তে নয় — `orderType`
         // একটা সাধারণ কলাম, তাই Postgres নিজেই গুনতে পারে। নিচের
         // বোর্ডের ছাঁকাগুলো memory-তে, কারণ ওদের শর্ত আলাদা।
@@ -120,7 +126,7 @@ export default async function KitchenDisplayPage({
     // ⚠️ তিনটে আলাদা `if` নয়, একটাই মানচিত্র — নতুন কোনো কলাম যোগ
     // হলে `lib/kitchen-status.ts`-এ একবার লিখলেই পাতা আর export
     // দুটোই সেটা মানে।
-    if (status !== "all" && row.status !== KITCHEN_STATUS_TO_ORDER_STATUS[status]) return false;
+    if (status !== "all" && kitchenStageOf(row) !== KITCHEN_FILTER_TO_STAGE[status]) return false;
 
     if (!q) return true;
     // আইডি বলে মনে হলে আইডিতেই খোঁজা, নাহলে খদ্দেরের নামে।
@@ -137,9 +143,9 @@ export default async function KitchenDisplayPage({
       ? rows
       : rows.filter((row) => row.orderType === KITCHEN_TYPE_TO_ORDER_TYPE[type]);
 
-  const pending = summaryRows.filter((row) => row.status === "PLACED").length;
-  const preparing = summaryRows.filter((row) => row.status === "PREPARING").length;
-  const readyToServe = summaryRows.filter((row) => row.status === "READY").length;
+  const pending = summaryRows.filter((row) => kitchenStageOf(row) === "QUEUED").length;
+  const preparing = summaryRows.filter((row) => kitchenStageOf(row) === "PREPARING").length;
+  const readyToServe = summaryRows.filter((row) => kitchenStageOf(row) === "READY").length;
 
   return (
     <div className="space-y-4">
@@ -209,7 +215,7 @@ export default async function KitchenDisplayPage({
         <KitchenBoard
           initialOrders={visible.map((order) => ({
             id: order.id,
-            status: order.status as "PLACED" | "PREPARING" | "READY",
+            stage: kitchenStageOf(order) ?? "QUEUED",
             orderType: order.orderType,
             firstName: order.firstName,
             lastName: order.lastName,

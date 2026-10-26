@@ -37,7 +37,7 @@ export const KITCHEN_STATUS_OPTIONS: FilterMenuOption<KitchenStatusFilter>[] = [
   // Figma-র pill-এ "All Statuses", popup-এ শুধু "All" — বাকি
   // পাতাগুলোর ছাঁকনির সাথে একই আচরণ।
   { value: "all", label: "All", triggerLabel: "All Statuses" },
-  { value: "placed", label: "Placed" },
+  { value: "placed", label: "Recent Order" },
   { value: "preparing", label: "Preparing" },
   { value: "ready", label: "Ready" },
 ];

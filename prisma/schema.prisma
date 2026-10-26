@@ -753,6 +753,12 @@ model Order {
    * তখন সময় ছাড়া শুধু ধাপের নামটাই দেখায়।
    */
   preparingAt  DateTime?
+
+// When the KITCHEN pressed "Start Preparing". status is already PREPARING from
+// the moment the admin pressed "Move to Kitchen"; this stamp is what moves the
+// card from the kitchen's "Recent Order" column to "Preparing".
+// null = admin sent it, the kitchen has not started it yet.
+kitchenStartedAt DateTime?
   dispatchedAt DateTime?
   deliveredAt  DateTime?
 

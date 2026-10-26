@@ -6,12 +6,12 @@ import { toCsv } from "@/lib/csv";
 import { formatOrderId, orderIdSearchToken } from "@/lib/format-order-id";
 import {
   DEFAULT_KITCHEN_STATUS,
-  KITCHEN_STATUS_TO_ORDER_STATUS,
   isKitchenStatus,
 } from "@/lib/kitchen-status";
+import { KITCHEN_FILTER_TO_STAGE, kitchenStageOf } from "@/lib/kitchen-stage";
 
-const STATUS_LABELS: Record<string, string> = {
-  PLACED: "Placed",
+const STAGE_LABELS: Record<string, string> = {
+  QUEUED: "Recent Order",
   PREPARING: "Preparing",
   READY: "Ready",
 };
@@ -53,7 +53,8 @@ export async function GET(request: Request) {
   const status = isKitchenStatus(rawStatus) ? rawStatus : DEFAULT_KITCHEN_STATUS;
 
   const rows = await prisma.order.findMany({
-    where: { status: { in: ["PLACED", "PREPARING", "READY"] } },
+    // PLACED orders are still waiting for admin approval: not kitchen orders yet.
+    where: { status: { in: ["PREPARING", "READY"] } },
     include: {
       items: { include: { menuItem: { select: { title: true } } } },
       table: { select: { label: true } },
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
     // ⚠️ তিনটে আলাদা `if` নয়, একটাই মানচিত্র — নতুন কোনো কলাম যোগ
     // হলে `lib/kitchen-status.ts`-এ একবার লিখলেই পাতা আর export
     // দুটোই সেটা মানে।
-    if (status !== "all" && row.status !== KITCHEN_STATUS_TO_ORDER_STATUS[status]) return false;
+    if (status !== "all" && kitchenStageOf(row) !== KITCHEN_FILTER_TO_STAGE[status]) return false;
 
     if (!q) return true;
     if (token) return row.id.toLowerCase().endsWith(token.toLowerCase());
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
     // ⚠️ ফাঁকা, "—" নয় — ওটা পর্দার জন্য। spreadsheet-এ একটা dash মানে
     // "এই ঘরে dash লেখা আছে", আর তখন কলাম ধরে ছাঁকা যায় না।
     row.table?.label ?? "",
-    STATUS_LABELS[row.status] ?? row.status,
+    STAGE_LABELS[kitchenStageOf(row) ?? "QUEUED"],
     row.createdAt.toISOString(),
     // কাঁচা সংখ্যা, "14m ago" নয় — spreadsheet-এ সাজানো যায়।
     String(Math.floor((nowMs - row.createdAt.getTime()) / 60000)),

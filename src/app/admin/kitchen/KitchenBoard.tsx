@@ -18,7 +18,8 @@ type OrderItem = {
 
 type KitchenOrder = {
   id: string;
-  status: "PLACED" | "PREPARING" | "READY";
+  /** Which column: QUEUED = "Recent Order" (admin moved it, kitchen has not started). */
+  stage: "QUEUED" | "PREPARING" | "READY";
   orderType: "DELIVERY" | "DINE_IN";
   firstName: string;
   lastName: string;
@@ -159,7 +160,7 @@ function OrderCard({
   onView: () => void;
 }) {
   const isUrgent =
-    order.status !== "READY" &&
+    order.stage !== "READY" &&
     nowMs - new Date(order.createdAt).getTime() > URGENT_AFTER_MS;
   const isDineIn = order.orderType === "DINE_IN";
 
@@ -278,8 +279,8 @@ export default function KitchenBoard({
   const [orders, setOrders] = useState<KitchenOrder[]>(initialOrders);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
-  const placedIdsRef = useRef<Set<string>>(
-    new Set(initialOrders.filter((o) => o.status === "PLACED").map((o) => o.id))
+  const queuedIdsRef = useRef<Set<string>>(
+    new Set(initialOrders.filter((o) => o.stage === "QUEUED").map((o) => o.id))
   );
 
   /**
@@ -308,12 +309,12 @@ export default function KitchenBoard({
         const data = await res.json();
         const freshOrders: KitchenOrder[] = data.orders;
 
-        const freshPlacedIds = new Set(
-          freshOrders.filter((o) => o.status === "PLACED").map((o) => o.id)
+        const freshQueuedIds = new Set(
+          freshOrders.filter((o) => o.stage === "QUEUED").map((o) => o.id)
         );
-        const hasNewPlaced = [...freshPlacedIds].some((id) => !placedIdsRef.current.has(id));
-        if (hasNewPlaced) playBeep();
-        placedIdsRef.current = freshPlacedIds;
+        const hasNewQueued = [...freshQueuedIds].some((id) => !queuedIdsRef.current.has(id));
+        if (hasNewQueued) playBeep();
+        queuedIdsRef.current = freshQueuedIds;
 
         setOrders(freshOrders);
       } catch {
@@ -336,18 +337,25 @@ export default function KitchenBoard({
 
   function advanceStatus(orderId: string, nextStatus: "PREPARING" | "READY") {
     const prevOrders = orders;
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
+    // "PREPARING" = the kitchen started cooking (Recent Order -> Preparing).
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, stage: nextStatus } : o)));
 
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/orders/${orderId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: nextStatus }),
-        });
+        // The order is already PREPARING in the database since the admin pressed
+        // "Move to Kitchen", so "Start Preparing" only records that the kitchen
+        // picked it up. "Ready" is a real status change.
+        const res =
+          nextStatus === "PREPARING"
+            ? await fetch(`/api/admin/kitchen/orders/${orderId}/start`, { method: "POST" })
+            : await fetch(`/api/orders/${orderId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "READY" }),
+              });
         if (!res.ok) throw new Error("Failed to update order");
       } catch {
-        setOrders(prevOrders); // ব্যর্থ হলে আগের অবস্থায় ফেরত
+        setOrders(prevOrders); // roll back the optimistic update
         toast.error("Couldn't update the order. Please try again.");
       }
     });
@@ -363,8 +371,8 @@ export default function KitchenBoard({
   const columns = [
     {
       key: "placed",
-      title: "Placed",
-      orders: sorted.filter((o) => o.status === "PLACED"),
+      title: "Recent Order",
+      orders: sorted.filter((o) => o.stage === "QUEUED"),
       action: (order: KitchenOrder) => ({
         label: "Start Preparing",
         onClick: () => advanceStatus(order.id, "PREPARING"),
@@ -373,7 +381,7 @@ export default function KitchenBoard({
     {
       key: "preparing",
       title: "Preparing",
-      orders: sorted.filter((o) => o.status === "PREPARING"),
+      orders: sorted.filter((o) => o.stage === "PREPARING"),
       /**
        * ⚠️ বোতামের লেখা শুধু "Ready" — "Ready to Delivery" নয়, আর কোনো
        * modal-ও খোলে না। চাপলে অর্ডার সরাসরি READY হয়ে যায়।
@@ -392,7 +400,7 @@ export default function KitchenBoard({
     {
       key: "ready",
       title: "Ready",
-      orders: sorted.filter((o) => o.status === "READY"),
+      orders: sorted.filter((o) => o.stage === "READY"),
       action: null,
     },
   ];
