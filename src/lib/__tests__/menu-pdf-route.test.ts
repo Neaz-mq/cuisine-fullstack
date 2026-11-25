@@ -57,7 +57,7 @@ describe("GET /api/menu/pdf", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
-    expect(res.headers.get("Content-Disposition")).toMatch(/^attachment; filename="cuisine-menu-\d{4}-\d{2}-\d{2}\.pdf"$/);
+    expect(res.headers.get("Content-Disposition")).toMatch(/^attachment; filename="cuisinefood-menu-\d{4}-\d{2}-\d{2}\.pdf"$/);
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=300");
     const bytes = Buffer.from(await res.arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
