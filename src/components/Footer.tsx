@@ -175,16 +175,16 @@ export default function Footer() {
                   href="tel:+0123456789"
                   className="font-sora text-[14px] leading-[1.6] text-white"
                 >
-                  +0123-456-789
+                  +1 (555) 010-0100
                 </a>
                 <a
                   href="mailto:example@gmail.com"
                   className="font-sora text-[14px] leading-[1.6] text-white underline"
                 >
-                  example@gmail.com
+                  demo@example.com
                 </a>
                 <p className="font-sora text-[14px] leading-[1.6] text-white">
-                  8602 Preston Rd. Inglewood, Maine 98380
+                  123 Demo Street, Sample City
                 </p>
               </div>
             </div>
