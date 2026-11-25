@@ -40,7 +40,9 @@ const supabaseWsOrigin = supabaseOrigin.replace(/^https:/, "wss:");
 // if the DSN's region/host ever changes, and is simply omitted (matches
 // nothing extra) when no DSN is configured yet.
 const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
-const sentryIngestOrigin = sentryDsn ? `https://${new URL(sentryDsn).hostname}` : "";
+const sentryIngestOrigin = sentryDsn
+  ? `https://${new URL(sentryDsn).hostname}`
+  : "";
 
 /**
  * React-এর development build stack reconstruction ও অন্যান্য debugging
@@ -82,7 +84,7 @@ const csp = [
     "script-src",
     "'self'",
     "'unsafe-inline'",
-    isDev ? "'unsafe-eval'" : ""
+    isDev ? "'unsafe-eval'" : "",
   ),
   directive("style-src", "'self'", "'unsafe-inline'"),
   // 'data:' covers the QR codes generated client-side by the `qrcode`
@@ -111,7 +113,7 @@ const csp = [
     // ওটা না দিলে next/image build-time-এ throw করে, আর এটা না দিলে
     // ছবিটা browser-এ গিয়ে নীরবে block হয় — দ্বিতীয়টা ধরা অনেক কঠিন।
     "https://lh3.googleusercontent.com",
-    supabaseOrigin
+    supabaseOrigin,
   ),
   // ⚠️ media-src — <video>/<audio> এই directive দিয়ে নিয়ন্ত্রিত হয়, img-src
   // দিয়ে নয়। এটা সেট না থাকলে browser চুপচাপ `default-src 'self'`-এ ফিরে
@@ -130,7 +132,13 @@ const csp = [
   // the supabaseWsOrigin comment above for why both are needed. Sentry's
   // ingest origin is included so browser-side error/crash reports aren't
   // silently dropped — see the sentryIngestOrigin comment above.
-  directive("connect-src", "'self'", supabaseOrigin, supabaseWsOrigin, sentryIngestOrigin),
+  directive(
+    "connect-src",
+    "'self'",
+    supabaseOrigin,
+    supabaseWsOrigin,
+    sentryIngestOrigin,
+  ),
   // Live Kitchen ভিডিও modal (components/landing/LiveKitchenModal.tsx) আর
   // Banner.tsx YouTube iframe খোলে। frame-src না থাকলে browser চুপচাপ
   // `default-src 'self'`-এ ফিরে যায় আর iframe ফাঁকা দেখায়। শুধু
@@ -139,7 +147,7 @@ const csp = [
     "frame-src",
     "'self'",
     "https://www.youtube-nocookie.com",
-    "https://www.youtube.com"
+    "https://www.youtube.com",
   ),
   // No site should ever be able to iframe this app (clickjacking).
   directive("frame-ancestors", "'none'"),
@@ -169,13 +177,14 @@ const securityHeaders = [
   // navigator.geolocation.watchPosition() to share a rider's position;
   // still blocked for any cross-origin/embedded context.
   //
-  // microphone is 'self' too, for the "Ask Cuisine AI" voice button
+  // microphone is 'self' too, for the "Ask CuisineFood AI" voice button
   // (components/ai/AiAssistant.tsx). With `microphone=()` the browser
   // refused the mic outright — the permission popup never even appeared.
   // Only this site's own pages can ask; embedded/third-party frames can't.
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(self), geolocation=(self), interest-cohort=()",
+    value:
+      "camera=(), microphone=(self), geolocation=(self), interest-cohort=()",
   },
   // Force HTTPS for a year, including subdomains. Harmless locally over
   // HTTP (browsers only honor this over an HTTPS response in the first

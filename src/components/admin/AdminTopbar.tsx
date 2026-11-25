@@ -90,45 +90,112 @@ const ICONS = {
   profile: (
     <>
       <circle cx="12" cy="8" r="3.5" fill="currentColor" />
-      <path
-        d="M5 19.5c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5"
-        fill="currentColor"
-      />
+      <path d="M5 19.5c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" fill="currentColor" />
     </>
   ),
   kitchen: (
     <>
-      <rect x="6" y="9" width="11" height="9" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M17 11h1.5a2 2 0 010 4H17" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M9 6v1.5M12 6v1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <rect
+        x="6"
+        y="9"
+        width="11"
+        height="9"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M17 11h1.5a2 2 0 010 4H17"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M9 6v1.5M12 6v1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
     </>
   ),
   admin: (
     <>
-      <rect x="4.5" y="4.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="13.5" y="4.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="4.5" y="13.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="13.5" y="13.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <rect
+        x="4.5"
+        y="4.5"
+        width="6"
+        height="6"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <rect
+        x="13.5"
+        y="4.5"
+        width="6"
+        height="6"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <rect
+        x="4.5"
+        y="13.5"
+        width="6"
+        height="6"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <rect
+        x="13.5"
+        y="13.5"
+        width="6"
+        height="6"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
     </>
   ),
   manager: (
     <>
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.6" />
       <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M7.5 17.5c1-2 2.6-3 4.5-3s3.5 1 4.5 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path
+        d="M7.5 17.5c1-2 2.6-3 4.5-3s3.5 1 4.5 3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
     </>
   ),
   logout: (
     <>
-      <path d="M14 8V6.5A1.5 1.5 0 0012.5 5h-6A1.5 1.5 0 005 6.5v11A1.5 1.5 0 006.5 19h6a1.5 1.5 0 001.5-1.5V16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M9 12h10m0 0l-3-3m3 3l-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M14 8V6.5A1.5 1.5 0 0012.5 5h-6A1.5 1.5 0 005 6.5v11A1.5 1.5 0 006.5 19h6a1.5 1.5 0 001.5-1.5V16"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 12h10m0 0l-3-3m3 3l-3 3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </>
   ),
 } as const;
 
 function MenuIcon({ name }: { name: keyof typeof ICONS }) {
   return (
-    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      className="w-5 h-5 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       {ICONS[name]}
     </svg>
   );
@@ -168,12 +235,16 @@ export default function AdminTopbar({
    * /kitchen → Kitchen Panel). Profile keeps the highlight only when no panel
    * is marked current (every other role), so their menu looks as before.
    */
-  const onProfilePage = toInternalPath(pathname ?? "").startsWith("/admin/profile");
+  const onProfilePage = toInternalPath(pathname ?? "").startsWith(
+    "/admin/profile",
+  );
   const hasCurrentPanel = panels.some((panel) => panel.current);
   // Owner: "Profile" is the admin panel itself, so it is the highlighted row
   // whenever no other panel is current, and /admin/profile doesn't steal it.
   const profileIsHome = profileHref !== "/admin/profile";
-  const profileActive = profileIsHome ? !hasCurrentPanel : onProfilePage || !hasCurrentPanel;
+  const profileActive = profileIsHome
+    ? !hasCurrentPanel
+    : onProfilePage || !hasCurrentPanel;
 
   /**
    * ৩৭৫px-এ hamburger, logo, search, bell আর avatar একসাথে রাখলে
@@ -284,7 +355,8 @@ export default function AdminTopbar({
    * crash করত। render আর Enter দুই জায়গাতেই এই clamp করা মানটাই ব্যবহার
    * হয়, তাই দুটো কখনো আলাদা হয় না।
    */
-  const activeSafe = results.length > 0 ? Math.min(activeIndex, results.length - 1) : 0;
+  const activeSafe =
+    results.length > 0 ? Math.min(activeIndex, results.length - 1) : 0;
 
   const goTo = (href: string) => {
     setQuery("");
@@ -324,12 +396,16 @@ export default function AdminTopbar({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSearchOpen(true);
-      setActiveIndex((prev) => (Math.min(prev, results.length - 1) + 1) % results.length);
+      setActiveIndex(
+        (prev) => (Math.min(prev, results.length - 1) + 1) % results.length,
+      );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSearchOpen(true);
       setActiveIndex(
-        (prev) => (Math.min(prev, results.length - 1) - 1 + results.length) % results.length
+        (prev) =>
+          (Math.min(prev, results.length - 1) - 1 + results.length) %
+          results.length,
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -366,13 +442,13 @@ export default function AdminTopbar({
    */
   /**
    * ⚠️ ৩৯০px-এর নিচে পুরো bar-টা Figma-র মোবাইল frame-এর হুবহু মাপে,
-   * আর সেটা করতে হয়েছে কারণ ৩২০px-এ "Cuisine" শব্দচিহ্নটা অন্যভাবে
+   * আর সেটা করতে হয়েছে কারণ ৩২০px-এ "CuisineFood" শব্দচিহ্নটা অন্যভাবে
    * আঁটেই না।
    *
    * Figma (Frame 2147236040): bar 288×56, padding 12, radius 100।
    * ভেতরে —
    *
-   *   বাঁ দল  121 = hamburger 32 + gap 8 + (logo 20 + gap 6 + "Cuisine" 55)
+   *   বাঁ দল  121 = hamburger 32 + gap 8 + (logo 20 + gap 6 + "CuisineFood" 55)
    *   ডান দল  112 = search 32 + 8 + bell 32 + 8 + avatar 32
    *   মাঝের ফাঁক 31
    *   ────────────────────────────────────────────────────────
@@ -380,7 +456,7 @@ export default function AdminTopbar({
    *
    * আগে বোতামগুলো ৪৪px ছিল (Apple/Google-এর স্পর্শ-লক্ষ্যের সুপারিশ),
    * আর তাতেই শব্দচিহ্নটা লুকিয়ে রাখতে হচ্ছিল — ৩২০px-এ ওই মাপে
-   * "Cuisine"-এর জন্য পড়ে থাকত মোটে ৮px।
+   * "CuisineFood"-এর জন্য পড়ে থাকত মোটে ৮px।
    *
    * ⚠️ কিন্তু ছোট স্পর্শ-লক্ষ্যের আপসটা **কেবল ৩৯০px-এর নিচেই**।
    * বাস্তবের প্রায় সব ফোন (iPhone 12/13/14/15, বেশির ভাগ Android)
@@ -415,7 +491,11 @@ export default function AdminTopbar({
           aria-label="Open menu"
           className="flex h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
         >
-          <Menu className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
+          <Menu
+            className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5"
+            strokeWidth={2}
+            aria-hidden="true"
+          />
         </button>
 
         {/**
@@ -438,7 +518,7 @@ export default function AdminTopbar({
          *
          * aria-label লাগে কারণ link-টার ভেতরে কোনো accessible text নেই:
          * <Image>-এ `alt=""` (সচেতনভাবে — পাশের wordmark একই কথা বলে,
-         * দুটোই পড়লে screen reader "Cuisine Cuisine" বলত), আর
+         * দুটোই পড়লে screen reader "CuisineFood CuisineFood" বলত), আর
          * wordmark-টা `hidden md:inline`। ফলে ফোনে link-টা নামহীন হয়ে
          * যেত — screen reader শুধু "link" বলত, কোথায় যায় তার কোনো
          * ইঙ্গিত ছাড়াই। label-এ গন্তব্যটাও বলা আছে, কারণ admin panel-এ
@@ -446,7 +526,7 @@ export default function AdminTopbar({
          */}
         <Link
           href="/"
-          aria-label="Cuisine — back to site"
+          aria-label="CuisineFood — back to site"
           className="flex items-center gap-1.5 min-[390px]:gap-2 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
         >
           {/* Figma: মোবাইল frame-এ icon 20×20 (gap 6), ডেস্কটপে 34×34।
@@ -478,7 +558,7 @@ export default function AdminTopbar({
               মাপে −1% — বড় লেখায় আলগা লাগে বলে বেশি টানা হয়, ছোট
               লেখায় বেশি টানলে পড়তে কষ্ট হয়। */}
           <span className="font-frank-ruhl font-semibold text-[16px] tracking-[-0.01em] min-[390px]:text-[24px] min-[390px]:tracking-[-0.03em] md:text-[30px] leading-none text-black">
-            Cuisine
+            CuisineFood
           </span>
         </Link>
       </div>
@@ -516,7 +596,13 @@ export default function AdminTopbar({
             fill="none"
             aria-hidden="true"
           >
-            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
+            <circle
+              cx="9"
+              cy="9"
+              r="6"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
             <path
               d="M13.5 13.5L17 17"
               stroke="currentColor"
@@ -543,7 +629,9 @@ export default function AdminTopbar({
             aria-controls="admin-search-results"
             aria-autocomplete="list"
             aria-activedescendant={
-              showResults && results.length > 0 ? `admin-search-option-${activeSafe}` : undefined
+              showResults && results.length > 0
+                ? `admin-search-option-${activeSafe}`
+                : undefined
             }
             /* Figma: Sora 400, 16px, line-height 100%, letter-spacing 0%,
                placeholder #000 @70%। আগে 14px আর black/40 ছিল — ফিকে
@@ -575,7 +663,9 @@ export default function AdminTopbar({
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => goTo(item.href)}
                     className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-[14px] font-sora text-[15px] text-left transition-colors ${
-                      index === activeSafe ? "bg-[#F9F6F3] text-black" : "text-black/80"
+                      index === activeSafe
+                        ? "bg-[#F9F6F3] text-black"
+                        : "text-black/80"
                     }`}
                   >
                     <svg
@@ -611,7 +701,11 @@ export default function AdminTopbar({
             mobileSearchOpen ? "flex" : "hidden"
           }`}
         >
-          <X className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
+          <X
+            className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5"
+            strokeWidth={2}
+            aria-hidden="true"
+          />
         </button>
 
         {/* ফোনে search খোলার বোতাম, আর bell + avatar — তিনটেই একসাথে
@@ -628,7 +722,11 @@ export default function AdminTopbar({
             aria-expanded={mobileSearchOpen}
             className="flex h-8 w-8 min-[390px]:h-11 min-[390px]:w-11 shrink-0 items-center justify-center rounded-full bg-[#F9F6F3] text-[#121212] transition-colors hover:bg-black/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30 md:hidden"
           >
-            <Search className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5" strokeWidth={2} aria-hidden="true" />
+            <Search
+              className="h-4 w-4 min-[390px]:h-5 min-[390px]:w-5"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
           </button>
 
           {/* Rider panel: the time. lg and up only — on a phone the
@@ -640,184 +738,189 @@ export default function AdminTopbar({
 
           {/* User menu */}
           <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            onClick={() => setMenuOpen((prev) => !prev)}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            /* Figma layout panel: Hug 266×50, radius 100px,
+            <button
+              type="button"
+              onClick={() => setMenuOpen((prev) => !prev)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              /* Figma layout panel: Hug 266×50, radius 100px,
                padding 6/12/6/6, gap 20px, BG #F9F6F3।
                উচ্চতা 50 − উপরে-নিচে 6 = ভেতরের সব কিছু 38px, তাই
                avatar-ও 38। */
-            /* ⚠️ ৩৯০px-এর নিচে এটা নিছক একটা ৩২px গোল ছবি — কোনো
+              /* ⚠️ ৩৯০px-এর নিচে এটা নিছক একটা ৩২px গোল ছবি — কোনো
                cream মোড়ক বা padding নেই, কারণ Figma-র মোবাইল frame-এ
                avatar-টা ৩২×৩২ আর তার চারপাশে কিছু নেই।
 
                মাপের ধাপগুলো bell-এর সাথে হুবহু এক (৩২ → ৪৪ → ৫০) —
                একই সারির গোল জিনিসগুলো সমান না হলে সেটা সাথে সাথে
                চোখে পড়ে। ব্যাখ্যা NotificationBell.tsx-এ। */
-            className="flex items-center gap-3 xl:gap-5 h-8 min-[390px]:h-11 md:h-[50px] bg-transparent min-[390px]:bg-[#F9F6F3] rounded-full p-0 min-[390px]:p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
-          >
-            {image ? (
-              <Image
-                src={image}
-                alt=""
-                width={38}
-                height={38}
-                className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full object-cover shrink-0"
-              />
-            ) : (
-              <span className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[12px] md:text-[14px] flex items-center justify-center shrink-0">
-                {initial}
-              </span>
-            )}
+              className="flex items-center gap-3 xl:gap-5 h-8 min-[390px]:h-11 md:h-[50px] bg-transparent min-[390px]:bg-[#F9F6F3] rounded-full p-0 min-[390px]:p-1.5 xl:pr-3 hover:bg-black/[0.06] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+            >
+              {image ? (
+                <Image
+                  src={image}
+                  alt=""
+                  width={38}
+                  height={38}
+                  className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <span className="h-8 w-8 md:h-[38px] md:w-[38px] rounded-full bg-[#2C6252] text-white font-sora font-semibold text-[12px] md:text-[14px] flex items-center justify-center shrink-0">
+                  {initial}
+                </span>
+              )}
 
-            {/* মোবাইলে নাম/email লুকানো — 320px-এ ওটুকু জায়গা নেই,
+              {/* মোবাইলে নাম/email লুকানো — 320px-এ ওটুকু জায়গা নেই,
                 avatar-ই যথেষ্ট affordance */}
-            {/* Figma: এই দুই লাইনের ব্লকটা 166×38। উচ্চতাটাই মাপ দুটো
+              {/* Figma: এই দুই লাইনের ব্লকটা 166×38। উচ্চতাটাই মাপ দুটো
                 নিশ্চিত করে — 18px নাম (line-height 1.14 ≈ 20.5) + 12px
                 email (≈13.7) ≈ 38। sidebar-এর user card-এ হুবহু একই
                 জোড়া, তাই দুটো জায়গা দেখতে এক লাগে। */}
-            {/* xl-এর নিচে শুধু avatar — Figma-র tablet নকশায় trigger-টা
+              {/* xl-এর নিচে শুধু avatar — Figma-র tablet নকশায় trigger-টা
                 একটা গোল ছবি, নাম/email নিচের dropdown-এ। ৭৬৮px-এ
                 search আর ২৬৬px চওড়া pill একসাথে রাখলে search-টা
                 "Searc..." হয়ে যেত। */}
-            <span className="hidden xl:flex flex-col items-start min-w-0">
-              <span className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate max-w-[166px]">
-                {name}
+              <span className="hidden xl:flex flex-col items-start min-w-0">
+                <span className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate max-w-[166px]">
+                  {name}
+                </span>
+                <span className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate max-w-[166px]">
+                  {email}
+                </span>
               </span>
-              <span className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate max-w-[166px]">
-                {email}
-              </span>
-            </span>
 
-            <svg
-              className={`hidden xl:block w-4 h-4 text-black/50 shrink-0 transition-transform ${
-                menuOpen ? "rotate-180" : ""
-              }`}
-              viewBox="0 0 20 20"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M5 7.5L10 12.5L15 7.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+              <svg
+                className={`hidden xl:block w-4 h-4 text-black/50 shrink-0 transition-transform ${
+                  menuOpen ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M5 7.5L10 12.5L15 7.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
 
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-2 w-[248px] bg-white rounded-[24px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50"
-            >
-              {/* xl-এর নিচে trigger-এ শুধু avatar থাকে, তাই কোন
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-2 w-[248px] bg-white rounded-[24px] shadow-[0_12px_32px_rgba(0,0,0,0.14)] p-2 z-50"
+              >
+                {/* xl-এর নিচে trigger-এ শুধু avatar থাকে, তাই কোন
                   account-এ আছি সেটা জানার একমাত্র জায়গা এটাই। sidebar-এর
                   user card-এর মতোই একই typography, যাতে তিন জায়গা
                   দেখতে এক লাগে। */}
-              <div className="px-3 pt-2 pb-3 xl:hidden">
-                <p className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate">
-                  {name}
-                </p>
-                <p className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate">
-                  {email}
-                </p>
-              </div>
+                <div className="px-3 pt-2 pb-3 xl:hidden">
+                  <p className="font-frank-ruhl font-semibold text-[18px] leading-[1.14] tracking-[-0.01em] text-black truncate">
+                    {name}
+                  </p>
+                  <p className="font-sora text-[12px] leading-[1.14] tracking-[-0.01em] text-black/70 truncate">
+                    {email}
+                  </p>
+                </div>
 
-              {/* Profile — Figma-র প্রথম item, cream pill দিয়ে হাইলাইট করা।
+                {/* Profile — Figma-র প্রথম item, cream pill দিয়ে হাইলাইট করা।
                   Staff-এর নিজের profile পাতা (/admin/profile): নাম, role,
                   password। আগে এটা customer-দের /account/orders-এ যেত। */}
-              {(() => {
-                const profileClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
-                  profileActive ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : "hover:bg-black/[0.04]"
-                }`;
-                return profileHardNav ? (
-                  // Plain <a> on purpose — see PanelLink.hardNav.
-                  // eslint-disable-next-line @next/next/no-html-link-for-pages
-                  <a
-                    href={profileHref}
-                    role="menuitem"
-                    referrerPolicy="no-referrer"
-                    onClick={() => setMenuOpen(false)}
-                    aria-current={profileActive ? "page" : undefined}
-                    className={profileClass}
-                  >
-                    <MenuIcon name="profile" />
-                    Profile
-                  </a>
-                ) : (
-                  <Link
-                    href={profileHref}
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                    aria-current={profileActive ? "page" : undefined}
-                    className={profileClass}
-                  >
-                    <MenuIcon name="profile" />
-                    Profile
-                  </Link>
-                );
-              })()}
+                {(() => {
+                  const profileClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
+                    profileActive
+                      ? "bg-[#F9F6F3] hover:bg-black/[0.06]"
+                      : "hover:bg-black/[0.04]"
+                  }`;
+                  return profileHardNav ? (
+                    // Plain <a> on purpose — see PanelLink.hardNav.
+                    // eslint-disable-next-line @next/next/no-html-link-for-pages
+                    <a
+                      href={profileHref}
+                      role="menuitem"
+                      referrerPolicy="no-referrer"
+                      onClick={() => setMenuOpen(false)}
+                      aria-current={profileActive ? "page" : undefined}
+                      className={profileClass}
+                    >
+                      <MenuIcon name="profile" />
+                      Profile
+                    </a>
+                  ) : (
+                    <Link
+                      href={profileHref}
+                      role="menuitem"
+                      onClick={() => setMenuOpen(false)}
+                      aria-current={profileActive ? "page" : undefined}
+                      className={profileClass}
+                    >
+                      <MenuIcon name="profile" />
+                      Profile
+                    </Link>
+                  );
+                })()}
 
-              {/* Panel shortcut — কোনগুলো দেখাবে তা layout scope থেকে ঠিক
+                {/* Panel shortcut — কোনগুলো দেখাবে তা layout scope থেকে ঠিক
                   করে পাঠায়। একটাও না থাকলে (যেমন শুধু WAITER) পুরো
                   অংশটাই render হয় না, ফাঁকা জায়গা পড়ে থাকে না। */}
-              {panels.map((panel) => {
-                const panelActive = !!panel.current && (profileIsHome || !onProfilePage);
-                const panelClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
-                  panelActive ? "bg-[#F9F6F3] hover:bg-black/[0.06]" : "hover:bg-black/[0.04]"
-                }`;
-                return panel.hardNav ? (
-                  // Plain <a> on purpose — see PanelLink.hardNav.
-                  // eslint-disable-next-line @next/next/no-html-link-for-pages
-                  <a
-                    key={panel.href}
-                    href={panel.href}
-                    role="menuitem"
-                    referrerPolicy="no-referrer"
-                    aria-current={panelActive ? "page" : undefined}
-                    onClick={() => setMenuOpen(false)}
-                    className={panelClass}
-                  >
-                    <MenuIcon name={panel.icon} />
-                    {panel.label}
-                  </a>
-                ) : (
-                  <Link
-                    key={panel.href}
-                    href={panel.href}
-                    role="menuitem"
-                    aria-current={panelActive ? "page" : undefined}
-                    onClick={() => setMenuOpen(false)}
-                    className={panelClass}
-                  >
-                    <MenuIcon name={panel.icon} />
-                    {panel.label}
-                  </Link>
-                );
-              })}
+                {panels.map((panel) => {
+                  const panelActive =
+                    !!panel.current && (profileIsHome || !onProfilePage);
+                  const panelClass = `flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black transition-colors ${
+                    panelActive
+                      ? "bg-[#F9F6F3] hover:bg-black/[0.06]"
+                      : "hover:bg-black/[0.04]"
+                  }`;
+                  return panel.hardNav ? (
+                    // Plain <a> on purpose — see PanelLink.hardNav.
+                    // eslint-disable-next-line @next/next/no-html-link-for-pages
+                    <a
+                      key={panel.href}
+                      href={panel.href}
+                      role="menuitem"
+                      referrerPolicy="no-referrer"
+                      aria-current={panelActive ? "page" : undefined}
+                      onClick={() => setMenuOpen(false)}
+                      className={panelClass}
+                    >
+                      <MenuIcon name={panel.icon} />
+                      {panel.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={panel.href}
+                      href={panel.href}
+                      role="menuitem"
+                      aria-current={panelActive ? "page" : undefined}
+                      onClick={() => setMenuOpen(false)}
+                      className={panelClass}
+                    >
+                      <MenuIcon name={panel.icon} />
+                      {panel.label}
+                    </Link>
+                  );
+                })}
 
-              {/* role badge — Figma-তে নেই, কিন্তু এই app-এ একজনের একাধিক
+                {/* role badge — Figma-তে নেই, কিন্তু এই app-এ একজনের একাধিক
                   panel-এ access থাকতে পারে, তাই "আমি এখন কোন ভূমিকায়" —
                   সেটা দেখানোটা কাজে লাগে। */}
-              <p className="px-3.5 pt-2 pb-1 font-sora text-[11px] font-semibold uppercase tracking-wide text-[#2C6252]">
-                {role}
-              </p>
+                <p className="px-3.5 pt-2 pb-1 font-sora text-[11px] font-semibold uppercase tracking-wide text-[#2C6252]">
+                  {role}
+                </p>
 
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black hover:bg-red-50 hover:text-red-600 transition-colors"
-              >
-                <MenuIcon name="logout" />
-                Logout
-              </button>
-            </div>
-          )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                  className="w-full flex items-center gap-3 px-3.5 py-3 rounded-[16px] font-sora text-[15px] text-black hover:bg-red-50 hover:text-red-600 transition-colors"
+                >
+                  <MenuIcon name="logout" />
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

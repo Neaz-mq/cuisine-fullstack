@@ -21,7 +21,11 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { isStaffRole, firstAllowedPath, staffMenuLabel } from "@/lib/permissions";
+import {
+  isStaffRole,
+  firstAllowedPath,
+  staffMenuLabel,
+} from "@/lib/permissions";
 import { useCart } from "@/context/CartContext";
 
 /**
@@ -29,7 +33,7 @@ import { useCart } from "@/context/CartContext";
  *
  * Figma "Frame 2147236005" spec:
  * - Outer row (Frame 2147236004): 1280px wide, justify-between, items-center
- * - Logo (icon 40x40 + "Cuisine" wordmark, gap 12px) — wordmark is BLACK
+ * - Logo (icon 40x40 + "CuisineFood" wordmark, gap 12px) — wordmark is BLACK
  *   here (#000000), unlike the footer where it's orange.
  * - Nav links (Frame 2147235235): Home / Menu / Our Chefs / Reservation,
  *   gap 30px. NOTE: the CSS export only accounts for these 4 items
@@ -129,7 +133,8 @@ export default function Navbar() {
   useEffect(() => {
     if (!mobileOpen) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (mobileRef.current && !mobileRef.current.contains(e.target as Node)) setMobileOpen(false);
+      if (mobileRef.current && !mobileRef.current.contains(e.target as Node))
+        setMobileOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
@@ -177,19 +182,25 @@ export default function Navbar() {
         {/* ⚠️ Smaller gaps and wordmark below 390px: when signed in, the
             logo + avatar + cart were wider than a 320px phone and the page
             scrolled sideways. From 390px up it's the Figma size. */}
-        <div ref={mobileRef} className="relative flex w-full items-center justify-between gap-2 min-[390px]:gap-6">
+        <div
+          ref={mobileRef}
+          className="relative flex w-full items-center justify-between gap-2 min-[390px]:gap-6"
+        >
           {/* Logo */}
-          <Link href="/" className="flex min-w-0 shrink-0 items-center gap-1.5 min-[390px]:gap-3">
+          <Link
+            href="/"
+            className="flex min-w-0 shrink-0 items-center gap-1.5 min-[390px]:gap-3"
+          >
             <Image
               src="/logo.svg"
-              alt="Cuisine logo"
+              alt="CuisineFood logo"
               width={40}
               height={40}
               className="h-9 w-9 min-[390px]:h-10 min-[390px]:w-10"
               priority
             />
             <span className="font-frank-ruhl text-[20px] font-bold leading-[1.26] tracking-[-0.01em] text-black min-[390px]:text-[28px]">
-              Cuisine
+              CuisineFood
             </span>
           </Link>
 
@@ -202,7 +213,9 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={`font-sora text-[18px] leading-[1.6] transition-colors hover:text-black focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] ${
-                    isActive ? "font-semibold text-[#141921]" : "font-normal text-black/70"
+                    isActive
+                      ? "font-semibold text-[#141921]"
+                      : "font-normal text-black/70"
                   }`}
                 >
                   {link.label}
@@ -284,7 +297,10 @@ export default function Navbar() {
                           onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
                         >
-                          <UserRound className="h-5 w-5 shrink-0 fill-current" aria-hidden="true" />
+                          <UserRound
+                            className="h-5 w-5 shrink-0 fill-current"
+                            aria-hidden="true"
+                          />
                           Profile
                         </Link>
                         <Link
@@ -293,7 +309,10 @@ export default function Navbar() {
                           onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
                         >
-                          <Coffee className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          <Coffee
+                            className="h-5 w-5 shrink-0"
+                            aria-hidden="true"
+                          />
                           Kitchen Panel
                         </Link>
                         <Link
@@ -302,7 +321,10 @@ export default function Navbar() {
                           onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-3 rounded-[16px] px-3.5 py-3 font-sora text-[15px] text-black transition-colors hover:bg-black/[0.04]"
                         >
-                          <CircleUserRound className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          <CircleUserRound
+                            className="h-5 w-5 shrink-0"
+                            aria-hidden="true"
+                          />
                           Manager Panel
                         </Link>
                         <p className="px-3.5 pb-1 pt-2 font-sora text-[11px] font-semibold uppercase tracking-wide text-[#2C6252]">
@@ -316,20 +338,26 @@ export default function Navbar() {
                         addresses) are for customers — staff who want to
                         order use a personal customer account, which keeps
                         sales, points and the customer list clean. */}
-                    {!showAdminLink && accountLinks.map(({ label, href, icon: Icon }) => (
-                      <Link
-                        key={href}
-                        href={href}
-                        role="menuitem"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-[14px] px-3.5 py-2.5 font-sora text-[14px] text-black transition-colors hover:bg-black/[0.05]"
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {label}
-                      </Link>
-                    ))}
+                    {!showAdminLink &&
+                      accountLinks.map(({ label, href, icon: Icon }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-[14px] px-3.5 py-2.5 font-sora text-[14px] text-black transition-colors hover:bg-black/[0.05]"
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {label}
+                        </Link>
+                      ))}
 
-                    {!showAdminLink && <span className="mx-3.5 my-1 block h-px bg-black/5" aria-hidden="true" />}
+                    {!showAdminLink && (
+                      <span
+                        className="mx-3.5 my-1 block h-px bg-black/5"
+                        aria-hidden="true"
+                      />
+                    )}
 
                     {showAdminLink && !isOwner && (
                       <Link
@@ -354,7 +382,11 @@ export default function Navbar() {
                         isOwner ? "rounded-[16px]" : "rounded-[14px]"
                       }`}
                     >
-                      <LogOut className={isOwner ? "h-5 w-5 shrink-0" : "h-4 w-4 shrink-0"} />
+                      <LogOut
+                        className={
+                          isOwner ? "h-5 w-5 shrink-0" : "h-4 w-4 shrink-0"
+                        }
+                      />
                       Logout
                     </button>
                   </div>
@@ -369,13 +401,13 @@ export default function Navbar() {
                   Log In
                 </Link>
                 {/**
-                  * ⚠️ `/register`, `/signup` নয় — পাতাটার ফোল্ডার
-                  * `app/(auth)/register/`। ঠিক নিচের cart-এর মন্তব্যটার
-                  * মতোই একই ভুল: বোতামের লেখা "Sign Up" দেখে path-টাও
-                  * `/signup` ধরে নেওয়া হয়েছিল, আর সেটা সোজা 404-এ
-                  * পাঠাত। AccountMenu আর login পাতা দুটোই আগে থেকেই
-                  * `/register`-এ যেত, তাই ভুলটা কেবল এখানেই ছিল।
-                  */}
+                 * ⚠️ `/register`, `/signup` নয় — পাতাটার ফোল্ডার
+                 * `app/(auth)/register/`। ঠিক নিচের cart-এর মন্তব্যটার
+                 * মতোই একই ভুল: বোতামের লেখা "Sign Up" দেখে path-টাও
+                 * `/signup` ধরে নেওয়া হয়েছিল, আর সেটা সোজা 404-এ
+                 * পাঠাত। AccountMenu আর login পাতা দুটোই আগে থেকেই
+                 * `/register`-এ যেত, তাই ভুলটা কেবল এখানেই ছিল।
+                 */}
                 <Link
                   href="/register"
                   className="hidden h-[46px] items-center justify-center rounded-full bg-gradient-to-r from-[#FF9540] to-[#FF70C6] px-5 min-[640px]:flex font-sora text-[16px] font-semibold leading-[1.3] text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
@@ -388,14 +420,12 @@ export default function Navbar() {
             {/**
              * ⚠️ `/carts`, `/cart` নয় — পাতাটার ফোল্ডার
              * `app/(main)/carts/`। এক অক্ষরের ভুলে cart-এর আইকনটা
-             * সোজা 404-এ নিয়ে যেত, অথচ "Add to cart" ঠিকই কাজ করছিল — 
+             * সোজা 404-এ নিয়ে যেত, অথচ "Add to cart" ঠিকই কাজ করছিল —
              * তাই মনে হচ্ছিল cart-টাই ফাঁকা।
              */}
             <Link
               href="/carts"
-              aria-label={
-                cartCount > 0 ? `Cart, ${cartCount} items` : "Cart"
-              }
+              aria-label={cartCount > 0 ? `Cart, ${cartCount} items` : "Cart"}
               className="relative flex h-[42px] w-[42px] items-center justify-center rounded-full bg-black transition-opacity hover:opacity-90 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[390px]:h-[46px] min-[390px]:w-[46px]"
             >
               <FaShoppingCart className="h-[18px] w-[18px] text-white" />
@@ -420,10 +450,14 @@ export default function Navbar() {
               aria-controls="site-mobile-menu"
               className="flex h-[42px] w-[42px] items-center justify-center rounded-full border border-black/15 bg-white text-black transition-colors hover:bg-black/[0.04] focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px] min-[390px]:h-[46px] min-[390px]:w-[46px] lg:hidden"
             >
-              {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <MenuIcon className="h-5 w-5" aria-hidden="true" />}
+              {mobileOpen ? (
+                <X className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <MenuIcon className="h-5 w-5" aria-hidden="true" />
+              )}
             </button>
           </div>
-        
+
           {/* Phone/tablet menu panel */}
           {mobileOpen && (
             <nav
@@ -440,7 +474,9 @@ export default function Navbar() {
                     onClick={() => setMobileOpen(false)}
                     aria-current={isActive ? "page" : undefined}
                     className={`rounded-[14px] px-4 py-3 font-sora text-[16px] transition-colors hover:bg-black/[0.05] ${
-                      isActive ? "bg-[#F9F6F3] font-semibold text-[#141921]" : "text-black/75"
+                      isActive
+                        ? "bg-[#F9F6F3] font-semibold text-[#141921]"
+                        : "text-black/75"
                     }`}
                   >
                     {link.label}

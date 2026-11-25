@@ -28,7 +28,7 @@ export type Chef = {
   /** "Executive Chef", "Master Chef" — কার্ডে নামের উপরে ছোট করে। */
   role: string;
   name: string;
-  /** "French Cuisine", "Desserts" — কার্ডের প্রথম ট্যাগ। */
+  /** "French CuisineFood", "Desserts" — কার্ডের প্রথম ট্যাগ। */
   specialty: string;
   /** দ্বিতীয় ট্যাগে "12 years Exp" হয়ে বসে। */
   yearsExperience: number;
@@ -40,9 +40,10 @@ export const CHEFS: Chef[] = [
     id: "antoine-rousseau",
     role: "Executive Chef",
     name: "Antoine Rousseau",
-    specialty: "French Cuisine",
+    specialty: "French CuisineFood",
     yearsExperience: 12,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623293/cd191f04c315b2b470f0aa5bcdfe7cfc39be70ad_p4yy36.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623293/cd191f04c315b2b470f0aa5bcdfe7cfc39be70ad_p4yy36.jpg",
   },
   {
     id: "elena-marchetti",
@@ -50,15 +51,17 @@ export const CHEFS: Chef[] = [
     name: "Elena Marchetti",
     specialty: "Desserts",
     yearsExperience: 9,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623347/94d859def10f67b2383bf059e9f89538cb485866_bn5goa.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623347/94d859def10f67b2383bf059e9f89538cb485866_bn5goa.jpg",
   },
   {
     id: "julien-moreau",
-    role: "Chef de Cuisine",
+    role: "Chef de CuisineFood",
     name: "Julien Moreau",
     specialty: "BBQ & Grill",
     yearsExperience: 10,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623410/882d577658c3acf517e86b47dc2425a5d815f0c3_uueiws.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623410/882d577658c3acf517e86b47dc2425a5d815f0c3_uueiws.jpg",
   },
   {
     id: "olivier-laurent",
@@ -66,7 +69,8 @@ export const CHEFS: Chef[] = [
     name: "Olivier Laurent",
     specialty: "Rice & Biryani",
     yearsExperience: 7,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623475/3b7824757fba25c298bd9eb87d0e930b628c5611_bhwxhe.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623475/3b7824757fba25c298bd9eb87d0e930b628c5611_bhwxhe.jpg",
   },
   {
     id: "gabriel-dupont",
@@ -74,7 +78,8 @@ export const CHEFS: Chef[] = [
     name: "Gabriel Dupont",
     specialty: "Wood-Fired Pizza",
     yearsExperience: 8,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623527/998ed2cd2180fc94ae1ce53a0aeaf8974526d1d4_ud3vrs.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623527/998ed2cd2180fc94ae1ce53a0aeaf8974526d1d4_ud3vrs.jpg",
   },
   {
     id: "louis-bernard",
@@ -82,7 +87,8 @@ export const CHEFS: Chef[] = [
     name: "Louis Bernard",
     specialty: "Beverages",
     yearsExperience: 4,
-    image: "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623588/7454d10ed7ac847087abd5ebe1f54445ab35b65d_mvj7xv.jpg",
+    image:
+      "https://res.cloudinary.com/dzi3u164c/image/upload/v1791623588/7454d10ed7ac847087abd5ebe1f54445ab35b65d_mvj7xv.jpg",
   },
 ];
 
@@ -92,7 +98,7 @@ export const CHEFS_HERO = {
   badge: "About Us",
   title: "Our Story of Passion, Tradition, and Unforgettable Flavors",
   description:
-    "Cuisine started with one simple idea — that a home-cooked meal, made with real ingredients and real care, brings people closer together",
+    "CuisineFood started with one simple idea — that a home-cooked meal, made with real ingredients and real care, brings people closer together",
 };
 
 // ── Our Journey ──────────────────────────────────────────────────────
@@ -176,7 +182,8 @@ export const WHY_US = {
     },
     {
       title: "Cozy Ambiance",
-      description: "Enjoy a warm, inviting atmosphere that's perfect for family meals.",
+      description:
+        "Enjoy a warm, inviting atmosphere that's perfect for family meals.",
     },
   ] satisfies WhyUsCard[],
 };

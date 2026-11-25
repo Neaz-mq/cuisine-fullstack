@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 // ছবি আনা + PDF বানানো মিলিয়ে সময় লাগতে পারে (প্রতি ছবি সর্বোচ্চ ৫s, সব সমান্তরালে)।
 export const maxDuration = 30;
 
-const RESTAURANT_NAME = "Cuisine";
+const RESTAURANT_NAME = "CuisineFood";
 
 function hourLabel(hour: number) {
   const period = hour % 24 < 12 ? "AM" : "PM";
@@ -46,11 +46,17 @@ function pct(rate: { toNumber(): number }) {
 }
 
 export async function GET(request: Request) {
-  const rate = checkRateLimit(request, "menu-pdf", { limit: 20, windowMs: 10 * 60 * 1000 });
+  const rate = checkRateLimit(request, "menu-pdf", {
+    limit: 20,
+    windowMs: 10 * 60 * 1000,
+  });
   if (!rate.allowed) {
     return NextResponse.json(
       { error: "Too many downloads. Please try again in a moment." },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: { "Retry-After": String(rate.retryAfterSeconds) },
+      },
     );
   }
 
@@ -84,15 +90,22 @@ export async function GET(request: Request) {
     if (nonEmpty.length === 0) {
       // খালি PDF ধরিয়ে দেওয়ার চেয়ে পরিষ্কার ব্যর্থতা ভালো — বোতাম এই বার্তাই toast-এ দেখায়।
       return NextResponse.json(
-        { error: "Our menu isn't available right now. Please check back soon." },
-        { status: 503 }
+        {
+          error: "Our menu isn't available right now. Please check back soon.",
+        },
+        { status: 503 },
       );
     }
 
-    const liveOffers = await findLiveOffers(nonEmpty.flatMap((c) => c.menuItems.map((i) => i.id)));
+    const liveOffers = await findLiveOffers(
+      nonEmpty.flatMap((c) => c.menuItems.map((i) => i.id)),
+    );
 
     // `NEXT_PUBLIC_APP_URL` — sitemap.ts যেটা ব্যবহার করে। না থাকলে অনুরোধের নিজের origin।
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || url.origin).replace(/\/+$/, "");
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || url.origin).replace(
+      /\/+$/,
+      "",
+    );
     const menuUrl = `${baseUrl}/menu`;
 
     const timeZone = settings.timezone || "Asia/Dhaka";
@@ -124,7 +137,7 @@ export async function GET(request: Request) {
           .slice(0, 2);
         const found = await Promise.all(urls.map((u) => fetchMenuPhoto(u)));
         return found.filter((p): p is Uint8Array => p !== null);
-      })
+      }),
     );
 
     const data: MenuPdfData = {
@@ -146,7 +159,7 @@ export async function GET(request: Request) {
             liveOffers.get(item.id),
             false, // সদস্য-বিশেষ offer নয় — উপরের মন্তব্য দেখুন
             settings.currency,
-            settings.currencyMinorUnits
+            settings.currencyMinorUnits,
           );
           return {
             title: item.title,
@@ -172,12 +185,16 @@ export async function GET(request: Request) {
         "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"`,
         // ৫ মিনিট CDN-এ নতুন, তারপর ১০ মিনিট পুরোনোটা দিয়ে পেছনে নতুন বানায়।
         // দাম বদলালে/offer শেষ হলে সর্বোচ্চ ~৫ মিনিটে PDF ধরে ফেলে; footer-এ "Prices as of" আছে।
-        "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control":
+          "public, max-age=0, s-maxage=300, stale-while-revalidate=600",
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
     console.error("GET /api/menu/pdf error:", error);
-    return NextResponse.json({ error: "Could not prepare the menu. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not prepare the menu. Please try again." },
+      { status: 500 },
+    );
   }
 }

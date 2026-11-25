@@ -21,9 +21,12 @@ export default function AcceptOrderButton({ token }: { token: string }) {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/supplier/orders/${encodeURIComponent(token)}/accept`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/supplier/orders/${encodeURIComponent(token)}/accept`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Something went wrong. Please try again.");
@@ -33,7 +36,9 @@ export default function AcceptOrderButton({ token }: { token: string }) {
       // Keep the spinner until the refreshed page replaces this button.
       router.refresh();
     } catch {
-      setError("Something went wrong. Please check your connection and try again.");
+      setError(
+        "Something went wrong. Please check your connection and try again.",
+      );
       setSubmitting(false);
     }
   }
@@ -41,7 +46,8 @@ export default function AcceptOrderButton({ token }: { token: string }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[13px] leading-[1.7] text-black/70">
-        Press the button if you can deliver this order. Cuisine is told straight away.
+        Press the button if you can deliver this order. CuisineFood is told
+        straight away.
       </p>
 
       {error && (
@@ -59,7 +65,9 @@ export default function AcceptOrderButton({ token }: { token: string }) {
         disabled={submitting}
         className="flex h-[50px] w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)] px-4 font-sora text-[16px] font-normal leading-none text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus-visible:[outline:2px_solid_#FF9540] focus-visible:[outline-offset:2px]"
       >
-        {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        {submitting && (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        )}
         {submitting ? "Accepting…" : "Accept order"}
       </button>
     </div>

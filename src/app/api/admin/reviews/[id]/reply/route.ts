@@ -10,7 +10,7 @@ import ReviewReplyEmail from "@/emails/ReviewReplyEmail";
 /**
  * POST /api/admin/reviews/[id]/reply  { message }
  *
- * The "Reply" button on /admin/reviews. Emails the customer from Cuisine's
+ * The "Reply" button on /admin/reviews. Emails the customer from CuisineFood's
  * own address through Resend — the same way order confirmations and
  * password resets go out.
  *
@@ -31,15 +31,24 @@ const replySchema = z.object({
     .max(2000, "Please keep the reply under 2000 characters"),
 });
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const authResult = await requireApiScope("reviews");
   if (authResult instanceof NextResponse) return authResult;
 
-  const rate = checkRateLimit(request, "review-reply", { limit: 20, windowMs: 10 * 60_000 });
+  const rate = checkRateLimit(request, "review-reply", {
+    limit: 20,
+    windowMs: 10 * 60_000,
+  });
   if (!rate.allowed) {
     return NextResponse.json(
       { error: "Too many replies in a short time. Please wait a moment." },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: { "Retry-After": String(rate.retryAfterSeconds) },
+      },
     );
   }
 
@@ -62,13 +71,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (!review.user.email) {
     return NextResponse.json(
-      { error: "This customer has no email address, so a reply can't be sent." },
-      { status: 400 }
+      {
+        error: "This customer has no email address, so a reply can't be sent.",
+      },
+      { status: 400 },
     );
   }
 
   const firstName = review.user.name?.trim().split(/\s+/)[0] || "there";
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  ).replace(/\/$/, "");
   const subject = `Re: your review of ${review.menuItem.title}`;
   const replyTo = process.env.EMAIL_REPLY_TO?.trim();
 
@@ -94,15 +107,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error) {
       console.error("Review reply email was rejected by Resend:", error);
       return NextResponse.json(
-        { error: "The email service couldn't send this reply. Please try again later." },
-        { status: 502 }
+        {
+          error:
+            "The email service couldn't send this reply. Please try again later.",
+        },
+        { status: 502 },
       );
     }
   } catch (error) {
     console.error("Review reply email failed:", error);
     return NextResponse.json(
-      { error: "The email service couldn't send this reply. Please try again later." },
-      { status: 502 }
+      {
+        error:
+          "The email service couldn't send this reply. Please try again later.",
+      },
+      { status: 502 },
     );
   }
 

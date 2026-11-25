@@ -34,7 +34,7 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * that nobody was told about.
  */
 export async function checkSupplierCanReceiveOrders(
-  supplierId: string | null | undefined
+  supplierId: string | null | undefined,
 ): Promise<SupplierCheck> {
   if (!supplierId) {
     return { ok: false, status: 400, error: "Pick a supplier to order from." };
@@ -61,7 +61,10 @@ export async function checkSupplierCanReceiveOrders(
       error: `${supplier.name} has no email address, so the order can't be sent. Add one on the Suppliers page first.`,
     };
   }
-  return { ok: true, supplier: { id: supplier.id, name: supplier.name, email } };
+  return {
+    ok: true,
+    supplier: { id: supplier.id, name: supplier.name, email },
+  };
 }
 
 type EmailOutcome = { ok: true } | { ok: false; reason: string };
@@ -72,7 +75,9 @@ type EmailOutcome = { ok: true } | { ok: false; reason: string };
  * Never throws. A failed email does NOT undo the order — it stays Pending with
  * `supplierEmailedAt` empty, and the Recent Deliveries row offers "Resend".
  */
-export async function emailSupplierAboutOrder(purchaseOrderId: string): Promise<EmailOutcome> {
+export async function emailSupplierAboutOrder(
+  purchaseOrderId: string,
+): Promise<EmailOutcome> {
   try {
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
@@ -92,7 +97,8 @@ export async function emailSupplierAboutOrder(purchaseOrderId: string): Promise<
       },
     });
     if (!po) return { ok: false, reason: "order not found" };
-    if (po.status !== "ORDERED") return { ok: false, reason: "order is no longer pending" };
+    if (po.status !== "ORDERED")
+      return { ok: false, reason: "order is no longer pending" };
 
     const to = po.supplier.email?.trim() ?? "";
     if (!EMAIL_SHAPE.test(to)) {
@@ -105,7 +111,7 @@ export async function emailSupplierAboutOrder(purchaseOrderId: string): Promise<
     const result = await sendEmail({
       tag: "supplier-order",
       to,
-      subject: `${isReminder ? "Reminder: " : ""}New order ${ref} from Cuisine`,
+      subject: `${isReminder ? "Reminder: " : ""}New order ${ref} from CuisineFood`,
       // A fresh key per attempt: a retry inside sendEmail must not double-send,
       // but a deliberate "Resend" a minute later must actually go out.
       idempotencyKey: `supplier-order/${po.id}/${Date.now()}`,
@@ -114,12 +120,15 @@ export async function emailSupplierAboutOrder(purchaseOrderId: string): Promise<
         orderRef: ref,
         lines: po.items.map((line) => ({
           name: line.inventoryItem.name,
-          quantity: formatQuantity(line.quantityOrdered, line.inventoryItem.unit),
+          quantity: formatQuantity(
+            line.quantityOrdered,
+            line.inventoryItem.unit,
+          ),
         })),
         note: po.note,
         acceptUrl: supplierOrderUrl(po.id),
         isReminder,
-        previewText: `Cuisine would like to order ${po.items.length} ${
+        previewText: `CuisineFood would like to order ${po.items.length} ${
           po.items.length === 1 ? "item" : "items"
         } from you — please accept the order.`,
       }),
@@ -134,7 +143,9 @@ export async function emailSupplierAboutOrder(purchaseOrderId: string): Promise<
     return { ok: true };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "unknown error";
-    console.error(`[supplier-order] couldn't email supplier for ${purchaseOrderId} — ${reason}`);
+    console.error(
+      `[supplier-order] couldn't email supplier for ${purchaseOrderId} — ${reason}`,
+    );
     return { ok: false, reason };
   }
 }
@@ -168,7 +179,9 @@ type PlaceOrderResult =
  * order is kept — it's real, the restaurant wants the goods — and the caller
  * gets `emailed: false` so the UI can say "saved, but not sent yet".
  */
-export async function placeSupplierOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+export async function placeSupplierOrder(
+  input: PlaceOrderInput,
+): Promise<PlaceOrderResult> {
   const check = await checkSupplierCanReceiveOrders(input.supplierId);
   if (!check.ok) return check;
 
@@ -176,7 +189,8 @@ export async function placeSupplierOrder(input: PlaceOrderInput): Promise<PlaceO
     where: { id: input.inventoryItemId },
     select: { id: true, costPerUnit: true, supplierId: true },
   });
-  if (!item) return { ok: false, status: 404, error: "Inventory item not found." };
+  if (!item)
+    return { ok: false, status: 404, error: "Inventory item not found." };
 
   const costPerUnit = input.costPerUnit ?? Number(item.costPerUnit);
   const totalCost = sum(toMoney(costPerUnit).times(input.quantity));
@@ -238,7 +252,7 @@ type AcceptResult =
  * delivered order is answered "fine, already done" — never an error.
  */
 export async function acceptPurchaseOrderAsSupplier(
-  purchaseOrderId: string
+  purchaseOrderId: string,
 ): Promise<AcceptResult> {
   const claimed = await prisma.purchaseOrder.updateMany({
     where: { id: purchaseOrderId, status: "ORDERED" },
@@ -263,27 +277,37 @@ export async function acceptPurchaseOrderAsSupplier(
  * thing twice.
  */
 export async function getOpenOrderQuantities(
-  inventoryItemIds?: string[]
-): Promise<Map<string, { quantity: number; status: string; supplierName: string }>> {
+  inventoryItemIds?: string[],
+): Promise<
+  Map<string, { quantity: number; status: string; supplierName: string }>
+> {
   const lines = await prisma.purchaseOrderItem.findMany({
     where: {
-      ...(inventoryItemIds ? { inventoryItemId: { in: inventoryItemIds } } : {}),
+      ...(inventoryItemIds
+        ? { inventoryItemId: { in: inventoryItemIds } }
+        : {}),
       purchaseOrder: { status: { in: [...OPEN_PURCHASE_ORDER_STATUSES] } },
     },
     select: {
       inventoryItemId: true,
       quantityOrdered: true,
-      purchaseOrder: { select: { status: true, supplier: { select: { name: true } } } },
+      purchaseOrder: {
+        select: { status: true, supplier: { select: { name: true } } },
+      },
     },
   });
 
-  const byItem = new Map<string, { quantity: number; status: string; supplierName: string }>();
+  const byItem = new Map<
+    string,
+    { quantity: number; status: string; supplierName: string }
+  >();
   for (const line of lines) {
     const existing = byItem.get(line.inventoryItemId);
     if (existing) {
       existing.quantity += line.quantityOrdered;
       // "On the way" is further along than "Pending" — show the latest stage.
-      if (line.purchaseOrder.status === "ON_THE_WAY") existing.status = "ON_THE_WAY";
+      if (line.purchaseOrder.status === "ON_THE_WAY")
+        existing.status = "ON_THE_WAY";
     } else {
       byItem.set(line.inventoryItemId, {
         quantity: line.quantityOrdered,

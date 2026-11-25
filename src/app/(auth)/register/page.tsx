@@ -218,13 +218,13 @@ export default function RegisterPage() {
           >
             <Image
               src="/logo.svg"
-              alt="Cuisine Logo"
+              alt="CuisineFood Logo"
               width={40}
               height={40}
               className="w-9 h-9 xl:w-10 xl:h-10"
             />
             <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
-              Cuisine
+              CuisineFood
             </span>
           </Link>
 
@@ -237,7 +237,7 @@ export default function RegisterPage() {
             </h2>
             <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
               Sign in to track your orders, save your favorite dishes, and get
-              personalized offers from Cuisine.
+              personalized offers from CuisineFood.
             </p>
 
             {/* Stats — xl-এ 510px ও 13.45px gap মিলে 161.03px cards হয় (Figma) */}
@@ -314,7 +314,8 @@ export default function RegisterPage() {
                 Create Your Account
               </h1>
               <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
-                Join Cuisine to order, save favorites, and get exclusive deals.
+                Join CuisineFood to order, save favorites, and get exclusive
+                deals.
               </p>
             </div>
 
@@ -493,7 +494,9 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     aria-pressed={showPassword}
                   >
                     {showPassword ? (
@@ -524,7 +527,10 @@ export default function RegisterPage() {
                   </button>
                 </div>
                 {/* Live checklist — same rules as Change Password and reset links. */}
-                <PasswordRulesHint id="register-password-rules" value={form.password} />
+                <PasswordRulesHint
+                  id="register-password-rules"
+                  value={form.password}
+                />
               </div>
 
               {/* Custom checkbox — a11y/state-এর জন্য native input রাখা হয়েছে, শুধু visually hidden।
@@ -541,7 +547,9 @@ export default function RegisterPage() {
                 />
                 <span
                   className={`w-[18px] h-[18px] md:w-5 md:h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
-                    agreed ? "bg-white border-black" : "bg-white border-black/25"
+                    agreed
+                      ? "bg-white border-black"
+                      : "bg-white border-black/25"
                   }`}
                 >
                   {agreed && (

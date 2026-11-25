@@ -56,7 +56,9 @@ export default function SupplierOrderEmail({
     <Html>
       <Head />
       <Preview>{previewText}</Preview>
-      <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
+      <Body
+        style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}
+      >
         <Container
           style={{
             backgroundColor: "#ffffff",
@@ -68,12 +70,15 @@ export default function SupplierOrderEmail({
         >
           <EmailLogo />
 
-          <Heading style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}>
+          <Heading
+            style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}
+          >
             {isReminder ? "Reminder: " : ""}New order {orderRef}
           </Heading>
           <Text style={{ color: "#6b7280", fontSize: "14px", marginTop: 0 }}>
-            Hi {supplierName}, Cuisine would like to order the items below. Please accept the order
-            if you can deliver it — we&apos;ll be notified straight away.
+            Hi {supplierName}, CuisineFood would like to order the items below.
+            Please accept the order if you can deliver it — we&apos;ll be
+            notified straight away.
           </Text>
 
           <Section
@@ -94,7 +99,13 @@ export default function SupplierOrderEmail({
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "10px 0", fontSize: "14px", color: "#1f2937" }}>
+                    <td
+                      style={{
+                        padding: "10px 0",
+                        fontSize: "14px",
+                        color: "#1f2937",
+                      }}
+                    >
                       {line.name}
                     </td>
                     <td
@@ -116,7 +127,9 @@ export default function SupplierOrderEmail({
           </Section>
 
           {note ? (
-            <Text style={{ color: "#6b7280", fontSize: "13px", margin: "0 0 8px" }}>
+            <Text
+              style={{ color: "#6b7280", fontSize: "13px", margin: "0 0 8px" }}
+            >
               Note from the restaurant: {note}
             </Text>
           ) : null}
@@ -140,18 +153,27 @@ export default function SupplierOrderEmail({
 
           {/* Some clients strip button links — keep the URL visible too
               (same reason as PasswordResetEmail). */}
-          <Text style={{ color: "#9ca3af", fontSize: "12px", margin: "0 0 4px" }}>
+          <Text
+            style={{ color: "#9ca3af", fontSize: "12px", margin: "0 0 4px" }}
+          >
             Button not working? Paste this into your browser:
           </Text>
-          <Text style={{ color: GREEN, fontSize: "12px", margin: 0, wordBreak: "break-all" }}>
+          <Text
+            style={{
+              color: GREEN,
+              fontSize: "12px",
+              margin: 0,
+              wordBreak: "break-all",
+            }}
+          >
             {acceptUrl}
           </Text>
 
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
 
           <Text style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-            This link is only for you — please don&apos;t forward it. If this order isn&apos;t
-            meant for you, you can ignore this email.
+            This link is only for you — please don&apos;t forward it. If this
+            order isn&apos;t meant for you, you can ignore this email.
           </Text>
         </Container>
       </Body>

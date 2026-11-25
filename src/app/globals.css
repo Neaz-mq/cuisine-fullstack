@@ -31,7 +31,7 @@
      সত্যিকারের ৩২০px+ breakpoint দরকার হলে `xs:` ব্যবহার করা যাবে;
      আপাতত কোনো ফাইলে `xs:` ব্যবহৃত হয় না, তাই এই বদলে বিদ্যমান কোনো
      ক্লাস ভাঙে না। */
- 
+
   --breakpoint-sm: 320px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
@@ -48,7 +48,7 @@
   writing-mode: vertical-lr;
 }
 
-/* Frank Ruhl Libre utility — apply to the "Cuisine" logo wordmark and any
+/* Frank Ruhl Libre utility — apply to the "CuisineFood" logo wordmark and any
    other serif headings that should match the Figma type spec, instead of
    Tailwind's generic `font-serif` (which falls back to the browser's
    default serif, not this specific typeface). Sourced from the

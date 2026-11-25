@@ -77,7 +77,14 @@ export default function OfferBroadcastEmail({
     <Html>
       <Head />
       <Preview>{previewText}</Preview>
-      <Body style={{ backgroundColor: CREAM, fontFamily: SANS, margin: 0, padding: "24px 12px" }}>
+      <Body
+        style={{
+          backgroundColor: CREAM,
+          fontFamily: SANS,
+          margin: 0,
+          padding: "24px 12px",
+        }}
+      >
         <Container
           style={{
             backgroundColor: "#ffffff",
@@ -108,7 +115,7 @@ export default function OfferBroadcastEmail({
                 margin: "0 0 16px 0",
               }}
             >
-              Cuisine
+              CuisineFood
             </Text>
             <Text
               style={{
@@ -143,7 +150,11 @@ export default function OfferBroadcastEmail({
           {/* Message */}
           <Section style={{ padding: "28px 28px 4px 28px" }}>
             <div
-              style={{ color: "rgba(0,0,0,0.7)", fontSize: "15px", lineHeight: "1.7" }}
+              style={{
+                color: "rgba(0,0,0,0.7)",
+                fontSize: "15px",
+                lineHeight: "1.7",
+              }}
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
           </Section>
@@ -152,7 +163,11 @@ export default function OfferBroadcastEmail({
           {featured && (
             <Section style={{ padding: "12px 28px 0 28px" }}>
               <Section
-                style={{ backgroundColor: CREAM, borderRadius: "16px", padding: "12px" }}
+                style={{
+                  backgroundColor: CREAM,
+                  borderRadius: "16px",
+                  padding: "12px",
+                }}
               >
                 {featured.imageUrl && (
                   <Img
@@ -180,7 +195,12 @@ export default function OfferBroadcastEmail({
                   {featured.title}
                 </Text>
                 <Text style={{ margin: "0 4px 6px 4px", fontSize: "14px" }}>
-                  <span style={{ color: "rgba(0,0,0,0.45)", textDecoration: "line-through" }}>
+                  <span
+                    style={{
+                      color: "rgba(0,0,0,0.45)",
+                      textDecoration: "line-through",
+                    }}
+                  >
                     {featured.oldPrice}
                   </span>
                   <span
@@ -195,7 +215,13 @@ export default function OfferBroadcastEmail({
                     {featured.newPrice}
                   </span>
                 </Text>
-                <Text style={{ margin: "0 4px 4px 4px", fontSize: "12px", color: "rgba(0,0,0,0.7)" }}>
+                <Text
+                  style={{
+                    margin: "0 4px 4px 4px",
+                    fontSize: "12px",
+                    color: "rgba(0,0,0,0.7)",
+                  }}
+                >
                   {featured.note}
                 </Text>
               </Section>
@@ -203,7 +229,9 @@ export default function OfferBroadcastEmail({
           )}
 
           {/* Call to action — gradient pill, like the site's buttons */}
-          <Section style={{ textAlign: "center", padding: "28px 28px 8px 28px" }}>
+          <Section
+            style={{ textAlign: "center", padding: "28px 28px 8px 28px" }}
+          >
             <Link
               href={ctaUrl}
               style={{
@@ -231,22 +259,36 @@ export default function OfferBroadcastEmail({
           {/* Footer — with the unsubscribe link every marketing email must
               carry (see `unsubscribeUrl` above). */}
           <Section style={{ padding: "0 28px 28px 28px" }}>
-            <Text style={{ fontSize: "12px", color: "rgba(0,0,0,0.5)", margin: "0 0 4px 0" }}>
-              You&apos;re receiving this email because you opted in to offers and updates from
-              Cuisine.{" "}
+            <Text
+              style={{
+                fontSize: "12px",
+                color: "rgba(0,0,0,0.5)",
+                margin: "0 0 4px 0",
+              }}
+            >
+              You&apos;re receiving this email because you opted in to offers
+              and updates from CuisineFood.{" "}
               {unsubscribeUrl ? (
                 <Link
                   href={unsubscribeUrl}
-                  style={{ color: "rgba(0,0,0,0.7)", textDecoration: "underline" }}
+                  style={{
+                    color: "rgba(0,0,0,0.7)",
+                    textDecoration: "underline",
+                  }}
                 >
                   Unsubscribe
                 </Link>
               ) : (
-                <span>(Test email — the real one has an Unsubscribe link here.)</span>
+                <span>
+                  (Test email — the real one has an Unsubscribe link here.)
+                </span>
               )}
             </Text>
-            <Text style={{ fontSize: "12px", color: "rgba(0,0,0,0.5)", margin: 0 }}>
-              &copy; {new Date().getFullYear()} Cuisine. All rights reserved.
+            <Text
+              style={{ fontSize: "12px", color: "rgba(0,0,0,0.5)", margin: 0 }}
+            >
+              &copy; {new Date().getFullYear()} CuisineFood. All rights
+              reserved.
             </Text>
           </Section>
         </Container>

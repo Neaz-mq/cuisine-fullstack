@@ -1,7 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/require-admin";
 import { RESTAURANT_LOCATION } from "@/lib/restaurant-location";
-import { ACTIVE_DELIVERY_WHERE, findAvailableOrders, getRiderPreferences, MAX_ACTIVE_DELIVERIES, withoutAddress } from "@/lib/rider-panel";
+import {
+  ACTIVE_DELIVERY_WHERE,
+  findAvailableOrders,
+  getRiderPreferences,
+  MAX_ACTIVE_DELIVERIES,
+  withoutAddress,
+} from "@/lib/rider-panel";
 import ExportReportButton from "@/components/admin/dashboard/ExportReportButton";
 import { RiderPageHeader } from "../rider-ui";
 import AvailableOrders from "./AvailableOrders";
@@ -19,7 +25,9 @@ export default async function AvailableOrdersPage() {
   const prefs = await getRiderPreferences(session.user.id!);
   const [orders, activeCount] = await Promise.all([
     findAvailableOrders(50, prefs),
-    prisma.deliveryTracking.count({ where: ACTIVE_DELIVERY_WHERE(session.user.id!) }),
+    prisma.deliveryTracking.count({
+      where: ACTIVE_DELIVERY_WHERE(session.user.id!),
+    }),
   ]);
 
   return (
@@ -28,7 +36,11 @@ export default async function AvailableOrdersPage() {
         name={session.user.name ?? undefined}
         now={new Date()}
         actions={
-          <ExportReportButton endpoint="/api/rider/export" forwardParams={[]} fallbackFilename="my-deliveries.csv" />
+          <ExportReportButton
+            endpoint="/api/rider/export"
+            forwardParams={[]}
+            fallbackFilename="my-deliveries.csv"
+          />
         }
       />
       <AvailableOrders
@@ -38,8 +50,8 @@ export default async function AvailableOrdersPage() {
           activeCount,
           maxActive: MAX_ACTIVE_DELIVERIES,
         }}
-        kitchenLabel="Cuisine — Main Kitchen"
-        pickupLabel={`Cuisine Kitchen, ${RESTAURANT_LOCATION.label}`}
+        kitchenLabel="CuisineFood — Main Kitchen"
+        pickupLabel={`CuisineFood Kitchen, ${RESTAURANT_LOCATION.label}`}
       />
     </div>
   );

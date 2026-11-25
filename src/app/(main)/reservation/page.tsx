@@ -7,7 +7,8 @@ import DeliveryCTA from "@/components/reservation/DeliveryCTA";
 
 export const metadata: Metadata = {
   title: "Reservation",
-  description: "Reserve your perfect table at Cuisine for every special occasion.",
+  description:
+    "Reserve your perfect table at CuisineFood for every special occasion.",
 };
 
 /**
@@ -33,7 +34,10 @@ export default async function ReservationPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const [params, settings] = await Promise.all([searchParams, getRestaurantSettings()]);
+  const [params, settings] = await Promise.all([
+    searchParams,
+    getRestaurantSettings(),
+  ]);
 
   /**
    * ⚠️ অগ্রিমের অঙ্কটা **server-এ** পড়া হয়, client-এ `/api/settings`
@@ -58,7 +62,11 @@ export default async function ReservationPage({
         depositAmount={deposit}
         depositLabel={
           deposit > 0
-            ? formatAmount(deposit, settings.currency, settings.currencyMinorUnits)
+            ? formatAmount(
+                deposit,
+                settings.currency,
+                settings.currencyMinorUnits,
+              )
             : null
         }
         // Stripe থেকে ফেরার পর — নিচে Congratulations modal খোলে।

@@ -9,7 +9,13 @@ import {
   useTransform,
 } from "framer-motion";
 import type { MouseEvent } from "react";
-import { FaApple, FaCheck, FaGooglePlay, FaMotorcycle, FaStar } from "react-icons/fa";
+import {
+  FaApple,
+  FaCheck,
+  FaGooglePlay,
+  FaMotorcycle,
+  FaStar,
+} from "react-icons/fa";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -74,13 +80,21 @@ function RideEffects() {
   ];
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5]" aria-hidden="true">
+    <div
+      className="pointer-events-none absolute inset-0 z-[5]"
+      aria-hidden="true"
+    >
       {streaks.map((s, i) => (
         <motion.span
           key={i}
           initial={{ x: 0, opacity: 0 }}
           animate={{ x: [0, 70], opacity: [0, 0.45, 0] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: s.delay }}
+          transition={{
+            duration: 2.2,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: s.delay,
+          }}
           style={{ top: s.top, right: s.right, width: s.w }}
           className="absolute h-[2px] transform-gpu rounded-full bg-gradient-to-l from-[#FF9540]/60 to-transparent will-change-transform"
         />
@@ -128,7 +142,7 @@ export default function OneAppSection() {
     <section
       // overflow-hidden: the slide-in (x ±24px) must not widen the page on phones
       className="overflow-hidden bg-white px-4 py-16 md:px-10 md:py-20 xl:px-20 xl:py-[100px]"
-      aria-label="Get the Cuisine app"
+      aria-label="Get the CuisineFood app"
     >
       <div className="mx-auto flex max-w-[1280px] flex-col items-center gap-12 lg:flex-row lg:items-stretch lg:justify-between lg:gap-10">
         {/* Left: copy + QR/rating + store buttons */}
@@ -155,13 +169,13 @@ export default function OneAppSection() {
               {/* public/qr.png — Figma-তে QR-এর পেছনে কোনো বক্স নেই */}
               <Image
                 src="/qr.png"
-                alt="QR code to download the Cuisine app"
+                alt="QR code to download the CuisineFood app"
                 width={88}
                 height={88}
                 className="h-[70px] w-[70px] shrink-0 md:h-[88px] md:w-[88px]"
               />
               <span className="max-w-[134px] text-left font-sora text-[13px] leading-[1.6] text-black/70 md:text-[16px]">
-                Scan to download the Cuisine app
+                Scan to download the CuisineFood app
               </span>
             </div>
 
@@ -175,10 +189,7 @@ export default function OneAppSection() {
                 <span className="font-sora text-[26px] font-medium leading-none text-black md:text-[30px]">
                   4.8
                 </span>
-                <span
-                  className="flex items-center gap-0.5"
-                  aria-hidden="true"
-                >
+                <span className="flex items-center gap-0.5" aria-hidden="true">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <FaStar key={i} className="h-4 w-4 text-black" />
                   ))}
@@ -239,7 +250,11 @@ export default function OneAppSection() {
                     ? undefined
                     : { y: [0, -5, 0], x: [0, -3, 0], rotate: [0, -0.35, 0] }
                 }
-                transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 3.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
                 style={{ transformOrigin: "75% 100%" }}
                 className="h-full transform-gpu will-change-transform"
               >
@@ -249,7 +264,7 @@ export default function OneAppSection() {
                 <div className="h-full lg:origin-[85%_50%] lg:scale-[1.13]">
                   <Image
                     src="https://res.cloudinary.com/dzi3u164c/image/upload/v1791560604/riders_odpldl.webp"
-                    alt="Delivery rider with a Cuisine order"
+                    alt="Delivery rider with a CuisineFood order"
                     width={1208}
                     height={936}
                     sizes="(min-width: 1280px) 714px, (min-width: 1024px) 55vw, 90vw"
@@ -257,7 +272,7 @@ export default function OneAppSection() {
                     className="block h-auto w-full object-contain object-right lg:h-full lg:w-auto lg:max-w-full"
                   />
                 </div>
-                </motion.div>
+              </motion.div>
             </motion.div>
 
             {/* হালকা speed streak — ছবির ডান দিকের ফাঁকা জায়গায় */}
@@ -273,7 +288,11 @@ export default function OneAppSection() {
             >
               <motion.div
                 animate={reduceMotion ? undefined : { y: [0, -6, 0] }}
-                transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 4.6,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
                 className="flex transform-gpu items-center gap-2.5 rounded-2xl bg-white px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] will-change-transform md:px-4 md:py-2.5"
               >
                 <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[#FF9540] text-white md:h-9 md:w-9">
@@ -283,8 +302,12 @@ export default function OneAppSection() {
                   )}
                 </span>
                 <span className="flex flex-col font-sora leading-tight">
-                  <span className="text-[11px] text-black/60 md:text-[12px]">Order on the way</span>
-                  <span className="text-[13px] font-semibold text-black md:text-[14px]">Arriving in 8 min</span>
+                  <span className="text-[11px] text-black/60 md:text-[12px]">
+                    Order on the way
+                  </span>
+                  <span className="text-[13px] font-semibold text-black md:text-[14px]">
+                    Arriving in 8 min
+                  </span>
                 </span>
               </motion.div>
             </motion.div>
@@ -299,7 +322,12 @@ export default function OneAppSection() {
             >
               <motion.div
                 animate={reduceMotion ? undefined : { y: [0, 6, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                transition={{
+                  duration: 5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: 0.6,
+                }}
                 className="flex transform-gpu items-center gap-2 rounded-full bg-white px-3.5 py-2 font-sora text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.12)] will-change-transform md:text-[13px]"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">

@@ -28,7 +28,11 @@ import AiAssistant from "@/components/ai/AiAssistant";
  *
  *     grep -rn "components/TopBar\\|components/Navbar" src/
  */
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Info bar + navbar stay pinned to the top while scrolling.
@@ -41,7 +45,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           a phone. `clip`, not `hidden` — it doesn't break sticky elements. */}
       <main className="flex-1 overflow-x-clip">{children}</main>
       <Footer />
-      {/* "Ask Cuisine AI" — shown only when the free Groq key is set (see /api/ai/chat). */}
+      {/* "Ask CuisineFood AI" — shown only when the free Groq key is set (see /api/ai/chat). */}
       {process.env.GROQ_API_KEY ? <AiAssistant /> : null}
     </div>
   );

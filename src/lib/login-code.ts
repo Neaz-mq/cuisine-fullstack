@@ -30,13 +30,15 @@ export function makeLoginCode(): string {
 
 export function hashLoginCode(userId: string, code: string): string {
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "";
-  return createHash("sha256").update(`${userId}:${code.trim()}:${secret}`).digest("hex");
+  return createHash("sha256")
+    .update(`${userId}:${code.trim()}:${secret}`)
+    .digest("hex");
 }
 
 /** Creates a fresh code (dropping older ones) and emails it. false = the email didn't go. */
 export async function sendLoginCode(
   user: { id: string; email: string; name: string | null },
-  purpose: LoginCodePurpose
+  purpose: LoginCodePurpose,
 ): Promise<boolean> {
   const code = makeLoginCode();
   await prisma.$transaction([
@@ -55,7 +57,10 @@ export async function sendLoginCode(
   const result = await sendEmail({
     tag: "login-code",
     to: user.email,
-    subject: purpose === "LOGIN" ? `${code} is your Cuisine sign-in code` : `${code} is your Cuisine verification code`,
+    subject:
+      purpose === "LOGIN"
+        ? `${code} is your CuisineFood sign-in code`
+        : `${code} is your CuisineFood verification code`,
     react: LoginCodeEmail({
       firstName: user.name?.trim().split(" ")[0] || "there",
       code,
@@ -73,17 +78,27 @@ export async function sendLoginCode(
 export async function verifyLoginCode(
   userId: string,
   purpose: LoginCodePurpose,
-  code: string
+  code: string,
 ): Promise<"ok" | "invalid" | "expired"> {
   const record = await prisma.loginCode.findFirst({
     where: { userId, purpose },
     orderBy: { createdAt: "desc" },
   });
-  if (!record || record.expiresAt.getTime() < Date.now() || record.attempts >= LOGIN_CODE_MAX_ATTEMPTS) {
+  if (
+    !record ||
+    record.expiresAt.getTime() < Date.now() ||
+    record.attempts >= LOGIN_CODE_MAX_ATTEMPTS
+  ) {
     return "expired";
   }
-  if (!/^\d{6}$/.test(code.trim()) || hashLoginCode(userId, code) !== record.codeHash) {
-    await prisma.loginCode.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
+  if (
+    !/^\d{6}$/.test(code.trim()) ||
+    hashLoginCode(userId, code) !== record.codeHash
+  ) {
+    await prisma.loginCode.update({
+      where: { id: record.id },
+      data: { attempts: { increment: 1 } },
+    });
     return "invalid";
   }
   await prisma.loginCode.deleteMany({ where: { userId, purpose } });

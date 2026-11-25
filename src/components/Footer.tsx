@@ -113,17 +113,17 @@ export default function Footer() {
               <Link href="/" className="flex items-center gap-3">
                 <Image
                   src="/logo 2.svg"
-                  alt="Cuisine logo"
+                  alt="CuisineFood logo"
                   width={40}
                   height={40}
                   className="h-10 w-10"
                 />
                 <span className="font-frank-ruhl text-[28px] font-bold leading-[1.26] tracking-[-0.01em] text-[#FF9540]">
-                  Cuisine
+                  CuisineFood
                 </span>
               </Link>
               <p className="font-sora text-[16px] leading-[1.6] text-white/70">
-                Cuisine brings your favorite restaurants and delicious meals
+                CuisineFood brings your favorite restaurants and delicious meals
                 together in one seamless food delivery experience.
               </p>
             </div>
@@ -194,7 +194,7 @@ export default function Footer() {
         {/* Bottom content: copyright — divider — install/store buttons */}
         <div className="flex w-full flex-col items-center gap-6 md:flex-row md:gap-[26px]">
           <p className="font-sora text-[12px] leading-[1.7] text-white/50">
-            © 2026 Cuisine. All rights reserved.
+            © 2026 CuisineFood. All rights reserved.
           </p>
 
           <span

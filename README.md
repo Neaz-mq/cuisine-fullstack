@@ -1,4 +1,4 @@
-# Cuisine — Full-Stack Restaurant Management System
+# CuisineFood — Full-Stack Restaurant Management System
 
 **Live demo:** [cuisine-fullstack.vercel.app](https://cuisine-fullstack.vercel.app/)
 
@@ -35,7 +35,7 @@ database instead of trusting a session token.
 - **Reservations** — book a table online (with an optional Stripe-paid
   deposit), manage your bookings, and cancel; serializable double-booking
   protection
-- **Ask Cuisine AI** — a food assistant for menu, offers, hours, orders and
+- **Ask CuisineFood AI** — a food assistant for menu, offers, hours, orders and
   points questions. Runs on Groq and falls back to a rule-based answer when
   the model is unavailable, so the chat never just breaks
 - **Smart upsell** — "pairs well with" suggestions derived from what past
@@ -112,24 +112,24 @@ On the admin side, managers confirm cash hand-ins and approve payouts.
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, Turbopack), React 19, TypeScript |
-| Database | PostgreSQL via Prisma 6 (Rust-free client + `@prisma/adapter-pg`) |
-| Auth | NextAuth v5 (credentials + Google OAuth, optional email two-step) |
-| Payments | Stripe Checkout + webhooks |
-| Realtime | Supabase Realtime (live chat); order tracking and the rider map poll every 15 seconds |
-| Storage | Supabase Storage (menu images, private rider documents) |
-| Email | Resend + React Email |
-| AI | Groq (customer assistant, business summaries) |
-| Validation | Zod |
-| Styling | Tailwind CSS v4 |
-| Maps | Leaflet / React-Leaflet, Nominatim geocoding |
-| PDF & QR | pdf-lib (menu PDF), qrcode (table QR codes) |
-| Monitoring | Sentry |
-| Hosting | Vercel (with Vercel Cron) |
-| Testing | Vitest |
-| CI | GitHub Actions (lint, test, build on every push and PR) |
+| Layer      | Technology                                                                            |
+| ---------- | ------------------------------------------------------------------------------------- |
+| Framework  | Next.js 16 (App Router, Turbopack), React 19, TypeScript                              |
+| Database   | PostgreSQL via Prisma 6 (Rust-free client + `@prisma/adapter-pg`)                     |
+| Auth       | NextAuth v5 (credentials + Google OAuth, optional email two-step)                     |
+| Payments   | Stripe Checkout + webhooks                                                            |
+| Realtime   | Supabase Realtime (live chat); order tracking and the rider map poll every 15 seconds |
+| Storage    | Supabase Storage (menu images, private rider documents)                               |
+| Email      | Resend + React Email                                                                  |
+| AI         | Groq (customer assistant, business summaries)                                         |
+| Validation | Zod                                                                                   |
+| Styling    | Tailwind CSS v4                                                                       |
+| Maps       | Leaflet / React-Leaflet, Nominatim geocoding                                          |
+| PDF & QR   | pdf-lib (menu PDF), qrcode (table QR codes)                                           |
+| Monitoring | Sentry                                                                                |
+| Hosting    | Vercel (with Vercel Cron)                                                             |
+| Testing    | Vitest                                                                                |
+| CI         | GitHub Actions (lint, test, build on every push and PR)                               |
 
 ## Design Notes
 
@@ -305,14 +305,14 @@ creates the user and profile together.
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start the dev server |
-| `npm run build` | Production build |
-| `npm run start` | Start the production server |
-| `npm run lint` | Run ESLint |
-| `npm run test` | Run the test suite once |
-| `npm run test:watch` | Run tests in watch mode |
+| Command              | Description                 |
+| -------------------- | --------------------------- |
+| `npm run dev`        | Start the dev server        |
+| `npm run build`      | Production build            |
+| `npm run start`      | Start the production server |
+| `npm run lint`       | Run ESLint                  |
+| `npm run test`       | Run the test suite once     |
+| `npm run test:watch` | Run tests in watch mode     |
 
 ### Demo-data helper
 

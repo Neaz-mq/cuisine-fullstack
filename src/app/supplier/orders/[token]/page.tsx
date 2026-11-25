@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import { formatQuantity } from "@/lib/inventory-status";
-import { purchaseOrderRef, readSupplierOrderToken } from "@/lib/supplier-order-token";
+import {
+  purchaseOrderRef,
+  readSupplierOrderToken,
+} from "@/lib/supplier-order-token";
 import AcceptOrderButton from "./AcceptOrderButton";
 
 /**
@@ -90,7 +93,9 @@ export default async function SupplierOrderPage({
   return (
     <main className="min-h-screen bg-[#F9F6F3] px-4 py-10 font-sora text-black md:py-16">
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
-        <p className="font-frank-ruhl text-[28px] font-bold leading-none text-black">Cuisine</p>
+        <p className="font-frank-ruhl text-[28px] font-bold leading-none text-black">
+          CuisineFood
+        </p>
 
         <div className="flex flex-col gap-6 rounded-[20px] bg-white p-5 md:p-[30px]">
           <div className="flex flex-col gap-2">
@@ -98,8 +103,11 @@ export default async function SupplierOrderPage({
               Order {ref}
             </h1>
             <p className="text-[13px] leading-[1.7] text-black/70">
-              For <strong className="font-semibold text-black">{po.supplier.name}</strong> · placed{" "}
-              {formatWhen(po.orderedAt ?? po.createdAt, tz)}
+              For{" "}
+              <strong className="font-semibold text-black">
+                {po.supplier.name}
+              </strong>{" "}
+              · placed {formatWhen(po.orderedAt ?? po.createdAt, tz)}
             </p>
           </div>
 
@@ -113,7 +121,10 @@ export default async function SupplierOrderPage({
                   {line.inventoryItem.name}
                 </span>
                 <span className="shrink-0 text-[14px] font-semibold text-black">
-                  {formatQuantity(line.quantityOrdered, line.inventoryItem.unit)}
+                  {formatQuantity(
+                    line.quantityOrdered,
+                    line.inventoryItem.unit,
+                  )}
                 </span>
               </li>
             ))}
@@ -129,15 +140,15 @@ export default async function SupplierOrderPage({
 
           {po.status === "ON_THE_WAY" && po.acceptedAt && (
             <StatusNote tone="purple" title="You accepted this order">
-              Accepted on {formatWhen(po.acceptedAt, tz)}. Cuisine is expecting the delivery — thank
-              you!
+              Accepted on {formatWhen(po.acceptedAt, tz)}. CuisineFood is
+              expecting the delivery — thank you!
             </StatusNote>
           )}
 
           {po.status === "RECEIVED" && (
             <StatusNote tone="green" title="Delivered">
               {po.receivedAt
-                ? `Cuisine confirmed the delivery on ${formatWhen(po.receivedAt, tz)}. `
+                ? `CuisineFood confirmed the delivery on ${formatWhen(po.receivedAt, tz)}. `
                 : ""}
               Thank you — nothing more to do.
             </StatusNote>
@@ -145,7 +156,8 @@ export default async function SupplierOrderPage({
 
           {po.status === "CANCELLED" && (
             <StatusNote tone="red" title="This order was cancelled">
-              Cuisine cancelled this order, so there is nothing to deliver. No action needed.
+              CuisineFood cancelled this order, so there is nothing to deliver.
+              No action needed.
             </StatusNote>
           )}
         </div>

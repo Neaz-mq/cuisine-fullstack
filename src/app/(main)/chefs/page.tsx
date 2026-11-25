@@ -7,7 +7,7 @@ import MenuCTA from "@/components/chefs/MenuCTA";
 
 export const metadata: Metadata = {
   title: "Our Chefs",
-  description: "Meet the award-winning chefs and team behind Cuisine.",
+  description: "Meet the award-winning chefs and team behind CuisineFood.",
 };
 
 /**

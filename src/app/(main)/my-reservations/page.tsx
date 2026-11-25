@@ -3,12 +3,15 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getRestaurantSettings } from "@/lib/get-settings";
 import ReservationsHero from "@/components/reservation/ReservationsHero";
-import ReservationList, { type ReservationRow } from "@/components/reservation/ReservationList";
+import ReservationList, {
+  type ReservationRow,
+} from "@/components/reservation/ReservationList";
 import NewReservationCTA from "@/components/reservation/NewReservationCTA";
 
 export const metadata: Metadata = {
   title: "My Reservations",
-  description: "View, reschedule or cancel your table reservations at Cuisine.",
+  description:
+    "View, reschedule or cancel your table reservations at CuisineFood.",
 };
 
 /**
@@ -66,7 +69,11 @@ type RowWithTable = {
  */
 function toReservationRows(
   rows: RowWithTable[],
-  fmt: { date: Intl.DateTimeFormat; time: Intl.DateTimeFormat; bookedOn: Intl.DateTimeFormat }
+  fmt: {
+    date: Intl.DateTimeFormat;
+    time: Intl.DateTimeFormat;
+    bookedOn: Intl.DateTimeFormat;
+  },
 ): ReservationRow[] {
   const now = Date.now();
 

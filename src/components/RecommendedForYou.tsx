@@ -7,7 +7,10 @@ import Container from "@/components/Container";
 import { useCart } from "@/context/CartContext";
 import { toast } from "react-toastify";
 import { BsCartX } from "react-icons/bs";
-import type { RecommendedMenuItem, Recommendations } from "@/lib/recommendations";
+import type {
+  RecommendedMenuItem,
+  Recommendations,
+} from "@/lib/recommendations";
 
 // Same restaurant-hours logic as Weekly/Items/Signature — keep in sync if
 // you change one.
@@ -21,68 +24,86 @@ interface FoodCardProps {
   isKitchenOpen: boolean;
 }
 
-const FoodCard = memo(({ item, index, onAddToCart, isKitchenOpen }: FoodCardProps) => (
-  <Motion.article
-    className="bg-[#F8F8F8] overflow-hidden flex flex-col p-6"
-    initial={{ opacity: 0, y: 30 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5, delay: index * 0.1 }}
-    viewport={{ once: true }}
-    whileHover={{ scale: 1.02 }}
-    aria-label={`${item.title} - ${item.description}, $${item.price}`}
-  >
-    <div className="relative w-full 3xl:h-60 2xl:h-60 xl:h-40 lg:h-36 md:h-36 sm:h-36 overflow-hidden">
-      <Image
-        src={item.imageUrl || "https://placehold.co/400x240/CCCCCC/FFFFFF?text=Cuisine"}
-        alt={item.title}
-        fill
-        unoptimized
-        sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw"
-        className="object-cover"
-        onError={(e) => {
-          e.currentTarget.onerror = null;
-          e.currentTarget.src = "https://placehold.co/400x240/CCCCCC/FFFFFF?text=Image+Not+Found";
-        }}
-      />
-    </div>
+const FoodCard = memo(
+  ({ item, index, onAddToCart, isKitchenOpen }: FoodCardProps) => (
+    <Motion.article
+      className="bg-[#F8F8F8] overflow-hidden flex flex-col p-6"
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      viewport={{ once: true }}
+      whileHover={{ scale: 1.02 }}
+      aria-label={`${item.title} - ${item.description}, $${item.price}`}
+    >
+      <div className="relative w-full 3xl:h-60 2xl:h-60 xl:h-40 lg:h-36 md:h-36 sm:h-36 overflow-hidden">
+        <Image
+          src={
+            item.imageUrl ||
+            "https://placehold.co/400x240/CCCCCC/FFFFFF?text=CuisineFood"
+          }
+          alt={item.title}
+          fill
+          unoptimized
+          sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src =
+              "https://placehold.co/400x240/CCCCCC/FFFFFF?text=Image+Not+Found";
+          }}
+        />
+      </div>
 
-    <div className="flex flex-col flex-grow mt-6">
-      <h3 className="3xl:text-xl 2xl:text-xl xl:text-xl lg:text-[14px] md:text-[14px] sm:text-[14px] font-semibold text-[#2C6252] leading-tight mb-1">
-        {item.title}
-      </h3>
-      <p className="text-xs text-[#CCCCCC] mb-4 flex-grow mt-2 line-clamp-2">{item.description}</p>
-      <div className="flex justify-between items-center mt-auto">
-        <span className="3xl:text-3xl 2xl:text-3xl xl:text-3xl lg:text-xl font-bold text-[#2C6252]">
-          ${item.price.toFixed(2)}
-        </span>
-        <div className="relative inline-block group">
-          <button
-            disabled={!isKitchenOpen}
-            className={`p-2 flex items-center justify-center rounded-sm w-10 h-10 ${
-              isKitchenOpen
-                ? "bg-[#2C6252] text-white hover:bg-[#1F4B3C] cursor-pointer"
-                : "bg-gray-400 text-gray-200 cursor-not-allowed"
-            }`}
-            onClick={() => isKitchenOpen && onAddToCart(item)}
-            aria-label={isKitchenOpen ? `Add ${item.title} to cart` : `${item.title} unavailable`}
-            type="button"
-          >
-            {isKitchenOpen ? (
-              <Image src="/Path 2764.svg" alt="Add to cart icon" width={14} height={14} className="w-5 h-5" />
-            ) : (
-              <BsCartX size={20} className="animate-pulse" />
+      <div className="flex flex-col flex-grow mt-6">
+        <h3 className="3xl:text-xl 2xl:text-xl xl:text-xl lg:text-[14px] md:text-[14px] sm:text-[14px] font-semibold text-[#2C6252] leading-tight mb-1">
+          {item.title}
+        </h3>
+        <p className="text-xs text-[#CCCCCC] mb-4 flex-grow mt-2 line-clamp-2">
+          {item.description}
+        </p>
+        <div className="flex justify-between items-center mt-auto">
+          <span className="3xl:text-3xl 2xl:text-3xl xl:text-3xl lg:text-xl font-bold text-[#2C6252]">
+            ${item.price.toFixed(2)}
+          </span>
+          <div className="relative inline-block group">
+            <button
+              disabled={!isKitchenOpen}
+              className={`p-2 flex items-center justify-center rounded-sm w-10 h-10 ${
+                isKitchenOpen
+                  ? "bg-[#2C6252] text-white hover:bg-[#1F4B3C] cursor-pointer"
+                  : "bg-gray-400 text-gray-200 cursor-not-allowed"
+              }`}
+              onClick={() => isKitchenOpen && onAddToCart(item)}
+              aria-label={
+                isKitchenOpen
+                  ? `Add ${item.title} to cart`
+                  : `${item.title} unavailable`
+              }
+              type="button"
+            >
+              {isKitchenOpen ? (
+                <Image
+                  src="/Path 2764.svg"
+                  alt="Add to cart icon"
+                  width={14}
+                  height={14}
+                  className="w-5 h-5"
+                />
+              ) : (
+                <BsCartX size={20} className="animate-pulse" />
+              )}
+            </button>
+            {!isKitchenOpen && (
+              <div className="absolute -top-6 -left-28 px-3 py-1 bg-black text-white text-center text-[10px] sm:text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-sm whitespace-normal w-max max-w-[160px]">
+                Kitchen will open at {KITCHEN_OPEN_HOUR} AM
+              </div>
             )}
-          </button>
-          {!isKitchenOpen && (
-            <div className="absolute -top-6 -left-28 px-3 py-1 bg-black text-white text-center text-[10px] sm:text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-sm whitespace-normal w-max max-w-[160px]">
-              Kitchen will open at {KITCHEN_OPEN_HOUR} AM
-            </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  </Motion.article>
-));
+    </Motion.article>
+  ),
+);
 FoodCard.displayName = "RecommendedFoodCard";
 
 function Row({
@@ -132,13 +153,17 @@ const RecommendedForYou = () => {
     fetch("/api/recommendations")
       .then((res) => res.json())
       .then((json: Recommendations) => setData(json))
-      .catch(() => setData({ personalized: false, orderAgain: [], recommended: [] }));
+      .catch(() =>
+        setData({ personalized: false, orderAgain: [], recommended: [] }),
+      );
   }, []);
 
   useEffect(() => {
     const checkKitchenStatus = () => {
       const hours = new Date().getHours();
-      setIsKitchenOpen(hours >= KITCHEN_OPEN_HOUR && hours < KITCHEN_CLOSE_HOUR);
+      setIsKitchenOpen(
+        hours >= KITCHEN_OPEN_HOUR && hours < KITCHEN_CLOSE_HOUR,
+      );
     };
     checkKitchenStatus();
     const interval = setInterval(checkKitchenStatus, 60000);
@@ -147,7 +172,9 @@ const RecommendedForYou = () => {
 
   const handleAddToCart = useCallback(
     (item: RecommendedMenuItem) => {
-      const isAlreadyInCart = cartItems.some((cartItem) => cartItem.id === item.id);
+      const isAlreadyInCart = cartItems.some(
+        (cartItem) => cartItem.id === item.id,
+      );
       if (isAlreadyInCart) {
         toast.warning(`${item.title} is already in cart!`, {
           position: "top-center",
@@ -170,13 +197,16 @@ const RecommendedForYou = () => {
         hideProgressBar: true,
       });
     },
-    [addToCart, cartItems]
+    [addToCart, cartItems],
   );
 
   // Nothing to show yet (still loading) or genuinely nothing to recommend
   // (e.g. brand-new restaurant with zero orders ever placed) — don't render
   // an empty/awkward section either way.
-  if (!data || (data.orderAgain.length === 0 && data.recommended.length === 0)) {
+  if (
+    !data ||
+    (data.orderAgain.length === 0 && data.recommended.length === 0)
+  ) {
     return null;
   }
 
@@ -194,7 +224,9 @@ const RecommendedForYou = () => {
             />
           )}
           <Row
-            title={data.personalized ? "Recommended For You" : "Popular Right Now"}
+            title={
+              data.personalized ? "Recommended For You" : "Popular Right Now"
+            }
             subtitle={
               data.personalized
                 ? "Picked based on what customers like you order"

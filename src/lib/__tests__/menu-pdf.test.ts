@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import sharp from "sharp";
-import { buildMenuPdf, wrap, type MenuPdfData, type MenuPdfItem } from "@/lib/menu-pdf";
+import {
+  buildMenuPdf,
+  wrap,
+  type MenuPdfData,
+  type MenuPdfItem,
+} from "@/lib/menu-pdf";
 
 // PDF বানানো (ফন্ট parse + embed) CPU-ভারী: local-এ ~১s, ধীর CI runner-এ কয়েক গুণ। vitest-এর
 // ডিফল্ট ৫s সেখানে অকারণে ফেল করায় (GitHub Actions-এ একবার করেছেও) — তাই এই ফাইলে সীমা ২০s।
@@ -19,7 +24,7 @@ const item = (over: Partial<MenuPdfItem> = {}): MenuPdfItem => ({
 });
 
 const base = (over: Partial<MenuPdfData> = {}): MenuPdfData => ({
-  restaurantName: "Cuisine",
+  restaurantName: "CuisineFood",
   address: "2454 Onk Drive, Paris, France",
   hoursLabel: "10:00 AM \u2013 10:00 PM",
   qrUrl: "https://example.com/menu?utm_source=menu_pdf",
@@ -28,15 +33,24 @@ const base = (over: Partial<MenuPdfData> = {}): MenuPdfData => ({
   currency: "USD",
   currencyMinorUnits: 2,
   taxNote: "Prices exclude VAT (5%), added at checkout.",
-  categories: [{ name: "Signature", items: [item(), item({ title: "Pasta" })] }],
+  categories: [
+    { name: "Signature", items: [item(), item({ title: "Pasta" })] },
+  ],
   ...over,
 });
 
 const jpeg = async () =>
   new Uint8Array(
-    await sharp({ create: { width: 320, height: 320, channels: 3, background: { r: 255, g: 148, b: 64 } } })
+    await sharp({
+      create: {
+        width: 320,
+        height: 320,
+        channels: 3,
+        background: { r: 255, g: 148, b: 64 },
+      },
+    })
       .jpeg()
-      .toBuffer()
+      .toBuffer(),
   );
 
 const text = (bytes: Uint8Array) => Buffer.from(bytes).toString("latin1");
@@ -51,12 +65,16 @@ describe("buildMenuPdf", () => {
     const { width, height } = doc.getPage(0).getSize();
     expect(Math.round(width)).toBe(595);
     expect(Math.round(height)).toBe(842);
-    expect(doc.getTitle()).toBe("Cuisine Menu");
+    expect(doc.getTitle()).toBe("CuisineFood Menu");
   });
 
   it("flows a long menu onto more pages instead of clipping it", async () => {
-    const many = Array.from({ length: 60 }, (_, i) => item({ title: `Dish ${i + 1}` }));
-    const bytes = await buildMenuPdf(base({ categories: [{ name: "Everything", items: many }] }));
+    const many = Array.from({ length: 60 }, (_, i) =>
+      item({ title: `Dish ${i + 1}` }),
+    );
+    const bytes = await buildMenuPdf(
+      base({ categories: [{ name: "Everything", items: many }] }),
+    );
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(2);
   });
 
@@ -67,10 +85,17 @@ describe("buildMenuPdf", () => {
         categories: [
           {
             name: "\u09AC\u09BE\u0982\u09B2\u09BE \u0996\u09BE\u09AC\u09BE\u09B0",
-            items: [item({ title: "\u09AC\u09BF\u09B0\u09BF\u09AF\u09BC\u09BE\u09A8\u09BF \uD83C\uDF5B", description: "\u0985\u09A8\u09C1\u09AC\u09BE\u09A6 \uD83D\uDE00" })],
+            items: [
+              item({
+                title:
+                  "\u09AC\u09BF\u09B0\u09BF\u09AF\u09BC\u09BE\u09A8\u09BF \uD83C\uDF5B",
+                description:
+                  "\u0985\u09A8\u09C1\u09AC\u09BE\u09A6 \uD83D\uDE00",
+              }),
+            ],
           },
         ],
-      })
+      }),
     );
     expect(text(bytes).startsWith("%PDF-")).toBe(true);
   });
@@ -84,18 +109,28 @@ describe("buildMenuPdf", () => {
             items: [
               item({ description: "" }),
               item({ title: "X".repeat(300), description: "Y".repeat(300) }),
-              item({ price: 8, originalPrice: 10, badge: "20% OFF", foodStatus: "Veg", calories: 420 }),
+              item({
+                price: 8,
+                originalPrice: 10,
+                badge: "20% OFF",
+                foodStatus: "Veg",
+                calories: 420,
+              }),
             ],
           },
         ],
-      })
+      }),
     );
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(1);
+    expect(
+      (await PDFDocument.load(bytes)).getPageCount(),
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("does not print a phone line when none is configured", async () => {
     // placeholder নম্বর (\"+0123-456-789\") ছাপা গ্রাহকের হাতে যাবে — তাই ফাঁকা হলে লাইনটাই নেই।
-    const doc = await PDFDocument.load(await buildMenuPdf(base({ phone: undefined })));
+    const doc = await PDFDocument.load(
+      await buildMenuPdf(base({ phone: undefined })),
+    );
     expect(doc.getPageCount()).toBe(1);
   });
 });
@@ -117,15 +152,29 @@ describe("buildMenuPdf with photos", () => {
 
   it("skips corrupt photo bytes instead of failing, and draws the category without a photo", async () => {
     const bytes = await buildMenuPdf(
-      base({ categories: [{ name: "Broken", items: [item()], photos: [new Uint8Array([1, 2, 3, 4])] }] })
+      base({
+        categories: [
+          {
+            name: "Broken",
+            items: [item()],
+            photos: [new Uint8Array([1, 2, 3, 4])],
+          },
+        ],
+      }),
     );
     expect(text(bytes).startsWith("%PDF-")).toBe(true);
     expect(text(bytes).match(/\/Subtype\s*\/Image/g)).toBeNull();
   });
 
   it("flows a long photo category over several pages without clipping", async () => {
-    const many = Array.from({ length: 30 }, (_, i) => item({ title: `Dish ${i + 1}` }));
-    const bytes = await buildMenuPdf(base({ categories: [{ name: "Big", items: many, photos: [await jpeg()] }] }));
+    const many = Array.from({ length: 30 }, (_, i) =>
+      item({ title: `Dish ${i + 1}` }),
+    );
+    const bytes = await buildMenuPdf(
+      base({
+        categories: [{ name: "Big", items: many, photos: [await jpeg()] }],
+      }),
+    );
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1);
   });
 });
@@ -137,6 +186,7 @@ describe("wrap", () => {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const lines = wrap("short " + "W".repeat(120) + " tail", font, 10, 100);
     expect(lines.length).toBeGreaterThan(2);
-    for (const l of lines) expect(font.widthOfTextAtSize(l, 10)).toBeLessThanOrEqual(100);
+    for (const l of lines)
+      expect(font.widthOfTextAtSize(l, 10)).toBeLessThanOrEqual(100);
   });
 });

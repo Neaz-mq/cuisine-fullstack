@@ -1,7 +1,7 @@
 /**
  * src/lib/ai-assistant/core.ts
  *
- * The customer AI assistant ("Ask Cuisine AI") — everything that doesn't
+ * The customer AI assistant ("Ask CuisineFood AI") — everything that doesn't
  * touch the database or the network, so it can be unit-tested:
  *
  *   • rankDishes()      — picks the dishes most relevant to a question, so
@@ -114,7 +114,16 @@ export function isBangla(text: string): boolean {
  * lot of customers type in it.
  */
 const SYNONYMS: Record<string, string[]> = {
-  veg: ["veg", "vegetarian", "veggie", "vegan", "plant", "নিরামিষ", "সবজি", "ভেজ"],
+  veg: [
+    "veg",
+    "vegetarian",
+    "veggie",
+    "vegan",
+    "plant",
+    "নিরামিষ",
+    "সবজি",
+    "ভেজ",
+  ],
   spicy: ["spicy", "hot", "chili", "chilli", "ঝাল", "মশলাদার"],
   chicken: ["chicken", "মুরগি", "চিকেন"],
   beef: ["beef", "গরু", "বিফ"],
@@ -122,7 +131,18 @@ const SYNONYMS: Record<string, string[]> = {
   fish: ["fish", "seafood", "prawn", "shrimp", "মাছ", "চিংড়ি"],
   rice: ["rice", "biryani", "ভাত", "বিরিয়ানি", "পোলাও"],
   dessert: ["dessert", "sweet", "cake", "ice", "মিষ্টি", "ডেজার্ট"],
-  drink: ["drink", "juice", "coffee", "tea", "shake", "lassi", "পানীয়", "জুস", "কফি", "চা"],
+  drink: [
+    "drink",
+    "juice",
+    "coffee",
+    "tea",
+    "shake",
+    "lassi",
+    "পানীয়",
+    "জুস",
+    "কফি",
+    "চা",
+  ],
   burger: ["burger", "বার্গার"],
   pizza: ["pizza", "পিজ্জা"],
   pasta: ["pasta", "noodle", "noodles", "পাস্তা", "নুডলস"],
@@ -135,8 +155,8 @@ const SYNONYMS: Record<string, string[]> = {
 
 const STOP_WORDS = new Set(
   "a an the and or for with me i my we you some any something what which is are to of in on under below less than about want need give show suggest recommend please can could would like have has get food dish dishes item items today now this that it".split(
-    " "
-  )
+    " ",
+  ),
 );
 
 function tokenize(text: string): string[] {
@@ -153,7 +173,8 @@ function expand(words: string[]): string[] {
     out.add(word);
     if (word.length < 3) continue;
     for (const group of Object.values(SYNONYMS)) {
-      if (group.some((g) => word.startsWith(g) || g.startsWith(word))) group.forEach((g) => out.add(g));
+      if (group.some((g) => word.startsWith(g) || g.startsWith(word)))
+        group.forEach((g) => out.add(g));
     }
   }
   return [...out];
@@ -170,9 +191,13 @@ function normalizeDigits(text: string): string {
  */
 export function parseBudget(text: string): number | null {
   const t = normalizeDigits(text.toLowerCase());
-  const english = t.match(/(?:under|below|less than|within|max(?:imum)?|budget(?: of)?|up to|upto)\s*[^\d]{0,4}(\d+(?:\.\d+)?)/);
+  const english = t.match(
+    /(?:under|below|less than|within|max(?:imum)?|budget(?: of)?|up to|upto)\s*[^\d]{0,4}(\d+(?:\.\d+)?)/,
+  );
   if (english) return Number(english[1]);
-  const bangla = t.match(/(\d+(?:\.\d+)?)\s*(?:টাকা|tk|taka|\$)?\s*(?:র|এর)?\s*(?:মধ্যে|ভিতরে|নিচে|কমে)/);
+  const bangla = t.match(
+    /(\d+(?:\.\d+)?)\s*(?:টাকা|tk|taka|\$)?\s*(?:র|এর)?\s*(?:মধ্যে|ভিতরে|নিচে|কমে)/,
+  );
   if (bangla) return Number(bangla[1]);
   return null;
 }
@@ -196,20 +221,27 @@ function dishScore(dish: AssistantDish, words: string[]): number {
 }
 
 function popularity(dish: AssistantDish): number {
-  return dish.soldRecently + (dish.rating ?? 0) * Math.min(dish.reviewCount, 10);
+  return (
+    dish.soldRecently + (dish.rating ?? 0) * Math.min(dish.reviewCount, 10)
+  );
 }
 
 /**
  * Dishes ordered by how well they fit the question (then by popularity),
  * with any price ceiling applied. Returns every dish — callers slice.
  */
-export function rankDishes(dishes: AssistantDish[], question: string): { dish: AssistantDish; score: number }[] {
+export function rankDishes(
+  dishes: AssistantDish[],
+  question: string,
+): { dish: AssistantDish; score: number }[] {
   const words = expand(tokenize(question));
   const budget = parseBudget(question);
   return dishes
     .filter((dish) => budget === null || dish.price <= budget)
     .map((dish) => ({ dish, score: dishScore(dish, words) }))
-    .sort((a, b) => b.score - a.score || popularity(b.dish) - popularity(a.dish));
+    .sort(
+      (a, b) => b.score - a.score || popularity(b.dish) - popularity(a.dish),
+    );
 }
 
 /**
@@ -217,7 +249,11 @@ export function rankDishes(dishes: AssistantDish[], question: string): { dish: A
  * one is cut to the most relevant plus the most popular, so a request
  * stays around 2–3K tokens (Groq's free tier allows ~8K per minute).
  */
-export function dishesForPrompt(dishes: AssistantDish[], question: string, limit = 40): AssistantDish[] {
+export function dishesForPrompt(
+  dishes: AssistantDish[],
+  question: string,
+  limit = 40,
+): AssistantDish[] {
   if (dishes.length <= limit) {
     // Still ordered by relevance — models lean towards what they read first.
     const ranked = rankDishes(dishes, question).map((r) => r.dish);
@@ -225,7 +261,10 @@ export function dishesForPrompt(dishes: AssistantDish[], question: string, limit
     return [...ranked, ...rest];
   }
   const ranked = rankDishes(dishes, question);
-  const relevant = ranked.filter((r) => r.score > 0).slice(0, 25).map((r) => r.dish);
+  const relevant = ranked
+    .filter((r) => r.score > 0)
+    .slice(0, 25)
+    .map((r) => r.dish);
   const popular = [...dishes].sort((a, b) => popularity(b) - popularity(a));
   const picked = new Set(relevant);
   for (const dish of popular) {
@@ -239,23 +278,34 @@ export function dishesForPrompt(dishes: AssistantDish[], question: string, limit
 
 function dishLine(dish: AssistantDish): string {
   const parts = [`[${dish.id}] ${dish.title}`, dish.category, dish.priceLabel];
-  if (dish.oldPriceLabel) parts.push(`was ${dish.oldPriceLabel}${dish.badge ? `, ${dish.badge}` : ""}`);
+  if (dish.oldPriceLabel)
+    parts.push(
+      `was ${dish.oldPriceLabel}${dish.badge ? `, ${dish.badge}` : ""}`,
+    );
   if (dish.foodStatus) parts.push(dish.foodStatus);
-  if (dish.tags.length) parts.push(`ingredients: ${dish.tags.slice(0, 6).join(", ")}`);
+  if (dish.tags.length)
+    parts.push(`ingredients: ${dish.tags.slice(0, 6).join(", ")}`);
   const nutrition = [
     dish.calories !== null ? `${dish.calories} kcal` : null,
     dish.proteinGrams !== null ? `${dish.proteinGrams}g protein` : null,
   ].filter(Boolean);
   if (nutrition.length) parts.push(nutrition.join(", "));
   if (dish.prepTimeMinutes) parts.push(`${dish.prepTimeMinutes} min`);
-  if (dish.rating !== null && dish.reviewCount > 0) parts.push(`rated ${dish.rating.toFixed(1)}/5 (${dish.reviewCount})`);
+  if (dish.rating !== null && dish.reviewCount > 0)
+    parts.push(`rated ${dish.rating.toFixed(1)}/5 (${dish.reviewCount})`);
   if (dish.soldRecently > 0) parts.push(`${dish.soldRecently} sold this month`);
   const description = dish.description.replace(/\s+/g, " ").trim();
-  if (description) parts.push(description.length > 90 ? `${description.slice(0, 87)}…` : description);
+  if (description)
+    parts.push(
+      description.length > 90 ? `${description.slice(0, 87)}…` : description,
+    );
   return parts.join(" | ");
 }
 
-export function buildSystemPrompt(context: AssistantContext, dishes: AssistantDish[]): string {
+export function buildSystemPrompt(
+  context: AssistantContext,
+  dishes: AssistantDish[],
+): string {
   const user = context.user;
   const facts = [
     `Now: ${context.nowLabel}. Kitchen is ${context.kitchenOpen ? "OPEN" : "CLOSED"} (hours ${context.hoursLabel}).`,
@@ -265,13 +315,17 @@ export function buildSystemPrompt(context: AssistantContext, dishes: AssistantDi
     "MENU (only these dishes exist; [id] is for dishIds):",
     ...dishes.map(dishLine),
     "",
-    context.coupons.length ? "COUPON CODES customers can use at checkout:" : "No coupon codes are running right now.",
+    context.coupons.length
+      ? "COUPON CODES customers can use at checkout:"
+      : "No coupon codes are running right now.",
     ...context.coupons,
     "",
     user
       ? [
           `CUSTOMER: signed in as ${user.firstName}. Loyalty: ${user.points} points, ${user.tier} tier` +
-            (user.nextTier ? ` (${user.pointsToNextTier} points to ${user.nextTier})` : " (top tier)") +
+            (user.nextTier
+              ? ` (${user.pointsToNextTier} points to ${user.nextTier})`
+              : " (top tier)") +
             `. Tier perks: ${user.tierPerks}. ${user.earnRule ? `Earning: ${user.earnRule}.` : ""} Redeeming: ${user.redeemRule}.`,
           user.orders.length
             ? `Their recent orders:\n${user.orders.map((o) => `- ${o.label}: ${o.status}, placed ${o.placedAt}, ${o.items}, ${o.total}`).join("\n")}`
@@ -283,7 +337,7 @@ export function buildSystemPrompt(context: AssistantContext, dishes: AssistantDi
       : "Their cart is empty.",
   ].join("\n");
 
-  return `You are "Cuisine AI", the friendly food assistant on the Cuisine restaurant website. You help customers choose dishes, explain the menu, offers and loyalty points, and check their orders.
+  return `You are "CuisineFood AI", the friendly food assistant on the CuisineFood restaurant website. You help customers choose dishes, explain the menu, offers and loyalty points, and check their orders.
 
 RULES
 - Use ONLY the facts below. Never invent dishes, prices, ingredients, offers, times or order details. If something isn't listed, say you don't know and suggest calling the restaurant.
@@ -318,7 +372,10 @@ export interface ParsedReply {
  * the caller then tries another model or the basic answer. Dish ids not
  * on the menu are dropped (a model can invent one).
  */
-export function parseModelReply(raw: string | null | undefined, knownIds: Set<string>): ParsedReply | null {
+export function parseModelReply(
+  raw: string | null | undefined,
+  knownIds: Set<string>,
+): ParsedReply | null {
   if (!raw) return null;
   let data: unknown;
   try {
@@ -338,11 +395,19 @@ export function parseModelReply(raw: string | null | undefined, knownIds: Set<st
   if (!reply) return null;
 
   const dishIds = Array.isArray(obj.dishIds)
-    ? [...new Set(obj.dishIds.filter((id): id is string => typeof id === "string" && knownIds.has(id)))].slice(0, 4)
+    ? [
+        ...new Set(
+          obj.dishIds.filter(
+            (id): id is string => typeof id === "string" && knownIds.has(id),
+          ),
+        ),
+      ].slice(0, 4)
     : [];
   const suggestions = Array.isArray(obj.suggestions)
     ? obj.suggestions
-        .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        .filter(
+          (s): s is string => typeof s === "string" && s.trim().length > 0,
+        )
         .map((s) => s.trim().slice(0, 60))
         .slice(0, 3)
     : [];
@@ -358,9 +423,11 @@ export function parseModelReply(raw: string | null | undefined, knownIds: Set<st
 // ── The no-AI answer ───────────────────────────────────────────────────
 
 const INTENTS = {
-  offers: /offer|deal|discount|coupon|promo|code|sale|অফার|ছাড়|ডিসকাউন্ট|কুপন/i,
+  offers:
+    /offer|deal|discount|coupon|promo|code|sale|অফার|ছাড়|ডিসকাউন্ট|কুপন/i,
   hours: /open|close|hour|timing|time|খোলা|বন্ধ|সময়/i,
-  order: /my order|order status|track|where('?s| is) my|আমার অর্ডার|অর্ডার কোথায়|অর্ডারের অবস্থা/i,
+  order:
+    /my order|order status|track|where('?s| is) my|আমার অর্ডার|অর্ডার কোথায়|অর্ডারের অবস্থা/i,
   delivery: /deliver|delivery fee|delivery charge|shipping|ডেলিভারি/i,
   points: /point|loyalty|reward|tier|পয়েন্ট|লয়্যালটি|রিওয়ার্ড/i,
   hello: /^(hi|hello|hey|salam|assalamu|হাই|হ্যালো|আসসালামু)/i,
@@ -377,11 +444,24 @@ const INTENTS = {
  * Points only for signed-in customers — a guest asking "how do points
  * work?" gets the model's friendlier explanation.
  */
-export function directIntent(question: string, signedIn: boolean): "order" | "points" | "delivery" | null {
-  if (INTENTS.order.test(question) && !INTENTS.offers.test(question)) return "order";
+export function directIntent(
+  question: string,
+  signedIn: boolean,
+): "order" | "points" | "delivery" | null {
+  if (INTENTS.order.test(question) && !INTENTS.offers.test(question))
+    return "order";
   // Fees are a table of exact numbers — read them out, don't paraphrase.
-  if (INTENTS.delivery.test(question) && /fee|charge|cost|price|how much|কত|চার্জ|খরচ/i.test(question)) return "delivery";
-  if (signedIn && INTENTS.points.test(question) && /\b(my|i have|do i)\b|আমার|কত/i.test(question)) return "points";
+  if (
+    INTENTS.delivery.test(question) &&
+    /fee|charge|cost|price|how much|কত|চার্জ|খরচ/i.test(question)
+  )
+    return "delivery";
+  if (
+    signedIn &&
+    INTENTS.points.test(question) &&
+    /\b(my|i have|do i)\b|আমার|কত/i.test(question)
+  )
+    return "points";
   return null;
 }
 
@@ -389,10 +469,15 @@ export function directIntent(question: string, signedIn: boolean): "order" | "po
  * A helpful answer without the model: menu search, offers, hours, orders,
  * points. Used when every model is busy or the free quota ran out.
  */
-export function basicReply(context: AssistantContext, question: string): Omit<AssistantAnswer, "kitchenOpen" | "source"> {
+export function basicReply(
+  context: AssistantContext,
+  question: string,
+): Omit<AssistantAnswer, "kitchenOpen" | "source"> {
   const bn = isBangla(question);
   const t = (en: string, bnText: string) => (bn ? bnText : en);
-  const popular = [...context.dishes].sort((a, b) => popularity(b) - popularity(a));
+  const popular = [...context.dishes].sort(
+    (a, b) => popularity(b) - popularity(a),
+  );
   const defaultSuggestions = bn
     ? ["আজ কী ভালো?", "চলমান অফার কী?", "ঝাল কিছু সাজেস্ট করো"]
     : ["What's popular today?", "Any offers right now?", "Something spicy"];
@@ -402,7 +487,7 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
       return {
         reply: t(
           "Sign in to see your orders here. As a guest, you can open the tracking link from your order confirmation.",
-          "আপনার অর্ডার দেখতে sign in করুন। Guest হলে অর্ডার confirmation-এর tracking link খুলুন।"
+          "আপনার অর্ডার দেখতে sign in করুন। Guest হলে অর্ডার confirmation-এর tracking link খুলুন।",
         ),
         dishes: [],
         suggestions: defaultSuggestions,
@@ -414,11 +499,15 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
       reply: orders.length
         ? t(
             `Your latest order ${orders[0].label} is ${orders[0].status}.${orders.length > 1 ? " Your recent orders are below." : ""} ${
-              /delivered|cancelled/i.test(orders[0].status) ? "Tap an order to see its details." : "Tap it to track it live."
+              /delivered|cancelled/i.test(orders[0].status)
+                ? "Tap an order to see its details."
+                : "Tap it to track it live."
             }`,
             `আপনার সর্বশেষ অর্ডার ${orders[0].label} এখন ${orders[0].status} অবস্থায় আছে। ${
-              /delivered|cancelled/i.test(orders[0].status) ? "বিস্তারিত দেখতে ট্যাপ করুন।" : "Live track করতে ট্যাপ করুন।"
-            }`
+              /delivered|cancelled/i.test(orders[0].status)
+                ? "বিস্তারিত দেখতে ট্যাপ করুন।"
+                : "Live track করতে ট্যাপ করুন।"
+            }`,
           )
         : t("You don't have any orders yet.", "আপনার এখনো কোনো অর্ডার নেই।"),
       dishes: orders.length ? [] : popular.slice(0, 3),
@@ -433,9 +522,12 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
       reply: user
         ? t(
             `You have ${user.points} points (${user.tier} tier)${user.nextTier ? ` — ${user.pointsToNextTier} more to reach ${user.nextTier}` : ""}. ${user.redeemRule}.`,
-            `আপনার ${user.points} পয়েন্ট আছে (${user.tier} tier)${user.nextTier ? ` — ${user.nextTier}-এ যেতে আর ${user.pointsToNextTier} পয়েন্ট লাগবে` : ""}। ${user.redeemRuleBn ?? user.redeemRule}।`
+            `আপনার ${user.points} পয়েন্ট আছে (${user.tier} tier)${user.nextTier ? ` — ${user.nextTier}-এ যেতে আর ${user.pointsToNextTier} পয়েন্ট লাগবে` : ""}। ${user.redeemRuleBn ?? user.redeemRule}।`,
           )
-        : t("Sign in to see your points. Every order earns points you can spend at checkout.", "পয়েন্ট দেখতে sign in করুন। প্রতিটা অর্ডারে পয়েন্ট জমে, checkout-এ খরচ করা যায়।"),
+        : t(
+            "Sign in to see your points. Every order earns points you can spend at checkout.",
+            "পয়েন্ট দেখতে sign in করুন। প্রতিটা অর্ডারে পয়েন্ট জমে, checkout-এ খরচ করা যায়।",
+          ),
       dishes: [],
       suggestions: defaultSuggestions,
       orders: [],
@@ -443,13 +535,21 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
   }
 
   if (INTENTS.offers.test(question)) {
-    const offerDishes = context.dishes.filter((d) => d.oldPriceLabel || d.badge).slice(0, 4);
+    const offerDishes = context.dishes
+      .filter((d) => d.oldPriceLabel || d.badge)
+      .slice(0, 4);
     const codes = context.coupons.slice(0, 3).join(" · ");
     return {
       reply: codes
-        ? t(`Codes you can use at checkout: ${codes}`, `Checkout-এ ব্যবহার করা যায়: ${codes}`)
+        ? t(
+            `Codes you can use at checkout: ${codes}`,
+            `Checkout-এ ব্যবহার করা যায়: ${codes}`,
+          )
         : offerDishes.length
-          ? t("These dishes have a discount right now.", "এই খাবারগুলোতে এখন ছাড় চলছে।")
+          ? t(
+              "These dishes have a discount right now.",
+              "এই খাবারগুলোতে এখন ছাড় চলছে।",
+            )
           : t("No offers are running right now.", "এখন কোনো অফার চলছে না।"),
       dishes: offerDishes,
       suggestions: defaultSuggestions,
@@ -461,11 +561,14 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
     const d = context.delivery;
     let reply: string;
     if (!d) {
-      reply = t(`Delivery: ${context.deliveryLabel}`, `ডেলিভারি: ${context.deliveryLabel}`);
+      reply = t(
+        `Delivery: ${context.deliveryLabel}`,
+        `ডেলিভারি: ${context.deliveryLabel}`,
+      );
     } else if (d.mode === "FLAT") {
       reply = t(
         `Delivery is a flat ${d.flatFee} anywhere we deliver. Dine-in has no delivery fee.`,
-        `ডেলিভারি চার্জ সব জায়গায় ${d.flatFee}। Dine-in-এ কোনো ডেলিভারি চার্জ নেই।`
+        `ডেলিভারি চার্জ সব জায়গায় ${d.flatFee}। Dine-in-এ কোনো ডেলিভারি চার্জ নেই।`,
       );
     } else {
       const table = d.zones.map((z) => `${z.label}: ${z.fee}`).join("\n");
@@ -474,8 +577,10 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
           d.maxKm !== null ? `\nWe don't deliver beyond ${d.maxKm} km.` : ""
         }\nYour exact fee shows at checkout once you enter your address. Dine-in has no delivery fee.`,
         `দূরত্ব অনুযায়ী ডেলিভারি চার্জ:\n${table}${
-          d.maxKm !== null ? `\n${d.maxKm} km-এর বেশি দূরে ডেলিভারি হয় না।` : ""
-        }\nঠিকানা দিলে checkout-এ আপনার সঠিক চার্জ দেখাবে। Dine-in-এ কোনো ডেলিভারি চার্জ নেই।`
+          d.maxKm !== null
+            ? `\n${d.maxKm} km-এর বেশি দূরে ডেলিভারি হয় না।`
+            : ""
+        }\nঠিকানা দিলে checkout-এ আপনার সঠিক চার্জ দেখাবে। Dine-in-এ কোনো ডেলিভারি চার্জ নেই।`,
       );
     }
     return {
@@ -490,7 +595,7 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
     return {
       reply: t(
         `We're ${context.kitchenOpen ? "open now" : "closed right now"}. Kitchen hours: ${context.hoursLabel}.`,
-        `আমরা এখন ${context.kitchenOpen ? "খোলা" : "বন্ধ"}। রান্নাঘরের সময়: ${context.hoursLabel}।`
+        `আমরা এখন ${context.kitchenOpen ? "খোলা" : "বন্ধ"}। রান্নাঘরের সময়: ${context.hoursLabel}।`,
       ),
       dishes: [],
       suggestions: defaultSuggestions,
@@ -499,24 +604,40 @@ export function basicReply(context: AssistantContext, question: string): Omit<As
   }
 
   const ranked = rankDishes(context.dishes, question);
-  const matches = ranked.filter((r) => r.score > 0).slice(0, 4).map((r) => r.dish);
+  const matches = ranked
+    .filter((r) => r.score > 0)
+    .slice(0, 4)
+    .map((r) => r.dish);
   const budget = parseBudget(question);
   if (matches.length) {
     return {
-      reply: t("Here's what I found on the menu for you.", "মেনু থেকে আপনার জন্য এগুলো পেলাম।"),
+      reply: t(
+        "Here's what I found on the menu for you.",
+        "মেনু থেকে আপনার জন্য এগুলো পেলাম।",
+      ),
       dishes: matches,
       suggestions: defaultSuggestions,
       orders: [],
     };
   }
-  const fallbackDishes = (budget !== null ? ranked.map((r) => r.dish) : popular).slice(0, 4);
+  const fallbackDishes = (
+    budget !== null ? ranked.map((r) => r.dish) : popular
+  ).slice(0, 4);
   return {
-    reply:
-      INTENTS.hello.test(question.trim())
-        ? t("Hi! I can help you pick a dish, find offers or check your order. Here are our favourites:", "হ্যালো! খাবার বাছাই, অফার বা অর্ডার — যেকোনো কিছুতে সাহায্য করতে পারি। আমাদের জনপ্রিয় খাবার:")
-        : fallbackDishes.length
-          ? t("I couldn't find an exact match, but customers love these:", "হুবহু মিল পাইনি, তবে এগুলো সবার প্রিয়:")
-          : t("Sorry, nothing on the menu fits that right now.", "দুঃখিত, এখন মেনুতে এমন কিছু নেই।"),
+    reply: INTENTS.hello.test(question.trim())
+      ? t(
+          "Hi! I can help you pick a dish, find offers or check your order. Here are our favourites:",
+          "হ্যালো! খাবার বাছাই, অফার বা অর্ডার — যেকোনো কিছুতে সাহায্য করতে পারি। আমাদের জনপ্রিয় খাবার:",
+        )
+      : fallbackDishes.length
+        ? t(
+            "I couldn't find an exact match, but customers love these:",
+            "হুবহু মিল পাইনি, তবে এগুলো সবার প্রিয়:",
+          )
+        : t(
+            "Sorry, nothing on the menu fits that right now.",
+            "দুঃখিত, এখন মেনুতে এমন কিছু নেই।",
+          ),
     dishes: fallbackDishes,
     suggestions: defaultSuggestions,
     orders: [],

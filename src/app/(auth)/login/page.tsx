@@ -18,8 +18,10 @@ import Image from "next/image";
 /** What to say for each two-step sign-in answer from auth.ts. */
 const TWO_STEP_MESSAGES: Record<string, string> = {
   "2fa_invalid": "That code isn't right. Please check the email and try again.",
-  "2fa_expired": "That code has expired or had too many tries. Tap “Send a new code”.",
-  "2fa_send_failed": "We couldn't send your sign-in code. Please try again in a minute.",
+  "2fa_expired":
+    "That code has expired or had too many tries. Tap “Send a new code”.",
+  "2fa_send_failed":
+    "We couldn't send your sign-in code. Please try again in a minute.",
 };
 
 export default function LoginPage() {
@@ -57,7 +59,9 @@ export default function LoginPage() {
       if (result?.code === "2fa_required") {
         setStep("code");
         setCode("");
-        setNotice(`We emailed a 6-digit code to ${form.email.trim()}. Enter it to finish signing in.`);
+        setNotice(
+          `We emailed a 6-digit code to ${form.email.trim()}. Enter it to finish signing in.`,
+        );
         return;
       }
       if (result?.code && result.code in TWO_STEP_MESSAGES) {
@@ -153,13 +157,13 @@ export default function LoginPage() {
           >
             <Image
               src="/logo.svg"
-              alt="Cuisine Logo"
+              alt="CuisineFood Logo"
               width={40}
               height={40}
               className="w-9 h-9 xl:w-10 xl:h-10"
             />
             <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
-              Cuisine
+              CuisineFood
             </span>
           </Link>
 
@@ -171,7 +175,7 @@ export default function LoginPage() {
             </h2>
             <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
               Sign in to track your orders, save your favorite dishes, and get
-              personalized offers from Cuisine.
+              personalized offers from CuisineFood.
             </p>
 
             <div className="mt-6 xl:mt-8 grid grid-cols-3 gap-2 xl:gap-[13.45px] w-full">
@@ -277,7 +281,9 @@ export default function LoginPage() {
             {step === "code" ? (
               <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
                 {notice && (
-                  <p className="rounded-xl bg-[#F9F6F3] lg:bg-white p-3 font-sora text-[13px] leading-[160%] text-black/70">{notice}</p>
+                  <p className="rounded-xl bg-[#F9F6F3] lg:bg-white p-3 font-sora text-[13px] leading-[160%] text-black/70">
+                    {notice}
+                  </p>
                 )}
                 <div>
                   <label
@@ -334,87 +340,89 @@ export default function LoginPage() {
                 </button>
               </form>
             ) : (
-            /* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */
-            <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
-              <div>
-                {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
-                <label
-                  htmlFor="email"
-                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
-                >
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                {/* Input — Figma mobile: height 40px, radius 12, bg #F9F6F3,
+              /* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */
+              <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
+                <div>
+                  {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
+                  <label
+                    htmlFor="email"
+                    className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
+                  >
+                    Email Address <span className="text-red-500">*</span>
+                  </label>
+                  {/* Input — Figma mobile: height 40px, radius 12, bg #F9F6F3,
                     inner padding ~14px, Sora 14px */}
-                <input
-                  id="email"
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                  autoComplete="email"
-                  className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
-                >
-                  Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
                   <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    value={form.password}
+                    id="email"
+                    type="email"
+                    name="email"
+                    value={form.email}
                     onChange={handleChange}
                     required
-                    autoComplete="current-password"
-                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
-                    placeholder="Password"
+                    autoComplete="email"
+                    className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                    placeholder="you@example.com"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    aria-pressed={showPassword}
-                  >
-                    {showPassword ? (
-                      <svg
-                        className="w-[18px] h-[18px]"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.359 1.359a2.5 2.5 0 013.14 3.14l1.359 1.359a4 4 0 00-5.858-5.858z" />
-                        <path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z" />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="w-[18px] h-[18px]"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-                        <path
-                          fillRule="evenodd"
-                          d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.147.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    )}
-                  </button>
                 </div>
-              </div>
 
-              {/* Remember me + Forgot password — একই সারিতে, Figma design অনুযায়ী।
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block font-frank-ruhl font-medium text-[14px] leading-[160%] text-black mb-2"
+                  >
+                    Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      required
+                      autoComplete="current-password"
+                      className="w-full h-[40px] md:h-[50px] bg-[#F9F6F3] lg:bg-white border-0 lg:border lg:border-gray-200 px-3.5 pr-11 rounded-xl text-black placeholder-black/35 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2C6252]/30 transition-shadow"
+                      placeholder="Password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2C6252]/30"
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      aria-pressed={showPassword}
+                    >
+                      {showPassword ? (
+                        <svg
+                          className="w-[18px] h-[18px]"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.359 1.359a2.5 2.5 0 013.14 3.14l1.359 1.359a4 4 0 00-5.858-5.858z" />
+                          <path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-[18px] h-[18px]"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+                          <path
+                            fillRule="evenodd"
+                            d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.147.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember me + Forgot password — একই সারিতে, Figma design অনুযায়ী।
                   Figma mobile inspect: দুটোই Sora 400, 12px, LH 160%, Black/100।
                   "Remember me" block 117 = checkbox 20 + gap 8 + text 89,
                   "Forgot Password?" 109 → মোট 226px, 248px content-এ এক সারিতে বসে।
@@ -428,92 +436,92 @@ export default function LoginPage() {
                   min-w-0 সরানো + shrink-0: min-w-0 থাকলে label শূন্য পর্যন্ত shrink করে
                   আর ভেতরের nowrap text box ছাড়িয়ে link-এর উপর overlap করে।
                   flex-wrap শুধু safety net — স্বাভাবিক অবস্থায় এক সারিতেই থাকবে। */}
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                <label className="flex shrink-0 items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    name="remember"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <span
-                    className={`w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
-                      remember
-                        ? "bg-white border-black"
-                        : "bg-white border-black/25"
-                    }`}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                  <label className="flex shrink-0 items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      name="remember"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <span
+                      className={`w-5 h-5 flex-shrink-0 rounded-[6px] border flex items-center justify-center transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#2C6252]/40 ${
+                        remember
+                          ? "bg-white border-black"
+                          : "bg-white border-black/25"
+                      }`}
+                    >
+                      {remember && (
+                        <svg
+                          viewBox="0 0 12 12"
+                          className="w-3 h-3"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M2 6.2L4.5 8.7L10 3"
+                            stroke="#000000"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black whitespace-nowrap">
+                      Remember me
+                    </span>
+                  </label>
+
+                  <Link
+                    href="/forgot-password"
+                    className="shrink-0 font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black hover:underline whitespace-nowrap"
                   >
-                    {remember && (
-                      <svg
-                        viewBox="0 0 12 12"
-                        className="w-3 h-3"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M2 6.2L4.5 8.7L10 3"
-                          stroke="#000000"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black whitespace-nowrap">
-                    Remember me
-                  </span>
-                </label>
+                    Forgot Password?
+                  </Link>
+                </div>
 
-                <Link
-                  href="/forgot-password"
-                  className="shrink-0 font-sora font-normal text-[12px] xl:text-[14px] leading-[160%] text-black hover:underline whitespace-nowrap"
-                >
-                  Forgot Password?
-                </Link>
-              </div>
-
-              {/* Login — Figma mobile: height 48, radius 100, gradient #FF9540 → #FF70C6,
+                {/* Login — Figma mobile: height 48, radius 100, gradient #FF9540 → #FF70C6,
                   label #F9F6F3 (pure white নয়), Sora 600 16px।
                   register page-এর Sign Up button-এর সাথে একদম identical। */}
-              <div className="pt-5 xl:pt-0">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  aria-busy={loading}
-                  className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {loading ? (
-                    <span className="flex items-center gap-2 md:gap-3">
-                      <svg
-                        className="animate-spin h-4 w-4"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                        />
-                      </svg>
-                      Logging in...
-                    </span>
-                  ) : (
-                    "Login"
-                  )}
-                </button>
-              </div>
-            </form>
+                <div className="pt-5 xl:pt-0">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    aria-busy={loading}
+                    className="w-full h-[48px] xl:h-[56px] px-4 md:px-6 flex items-center justify-center bg-gradient-to-r from-[#FF9540] to-[#FF70C6] text-[#F9F6F3] rounded-full font-sora font-semibold text-[16px] leading-[160%] hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {loading ? (
+                      <span className="flex items-center gap-2 md:gap-3">
+                        <svg
+                          className="animate-spin h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                          />
+                        </svg>
+                        Logging in...
+                      </span>
+                    ) : (
+                      "Login"
+                    )}
+                  </button>
+                </div>
+              </form>
             )}
 
             {/* Google — একই pill (48px mobile), Sora 600 16px at black/100 */}

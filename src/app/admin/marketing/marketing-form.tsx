@@ -52,10 +52,12 @@ export type OfferOption = {
   membersOnly: boolean;
 };
 
-const CARD = "flex min-w-0 flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]";
+const CARD =
+  "flex min-w-0 flex-col gap-6 rounded-[20px] bg-white p-4 min-[480px]:p-5 md:p-[30px]";
 const CARD_TITLE =
   "min-w-0 font-frank-ruhl text-[22px] font-semibold leading-tight text-black min-[480px]:text-[24px] min-[480px]:leading-none xl:text-[30px]";
-const SECTION_TITLE = "font-frank-ruhl text-[18px] font-medium leading-[1.6] text-black";
+const SECTION_TITLE =
+  "font-frank-ruhl text-[18px] font-medium leading-[1.6] text-black";
 const HELP = "mt-1.5 font-sora text-[12px] leading-[1.5] text-black/60";
 
 const GRADIENT = "bg-[linear-gradient(93.36deg,#FF9540_0%,#FF70C6_145.78%)]";
@@ -65,7 +67,9 @@ const LIMITS = { subject: 150, headline: 120, message: 5000, ctaText: 40 };
 function Counter({ value, max }: { value: string; max: number }) {
   const near = value.length > max * 0.9;
   return (
-    <span className={`font-sora text-[11px] ${near ? "text-[#D72A37]" : "text-black/50"}`}>
+    <span
+      className={`font-sora text-[11px] ${near ? "text-[#D72A37]" : "text-black/50"}`}
+    >
       {value.length}/{max}
     </span>
   );
@@ -109,9 +113,9 @@ export default function MarketingForm({
     setMessage(
       `Treat yourself: ${offer.title} is now ${offer.newPrice} instead of ${offer.oldPrice}.\n` +
         (offer.membersOnly
-          ? "This one is just for members — sign in to your Cuisine account when you order.\n"
+          ? "This one is just for members — sign in to your CuisineFood account when you order.\n"
           : "") +
-        "Order online in a few taps, or drop by and enjoy it fresh."
+        "Order online in a few taps, or drop by and enjoy it fresh.",
     );
     setCtaText("Order Now");
   };
@@ -125,12 +129,15 @@ export default function MarketingForm({
 
   // The text was written for a different dish than the card now shows.
   const textOffer = offers.find((o) => o.id === textOfferId) ?? null;
-  const mismatch = featured !== null && textOffer !== null && textOffer.id !== featured.id;
+  const mismatch =
+    featured !== null && textOffer !== null && textOffer.id !== featured.id;
 
-  const own = <T,>(setter: (value: T) => void) => (value: T) => {
-    setTypedOwn(true);
-    setter(value);
-  };
+  const own =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setTypedOwn(true);
+      setter(value);
+    };
 
   const problem = (() => {
     if (!subject.trim()) return "Write a subject line.";
@@ -152,10 +159,19 @@ export default function MarketingForm({
       const res = await fetch("/api/admin/marketing/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, headline, message, ctaText, ctaUrl, offerId, test }),
+        body: JSON.stringify({
+          subject,
+          headline,
+          message,
+          ctaText,
+          ctaUrl,
+          offerId,
+          test,
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Send failed (error ${res.status}).`);
+      if (!res.ok)
+        throw new Error(data.error ?? `Send failed (error ${res.status}).`);
 
       if (test) {
         toast.success(`Test email sent to ${data.sentTo ?? "your inbox"}`);
@@ -173,14 +189,21 @@ export default function MarketingForm({
       }
     } catch (err) {
       setConfirming(false);
-      setError(err instanceof Error ? err.message : "Network error — please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Network error — please try again.",
+      );
     } finally {
       setSending(null);
     }
   };
 
   const offerOptions = [
-    { value: "", label: offers.length ? "No offer — just a message" : "No offers running" },
+    {
+      value: "",
+      label: offers.length ? "No offer — just a message" : "No offers running",
+    },
     ...offers.map((offer) => ({
       value: offer.id,
       label: `${offer.title} — ${offer.badge} (${offer.newPrice})`,
@@ -199,25 +222,31 @@ export default function MarketingForm({
         <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between">
           <h2 className={CARD_TITLE}>Email Subscribers</h2>
           <span className="flex h-10 w-fit shrink-0 items-center gap-2 rounded-full bg-[#F9F6F3] px-4 font-sora text-[14px] leading-none text-black">
-            <Users className="h-4 w-4 text-black/70" strokeWidth={1.5} aria-hidden="true" />
+            <Users
+              className="h-4 w-4 text-black/70"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
             {subscribers.fromResend ? "" : "~"}
             {countLabel} {subscriberCount === 1 ? "subscriber" : "subscribers"}
           </span>
         </div>
         <p className="-mt-2 font-sora text-[14px] leading-[1.6] text-black/70">
-          Goes only to customers who opted in to offer emails. Anyone who unsubscribed is left out
-          automatically.
+          Goes only to customers who opted in to offer emails. Anyone who
+          unsubscribed is left out automatically.
           {subscribers.fromResend && subscribers.unsubscribed > 0 && (
             <>
               {" "}
               {subscribers.unsubscribed.toLocaleString("en-US")}{" "}
-              {subscribers.unsubscribed === 1 ? "person has" : "people have"} unsubscribed.
+              {subscribers.unsubscribed === 1 ? "person has" : "people have"}{" "}
+              unsubscribed.
             </>
           )}
           {!subscribers.fromResend && (
             <span className="text-[#D72A37]">
               {" "}
-              Couldn&apos;t reach Resend, so this number is an estimate from signed-in customers.
+              Couldn&apos;t reach Resend, so this number is an estimate from
+              signed-in customers.
             </span>
           )}
         </p>
@@ -235,9 +264,11 @@ export default function MarketingForm({
           {mismatch && (
             <div className="flex flex-col gap-3 rounded-[12px] bg-[#FFF2DA] p-3 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between">
               <p className="font-sora text-[12px] leading-[1.5] text-black">
-                Your text still talks about <span className="font-semibold">{textOffer!.title}</span>, but the
-                card now shows <span className="font-semibold">{featured!.title}</span>. It was kept because
-                you edited it.
+                Your text still talks about{" "}
+                <span className="font-semibold">{textOffer!.title}</span>, but
+                the card now shows{" "}
+                <span className="font-semibold">{featured!.title}</span>. It was
+                kept because you edited it.
               </p>
               <button
                 type="button"
@@ -251,14 +282,18 @@ export default function MarketingForm({
           {offers.length === 0 ? (
             <p className={HELP}>
               No product offers are running.{" "}
-              <Link href="/admin/offers" className="text-black underline underline-offset-2">
+              <Link
+                href="/admin/offers"
+                className="text-black underline underline-offset-2"
+              >
                 Create one on the Offers page
               </Link>{" "}
               to show a dish with its new price in the email.
             </p>
           ) : (
             <p className={HELP}>
-              The dish is shown as a card with its old and new price, and the button links to it.
+              The dish is shown as a card with its old and new price, and the
+              button links to it.
             </p>
           )}
         </div>
@@ -288,7 +323,10 @@ export default function MarketingForm({
           <div>
             <div className="flex items-center justify-between gap-3">
               <label htmlFor="broadcast-headline" className={LABEL}>
-                Headline <span className="font-sora text-[12px] font-normal text-black/50">(optional)</span>
+                Headline{" "}
+                <span className="font-sora text-[12px] font-normal text-black/50">
+                  (optional)
+                </span>
               </label>
               <Counter value={headline} max={LIMITS.headline} />
             </div>
@@ -321,7 +359,9 @@ export default function MarketingForm({
               }
               className={`${TEXTAREA} max-[639px]:text-[16px]`}
             />
-            <p className={HELP}>Type normally — each new line becomes its own paragraph.</p>
+            <p className={HELP}>
+              Type normally — each new line becomes its own paragraph.
+            </p>
           </div>
 
           <div className="grid gap-4 min-[560px]:grid-cols-2">
@@ -340,14 +380,19 @@ export default function MarketingForm({
             </div>
             <div>
               <label htmlFor="broadcast-link" className={LABEL}>
-                Button Link <span className="font-sora text-[12px] font-normal text-black/50">(optional)</span>
+                Button Link{" "}
+                <span className="font-sora text-[12px] font-normal text-black/50">
+                  (optional)
+                </span>
               </label>
               <input
                 id="broadcast-link"
                 type="url"
                 value={ctaUrl}
                 onChange={(event) => setCtaUrl(event.target.value)}
-                placeholder={featured ? "The dish's page" : "Your site's homepage"}
+                placeholder={
+                  featured ? "The dish's page" : "Your site's homepage"
+                }
                 className={`${FIELD} max-[639px]:text-[16px]`}
               />
             </div>
@@ -366,7 +411,11 @@ export default function MarketingForm({
             className={`${OUTLINE_BUTTON} min-[560px]:min-w-[190px]`}
           >
             {sending === "test" ? (
-              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />
+              <Loader2
+                className="h-4 w-4 animate-spin"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
             ) : (
               <Mail className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
             )}
@@ -377,7 +426,9 @@ export default function MarketingForm({
             onClick={() => {
               if (problem) setError(problem);
               else if (subscribers.fromResend && subscriberCount === 0)
-                setError("No one is subscribed yet, so there's no one to send to. Use Send Test to Me to check the email.");
+                setError(
+                  "No one is subscribed yet, so there's no one to send to. Use Send Test to Me to check the email.",
+                );
               else setConfirming(true);
             }}
             disabled={sending !== null}
@@ -392,7 +443,9 @@ export default function MarketingForm({
       {/* ── Live preview ── */}
       <section className={`${CARD} xl:sticky xl:top-[30px]`}>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-frank-ruhl text-[22px] font-semibold leading-none text-black">Preview</h2>
+          <h2 className="font-frank-ruhl text-[22px] font-semibold leading-none text-black">
+            Preview
+          </h2>
           <span className="rounded-full bg-[#F9F6F3] px-3 py-2 font-sora text-[12px] leading-none text-black/70">
             Live
           </span>
@@ -407,7 +460,9 @@ export default function MarketingForm({
             C
           </span>
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="font-sora text-[12px] font-semibold leading-none text-black">Cuisine</span>
+            <span className="font-sora text-[12px] font-semibold leading-none text-black">
+              CuisineFood
+            </span>
             <span className="truncate font-sora text-[13px] leading-tight text-black">
               {subject || "Your subject line"}
             </span>
@@ -420,12 +475,18 @@ export default function MarketingForm({
         {/* The email itself — same order and colours as OfferBroadcastEmail */}
         <div className="rounded-[16px] bg-[#F9F6F3] p-3 min-[480px]:p-4">
           <div className="overflow-hidden rounded-[16px] bg-white">
-            <div className={`${GRADIENT} flex flex-col items-center gap-3 px-5 py-6 text-center`}>
+            <div
+              className={`${GRADIENT} flex flex-col items-center gap-3 px-5 py-6 text-center`}
+            >
               {/* Wordmark only — the orange logo mark disappeared into the
                   orange gradient behind it. */}
-              <span className="font-frank-ruhl text-[22px] font-bold leading-none text-white">Cuisine</span>
+              <span className="font-frank-ruhl text-[22px] font-bold leading-none text-white">
+                CuisineFood
+              </span>
               <span className="rounded-full bg-white px-3 py-1.5 font-sora text-[10px] font-semibold uppercase tracking-[0.06em] text-black">
-                {featured ? `${featured.badge} · Special Offer` : "Special Offer"}
+                {featured
+                  ? `${featured.badge} · Special Offer`
+                  : "Special Offer"}
               </span>
               <p className="break-words font-frank-ruhl text-[22px] font-semibold leading-[1.2] text-white">
                 {headline || subject || "Your headline"}
@@ -435,12 +496,17 @@ export default function MarketingForm({
             <div className="flex flex-col gap-3 px-5 pb-2 pt-5">
               {paragraphs.length > 0 ? (
                 paragraphs.map((line, index) => (
-                  <p key={index} className="break-words font-sora text-[13px] leading-[1.7] text-black/70">
+                  <p
+                    key={index}
+                    className="break-words font-sora text-[13px] leading-[1.7] text-black/70"
+                  >
                     {line}
                   </p>
                 ))
               ) : (
-                <p className="font-sora text-[13px] leading-[1.7] text-black/40">Your message shows here.</p>
+                <p className="font-sora text-[13px] leading-[1.7] text-black/40">
+                  Your message shows here.
+                </p>
               )}
             </div>
 
@@ -449,19 +515,30 @@ export default function MarketingForm({
                 <div className="flex flex-col gap-2 rounded-[14px] bg-[#F9F6F3] p-2.5">
                   {featured.imageUrl && (
                     <div className="relative aspect-[295/200] w-full overflow-hidden rounded-[10px] bg-white">
-                      <Image src={featured.imageUrl} alt="" fill sizes="360px" unoptimized className="object-cover" />
+                      <Image
+                        src={featured.imageUrl}
+                        alt=""
+                        fill
+                        sizes="360px"
+                        unoptimized
+                        className="object-cover"
+                      />
                     </div>
                   )}
                   <p className="px-1 font-frank-ruhl text-[17px] font-semibold leading-tight text-black">
                     {featured.title}
                   </p>
                   <p className="flex items-baseline gap-2 px-1">
-                    <s className="font-sora text-[12px] text-black/45">{featured.oldPrice}</s>
+                    <s className="font-sora text-[12px] text-black/45">
+                      {featured.oldPrice}
+                    </s>
                     <span className="font-frank-ruhl text-[19px] font-bold leading-none text-black">
                       {featured.newPrice}
                     </span>
                   </p>
-                  <p className="px-1 pb-1 font-sora text-[11px] leading-[1.4] text-black/70">{featured.note}</p>
+                  <p className="px-1 pb-1 font-sora text-[11px] leading-[1.4] text-black/70">
+                    {featured.note}
+                  </p>
                 </div>
               </div>
             )}
@@ -476,8 +553,9 @@ export default function MarketingForm({
 
             <div className="mx-5 border-t border-[#EFE9E3] pb-5 pt-3">
               <p className="font-sora text-[10px] leading-[1.5] text-black/50">
-                You&apos;re receiving this email because you opted in to offers and updates from Cuisine.
-                Unsubscribe link added automatically.
+                You&apos;re receiving this email because you opted in to offers
+                and updates from CuisineFood. Unsubscribe link added
+                automatically.
               </p>
             </div>
           </div>

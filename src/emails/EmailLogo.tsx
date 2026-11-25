@@ -16,7 +16,7 @@ interface EmailLogoProps {
  * src/emails/EmailLogo.tsx
  *
  * প্রতিটি transactional email-এর logo lockup: dome mark (ছবি) +
- * "Cuisine" (HTML text)।
+ * "CuisineFood" (HTML text)।
  *
  * শব্দটা ইচ্ছাকৃতভাবে ছবির অংশ নয়। Gmail, Outlook আর বেশিরভাগ mobile
  * client অচেনা প্রেরকের ছবি ডিফল্টে block করে রাখে; পুরো lockup ছবি হলে
@@ -34,7 +34,7 @@ export default function EmailLogo({
 }: EmailLogoProps) {
   return (
     <Section style={{ marginBottom, textAlign: align }}>
-      {/* alt ইচ্ছাকৃতভাবে খালি: পাশেই "Cuisine" লেখা আছে, alt দিলে
+      {/* alt ইচ্ছাকৃতভাবে খালি: পাশেই "CuisineFood" লেখা আছে, alt দিলে
           screen reader নামটা পরপর দুবার পড়ত। */}
       <Img
         src={EMAIL_LOGO_URL}
@@ -53,7 +53,7 @@ export default function EmailLogo({
           marginLeft: "8px",
         }}
       >
-        Cuisine
+        CuisineFood
       </span>
     </Section>
   );

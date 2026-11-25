@@ -84,13 +84,13 @@ function AuthShell({ children }: { children: React.ReactNode }) {
           >
             <Image
               src="/logo.svg"
-              alt="Cuisine Logo"
+              alt="CuisineFood Logo"
               width={40}
               height={40}
               className="w-9 h-9 xl:w-10 xl:h-10"
             />
             <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
-              Cuisine
+              CuisineFood
             </span>
           </Link>
 
@@ -102,7 +102,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
             </h2>
             <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
               Sign in to track your orders, save your favorite dishes, and get
-              personalized offers from Cuisine.
+              personalized offers from CuisineFood.
             </p>
 
             <div className="mt-6 xl:mt-8 grid grid-cols-3 gap-2 xl:gap-[13.45px] w-full">
@@ -207,8 +207,8 @@ function ResetPasswordForm() {
           Link Incomplete
         </h1>
         <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
-          This reset link is missing its token — some email apps shorten long links.
-          Request a fresh one and open it directly from the email.
+          This reset link is missing its token — some email apps shorten long
+          links. Request a fresh one and open it directly from the email.
         </p>
         <Link href="/forgot-password" className={`${PILL_BUTTON} mt-8`}>
           Request a New Link
@@ -250,7 +250,8 @@ function ResetPasswordForm() {
           Choose a New Password
         </h1>
         <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
-          Pick something you haven&apos;t used here before. This link works once.
+          Pick something you haven&apos;t used here before. This link works
+          once.
         </p>
       </div>
 
@@ -404,7 +405,10 @@ function ResetPasswordForm() {
       {/* Log in line — Figma: Sora 400, 12px, LH 160%, center। xl-এ 16px */}
       <p className="text-center font-sora font-normal text-[12px] xl:text-[16px] leading-[160%] text-black/70 mt-4 xl:mt-7">
         Remembered it?{" "}
-        <Link href="/login" className="font-semibold text-black hover:underline">
+        <Link
+          href="/login"
+          className="font-semibold text-black hover:underline"
+        >
           Log in
         </Link>
       </p>

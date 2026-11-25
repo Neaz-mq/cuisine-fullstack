@@ -44,7 +44,7 @@ export type ReservationRow = {
 };
 
 const LOCATION = {
-  name: "Cuisine Main Branch",
+  name: "CuisineFood Main Branch",
   address: "24/6 Park Street, Dhaka, Bangladesh",
 };
 
@@ -71,10 +71,18 @@ export default function ReservationList({
   const [confirming, setConfirming] = useState<ReservationRow | null>(null);
   const [cancelling, setCancelling] = useState(false);
   /** বাতিল সফল হলে Figma-র "Reservation Cancelled?" modal। */
-  const [cancelled, setCancelled] = useState<{ refundNote: string | null } | null>(null);
+  const [cancelled, setCancelled] = useState<{
+    refundNote: string | null;
+  } | null>(null);
 
-  const upcoming = useMemo(() => reservations.filter((r) => r.upcoming), [reservations]);
-  const past = useMemo(() => reservations.filter((r) => !r.upcoming), [reservations]);
+  const upcoming = useMemo(
+    () => reservations.filter((r) => r.upcoming),
+    [reservations],
+  );
+  const past = useMemo(
+    () => reservations.filter((r) => !r.upcoming),
+    [reservations],
+  );
   const visible = tab === "upcoming" ? upcoming : past;
 
   async function confirmCancel() {
@@ -82,9 +90,12 @@ export default function ReservationList({
 
     setCancelling(true);
     try {
-      const res = await fetch(`/api/reservations/${confirming.id}/cancel`, { method: "POST" });
+      const res = await fetch(`/api/reservations/${confirming.id}/cancel`, {
+        method: "POST",
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Couldn't cancel this reservation.");
+      if (!res.ok)
+        throw new Error(data?.error ?? "Couldn't cancel this reservation.");
 
       /**
        * ⚠️ টাকা ফেরতের কথাটা লুকানো হয় না।
@@ -102,7 +113,11 @@ export default function ReservationList({
       setCancelled({ refundNote });
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't cancel this reservation.");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't cancel this reservation.",
+      );
     } finally {
       setCancelling(false);
     }
@@ -155,11 +170,11 @@ export default function ReservationList({
                 className="flex flex-col gap-5 rounded-[20px] bg-[#F9F6F3] p-4 md:p-5 lg:flex-row"
               >
                 {/**
-                  * ⚠️ Figma-তে ছবির উপরে তীর (◀ ▶) আছে — একাধিক ছবির
-                  * carousel। schema-য় `RestaurantTable.imageUrl` একটাই
-                  * string, তাই তীরদুটো বসানো হয়নি: যে বোতাম চাপলে কিছু
-                  * হয় না, সেটা না থাকার চেয়ে খারাপ।
-                  */}
+                 * ⚠️ Figma-তে ছবির উপরে তীর (◀ ▶) আছে — একাধিক ছবির
+                 * carousel। schema-য় `RestaurantTable.imageUrl` একটাই
+                 * string, তাই তীরদুটো বসানো হয়নি: যে বোতাম চাপলে কিছু
+                 * হয় না, সেটা না থাকার চেয়ে খারাপ।
+                 */}
                 <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-[14px] bg-black/5 lg:w-[280px] xl:w-[320px]">
                   {reservation.tableImage ? (
                     <Image
@@ -188,25 +203,41 @@ export default function ReservationList({
                   </h3>
 
                   <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 lg:grid-cols-1">
-                    <DetailRow icon={<CalendarDays className="h-4 w-4" strokeWidth={1.5} />} label="Date">
+                    <DetailRow
+                      icon={
+                        <CalendarDays className="h-4 w-4" strokeWidth={1.5} />
+                      }
+                      label="Date"
+                    >
                       {reservation.dateLabel}
                     </DetailRow>
-                    <DetailRow icon={<Clock className="h-4 w-4" strokeWidth={1.5} />} label="Time">
+                    <DetailRow
+                      icon={<Clock className="h-4 w-4" strokeWidth={1.5} />}
+                      label="Time"
+                    >
                       {reservation.timeLabel}
                     </DetailRow>
-                    <DetailRow icon={<Users className="h-4 w-4" strokeWidth={1.5} />} label="Guests">
+                    <DetailRow
+                      icon={<Users className="h-4 w-4" strokeWidth={1.5} />}
+                      label="Guests"
+                    >
                       {reservation.guestCount}{" "}
                       {reservation.guestCount === 1 ? "Person" : "People"}
                     </DetailRow>
                     {reservation.specialRequests && (
                       <DetailRow
-                        icon={<StickyNote className="h-4 w-4" strokeWidth={1.5} />}
+                        icon={
+                          <StickyNote className="h-4 w-4" strokeWidth={1.5} />
+                        }
                         label="Special Requests"
                       >
                         {reservation.specialRequests}
                       </DetailRow>
                     )}
-                    <DetailRow icon={<MapPin className="h-4 w-4" strokeWidth={1.5} />} label="Location">
+                    <DetailRow
+                      icon={<MapPin className="h-4 w-4" strokeWidth={1.5} />}
+                      label="Location"
+                    >
                       {LOCATION.name}
                       <span className="mt-0.5 block font-sora text-[11px] font-normal text-black/50">
                         {LOCATION.address}
@@ -217,8 +248,12 @@ export default function ReservationList({
 
                 {/* ডান কলাম: id, অবস্থা, কাজ */}
                 <div className="flex w-full shrink-0 flex-col gap-3 rounded-[16px] bg-white p-4 lg:w-[240px] xl:w-[260px]">
-                  <MetaRow label="Reservation ID">{reservation.reference}</MetaRow>
-                  <MetaRow label="Booked On">{reservation.bookedOnLabel}</MetaRow>
+                  <MetaRow label="Reservation ID">
+                    {reservation.reference}
+                  </MetaRow>
+                  <MetaRow label="Booked On">
+                    {reservation.bookedOnLabel}
+                  </MetaRow>
 
                   <span
                     className={`rounded-[10px] py-2 text-center font-sora text-[13px] font-semibold ${
@@ -235,17 +270,17 @@ export default function ReservationList({
                   {reservation.cancellable && (
                     <>
                       {/**
-                        * ⚠️ Figma-তে "Reschedule" বোতামটাও আছে, কিন্তু
-                        * বসানো হয়নি।
-                        *
-                        * Reschedule মানে নতুন সময়ে ওই টেবিলটা খালি
-                        * কিনা যাচাই করা, পুরোনো slot ছেড়ে নতুনটা দাবি
-                        * করা — সবটা একটা transaction-এ, নাহলে দুটো
-                        * booking একই সময়ে বসে যেতে পারে। অর্থাৎ
-                        * deposit-session route-এর মতোই একটা আলাদা
-                        * প্রবাহ। যে বোতাম চাপলে কিছু হয় না, সেটা না
-                        * থাকার চেয়ে খারাপ।
-                        */}
+                       * ⚠️ Figma-তে "Reschedule" বোতামটাও আছে, কিন্তু
+                       * বসানো হয়নি।
+                       *
+                       * Reschedule মানে নতুন সময়ে ওই টেবিলটা খালি
+                       * কিনা যাচাই করা, পুরোনো slot ছেড়ে নতুনটা দাবি
+                       * করা — সবটা একটা transaction-এ, নাহলে দুটো
+                       * booking একই সময়ে বসে যেতে পারে। অর্থাৎ
+                       * deposit-session route-এর মতোই একটা আলাদা
+                       * প্রবাহ। যে বোতাম চাপলে কিছু হয় না, সেটা না
+                       * থাকার চেয়ে খারাপ।
+                       */}
                       <button
                         type="button"
                         onClick={() => setConfirming(reservation)}
@@ -275,10 +310,11 @@ export default function ReservationList({
                 Cancel Reservation
               </h3>
               <p className="mt-1.5 font-sora text-[12px] leading-[1.6] text-black/60">
-                You may cancel your reservation up to 2 hours before your scheduled booking time
-                at no additional charge. If you cancel less than 2 hours before your reservation,
-                or after the scheduled time, 50% of the reservation payment will be deducted as a
-                cancellation fee.
+                You may cancel your reservation up to 2 hours before your
+                scheduled booking time at no additional charge. If you cancel
+                less than 2 hours before your reservation, or after the
+                scheduled time, 50% of the reservation payment will be deducted
+                as a cancellation fee.
               </p>
             </div>
           </div>
@@ -293,8 +329,8 @@ export default function ReservationList({
               Cancel {confirming.tableLabel}?
             </h2>
             <p className="font-sora text-[13px] leading-[1.6] text-black/60">
-              {confirming.dateLabel} · {confirming.timeLabel}. This can&apos;t be undone — you
-              would need to book again.
+              {confirming.dateLabel} · {confirming.timeLabel}. This can&apos;t
+              be undone — you would need to book again.
             </p>
             <div className="flex flex-col gap-3 min-[420px]:flex-row">
               <button
@@ -345,10 +381,12 @@ export default function ReservationList({
                 Reservation Cancelled
               </h2>
               <p className="font-sora text-[14px] leading-[1.6] text-black/70 md:text-[16px]">
-                Your reservation has been cancelled successfully. We hope to welcome you again
-                soon. Thank you for choosing Cuisine.
+                Your reservation has been cancelled successfully. We hope to
+                welcome you again soon. Thank you for choosing CuisineFood.
                 {cancelled.refundNote && (
-                  <span className="mt-2 block text-black">{cancelled.refundNote}</span>
+                  <span className="mt-2 block text-black">
+                    {cancelled.refundNote}
+                  </span>
                 )}
               </p>
             </div>
@@ -392,7 +430,10 @@ function Backdrop({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
-      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-[555px]">
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-[555px]"
+      >
         {children}
       </div>
     </div>
@@ -417,7 +458,9 @@ function DetailRow({
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block font-sora text-[11px] leading-none text-black/50">{label}</span>
+        <span className="block font-sora text-[11px] leading-none text-black/50">
+          {label}
+        </span>
         <span className="mt-1 block font-sora text-[13px] font-semibold leading-[1.4] text-black">
           {children}
         </span>
@@ -426,10 +469,18 @@ function DetailRow({
   );
 }
 
-function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+function MetaRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <span className="flex flex-col gap-1 rounded-[10px] bg-[#F9F6F3] px-3 py-2">
-      <span className="font-sora text-[11px] leading-none text-black/50">{label}</span>
+      <span className="font-sora text-[11px] leading-none text-black/50">
+        {label}
+      </span>
       <span className="font-sora text-[13px] font-semibold leading-none text-black">
         {children}
       </span>

@@ -25,7 +25,7 @@ type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
  *   REJECTED → Accept · Delete
  *
  * "Reply" opens a small form right here; the app emails the answer to the
- * customer from Cuisine's own address (POST /api/admin/reviews/[id]/reply,
+ * customer from CuisineFood's own address (POST /api/admin/reviews/[id]/reply,
  * through Resend). It used to be a `mailto:` link, which on most staff PCs
  * opened an Outlook that was never set up. Only shown when the customer
  * has an email address.
@@ -75,13 +75,18 @@ export default function ReviewActions({
         body: JSON.stringify({ message }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Couldn't send the reply (error ${res.status}).`);
+      if (!res.ok)
+        throw new Error(
+          data.error ?? `Couldn't send the reply (error ${res.status}).`,
+        );
 
       toast.success(`Reply sent to ${data.sentTo ?? customerName}`);
       setReplyOpen(false);
       setReplyText("");
     } catch (error) {
-      setReplyError(error instanceof Error ? error.message : "Couldn't send the reply.");
+      setReplyError(
+        error instanceof Error ? error.message : "Couldn't send the reply.",
+      );
     } finally {
       setReplySending(false);
     }
@@ -98,7 +103,9 @@ export default function ReviewActions({
         });
         if (!res.ok) throw new Error("Failed to update review status");
 
-        toast.success(next === "APPROVED" ? "Review accepted" : "Review rejected");
+        toast.success(
+          next === "APPROVED" ? "Review accepted" : "Review rejected",
+        );
         // Re-reads the list, the status pill and the Overview numbers.
         router.refresh();
       } catch {
@@ -113,7 +120,9 @@ export default function ReviewActions({
     setBusy("delete");
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/admin/reviews/${reviewId}`, { method: "DELETE" });
+        const res = await fetch(`/api/admin/reviews/${reviewId}`, {
+          method: "DELETE",
+        });
         if (!res.ok) throw new Error("Failed to delete review");
 
         toast.success("Review deleted");
@@ -127,8 +136,13 @@ export default function ReviewActions({
     });
   }
 
-  const spinner = <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />;
-
+  const spinner = (
+    <Loader2
+      className="h-4 w-4 animate-spin"
+      strokeWidth={2}
+      aria-hidden="true"
+    />
+  );
 
   return (
     <div className="flex w-full items-center gap-3 md:w-auto md:justify-end">
@@ -240,7 +254,8 @@ export default function ReviewActions({
             className={TEXTAREA}
           />
           <p className="mt-1.5 font-sora text-[12px] leading-[1.4] text-black/70">
-            Sent by email to <span className="text-black">{customerEmail}</span> from Cuisine.
+            Sent by email to <span className="text-black">{customerEmail}</span>{" "}
+            from CuisineFood.
           </p>
         </div>
 

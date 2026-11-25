@@ -1,11 +1,22 @@
-import { Body, Container, Head, Heading, Hr, Html, Link, Preview, Section, Text } from "@react-email/components";
+import {
+  Body,
+  Container,
+  Head,
+  Heading,
+  Hr,
+  Html,
+  Link,
+  Preview,
+  Section,
+  Text,
+} from "@react-email/components";
 import EmailLogo from "@/emails/EmailLogo";
 
 /**
  * "Your order is on its way / delivered / cancelled" — the "Order Updates"
  * switch on Profile Details (lib/send-order-status-email.ts).
  *
- * Same look as the other Cuisine emails (see ReviewReplyEmail.tsx): logo,
+ * Same look as the other CuisineFood emails (see ReviewReplyEmail.tsx): logo,
  * heading, short text, a cream box, one orange button.
  */
 export interface OrderStatusEmailProps {
@@ -39,7 +50,9 @@ export default function OrderStatusEmail({
     <Html>
       <Head />
       <Preview>{previewText}</Preview>
-      <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
+      <Body
+        style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}
+      >
         <Container
           style={{
             backgroundColor: "#ffffff",
@@ -51,15 +64,50 @@ export default function OrderStatusEmail({
         >
           <EmailLogo />
 
-          <Heading style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}>{heading}</Heading>
-          <Text style={{ color: "#1f2937", fontSize: "15px", lineHeight: "1.6", marginTop: "8px" }}>
+          <Heading
+            style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}
+          >
+            {heading}
+          </Heading>
+          <Text
+            style={{
+              color: "#1f2937",
+              fontSize: "15px",
+              lineHeight: "1.6",
+              marginTop: "8px",
+            }}
+          >
             Hi {firstName}, {message}
           </Text>
 
-          <Section style={{ backgroundColor: "#F9F6F3", borderRadius: "12px", padding: "16px", margin: "20px 0" }}>
-            <Text style={{ color: "#6b7280", fontSize: "12px", margin: "0 0 4px" }}>Order {orderCode}</Text>
-            <Text style={{ color: "#1f2937", fontSize: "14px", margin: "0 0 8px" }}>{itemsLabel}</Text>
-            <Text style={{ color: "#1f2937", fontSize: "16px", fontWeight: "bold", margin: 0 }}>{totalLabel}</Text>
+          <Section
+            style={{
+              backgroundColor: "#F9F6F3",
+              borderRadius: "12px",
+              padding: "16px",
+              margin: "20px 0",
+            }}
+          >
+            <Text
+              style={{ color: "#6b7280", fontSize: "12px", margin: "0 0 4px" }}
+            >
+              Order {orderCode}
+            </Text>
+            <Text
+              style={{ color: "#1f2937", fontSize: "14px", margin: "0 0 8px" }}
+            >
+              {itemsLabel}
+            </Text>
+            <Text
+              style={{
+                color: "#1f2937",
+                fontSize: "16px",
+                fontWeight: "bold",
+                margin: 0,
+              }}
+            >
+              {totalLabel}
+            </Text>
           </Section>
 
           <Section style={{ textAlign: "center", margin: "8px 0 24px" }}>
@@ -82,12 +130,15 @@ export default function OrderStatusEmail({
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
 
           <Text style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-            You&apos;re getting this because you ordered from Cuisine.
+            You&apos;re getting this because you ordered from CuisineFood.
             {settingsUrl && (
               <>
                 {" "}
                 Don&apos;t want order updates?{" "}
-                <Link href={settingsUrl} style={{ color: "#9ca3af", textDecoration: "underline" }}>
+                <Link
+                  href={settingsUrl}
+                  style={{ color: "#9ca3af", textDecoration: "underline" }}
+                >
                   Turn them off
                 </Link>
                 .

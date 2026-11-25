@@ -15,7 +15,7 @@ import {
 } from "@/lib/ai-assistant/core";
 
 /**
- * POST /api/ai/chat — "Ask Cuisine AI", the customer food assistant.
+ * POST /api/ai/chat — "Ask CuisineFood AI", the customer food assistant.
  *
  * Body: { messages: [{ role, content }...], cart: [{ id, quantity }...] }
  * The last message is the customer's new question; up to 8 earlier ones
@@ -46,12 +46,17 @@ const bodySchema = z.object({
       z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string().trim().min(1).max(1500),
-      })
+      }),
     )
     .min(1)
     .max(20),
   cart: z
-    .array(z.object({ id: z.string().max(64), quantity: z.number().int().min(1).max(99) }))
+    .array(
+      z.object({
+        id: z.string().max(64),
+        quantity: z.number().int().min(1).max(99),
+      }),
+    )
     .max(50)
     .default([]),
 });
@@ -65,8 +70,14 @@ export async function POST(request: Request) {
     const rate = checkRateLimit(request, scope, { limit, windowMs });
     if (!rate.allowed) {
       return NextResponse.json(
-        { error: "You're sending messages quickly — please wait a moment and try again." },
-        { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+        {
+          error:
+            "You're sending messages quickly — please wait a moment and try again.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rate.retryAfterSeconds) },
+        },
       );
     }
   }
@@ -77,14 +88,23 @@ export async function POST(request: Request) {
   const history = parsed.messages.slice(-9);
   const question = history[history.length - 1];
   if (question.role !== "user") {
-    return NextResponse.json({ error: "The last message must be the customer's." }, { status: 400 });
+    return NextResponse.json(
+      { error: "The last message must be the customer's." },
+      { status: 400 },
+    );
   }
   if (question.content.length > 500) {
-    return NextResponse.json({ error: "Please keep your message under 500 characters." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Please keep your message under 500 characters." },
+      { status: 400 },
+    );
   }
 
   const session = await auth();
-  const context = await getAssistantContext(session?.user?.id ?? null, parsed.cart);
+  const context = await getAssistantContext(
+    session?.user?.id ?? null,
+    parsed.cart,
+  );
 
   const dishById = new Map(context.dishes.map((dish) => [dish.id, dish]));
   const promptDishes = dishesForPrompt(context.dishes, question.content);
@@ -100,17 +120,24 @@ export async function POST(request: Request) {
   }
 
   const answer: AssistantAnswer | null = process.env.GROQ_API_KEY
-    ? await askModel(buildSystemPrompt(context, promptDishes), history, knownIds).then((result) =>
+    ? await askModel(
+        buildSystemPrompt(context, promptDishes),
+        history,
+        knownIds,
+      ).then((result) =>
         result
           ? {
               reply: result.reply,
-              dishes: result.dishIds.map((id) => dishById.get(id)).filter((d) => d !== undefined),
+              dishes: result.dishIds
+                .map((id) => dishById.get(id))
+                .filter((d) => d !== undefined),
               suggestions: result.suggestions,
-              orders: result.showOrders && context.user ? context.user.orders : [],
+              orders:
+                result.showOrders && context.user ? context.user.orders : [],
               kitchenOpen: context.kitchenOpen,
               source: "ai" as const,
             }
-          : null
+          : null,
       )
     : null;
 
@@ -126,9 +153,15 @@ export async function POST(request: Request) {
 async function askModel(
   systemPrompt: string,
   history: { role: "user" | "assistant"; content: string }[],
-  knownIds: Set<string>
+  knownIds: Set<string>,
 ) {
-  const models = [...new Set([process.env.GROQ_CHAT_MODEL, ...DEFAULT_MODELS].filter(Boolean) as string[])];
+  const models = [
+    ...new Set(
+      [process.env.GROQ_CHAT_MODEL, ...DEFAULT_MODELS].filter(
+        Boolean,
+      ) as string[],
+    ),
+  ];
   const client = getGroqClient();
 
   for (const model of models) {
@@ -152,18 +185,27 @@ async function askModel(
               : {}),
             messages: [
               { role: "system", content: systemPrompt },
-              ...history.map((m) => ({ role: m.role, content: m.content.slice(0, 1500) })),
+              ...history.map((m) => ({
+                role: m.role,
+                content: m.content.slice(0, 1500),
+              })),
             ],
           },
-          { timeout: 15_000, maxRetries: 0 }
+          { timeout: 15_000, maxRetries: 0 },
         );
-        const result = parseModelReply(completion.choices[0]?.message?.content, knownIds);
+        const result = parseModelReply(
+          completion.choices[0]?.message?.content,
+          knownIds,
+        );
         if (result) return result;
         console.warn(`AI chat: unusable reply from ${model}`);
         break;
       } catch (error) {
         const status = (error as { status?: number })?.status;
-        console.warn(`AI chat: ${model} failed${status ? ` (${status})` : ""}`, status ? "" : error);
+        console.warn(
+          `AI chat: ${model} failed${status ? ` (${status})` : ""}`,
+          status ? "" : error,
+        );
         if (!(strict && status === 400)) break;
       }
     }

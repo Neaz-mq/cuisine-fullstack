@@ -14,7 +14,7 @@ import EmailLogo from "@/emails/EmailLogo";
 
 /**
  * The email a customer gets when staff press "Reply" on their review in
- * /admin/reviews. Same look as the other Cuisine emails (see
+ * /admin/reviews. Same look as the other CuisineFood emails (see
  * PasswordResetEmail.tsx): logo, heading, short text, one button.
  *
  * Their own review is quoted underneath, so the customer knows exactly
@@ -51,7 +51,9 @@ export default function ReviewReplyEmail({
     <Html>
       <Head />
       <Preview>{previewText}</Preview>
-      <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
+      <Body
+        style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}
+      >
         <Container
           style={{
             backgroundColor: "#ffffff",
@@ -63,7 +65,9 @@ export default function ReviewReplyEmail({
         >
           <EmailLogo />
 
-          <Heading style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}>
+          <Heading
+            style={{ color: "#1f2937", fontSize: "20px", marginBottom: "4px" }}
+          >
             Hi {firstName}, thanks for your review
           </Heading>
           <Text style={{ color: "#6b7280", fontSize: "14px", marginTop: 0 }}>
@@ -85,8 +89,10 @@ export default function ReviewReplyEmail({
             </Text>
           ))}
 
-          <Text style={{ color: "#1f2937", fontSize: "15px", margin: "16px 0 0" }}>
-            — The Cuisine team
+          <Text
+            style={{ color: "#1f2937", fontSize: "15px", margin: "16px 0 0" }}
+          >
+            — The CuisineFood team
           </Text>
 
           {/* Their review, quoted — a cream box like the admin rows. */}
@@ -98,10 +104,19 @@ export default function ReviewReplyEmail({
               margin: "24px 0",
             }}
           >
-            <Text style={{ color: "#6b7280", fontSize: "12px", margin: "0 0 6px" }}>
+            <Text
+              style={{ color: "#6b7280", fontSize: "12px", margin: "0 0 6px" }}
+            >
               Your review of {itemTitle}
             </Text>
-            <Text style={{ color: ORANGE, fontSize: "18px", letterSpacing: "2px", margin: 0 }}>
+            <Text
+              style={{
+                color: ORANGE,
+                fontSize: "18px",
+                letterSpacing: "2px",
+                margin: 0,
+              }}
+            >
               {"★".repeat(rating)}
               <span style={{ color: "#e5e7eb" }}>{"★".repeat(5 - rating)}</span>
             </Text>
@@ -139,7 +154,7 @@ export default function ReviewReplyEmail({
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
 
           <Text style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-            You&apos;re getting this because you reviewed a dish on Cuisine.
+            You&apos;re getting this because you reviewed a dish on CuisineFood.
           </Text>
         </Container>
       </Body>

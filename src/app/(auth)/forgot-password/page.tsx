@@ -103,13 +103,13 @@ export default function ForgotPasswordPage() {
           >
             <Image
               src="/logo.svg"
-              alt="Cuisine Logo"
+              alt="CuisineFood Logo"
               width={40}
               height={40}
               className="w-9 h-9 xl:w-10 xl:h-10"
             />
             <span className="font-frank-ruhl font-bold text-[26px] xl:text-[30px] leading-[126%] tracking-[-0.01em] text-white">
-              Cuisine
+              CuisineFood
             </span>
           </Link>
 
@@ -121,7 +121,7 @@ export default function ForgotPasswordPage() {
             </h2>
             <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-white/80 mt-3 xl:mt-4 max-w-sm mx-auto">
               Sign in to track your orders, save your favorite dishes, and get
-              personalized offers from Cuisine.
+              personalized offers from CuisineFood.
             </p>
 
             <div className="mt-6 xl:mt-8 grid grid-cols-3 gap-2 xl:gap-[13.45px] w-full">
@@ -198,9 +198,9 @@ export default function ForgotPasswordPage() {
                 </h1>
                 <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
                   If an account exists for{" "}
-                  <span className="text-black break-all">{email}</span>, we&apos;ve sent
-                  a link to reset your password. It expires in an hour and can be used
-                  once.
+                  <span className="text-black break-all">{email}</span>,
+                  we&apos;ve sent a link to reset your password. It expires in
+                  an hour and can be used once.
                 </p>
                 <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-4">
                   Nothing arrived? Check your spam folder, or{" "}
@@ -230,8 +230,8 @@ export default function ForgotPasswordPage() {
                     Forgot Your Password
                   </h1>
                   <p className="font-sora font-normal text-[12px] leading-[160%] tracking-normal text-black/70 mt-2">
-                    Enter the email you signed up with and we&apos;ll send you a link to
-                    choose a new one.
+                    Enter the email you signed up with and we&apos;ll send you a
+                    link to choose a new one.
                   </p>
                 </div>
 
@@ -258,7 +258,10 @@ export default function ForgotPasswordPage() {
                 )}
 
                 {/* space-y-5 = Figma card-এর 20px gap। xl-এ 24px */}
-                <form onSubmit={handleSubmit} className="space-y-5 xl:space-y-6">
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-5 xl:space-y-6"
+                >
                   <div>
                     {/* Labels — Figma: Frank Ruhl Libre 500, 14px, LH 160%, black/100 */}
                     <label

@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [main]
 
-# Cuisine's own env vars — never real secrets. `next build` and
+# CuisineFood's own env vars — never real secrets. `next build` and
 # `prisma generate` need these to be *present* (so top-level clients like
 # supabase-admin.ts don't throw "url is required"), but never need them to
 # be *valid*, since this workflow never runs the app or hits a real
@@ -24,7 +24,7 @@ env:
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ci_placeholder"
   SUPABASE_SECRET_KEY: "sb_secret_ci_placeholder"
   RESEND_API_KEY: "re_ci_placeholder"
-  EMAIL_FROM: "Cuisine <ci@example.com>"
+  EMAIL_FROM: "CuisineFood <ci@example.com>"
 
 jobs:
   ci:

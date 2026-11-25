@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import { render } from "@react-email/render";
-import OfferBroadcastEmail, { type FeaturedOfferEmail } from "@/emails/OfferBroadcastEmail";
+import OfferBroadcastEmail, {
+  type FeaturedOfferEmail,
+} from "@/emails/OfferBroadcastEmail";
 
 // Lazily instantiated so that importing this module never throws even if
 // RESEND_API_KEY isn't set yet (e.g. local dev before the .env is filled
@@ -22,18 +24,20 @@ export function getResendClient(): Resend {
 
 // Resend's sandbox sender — works immediately with no domain verification,
 // good for development. Once a domain is verified in the Resend dashboard,
-// set EMAIL_FROM in .env to something like "Cuisine <orders@yourdomain.com>"
+// set EMAIL_FROM in .env to something like "CuisineFood <orders@yourdomain.com>"
 // and this falls back to that instead.
-export const EMAIL_FROM = process.env.EMAIL_FROM || "Cuisine <onboarding@resend.dev>";
+export const EMAIL_FROM =
+  process.env.EMAIL_FROM || "CuisineFood <onboarding@resend.dev>";
 
 // The "Marketing" sender should ideally be a different local-part than the
 // transactional sender (e.g. offers@ vs orders@) — mixing marketing content
 // into your transactional stream hurts deliverability for both. Falls back
 // to EMAIL_FROM if a dedicated marketing sender isn't configured yet.
-export const MARKETING_EMAIL_FROM = process.env.MARKETING_EMAIL_FROM || EMAIL_FROM;
+export const MARKETING_EMAIL_FROM =
+  process.env.MARKETING_EMAIL_FROM || EMAIL_FROM;
 
 /**
- * সব transactional email-এর dome mark। শুধু চিহ্নটাই — "Cuisine" শব্দটা
+ * সব transactional email-এর dome mark। শুধু চিহ্নটাই — "CuisineFood" শব্দটা
  * প্রতিটি template-এ HTML text হিসেবে আঁকা হয়, ছবির অংশ হিসেবে নয়। বহু
  * client ডিফল্টে ছবি block করে রাখে, তখন অন্তত নামটা টিকে থাকে।
  *
@@ -86,7 +90,11 @@ export async function syncCustomerToAudience(params: {
     // earlier — `create` doesn't change them, so they'd stay unsubscribed
     // even though they just ticked "Email me about offers" again. Setting
     // it explicitly respects that new, deliberate opt-in.
-    await resend.contacts.update({ audienceId, email: params.email, unsubscribed: false });
+    await resend.contacts.update({
+      audienceId,
+      email: params.email,
+      unsubscribed: false,
+    });
   } catch (error) {
     console.error("[resend] Failed to sync contact to audience:", error);
     // Intentionally swallowed — see doc comment above.
@@ -134,7 +142,7 @@ export type OfferEmailParams = {
 // works reliably regardless of Resend SDK version.
 function renderOfferEmail(
   params: OfferEmailParams,
-  unsubscribeUrl: string | null
+  unsubscribeUrl: string | null,
 ): Promise<string> {
   return render(
     OfferBroadcastEmail({
@@ -145,7 +153,7 @@ function renderOfferEmail(
       ctaUrl: params.ctaUrl,
       previewText: params.subject,
       featured: params.featured ?? null,
-    })
+    }),
   );
 }
 
@@ -157,7 +165,7 @@ function renderOfferEmail(
  */
 export async function sendOfferTestEmail(
   to: string,
-  params: OfferEmailParams
+  params: OfferEmailParams,
 ): Promise<{ id: string }> {
   const resend = getResendClient();
   const html = await renderOfferEmail(params, null);
@@ -174,7 +182,7 @@ export async function sendOfferTestEmail(
 }
 
 export async function sendOfferBroadcast(
-  params: OfferEmailParams
+  params: OfferEmailParams,
 ): Promise<{ broadcastId: string }> {
   const resend = getResendClient();
   // Resend replaces this with each contact's own unsubscribe link.
@@ -249,7 +257,10 @@ export async function getAudienceStats(): Promise<AudienceStats | null> {
         ...(after ? { after } : {}),
       });
       if (result.error || !result.data) {
-        console.error("[resend] Failed to list audience contacts:", result.error);
+        console.error(
+          "[resend] Failed to list audience contacts:",
+          result.error,
+        );
         return null;
       }
 
@@ -285,19 +296,30 @@ export async function getAudienceStats(): Promise<AudienceStats | null> {
  * account — every other address (a rider, a customer) is refused with 403.
  */
 export function describeEmailError(error: unknown): string {
-  const e = (error ?? {}) as { message?: string; name?: string; statusCode?: number };
+  const e = (error ?? {}) as {
+    message?: string;
+    name?: string;
+    statusCode?: number;
+  };
   const message = e.message ?? String(error);
   const lower = message.toLowerCase();
   if (lower.includes("testing emails") || lower.includes("own email address")) {
-    return `${message} — EMAIL_FROM uses Resend's test sender, which only delivers to your Resend account's own address. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on it (e.g. "Cuisine <no-reply@yourdomain.com>").`;
+    return `${message} — EMAIL_FROM uses Resend's test sender, which only delivers to your Resend account's own address. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on it (e.g. "CuisineFood <no-reply@yourdomain.com>").`;
   }
-  if (e.name === "daily_quota_exceeded" || e.name === "monthly_quota_exceeded") {
+  if (
+    e.name === "daily_quota_exceeded" ||
+    e.name === "monthly_quota_exceeded"
+  ) {
     return `${message} — the Resend plan's email limit is used up; emails stop until it resets or the plan is upgraded.`;
   }
   if (lower.includes("domain") && lower.includes("not verified")) {
     return `${message} — the domain in EMAIL_FROM isn't verified in Resend yet (resend.com/domains).`;
   }
-  if (e.statusCode === 401 || e.statusCode === 403 || lower.includes("api key")) {
+  if (
+    e.statusCode === 401 ||
+    e.statusCode === 403 ||
+    lower.includes("api key")
+  ) {
     return `${message} — check RESEND_API_KEY.`;
   }
   return message;

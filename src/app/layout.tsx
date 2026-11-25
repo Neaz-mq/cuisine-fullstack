@@ -21,7 +21,7 @@ const poppins = Poppins({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
 });
-// Serif display font used for the "Cuisine" logo wordmark and other
+// Serif display font used for the "CuisineFood" logo wordmark and other
 // serif headings (see register page) — matches the Figma spec (700
 // weight, 30px, 126% line-height, -1% letter-spacing on the logo).
 // Self-hosted via next/font like the other fonts here, rather than a
@@ -52,18 +52,20 @@ const sora = Sora({
 // a dedicated 1200x630 PNG/JPG — the Cloudinary photo below is a
 // reasonable placeholder, not a designed OG image) before launch.
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  ),
   title: {
-    default: "Cuisine — Online Restaurant Ordering",
-    template: "%s | Cuisine",
+    default: "CuisineFood — Online Restaurant Ordering",
+    template: "%s | CuisineFood",
   },
   description:
-    "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
+    "Order online for delivery or dine-in, browse our menu, and book a table — all from CuisineFood.",
   openGraph: {
-    title: "Cuisine — Online Restaurant Ordering",
+    title: "CuisineFood — Online Restaurant Ordering",
     description:
-      "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
-    siteName: "Cuisine",
+      "Order online for delivery or dine-in, browse our menu, and book a table — all from CuisineFood.",
+    siteName: "CuisineFood",
     type: "website",
     images: [
       {
@@ -75,9 +77,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cuisine — Online Restaurant Ordering",
+    title: "CuisineFood — Online Restaurant Ordering",
     description:
-      "Order online for delivery or dine-in, browse our menu, and book a table — all from Cuisine.",
+      "Order online for delivery or dine-in, browse our menu, and book a table — all from CuisineFood.",
   },
 };
 

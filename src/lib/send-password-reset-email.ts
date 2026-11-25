@@ -33,7 +33,7 @@ export async function sendPasswordResetEmail({
   resetUrl,
 }: PasswordResetEmailParams): Promise<boolean> {
   const expiresInMinutes = Math.round(RESET_TOKEN_TTL_MS / 60_000);
-  const subject = "Reset your Cuisine password";
+  const subject = "Reset your CuisineFood password";
 
   // sendEmail logs the outcome, retries hiccups and adds a plain-text part
   // (lib/send-email.ts). The key is one per reset link: a retry never sends
@@ -61,8 +61,9 @@ export async function sendPasswordResetEmail({
   // is your own terminal, and without it a local reset is impossible
   // until the email domain is set up.
   if (process.env.NODE_ENV === "development") {
-    console.warn(`[password-reset] DEV ONLY — email failed, open this link to set the password:\n${resetUrl}`);
+    console.warn(
+      `[password-reset] DEV ONLY — email failed, open this link to set the password:\n${resetUrl}`,
+    );
   }
   return false;
 }
-
